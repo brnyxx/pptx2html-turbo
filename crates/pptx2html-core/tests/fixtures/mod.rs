@@ -3,8 +3,8 @@
 mod package;
 mod parts;
 
-pub use package::{PackageBuilder, Relationship};
-pub use parts::{FeaturePart, SlideXml};
+pub use package::PackageBuilder;
+pub use parts::{FeaturePart, Relationship, SlideXml};
 
 use std::io::{Cursor, Write};
 use zip::ZipWriter;
@@ -437,7 +437,7 @@ mod fixture_api_contract {
             ))
             .with_part(FeaturePart::chart("<c:chartSpace/>"))
             .with_part(FeaturePart::extra(
-                "ppt/charts/chart1.xml",
+                "ppt/embeddings/fixture.bin",
                 "application/xml",
                 b"chart",
             ));
