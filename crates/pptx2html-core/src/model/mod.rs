@@ -1,6 +1,7 @@
 //! Data model representing PPTX document structure
 //! Based on ECMA-376 Part 1 (PresentationML)
 
+pub mod action;
 pub mod bullet;
 pub mod capabilities;
 pub mod chart;
@@ -23,6 +24,9 @@ pub mod table_style;
 pub mod text;
 pub mod timing;
 
+pub use action::{
+    Action, ActionIssue, ActionSet, ActionTarget, ActionTrigger, is_safe_external_uri,
+};
 pub use capabilities::{
     CapabilityMatrix, CapabilityStage, FeatureCapability, FeatureFamily, SupportTier,
 };

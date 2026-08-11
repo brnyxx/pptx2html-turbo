@@ -2,6 +2,7 @@
 //! PPTX = ZIP archive containing OOXML (PresentationML) XML files
 
 mod action_parser;
+mod action_relationship;
 mod chart_parser;
 mod custom_geometry;
 mod custom_guide;
@@ -233,6 +234,15 @@ impl PptxParser {
 
         // 6. Parse slides
         let total_slides = slide_refs.len();
+        let slide_order: HashMap<String, usize> = slide_refs
+            .iter()
+            .enumerate()
+            .filter_map(|(index, slide_ref)| {
+                pres_rels
+                    .get(&slide_ref.rel_id)
+                    .map(|target| (normalize_ppt_path(target), index + 1))
+            })
+            .collect();
         info!("Parsing {total_slides} slide(s)");
         for (slide_num, slide_ref) in slide_refs.iter().enumerate() {
             info!("Parsing slide {} of {total_slides}", slide_num + 1);
@@ -240,17 +250,20 @@ impl PptxParser {
                 let full_path = normalize_ppt_path(slide_path);
                 if let Ok(slide_xml) = Self::read_entry(&mut archive, &full_path) {
                     let slide_rels_path = Self::rels_path_for(&full_path);
-                    let (slide_relationships, slide_rels) =
+                    let slide_relationships =
                         if let Ok(rels_xml) = Self::read_entry(&mut archive, &slide_rels_path) {
-                            let records = relationships::parse_relationship_records(&rels_xml)?;
-                            let targets = relationships::target_map(&records);
-                            (records, targets)
+                            relationships::parse_relationship_records(&rels_xml)?
                         } else {
-                            (Vec::new(), HashMap::new())
+                            Vec::new()
                         };
 
-                    let mut slide =
-                        slide_parser::parse_slide(&slide_xml, &slide_rels, &mut archive)?;
+                    let mut slide = slide_parser::parse_slide_with_actions(
+                        &slide_xml,
+                        &slide_relationships,
+                        &full_path,
+                        &slide_order,
+                        &mut archive,
+                    )?;
                     picture_bullet_parser::resolve_slide(
                         &mut slide,
                         &slide_relationships,

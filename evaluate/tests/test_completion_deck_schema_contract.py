@@ -129,6 +129,34 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                 archive.read("ppt/tableStyles.xml").decode(),
             )
 
+    def test_actions_use_nonsequential_parts_in_presentation_order(self) -> None:
+        with zipfile.ZipFile(self.root / "actions.pptx") as archive:
+            presentation = ElementTree.fromstring(archive.read("ppt/presentation.xml"))
+            rels = ElementTree.fromstring(
+                archive.read("ppt/_rels/presentation.xml.rels")
+            )
+            targets = {
+                rel.get("Id"): rel.get("Target")
+                for rel in rels.findall("pr:Relationship", NS)
+            }
+            order = [
+                targets[node.get(f"{{{NS['r']}}}id")]
+                for node in presentation.findall("p:sldIdLst/p:sldId", NS)
+            ]
+            self.assertEqual(
+                order,
+                ["slides/slide1.xml", "slides/slide42.xml", "slides/slide7.xml"],
+            )
+            slide_rels = ElementTree.fromstring(
+                archive.read("ppt/slides/_rels/slide1.xml.rels")
+            )
+            specific = slide_rels.find("pr:Relationship[@Id='rIdSpecific']", NS)
+            self.assertEqual(specific.get("Target"), "slide7.xml")
+            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            self.assertIsNotNone(
+                slide.find(".//a:prstGeom[@prst='actionButtonForwardNext']", NS)
+            )
+
     def test_missing_table_style_fixture_preserves_id_and_flags(self) -> None:
         with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
             slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))

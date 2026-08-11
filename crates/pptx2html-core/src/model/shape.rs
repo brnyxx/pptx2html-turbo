@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use super::action::ActionSet;
 use super::chart::ChartData;
 use super::effects::ShapeEffects;
 use super::fill::Fill;
@@ -36,6 +37,7 @@ pub enum ShapeType {
 pub struct Shape {
     pub id: u32,
     pub name: String,
+    pub actions: ActionSet,
     pub shape_type: ShapeType,
     pub position: Position,
     pub size: Size,

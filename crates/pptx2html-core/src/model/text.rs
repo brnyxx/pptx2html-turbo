@@ -1,3 +1,4 @@
+use super::action::ActionSet;
 use super::bullet::Bullet;
 use super::color::Color;
 use super::hierarchy::{ListStyle, SpacingValue};
@@ -276,6 +277,7 @@ pub struct TextRun {
     pub style: TextStyle,
     pub font: FontStyle,
     pub hyperlink: Option<String>,
+    pub actions: ActionSet,
     pub is_break: bool, // <a:br> line break
 }
 

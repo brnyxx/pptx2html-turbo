@@ -6,9 +6,10 @@ use quick_xml::name::ResolveResult;
 use quick_xml::reader::NsReader;
 use zip::ZipArchive;
 
-use super::action_parser;
 #[cfg(test)]
 use super::action_parser::hyperlink_rel_id;
+use super::action_parser::{self, ActionTargets};
+use super::action_relationship::ActionContext;
 use super::custom_geometry::CustomGeometryState;
 use super::custom_guide;
 #[cfg(test)]
@@ -55,9 +56,35 @@ use crate::error::{PptxError, PptxResult};
 use crate::model::*;
 
 /// Parse slide XML
+#[cfg(test)]
 pub fn parse_slide<R: Read + Seek>(
     xml: &str,
     rels: &HashMap<String, String>,
+    archive: &mut ZipArchive<R>,
+) -> PptxResult<Slide> {
+    parse_slide_impl(xml, rels, None, archive)
+}
+
+pub(crate) fn parse_slide_with_actions<R: Read + Seek>(
+    xml: &str,
+    relationships: &[super::relationships::Relationship],
+    owner_part: &str,
+    slide_order: &HashMap<String, usize>,
+    archive: &mut ZipArchive<R>,
+) -> PptxResult<Slide> {
+    let rels = super::relationships::target_map(relationships);
+    let context = ActionContext {
+        owner_part,
+        relationships,
+        slide_order,
+    };
+    parse_slide_impl(xml, &rels, Some(&context), archive)
+}
+
+fn parse_slide_impl<R: Read + Seek>(
+    xml: &str,
+    rels: &HashMap<String, String>,
+    action_context: Option<&ActionContext<'_>>,
     archive: &mut ZipArchive<R>,
 ) -> PptxResult<Slide> {
     let mut reader = NsReader::from_str(xml);
@@ -71,6 +98,7 @@ pub fn parse_slide<R: Read + Seek>(
     let mut fill = FillSaxState::default();
     let mut in_sp_pr = false;
     let mut in_nv_pr = false;
+    let mut in_c_nv_pr = false;
 
     // Table parsing state
     let mut graphic_frame = GraphicFrameSaxState::default();
@@ -116,6 +144,7 @@ pub fn parse_slide<R: Read + Seek>(
 
                 if local == "cNvPr" && current_shape.is_some() {
                     parse_shape_identity(e, &mut current_shape);
+                    in_c_nv_pr = true;
                     continue;
                 }
                 if local == "stCxn" && current_shape.as_ref().is_some_and(|s| s.is_connector) {
@@ -139,15 +168,22 @@ pub fn parse_slide<R: Read + Seek>(
                 if text.handle_start(&local, e, &mut current_shape, table.in_cell) {
                     continue;
                 }
-                if action_parser::handle_start(
-                    &local,
-                    e,
-                    rels,
-                    text.in_run_properties,
-                    table.in_run_properties,
-                    &mut text.run,
-                    &mut table.run,
-                ) {
+                if drawingml
+                    && (text.in_run_properties || table.in_run_properties || in_c_nv_pr)
+                    && action_parser::handle(
+                        &local,
+                        e,
+                        action_context,
+                        rels,
+                        text.in_run_properties || table.in_run_properties,
+                        resolved_relationship_id(&reader, e),
+                        ActionTargets {
+                            shape: &mut current_shape,
+                            shape_run: &mut text.run,
+                            cell_run: &mut table.run,
+                        },
+                    )
+                {
                     continue;
                 }
                 if fill.handle_start(&local, e, in_sp_pr, &mut current_shape, &text, &table) {
@@ -399,15 +435,22 @@ pub fn parse_slide<R: Read + Seek>(
                 if text.handle_empty(&local, e, &mut current_shape, table.in_cell) {
                     continue;
                 }
-                if action_parser::handle_start(
-                    &local,
-                    e,
-                    rels,
-                    text.in_run_properties,
-                    table.in_run_properties,
-                    &mut text.run,
-                    &mut table.run,
-                ) {
+                if drawingml
+                    && (text.in_run_properties || table.in_run_properties || in_c_nv_pr)
+                    && action_parser::handle(
+                        &local,
+                        e,
+                        action_context,
+                        rels,
+                        text.in_run_properties || table.in_run_properties,
+                        resolved_relationship_id(&reader, e),
+                        ActionTargets {
+                            shape: &mut current_shape,
+                            shape_run: &mut text.run,
+                            cell_run: &mut table.run,
+                        },
+                    )
+                {
                     continue;
                 }
                 if fill.handle_empty(
@@ -884,6 +927,7 @@ pub fn parse_slide<R: Read + Seek>(
                     "nvPr" => {
                         in_nv_pr = false;
                     }
+                    "cNvPr" => in_c_nv_pr = false,
                     // End of shape properties
                     "spPr" => {
                         in_sp_pr = false;
@@ -982,6 +1026,32 @@ fn parse_shape_identity(e: &quick_xml::events::BytesStart<'_>, shape: &mut Optio
     }
 }
 
+fn resolved_relationship_id(
+    reader: &NsReader<&[u8]>,
+    element: &quick_xml::events::BytesStart<'_>,
+) -> Result<Option<String>, ()> {
+    let mut id = None;
+    for attribute in element.attributes().flatten() {
+        if xml_utils::local_name(attribute.key.as_ref()) != "id" {
+            continue;
+        }
+        if id.is_some() {
+            return Err(());
+        }
+        let official = matches!(
+            reader.resolve_attribute(attribute.key).0,
+            ResolveResult::Bound(namespace)
+                if namespace.as_ref()
+                    == b"http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        );
+        if !official {
+            return Err(());
+        }
+        id = Some(attribute.unescape_value().map_err(|_| ())?.into_owned());
+    }
+    Ok(id)
+}
+
 fn parse_connector_ref(
     e: &quick_xml::events::BytesStart<'_>,
     shape: &mut Option<ShapeBuilder>,
@@ -1010,6 +1080,7 @@ fn parse_connector_ref(
 pub(crate) struct ShapeBuilder {
     pub(crate) id: u32,
     pub(crate) name: String,
+    pub(crate) actions: ActionSet,
     pub(crate) position: Position,
     pub(crate) size: Size,
     rotation: f64,
@@ -1180,6 +1251,7 @@ impl ShapeBuilder {
         Shape {
             id: self.id,
             name: self.name,
+            actions: self.actions,
             position: self.position,
             size: self.size,
             rotation: self.rotation,

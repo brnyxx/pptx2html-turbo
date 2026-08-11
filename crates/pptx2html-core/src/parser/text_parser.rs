@@ -395,6 +395,7 @@ pub(crate) struct RunBuilder {
     pub(crate) highlight: Option<Color>,
     pub(crate) shadow: Option<TextShadow>,
     pub(crate) hyperlink: Option<String>,
+    pub(crate) actions: ActionSet,
     pub(crate) is_break: bool,
 }
 
@@ -422,6 +423,7 @@ impl RunBuilder {
                 complex_script: self.font_cs,
             },
             hyperlink: self.hyperlink,
+            actions: self.actions,
             is_break: self.is_break,
         }
     }

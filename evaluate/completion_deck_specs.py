@@ -73,7 +73,89 @@ else:
 
 PATTERNS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="50" name="unknown custom formula"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:custGeom><a:avLst><a:gd name="unknownGuide" fmla="unknownOp 1 2"/></a:avLst><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="100000" h="100000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="100000" y="100000"/></a:lnTo></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>'
 PICTURE_BULLETS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="picture bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:buBlip><a:blip r:embed="rIdImage"/></a:buBlip></a:pPr><a:r><a:t>Present</a:t></a:r></a:p><a:p><a:pPr><a:buBlip><a:blip/></a:buBlip></a:pPr><a:r><a:t>Missing</a:t></a:r></a:p></p:txBody></p:sp>'
-ACTIONS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="internal"><a:hlinkClick action="ppaction://hlinkshowjump?jump=nextslide"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="external"><a:hlinkClick r:id="rIdExternal"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="4" name="unsafe"><a:hlinkClick r:id="rIdUnsafe"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
+
+
+def _action_shape(
+    shape_id: int, name: str, action: str, label: str, x: int, preset: str = "rect"
+) -> str:
+    return f'<p:sp><p:nvSpPr><p:cNvPr id={quoteattr(str(shape_id))} name={quoteattr(name)}>{action}</p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x={quoteattr(str(x))} y="200000"/><a:ext cx="1200000" cy="500000"/></a:xfrm><a:prstGeom prst={quoteattr(preset)}><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>{label}</a:t></a:r></a:p></p:txBody></p:sp>'
+
+
+ACTIONS: Final = "".join(
+    (
+        _action_shape(
+            2,
+            "next",
+            '<a:hlinkClick action="ppaction://hlinkshowjump?jump=nextslide"/>',
+            "NEXT_ACTION",
+            200000,
+            "actionButtonForwardNext",
+        ),
+        _action_shape(
+            3,
+            "previous",
+            '<a:hlinkClick action="ppaction://hlinkshowjump?jump=previousslide"/>',
+            "PREVIOUS_ACTION",
+            1500000,
+        ),
+        _action_shape(
+            4,
+            "first",
+            '<a:hlinkClick action="ppaction://hlinkshowjump?jump=firstslide"/>',
+            "FIRST_ACTION",
+            2800000,
+        ),
+        _action_shape(
+            5,
+            "last",
+            '<a:hlinkClick action="ppaction://hlinkshowjump?jump=lastslide"/>',
+            "LAST_ACTION",
+            4100000,
+        ),
+        _action_shape(
+            6,
+            "specific",
+            '<a:hlinkClick r:id="rIdSpecific" action="ppaction://hlinksldjump"/>',
+            "SPECIFIC_ACTION",
+            5400000,
+        ),
+        _action_shape(
+            7, "external", '<a:hlinkClick r:id="rIdExternal"/>', "HTTPS_ACTION", 6700000
+        ),
+        _action_shape(
+            8, "mailto", '<a:hlinkClick r:id="rIdMailto"/>', "MAILTO_ACTION", 200000
+        ),
+        _action_shape(
+            9, "unsafe", '<a:hlinkClick r:id="rIdUnsafe"/>', "UNSAFE_VISIBLE", 1500000
+        ),
+        _action_shape(
+            10,
+            "hover",
+            '<a:hlinkMouseOver action="ppaction://hlinkshowjump?jump=lastslide"/>',
+            "HOVER_ONLY",
+            2800000,
+        ),
+        _action_shape(
+            11,
+            "program",
+            '<a:hlinkClick action="ppaction://program"/>',
+            "PROGRAM_BLOCKED",
+            4100000,
+        ),
+        _action_shape(
+            12,
+            "macro",
+            '<a:hlinkClick action="ppaction://macro?name=SafeFixture"/>',
+            "MACRO_BLOCKED",
+            5400000,
+        ),
+        _action_shape(13, "no-op", "<a:hlinkClick/>", "NO_OP", 6700000),
+        '<p:pic><p:nvPicPr><p:cNvPr id="14" name="media"><a:hlinkClick r:id="" action="ppaction://media"/></p:cNvPr><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill/><p:spPr><a:xfrm><a:off x="200000" y="1600000"/><a:ext cx="1200000" cy="500000"/></a:xfrm></p:spPr></p:pic>',
+        '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="15" name="connector"><a:hlinkClick action="ppaction://hlinkshowjump?jump=nextslide"/></p:cNvPr><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm><a:off x="1500000" y="1600000"/><a:ext cx="1200000" cy="500000"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom></p:spPr></p:cxnSp>',
+        '<p:sp><p:nvSpPr><p:cNvPr id="16" name="run links"><a:hlinkClick r:id="rIdExternal"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr><a:hlinkClick r:id="rIdExternal"/></a:rPr><a:t>RUN_HTTPS</a:t></a:r><a:r><a:rPr><a:hlinkClick r:id="rIdUnsafe"/></a:rPr><a:t>RUN_UNSAFE_VISIBLE</a:t></a:r></a:p></p:txBody></p:sp>',
+        '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="17" name="table run"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr/><a:tblGrid><a:gridCol w="2000000"/></a:tblGrid><a:tr h="500000"><a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr><a:hlinkClick r:id="rIdExternal"/></a:rPr><a:t>TABLE_RUN_HTTPS</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>',
+    )
+)
 REFLECTION: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="reflection 3d"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom><a:effectLst><a:reflection blurRad="40000" stA="50000"/></a:effectLst><a:scene3d><a:camera prst="perspectiveFront"/><a:lightRig rig="threePt" dir="t"/></a:scene3d><a:sp3d extrusionH="120000" prstMaterial="warmMatte"/></p:spPr></p:sp>'
 MEDIA: Final = '<p:pic><p:nvPicPr><p:cNvPr id="2" name="audio"><a:hlinkClick action="ppaction://media"/></p:cNvPr><p:cNvPicPr/><p:nvPr><a:audioFile r:link="rIdAudio"/></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rIdPoster"/></p:blipFill><p:spPr/></p:pic><p:pic><p:nvPicPr><p:cNvPr id="3" name="video"/><p:cNvPicPr/><p:nvPr><a:videoFile r:link="rIdVideo"/></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rIdPoster"/></p:blipFill><p:spPr/></p:pic><p:pic><p:nvPicPr><p:cNvPr id="4" name="unsupported"/><p:cNvPicPr/><p:nvPr><a:audioFile r:link="rIdUnsupported"/></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rIdPoster"/></p:blipFill><p:spPr/></p:pic>'
 TIMING_SHAPES: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="animated"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
@@ -113,11 +195,19 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
         ),
         Deck(
             "actions",
-            ((ACTIONS, ""),),
+            ((ACTIONS, ""), ("", ""), ("", "")),
             (
                 ("rIdExternal", REL + "hyperlink", "https://example.com/", "External"),
+                (
+                    "rIdMailto",
+                    REL + "hyperlink",
+                    "mailto:fixture@example.com",
+                    "External",
+                ),
                 ("rIdUnsafe", REL + "hyperlink", "javascript:alert(1)", "External"),
+                ("rIdSpecific", REL + "slide", "slide7.xml", None),
             ),
+            slide_part_names=("slide1.xml", "slide42.xml", "slide7.xml"),
         ),
         Deck(
             "notes-comments",

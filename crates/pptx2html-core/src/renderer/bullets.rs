@@ -924,7 +924,14 @@ impl HtmlRenderer {
             inner_html
         };
 
-        actions::render_run_wrapper(run.hyperlink.as_deref(), &run_style, &segment_html, html);
+        actions::render_run_wrapper(
+            &run.actions,
+            run.hyperlink.as_deref(),
+            &run_style,
+            &segment_html,
+            ctx,
+            html,
+        );
     }
 }
 

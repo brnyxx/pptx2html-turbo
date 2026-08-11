@@ -6,6 +6,11 @@ use quick_xml::events::Event;
 use super::xml_utils;
 use crate::error::PptxResult;
 
+pub(crate) const HYPERLINK_RELATIONSHIP: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+pub(crate) const SLIDE_RELATIONSHIP: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TargetError {
     Empty,
@@ -46,6 +51,16 @@ pub enum TargetMode {
     Other(String),
 }
 
+impl TargetMode {
+    pub(crate) fn as_str(&self) -> &str {
+        match self {
+            Self::Internal => "Internal",
+            Self::External => "External",
+            Self::Other(value) => value,
+        }
+    }
+}
+
 pub fn parse_relationship_records(xml: &str) -> PptxResult<Vec<Relationship>> {
     let mut reader = Reader::from_str(xml);
     let mut relationships = Vec::new();
@@ -63,7 +78,7 @@ pub fn parse_relationship_records(xml: &str) -> PptxResult<Vec<Relationship>> {
                 let mut target_mode = TargetMode::Internal;
                 for attr in e.attributes().flatten() {
                     let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                    let value = String::from_utf8_lossy(&attr.value).to_string();
+                    let value = attr.unescape_value()?.into_owned();
                     match key {
                         "Id" => id = value,
                         "Type" => relationship_type = value,

@@ -52,6 +52,7 @@ struct UnresolvedCollector {
     pattern_counter: usize,
     marker_counter: usize,
     asset_counter: usize,
+    action_counter: usize,
 }
 
 /// Rendering context -- propagates theme/ClrMap references and full presentation
@@ -256,6 +257,7 @@ impl HtmlRenderer {
             pattern_counter: 0,
             marker_counter: 0,
             asset_counter: 0,
+            action_counter: 0,
         });
 
         let ctx = RenderCtx {
@@ -286,6 +288,10 @@ impl HtmlRenderer {
         }
         html.push_str("<style>\n");
         html.push_str(&Self::global_css(slide_w, slide_h));
+        let has_actions = actions::presentation_has_actions(pres);
+        if has_actions {
+            html.push_str(actions::CSS);
+        }
         html.push_str("</style>\n");
         html.push_str("</head>\n<body>\n");
         html.push_str("<div class=\"pptx-container\">\n");
@@ -316,7 +322,11 @@ impl HtmlRenderer {
         fallback::sort_and_deduplicate(&mut coll.diagnostics);
         html.push_str("<script type=\"application/json\" id=\"pptx2html-diagnostics\">");
         html.push_str(&fallback::diagnostics_json(&coll.diagnostics));
-        html.push_str("</script>\n</body>\n</html>");
+        html.push_str("</script>\n");
+        if has_actions {
+            html.push_str(actions::RUNTIME);
+        }
+        html.push_str("\n</body>\n</html>");
         Ok(ConversionResult {
             html,
             diagnostics: coll.diagnostics,
@@ -445,7 +455,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         );
         let _ = writeln!(
             html,
-            "<div class=\"slide\" data-slide=\"{num}\" style=\"{slide_style}\">"
+            "<div class=\"slide\" id=\"slide-{num}\" data-slide=\"{num}\" style=\"{slide_style}\">"
         );
         slide_ctx.push_provenance(RenderedProvenanceEntry {
             slide_index: num,
@@ -826,6 +836,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         let _ = writeln!(html, "<div class=\"shape\" style=\"{style_buf}\">");
+        actions::render_shape_surface(&shape.actions, shape.id, ctx, html);
 
         // Table
         if let ShapeType::Table(ref table) = shape.shape_type {
@@ -2149,6 +2160,7 @@ mod tests {
             pattern_counter: 0,
             marker_counter: 0,
             asset_counter: 0,
+            action_counter: 0,
         });
         (pres, collector)
     }

@@ -433,6 +433,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -455,6 +456,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -478,6 +480,7 @@ mod tests {
                     },
                     font: FontStyle::default(),
                     hyperlink: None,
+                    actions: Default::default(),
                     is_break: false,
                 },
                 TextRun {
@@ -488,6 +491,7 @@ mod tests {
                     },
                     font: FontStyle::default(),
                     hyperlink: None,
+                    actions: Default::default(),
                     is_break: false,
                 },
             ],
@@ -509,6 +513,7 @@ mod tests {
                     style: TextStyle::default(),
                     font: FontStyle::default(),
                     hyperlink: None,
+                    actions: Default::default(),
                     is_break: false,
                 },
                 TextRun {
@@ -516,6 +521,7 @@ mod tests {
                     style: TextStyle::default(),
                     font: FontStyle::default(),
                     hyperlink: None,
+                    actions: Default::default(),
                     is_break: false,
                 },
             ],
@@ -541,6 +547,7 @@ mod tests {
                     style: TextStyle::default(),
                     font: FontStyle::default(),
                     hyperlink: None,
+                    actions: Default::default(),
                     is_break: false,
                 },
                 TextRun {
@@ -548,6 +555,7 @@ mod tests {
                     style: TextStyle::default(),
                     font: FontStyle::default(),
                     hyperlink: None,
+                    actions: Default::default(),
                     is_break: false,
                 },
             ],
@@ -571,6 +579,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -593,6 +602,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -615,6 +625,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -637,6 +648,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -659,6 +671,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -681,6 +694,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -703,6 +717,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -725,6 +740,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -747,6 +763,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -769,6 +786,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -791,6 +809,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -813,6 +832,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -835,6 +855,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -857,6 +878,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -879,6 +901,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -901,6 +924,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -923,6 +947,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -945,6 +970,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -967,6 +993,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -989,6 +1016,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1011,6 +1039,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1033,6 +1062,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1055,6 +1085,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1077,6 +1108,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1099,6 +1131,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1121,6 +1154,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1143,6 +1177,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1165,6 +1200,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1187,6 +1223,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1209,6 +1246,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1231,6 +1269,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1253,6 +1292,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1275,6 +1315,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1297,6 +1338,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1319,6 +1361,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1341,6 +1384,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1363,6 +1407,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1385,6 +1430,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1407,6 +1453,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1429,6 +1476,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1451,6 +1499,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1473,6 +1522,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()
@@ -1563,6 +1613,7 @@ mod tests {
                 },
                 font: FontStyle::default(),
                 hyperlink: None,
+                actions: Default::default(),
                 is_break: false,
             }],
             ..Default::default()

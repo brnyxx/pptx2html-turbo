@@ -13,7 +13,9 @@ SPECIFIC_RELS: Final = {
     "picture-bullets": ((SR, "rIdImage", REL + "image", "../media/bullet.png", None),),
     "actions": (
         (SR, "rIdExternal", REL + "hyperlink", "https://example.com/", "External"),
+        (SR, "rIdMailto", REL + "hyperlink", "mailto:fixture@example.com", "External"),
         (SR, "rIdUnsafe", REL + "hyperlink", "javascript:alert(1)", "External"),
+        (SR, "rIdSpecific", REL + "slide", "slide7.xml", None),
     ),
     "notes-comments": (
         (SR, "rIdNotes", REL + "notesSlide", "../notesSlides/notesSlide1.xml", None),
@@ -157,7 +159,10 @@ def assert_package_graph(
             )
             if mode == "External":
                 case.assertTrue(
-                    target.startswith(("http://", "https://", "javascript:")), rel_part
+                    target.startswith(
+                        ("http://", "https://", "mailto:", "javascript:")
+                    ),
+                    rel_part,
                 )
                 continue
             case.assertIsNone(mode, rel_part)
@@ -194,17 +199,25 @@ def _assert_relationship_expectations(
             (kind, target, mode),
             f"{deck}:{rid}",
         )
-    for index in range(
-        1,
-        1
-        + len(
-            [
-                name
-                for name in archive.namelist()
-                if name.startswith("ppt/slides/slide") and name.endswith(".xml")
-            ]
-        ),
-    ):
+    expected_slide_targets = (
+        ("slides/slide1.xml", "slides/slide42.xml", "slides/slide7.xml")
+        if deck == "actions"
+        else tuple(
+            f"slides/slide{index}.xml"
+            for index in range(
+                1,
+                1
+                + len(
+                    [
+                        name
+                        for name in archive.namelist()
+                        if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+                    ]
+                ),
+            )
+        )
+    )
+    for index, target in enumerate(expected_slide_targets, 1):
         presentation = ElementTree.fromstring(
             archive.read("ppt/_rels/presentation.xml.rels")
         )
@@ -215,10 +228,11 @@ def _assert_relationship_expectations(
                 slide_rel.get("Target"),
                 slide_rel.get("TargetMode"),
             ),
-            (REL + "slide", f"slides/slide{index}.xml", None),
+            (REL + "slide", target, None),
         )
+        case.assertIn(f"ppt/{target}", archive.namelist())
         slide_rels = ElementTree.fromstring(
-            archive.read(f"ppt/slides/_rels/slide{index}.xml.rels")
+            archive.read(f"ppt/slides/_rels/{target.rsplit('/', 1)[-1]}.rels")
         )
         layout = slide_rels.find("pr:Relationship[@Id='rIdLayout']", NS)
         case.assertEqual(

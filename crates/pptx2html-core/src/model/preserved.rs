@@ -54,6 +54,7 @@ pub enum FallbackKind {
     IgnoredRelationship,
     UnknownElement,
     TableStyleDefinitionUnavailable,
+    ActionMetadata,
 }
 
 impl FallbackKind {
@@ -67,6 +68,7 @@ impl FallbackKind {
             Self::IgnoredRelationship => "ignored-relationship",
             Self::UnknownElement => "unknown-element",
             Self::TableStyleDefinitionUnavailable => "table-style-definition-unavailable",
+            Self::ActionMetadata => "action-metadata",
         }
     }
 }

@@ -382,6 +382,8 @@ fn known_drawingml_element(local_name: &str) -> bool {
             | "lnB"
             | "extLst"
             | "hlinkClick"
+            | "hlinkHover"
+            | "hlinkMouseOver"
             | "fillRef"
             | "lnRef"
             | "effectRef"

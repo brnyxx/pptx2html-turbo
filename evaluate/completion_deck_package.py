@@ -39,6 +39,15 @@ class Deck:
     parts: tuple[Part, ...] = ()
     types: tuple[ContentType, ...] = ()
     backgrounds: tuple[str, ...] = ()
+    slide_part_names: tuple[str, ...] = ()
+
+
+def slide_part_names(deck: Deck) -> tuple[str, ...]:
+    if deck.slide_part_names:
+        if len(deck.slide_part_names) != len(deck.slides):
+            raise ValueError("slide part names must match slide count")
+        return deck.slide_part_names
+    return tuple(f"slide{i}.xml" for i in range(1, len(deck.slides) + 1))
 
 
 def relationships_xml(rows: tuple[Relationship, ...]) -> bytes:
@@ -130,10 +139,10 @@ def _content_types(deck: Deck) -> bytes:
     )
     slides = tuple(
         (
-            f"/ppt/slides/slide{i}.xml",
+            f"/ppt/slides/{name}",
             "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
         )
-        for i in range(1, len(deck.slides) + 1)
+        for name in slide_part_names(deck)
     )
     overrides = "".join(
         f"<Override PartName={quoteattr(name)} ContentType={quoteattr(kind)}/>"
@@ -151,6 +160,7 @@ def _content_types(deck: Deck) -> bytes:
 
 
 def _package_parts(deck: Deck) -> dict[str, bytes]:
+    names = slide_part_names(deck)
     slide_ids = "".join(
         f"<p:sldId id={quoteattr(str(255 + i))} r:id={quoteattr(f'rIdSlide{i}')}/>"
         for i in range(1, len(deck.slides) + 1)
@@ -159,8 +169,8 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
         ("rIdMaster", REL + "slideMaster", "slideMasters/slideMaster1.xml", None),
         ("rIdPresProps", REL + "presProps", "presProps.xml", None),
         *(
-            (f"rIdSlide{i}", REL + "slide", f"slides/slide{i}.xml", None)
-            for i in range(1, len(deck.slides) + 1)
+            (f"rIdSlide{i}", REL + "slide", f"slides/{name}", None)
+            for i, name in enumerate(names, 1)
         ),
         *deck.presentation_rels,
     )
@@ -204,13 +214,15 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
         "ppt/theme/theme1.xml": theme_xml(),
         **dict(deck.parts),
     }
-    for index, (body, tail) in enumerate(deck.slides, 1):
+    for index, ((body, tail), name) in enumerate(
+        zip(deck.slides, names, strict=True), 1
+    ):
         background = (
             deck.backgrounds[index - 1] if index <= len(deck.backgrounds) else ""
         )
-        parts[f"ppt/slides/slide{index}.xml"] = _slide(body, tail, background)
+        parts[f"ppt/slides/{name}"] = _slide(body, tail, background)
         feature_rels = deck.slide_rels if index == 1 else ()
-        parts[f"ppt/slides/_rels/slide{index}.xml.rels"] = relationships_xml(
+        parts[f"ppt/slides/_rels/{name}.rels"] = relationships_xml(
             (
                 (
                     "rIdLayout",
