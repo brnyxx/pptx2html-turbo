@@ -6,6 +6,8 @@ This contract defines finite, observable completeness for PPTX conversion. It do
 
 `evaluate/completeness_manifest.json` is the machine-readable inventory. Every feature row has a stable id, an official source URL, and an OOXML qualified name or relationship type. The source is format authority, not evidence that the current converter supports the feature.
 
+The root `contract_scope` must exactly equal `target disposition; this manifest does not claim current direct support without feature evidence`. The checker rejects any drift with `INVALID_CONTRACT_SCOPE`.
+
 The validator accepts official source URLs only from `learn.microsoft.com` and `ecma-international.org`. A source URL must use HTTPS, have no credentials or explicit port, and include a non-root path. Other values fail with `UNOFFICIAL_SOURCE`.
 
 ## Fidelity dimensions
