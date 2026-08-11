@@ -72,7 +72,6 @@ else:
 
 
 PATTERNS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="50" name="unknown custom formula"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:custGeom><a:avLst><a:gd name="unknownGuide" fmla="unknownOp 1 2"/></a:avLst><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="100000" h="100000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="100000" y="100000"/></a:lnTo></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>'
-PICTURE_BULLETS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="picture bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:buBlip><a:blip r:embed="rIdImage"/></a:buBlip></a:pPr><a:r><a:t>Present</a:t></a:r></a:p><a:p><a:pPr><a:buBlip><a:blip/></a:buBlip></a:pPr><a:r><a:t>Missing</a:t></a:r></a:p></p:txBody></p:sp>'
 
 
 def _action_shape(
