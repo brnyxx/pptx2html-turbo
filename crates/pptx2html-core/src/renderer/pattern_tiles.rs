@@ -9,17 +9,20 @@ pub(super) struct TileSpec {
 }
 
 fn percentage_tile(percent: u8, foreground: &str) -> TileSpec {
-    let count = usize::from(percent).div_ceil(5).min(20);
+    const CELL_ORDER: [u8; 20] = [
+        0, 13, 16, 9, 2, 10, 3, 6, 19, 12, 5, 18, 11, 4, 17, 15, 8, 1, 14, 7,
+    ];
+    let count = usize::from(percent / 5);
     let mut motif = String::new();
-    for index in 0..count {
-        let x = 1 + (index % 5) * 2;
-        let y = 1 + (index / 5) * 2;
+    for cell in CELL_ORDER.iter().take(count) {
+        let x = cell % 5;
+        let y = cell / 5;
         let _ = write!(
             motif,
-            "<circle cx='{x}' cy='{y}' r='.7' fill='{foreground}'/>"
+            "<rect x='{x}' y='{y}' width='1' height='1' fill='{foreground}'/>"
         );
     }
-    tile(10, 8, motif)
+    tile(5, 4, motif)
 }
 
 fn tile(width: u8, height: u8, motif: String) -> TileSpec {
