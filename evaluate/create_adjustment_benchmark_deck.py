@@ -11,16 +11,21 @@ reference image set.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Final, Iterable
+import zipfile
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
+
+
+FIXED_ZIP_TIME: Final = (1980, 1, 1, 0, 0, 0)
 
 
 @dataclass(frozen=True)
@@ -422,22 +427,46 @@ UTURN_ARROW_VARIANTS: tuple[ShapeVariant, ...] = (
     ShapeVariant(
         "UTURN_ARROW_ADJ_TIGHT",
         MSO_AUTO_SHAPE_TYPE.U_TURN_ARROW,
-        {"adj1": 15_000, "adj2": 15_000, "adj3": 15_000, "adj4": 35_000, "adj5": 65_000},
+        {
+            "adj1": 15_000,
+            "adj2": 15_000,
+            "adj3": 15_000,
+            "adj4": 35_000,
+            "adj5": 65_000,
+        },
     ),
     ShapeVariant(
         "UTURN_ARROW_ADJ_WIDE",
         MSO_AUTO_SHAPE_TYPE.U_TURN_ARROW,
-        {"adj1": 35_000, "adj2": 30_000, "adj3": 35_000, "adj4": 50_000, "adj5": 85_000},
+        {
+            "adj1": 35_000,
+            "adj2": 30_000,
+            "adj3": 35_000,
+            "adj4": 50_000,
+            "adj5": 85_000,
+        },
     ),
     ShapeVariant(
         "UTURN_ARROW_ADJ_SHALLOW",
         MSO_AUTO_SHAPE_TYPE.U_TURN_ARROW,
-        {"adj1": 20_000, "adj2": 12_000, "adj3": 25_000, "adj4": 65_000, "adj5": 85_000},
+        {
+            "adj1": 20_000,
+            "adj2": 12_000,
+            "adj3": 25_000,
+            "adj4": 65_000,
+            "adj5": 85_000,
+        },
     ),
     ShapeVariant(
         "UTURN_ARROW_ADJ_DEEP",
         MSO_AUTO_SHAPE_TYPE.U_TURN_ARROW,
-        {"adj1": 25_000, "adj2": 45_000, "adj3": 10_000, "adj4": 25_000, "adj5": 70_000},
+        {
+            "adj1": 25_000,
+            "adj2": 45_000,
+            "adj3": 10_000,
+            "adj4": 25_000,
+            "adj5": 70_000,
+        },
     ),
 )
 
@@ -1075,6 +1104,21 @@ def apply_adjustments(shape, adjustments: dict[str, int]) -> None:
         av_lst.append(gd)
 
 
+def canonicalize_pptx(path: Path) -> None:
+    with zipfile.ZipFile(path) as source:
+        members = {name: source.read(name) for name in source.namelist()}
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for name, payload in sorted(members.items()):
+            info = zipfile.ZipInfo(name, FIXED_ZIP_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 0
+            info.external_attr = 0
+            archive.writestr(info, payload)
+    path.write_bytes(buffer.getvalue())
+
+
 def build_curated_slide(
     prs: Presentation, variants: Iterable[ShapeVariant]
 ) -> tuple[list[dict[str, object]], dict[str, float]]:
@@ -1159,6 +1203,7 @@ def main() -> None:
     prs.slide_height = Inches(7.5)
     entries, grid = build_curated_slide(prs, variants)
     prs.save(pptx_path)
+    canonicalize_pptx(pptx_path)
 
     manifest = {
         "pptx": str(pptx_path),
