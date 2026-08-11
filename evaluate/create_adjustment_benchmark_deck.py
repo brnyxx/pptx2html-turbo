@@ -11,8 +11,9 @@ reference image set.
 from __future__ import annotations
 
 import argparse
-import io
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Iterable
@@ -26,6 +27,10 @@ from pptx.util import Inches, Pt
 
 
 FIXED_ZIP_TIME: Final = (1980, 1, 1, 0, 0, 0)
+
+
+class PptxCanonicalizationError(RuntimeError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -1105,18 +1110,43 @@ def apply_adjustments(shape, adjustments: dict[str, int]) -> None:
 
 
 def canonicalize_pptx(path: Path) -> None:
-    with zipfile.ZipFile(path) as source:
-        members = {name: source.read(name) for name in source.namelist()}
+    temporary_path: Path | None = None
+    try:
+        with zipfile.ZipFile(path) as source:
+            members = {name: source.read(name) for name in source.namelist()}
 
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for name, payload in sorted(members.items()):
-            info = zipfile.ZipInfo(name, FIXED_ZIP_TIME)
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.create_system = 0
-            info.external_attr = 0
-            archive.writestr(info, payload)
-    path.write_bytes(buffer.getvalue())
+        with tempfile.NamedTemporaryFile(
+            mode="w+b",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            with zipfile.ZipFile(
+                temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=9
+            ) as archive:
+                for name, payload in sorted(members.items()):
+                    info = zipfile.ZipInfo(name, FIXED_ZIP_TIME)
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.create_system = 0
+                    info.external_attr = 0
+                    archive.writestr(info, payload)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        temporary_path.replace(path)
+        temporary_path = None
+    except (OSError, zipfile.BadZipFile) as error:
+        cleanup_error: OSError | None = None
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError as caught:
+                cleanup_error = caught
+        detail = f" cleanup_error={cleanup_error}" if cleanup_error else ""
+        raise PptxCanonicalizationError(
+            f"failed to canonicalize PPTX path={path}{detail}"
+        ) from error
 
 
 def build_curated_slide(

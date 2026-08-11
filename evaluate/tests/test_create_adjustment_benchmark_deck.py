@@ -5,10 +5,15 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import patch
 from xml.etree import ElementTree
 
-from evaluate.create_adjustment_benchmark_deck import canonicalize_pptx
+from evaluate.create_adjustment_benchmark_deck import (
+    PptxCanonicalizationError,
+    canonicalize_pptx,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +22,56 @@ FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 
 
 class AdjustmentBenchmarkDeckTests(unittest.TestCase):
+    def test_write_failure_preserves_original_and_cleans_unique_temporary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "fixture.pptx"
+            self._write_fixture(path)
+            original = path.read_bytes()
+
+            with patch(
+                "evaluate.create_adjustment_benchmark_deck.os.fsync",
+                side_effect=OSError("injected fsync failure"),
+            ):
+                with self.assertRaises(PptxCanonicalizationError):
+                    canonicalize_pptx(path)
+
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
+
+    def test_replace_failure_preserves_original_and_cleans_unique_temporary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "fixture.pptx"
+            self._write_fixture(path)
+            original = path.read_bytes()
+
+            with patch.object(
+                Path, "replace", side_effect=OSError("injected replace failure")
+            ):
+                with self.assertRaises(PptxCanonicalizationError):
+                    canonicalize_pptx(path)
+
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
+
+    def test_concurrent_canonicalization_uses_collision_free_temporary_files(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "fixture.pptx"
+            self._write_fixture(path)
+
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                list(executor.map(lambda _: canonicalize_pptx(path), range(8)))
+
+            with zipfile.ZipFile(path) as archive:
+                self.assertEqual(archive.namelist(), sorted(archive.namelist()))
+                self.assertTrue(
+                    all(info.date_time == FIXED_TIME for info in archive.infolist())
+                )
+            self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
+
     def test_canonicalization_preserves_every_member_payload(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "fixture.pptx"
@@ -81,6 +136,12 @@ class AdjustmentBenchmarkDeckTests(unittest.TestCase):
                 for member in archive.namelist():
                     if member.endswith((".xml", ".rels")):
                         ElementTree.fromstring(archive.read(member))
+
+    @staticmethod
+    def _write_fixture(path: Path) -> None:
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("z.xml", b"<z />")
+            archive.writestr("_rels/.rels", b'<Relationships xmlns="urn:test" />')
 
 
 if __name__ == "__main__":
