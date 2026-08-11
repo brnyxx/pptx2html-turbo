@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::io::{Cursor, Read, Write};
 use std::process::{Command, Stdio};
 
-use fixtures::{FeaturePart, PackageBuilder, Relationship, SlideXml};
+use fixtures::{FeaturePart, MinimalPptx, PackageBuilder, Relationship, SlideXml};
 use pptx2html_core::model::{
     Emu, FallbackKind, Position, Presentation, Shape, ShapeType, Size, Slide, UnresolvedType,
     UnsupportedData,
@@ -134,6 +134,55 @@ fn existing_fallbacks_emit_typed_diagnostics_with_locations() {
         diagnostic.fallback_kind == FallbackKind::CustomGeometryPlaceholder
             && diagnostic.location.qualified_element_name.as_deref() == Some("a:custGeom")
     }));
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "DRAWINGML_SMARTART_FALLBACK"
+            && diagnostic.location.relationship_id.as_deref() == Some("rId7")
+    }));
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "PRESENTATIONML_OLE_FALLBACK"
+            && diagnostic.location.relationship_id.as_deref() == Some("rId8")
+    }));
+}
+
+#[test]
+fn custom_formula_relationship_markers_do_not_spoof_or_deduplicate_diagnostics() {
+    const FORMULA: &str = "val r:id=\"spoof\"";
+    let custom_shape = |id: u32, name: &str| {
+        format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="{id}" name="{name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst><a:gd name="bad" fmla='val r:id="spoof"'/></a:gdLst><a:pathLst><a:path w="10" h="10"/></a:pathLst></a:custGeom></p:spPr></p:sp>"#
+        )
+    };
+    let shapes = format!(
+        "{}{}",
+        custom_shape(2, "first spoof"),
+        custom_shape(3, "second spoof")
+    );
+    let package = MinimalPptx::new(&shapes).build();
+
+    let result = convert_bytes_with_metadata(&package).expect("custom fallbacks remain non-fatal");
+
+    let diagnostics = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "DRAWINGML_CUSTOM_GEOMETRY_FALLBACK")
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 2);
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.raw_reference.as_deref() == Some(FORMULA))
+    );
+    let relationship_ids = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.location.relationship_id.as_deref())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(relationship_ids.len(), 2);
+    assert!(!relationship_ids.contains("spoof"));
+    assert!(
+        relationship_ids
+            .iter()
+            .all(|identity| identity.starts_with("unresolved-s0-e"))
+    );
 }
 
 #[test]

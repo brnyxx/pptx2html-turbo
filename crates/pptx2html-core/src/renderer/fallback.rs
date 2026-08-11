@@ -86,11 +86,15 @@ fn fallback_diagnostic(
             FallbackKind::CustomGeometryPlaceholder,
         ),
     };
-    let relationship_id = metadata
-        .raw_reference
-        .as_deref()
-        .and_then(extract_relationship_id)
-        .unwrap_or_else(|| placeholder_id.to_owned());
+    let relationship_id = if data.element_type == UnresolvedType::CustomGeometry {
+        placeholder_id.to_owned()
+    } else {
+        metadata
+            .raw_reference
+            .as_deref()
+            .and_then(extract_relationship_id)
+            .unwrap_or_else(|| placeholder_id.to_owned())
+    };
     ConversionDiagnostic {
         code: code.to_owned(),
         family: FeatureFamily::Unsupported,
