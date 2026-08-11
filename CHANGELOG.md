@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Preserve click and mouse-over actions as typed `ActionSet` data across shapes, pictures, connectors, graphic frames, and shape/table text runs
 - Render only strict product-allowlisted `http`, `https`, and `mailto` links, use actual presentation slide order for internal navigation, and keep unsafe or unsupported actions inert with stable diagnostics
 - Preserve group and table graphic-frame action ownership, require exact PresentationML owner stacks, and use stable owner-derived run/table-cell diagnostic identities
+- Keep safe legacy run hyperlinks pointer-reachable above enclosing shape, group, and table actions without enabling plain or unsafe legacy runs
 - Add public `Shape::actions`, `TextRun::actions`, typed action enums, and `FallbackKind::ActionMetadata`; exhaustive matches and struct literals require a next-semver-major source migration while the manifest version remains unchanged
 - Resolve package-defined DrawingML table styles in Office region precedence order, including theme-aware fills, text, outer/inside borders, explicit-cell overrides, and logical merged-cell coordinates
 - Preserve unavailable built-in and invalid table style IDs plus all six flags in `TABLE_STYLE_DEFINITION_UNAVAILABLE` diagnostics without synthesizing Office appearances
