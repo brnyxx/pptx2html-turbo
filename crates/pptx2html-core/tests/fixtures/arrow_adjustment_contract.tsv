@@ -1,0 +1,248 @@
+# manifest_sha256=6f02bd9353de8a80dbfa6c916ad16b8139d0813e48c60100ac9fe00b09cf5c3d
+# official_names_sha256=f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587
+# supplement_sha256=23dc5bfc28c65bbac832c40452b29af40b535679f47c35d22e6db6f1292a48ad
+# preset_name=homePlate
+# preset_name=chevron
+# preset_name=rightArrow
+# preset_name=leftArrow
+# preset_name=upArrow
+# preset_name=downArrow
+# preset_name=stripedRightArrow
+# preset_name=notchedRightArrow
+# preset_name=bentUpArrow
+# preset_name=leftRightArrow
+# preset_name=upDownArrow
+# preset_name=leftUpArrow
+# preset_name=leftRightUpArrow
+# preset_name=quadArrow
+# preset_name=leftArrowCallout
+# preset_name=rightArrowCallout
+# preset_name=upArrowCallout
+# preset_name=downArrowCallout
+# preset_name=leftRightArrowCallout
+# preset_name=upDownArrowCallout
+# preset_name=quadArrowCallout
+# preset_name=bentArrow
+# preset_name=uturnArrow
+# preset_name=circularArrow
+# preset_name=leftCircularArrow
+# preset_name=leftRightCircularArrow
+# preset_name=curvedRightArrow
+# preset_name=curvedLeftArrow
+# preset_name=curvedUpArrow
+# preset_name=curvedDownArrow
+# preset_name=swooshArrow
+# preset_name=bentConnector2
+# preset_name=bentConnector3
+# preset_name=bentConnector4
+# preset_name=bentConnector5
+# preset_name=curvedConnector2
+# preset_name=curvedConnector3
+# preset_name=curvedConnector4
+# preset_name=curvedConnector5
+# preset_name=callout1
+# preset_name=callout2
+# preset_name=callout3
+# preset_name=accentCallout1
+# preset_name=accentCallout2
+# preset_name=accentCallout3
+# preset_name=borderCallout1
+# preset_name=borderCallout2
+# preset_name=borderCallout3
+# preset_name=accentBorderCallout1
+# preset_name=accentBorderCallout2
+# preset_name=accentBorderCallout3
+# preset_name=wedgeRectCallout
+# preset_name=wedgeRoundRectCallout
+# preset_name=wedgeEllipseCallout
+# preset_name=cloudCallout
+preset	key	default	lower	upper
+homePlate	adj	50000	25000	75000
+chevron	adj	50000	25000	75000
+rightArrow	adj1	50000	0	100000
+rightArrow	adj2	50000	25000	75000
+leftArrow	adj1	50000	0	100000
+leftArrow	adj2	50000	25000	75000
+upArrow	adj1	50000	0	100000
+upArrow	adj2	50000	25000	75000
+downArrow	adj1	50000	0	100000
+downArrow	adj2	50000	25000	75000
+stripedRightArrow	adj1	50000	0	100000
+stripedRightArrow	adj2	50000	25000	75000
+notchedRightArrow	adj1	50000	0	100000
+notchedRightArrow	adj2	50000	25000	75000
+bentUpArrow	adj1	25000	0	50000
+bentUpArrow	adj2	25000	0	50000
+bentUpArrow	adj3	25000	0	50000
+leftRightArrow	adj1	50000	0	100000
+leftRightArrow	adj2	50000	25000	75000
+upDownArrow	adj1	50000	0	100000
+upDownArrow	adj2	50000	25000	75000
+leftUpArrow	adj1	25000	12500	37500
+leftUpArrow	adj2	25000	0	50000
+leftUpArrow	adj3	25000	12500	37500
+leftRightUpArrow	adj1	25000	12500	37500
+leftRightUpArrow	adj2	25000	0	50000
+leftRightUpArrow	adj3	25000	12500	37500
+quadArrow	adj1	22500	11250	33750
+quadArrow	adj2	22500	0	50000
+quadArrow	adj3	22500	11250	33750
+leftArrowCallout	adj1	25000	12500	37500
+leftArrowCallout	adj2	25000	12500	37500
+leftArrowCallout	adj3	25000	12500	37500
+leftArrowCallout	adj4	64977	32488.5	97465.5
+rightArrowCallout	adj1	25000	12500	37500
+rightArrowCallout	adj2	25000	12500	37500
+rightArrowCallout	adj3	25000	12500	37500
+rightArrowCallout	adj4	64977	32488.5	97465.5
+upArrowCallout	adj1	25000	12500	37500
+upArrowCallout	adj2	25000	12500	37500
+upArrowCallout	adj3	25000	12500	37500
+upArrowCallout	adj4	64977	32488.5	97465.5
+downArrowCallout	adj1	25000	12500	37500
+downArrowCallout	adj2	25000	12500	37500
+downArrowCallout	adj3	25000	12500	37500
+downArrowCallout	adj4	64977	32488.5	97465.5
+leftRightArrowCallout	adj1	25000	12500	37500
+leftRightArrowCallout	adj2	25000	12500	37500
+leftRightArrowCallout	adj3	25000	12500	37500
+leftRightArrowCallout	adj4	48123	24061.5	72184.5
+upDownArrowCallout	adj1	25000	12500	37500
+upDownArrowCallout	adj2	25000	12500	37500
+upDownArrowCallout	adj3	25000	12500	37500
+upDownArrowCallout	adj4	48123	24061.5	72184.5
+quadArrowCallout	adj1	18515	9257.5	27772.5
+quadArrowCallout	adj2	18515	0	50000
+quadArrowCallout	adj3	18515	9257.5	27772.5
+quadArrowCallout	adj4	48123	24061.5	72184.5
+bentArrow	adj1	25000	12500	37500
+bentArrow	adj2	25000	0	50000
+bentArrow	adj3	25000	0	50000
+bentArrow	adj4	43750	21875	65625
+uturnArrow	adj1	25000	12500	37500
+uturnArrow	adj2	25000	0	25000
+uturnArrow	adj3	25000	12500	37500
+uturnArrow	adj4	43750	21875	65625
+uturnArrow	adj5	75000	37500	112500
+circularArrow	adj1	12500	6250	18750
+circularArrow	adj2	1.14232e+06	571160	1.71348e+06
+circularArrow	adj3	2.04577e+07	0	2.16e+07
+circularArrow	adj4	1.08e+07	0	2.16e+07
+circularArrow	adj5	12500	0	25000
+leftCircularArrow	adj1	12500	6250	18750
+leftCircularArrow	adj2	-1.14232e+06	-1.71348e+06	-571160
+leftCircularArrow	adj3	1.14232e+06	0	2.16e+07
+leftCircularArrow	adj4	1.08e+07	0	2.16e+07
+leftCircularArrow	adj5	12500	0	25000
+leftRightCircularArrow	adj1	12500	6250	18750
+leftRightCircularArrow	adj2	1.14232e+06	571160	1.71348e+06
+leftRightCircularArrow	adj3	2.04577e+07	0	2.16e+07
+leftRightCircularArrow	adj4	1.19423e+07	0	2.16e+07
+leftRightCircularArrow	adj5	12500	0	25000
+curvedRightArrow	adj1	25000	12500	37500
+curvedRightArrow	adj2	50000	25000	75000
+curvedRightArrow	adj3	25000	12500	37500
+curvedLeftArrow	adj1	25000	12500	37500
+curvedLeftArrow	adj2	50000	25000	75000
+curvedLeftArrow	adj3	25000	12500	37500
+curvedUpArrow	adj1	25000	12500	37500
+curvedUpArrow	adj2	50000	25000	75000
+curvedUpArrow	adj3	25000	12500	37500
+curvedDownArrow	adj1	25000	12500	37500
+curvedDownArrow	adj2	50000	25000	75000
+curvedDownArrow	adj3	25000	12500	37500
+swooshArrow	adj1	25000	1	75000
+swooshArrow	adj2	16667	8333.5	25000.5
+bentConnector3	adj1	50000	-2.14748e+09	2.14748e+09
+bentConnector4	adj1	50000	-2.14748e+09	2.14748e+09
+bentConnector4	adj2	50000	-2.14748e+09	2.14748e+09
+bentConnector5	adj1	50000	-2.14748e+09	2.14748e+09
+bentConnector5	adj2	50000	-2.14748e+09	2.14748e+09
+bentConnector5	adj3	50000	-2.14748e+09	2.14748e+09
+curvedConnector3	adj1	50000	-2.14748e+09	2.14748e+09
+curvedConnector4	adj1	50000	-2.14748e+09	2.14748e+09
+curvedConnector4	adj2	50000	-2.14748e+09	2.14748e+09
+curvedConnector5	adj1	50000	-2.14748e+09	2.14748e+09
+curvedConnector5	adj2	50000	-2.14748e+09	2.14748e+09
+curvedConnector5	adj3	50000	-2.14748e+09	2.14748e+09
+callout1	adj1	18750	-2.14748e+09	2.14748e+09
+callout1	adj2	-8333	-2.14748e+09	2.14748e+09
+callout1	adj3	112500	-2.14748e+09	2.14748e+09
+callout1	adj4	-38333	-2.14748e+09	2.14748e+09
+callout2	adj1	18750	-2.14748e+09	2.14748e+09
+callout2	adj2	-8333	-2.14748e+09	2.14748e+09
+callout2	adj3	18750	-2.14748e+09	2.14748e+09
+callout2	adj4	-16667	-2.14748e+09	2.14748e+09
+callout2	adj5	112500	-2.14748e+09	2.14748e+09
+callout2	adj6	-46667	-2.14748e+09	2.14748e+09
+callout3	adj1	18750	-2.14748e+09	2.14748e+09
+callout3	adj2	-8333	-2.14748e+09	2.14748e+09
+callout3	adj3	18750	-2.14748e+09	2.14748e+09
+callout3	adj4	-16667	-2.14748e+09	2.14748e+09
+callout3	adj5	100000	-2.14748e+09	2.14748e+09
+callout3	adj6	-16667	-2.14748e+09	2.14748e+09
+callout3	adj7	112963	-2.14748e+09	2.14748e+09
+callout3	adj8	-8333	-2.14748e+09	2.14748e+09
+accentCallout1	adj1	18750	-2.14748e+09	2.14748e+09
+accentCallout1	adj2	-8333	-2.14748e+09	2.14748e+09
+accentCallout1	adj3	112500	-2.14748e+09	2.14748e+09
+accentCallout1	adj4	-38333	-2.14748e+09	2.14748e+09
+accentCallout2	adj1	18750	-2.14748e+09	2.14748e+09
+accentCallout2	adj2	-8333	-2.14748e+09	2.14748e+09
+accentCallout2	adj3	18750	-2.14748e+09	2.14748e+09
+accentCallout2	adj4	-16667	-2.14748e+09	2.14748e+09
+accentCallout2	adj5	112500	-2.14748e+09	2.14748e+09
+accentCallout2	adj6	-46667	-2.14748e+09	2.14748e+09
+accentCallout3	adj1	18750	-2.14748e+09	2.14748e+09
+accentCallout3	adj2	-8333	-2.14748e+09	2.14748e+09
+accentCallout3	adj3	18750	-2.14748e+09	2.14748e+09
+accentCallout3	adj4	-16667	-2.14748e+09	2.14748e+09
+accentCallout3	adj5	100000	-2.14748e+09	2.14748e+09
+accentCallout3	adj6	-16667	-2.14748e+09	2.14748e+09
+accentCallout3	adj7	112963	-2.14748e+09	2.14748e+09
+accentCallout3	adj8	-8333	-2.14748e+09	2.14748e+09
+borderCallout1	adj1	18750	-2.14748e+09	2.14748e+09
+borderCallout1	adj2	-8333	-2.14748e+09	2.14748e+09
+borderCallout1	adj3	112500	-2.14748e+09	2.14748e+09
+borderCallout1	adj4	-38333	-2.14748e+09	2.14748e+09
+borderCallout2	adj1	18750	-2.14748e+09	2.14748e+09
+borderCallout2	adj2	-8333	-2.14748e+09	2.14748e+09
+borderCallout2	adj3	18750	-2.14748e+09	2.14748e+09
+borderCallout2	adj4	-16667	-2.14748e+09	2.14748e+09
+borderCallout2	adj5	112500	-2.14748e+09	2.14748e+09
+borderCallout2	adj6	-46667	-2.14748e+09	2.14748e+09
+borderCallout3	adj1	18750	-2.14748e+09	2.14748e+09
+borderCallout3	adj2	-8333	-2.14748e+09	2.14748e+09
+borderCallout3	adj3	18750	-2.14748e+09	2.14748e+09
+borderCallout3	adj4	-16667	-2.14748e+09	2.14748e+09
+borderCallout3	adj5	100000	-2.14748e+09	2.14748e+09
+borderCallout3	adj6	-16667	-2.14748e+09	2.14748e+09
+borderCallout3	adj7	112963	-2.14748e+09	2.14748e+09
+borderCallout3	adj8	-8333	-2.14748e+09	2.14748e+09
+accentBorderCallout1	adj1	18750	-2.14748e+09	2.14748e+09
+accentBorderCallout1	adj2	-8333	-2.14748e+09	2.14748e+09
+accentBorderCallout1	adj3	112500	-2.14748e+09	2.14748e+09
+accentBorderCallout1	adj4	-38333	-2.14748e+09	2.14748e+09
+accentBorderCallout2	adj1	18750	-2.14748e+09	2.14748e+09
+accentBorderCallout2	adj2	-8333	-2.14748e+09	2.14748e+09
+accentBorderCallout2	adj3	18750	-2.14748e+09	2.14748e+09
+accentBorderCallout2	adj4	-16667	-2.14748e+09	2.14748e+09
+accentBorderCallout2	adj5	112500	-2.14748e+09	2.14748e+09
+accentBorderCallout2	adj6	-46667	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj1	18750	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj2	-8333	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj3	18750	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj4	-16667	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj5	100000	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj6	-16667	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj7	112963	-2.14748e+09	2.14748e+09
+accentBorderCallout3	adj8	-8333	-2.14748e+09	2.14748e+09
+wedgeRectCallout	adj1	-20833	-2.14748e+09	2.14748e+09
+wedgeRectCallout	adj2	62500	-2.14748e+09	2.14748e+09
+wedgeRoundRectCallout	adj1	-20833	-2.14748e+09	2.14748e+09
+wedgeRoundRectCallout	adj2	62500	-2.14748e+09	2.14748e+09
+wedgeRoundRectCallout	adj3	16667	8333.5	25000.5
+wedgeEllipseCallout	adj1	-20833	-2.14748e+09	2.14748e+09
+wedgeEllipseCallout	adj2	62500	-2.14748e+09	2.14748e+09
+cloudCallout	adj1	-20833	-2.14748e+09	2.14748e+09
+cloudCallout	adj2	62500	-2.14748e+09	2.14748e+09

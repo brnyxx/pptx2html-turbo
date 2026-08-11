@@ -2157,3 +2157,76 @@ fn test_uturn_arrow_extreme_adj_keeps_arc_radii_non_negative() {
         "uturnArrow should keep SVG path numeric under extreme adj values: {path}"
     );
 }
+
+#[test]
+fn official_full_and_multiple_turn_arcs_are_visible_and_deterministic() {
+    use super::official_presets_formula::GuideEnvironment;
+    use super::official_presets_path::{
+        PathCommandDefinition, PathDefinition, PointDefinition, render_path,
+    };
+    use crate::model::PathFill;
+
+    for (swing, expected_arcs, expected_sweep) in [
+        ("21600000", 2, "0 0,1"),
+        ("43200000", 4, "0 0,1"),
+        ("-21600000", 2, "0 0,0"),
+        ("-43200000", 4, "0 0,0"),
+        ("0", 0, ""),
+    ] {
+        let definition = PathDefinition {
+            width: None,
+            height: None,
+            fill: PathFill::Norm,
+            stroke: true,
+            commands: vec![
+                PathCommandDefinition::Move(vec![PointDefinition {
+                    x: "10".into(),
+                    y: "5".into(),
+                }]),
+                PathCommandDefinition::Arc {
+                    width_radius: "5".into(),
+                    height_radius: "5".into(),
+                    start_angle: "0".into(),
+                    swing_angle: swing.into(),
+                },
+            ],
+        };
+        let path = render_path(&definition, &GuideEnvironment::new(20.0, 20.0), 20.0, 20.0)
+            .expect("official full-turn arc");
+        assert_eq!(path.d.matches('A').count(), expected_arcs, "swing={swing}");
+        if expected_arcs > 0 {
+            assert_eq!(path.d.matches(expected_sweep).count(), expected_arcs);
+            assert!(path.d.contains("5.00,5.00"), "swing={swing}: {}", path.d);
+            assert!(path.d.ends_with("10.00,5.00"), "swing={swing}: {}", path.d);
+        }
+    }
+}
+
+#[test]
+fn official_unrepresentable_arc_sweep_returns_explicit_error() {
+    use super::official_presets_formula::GuideEnvironment;
+    use super::official_presets_path::{
+        PathCommandDefinition, PathDefinition, PointDefinition, render_path,
+    };
+    use crate::model::PathFill;
+
+    let definition = PathDefinition {
+        width: None,
+        height: None,
+        fill: PathFill::Norm,
+        stroke: true,
+        commands: vec![
+            PathCommandDefinition::Move(vec![PointDefinition {
+                x: "10".into(),
+                y: "5".into(),
+            }]),
+            PathCommandDefinition::Arc {
+                width_radius: "5".into(),
+                height_radius: "5".into(),
+                start_angle: "0".into(),
+                swing_angle: "1e308".into(),
+            },
+        ],
+    };
+    assert!(render_path(&definition, &GuideEnvironment::new(20.0, 20.0), 20.0, 20.0,).is_err());
+}

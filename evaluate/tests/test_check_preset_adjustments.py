@@ -25,6 +25,9 @@ CHECKER = REPO_ROOT / "evaluate/check_preset_adjustments.py"
 MANIFEST = REPO_ROOT / "evaluate/preset_adjustments.json"
 GEOMETRY_SOURCE = REPO_ROOT / "crates/pptx2html-core/src/renderer/geometry"
 DISPATCHER = REPO_ROOT / "crates/pptx2html-core/src/renderer/geometry.rs"
+ARROW_CONTRACT = (
+    REPO_ROOT / "crates/pptx2html-core/tests/fixtures/arrow_adjustment_contract.tsv"
+)
 DRAWINGML_NAMESPACE = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
@@ -214,6 +217,17 @@ class CheckPresetAdjustmentsTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(report["official_adjustment_pairs"], 189)
+
+    def test_exported_arrow_contract_matches_immutable_rust_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "arrow-contract.tsv"
+            result = self._run_cli("--export-arrow-contract", str(output))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(output.read_bytes(), ARROW_CONTRACT.read_bytes())
+            self.assertEqual(
+                hashlib.sha256(output.read_bytes()).hexdigest(),
+                "ad5ae101031077cdcc3507157027fd2f618e8b2ff3787c4265658529f025ff73",
+            )
 
     def test_official_supplement_deletion_and_mutation_fail_stably(self) -> None:
         supplement = REPO_ROOT / "evaluate/official_supplements/upArrow.xml"

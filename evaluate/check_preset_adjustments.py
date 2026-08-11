@@ -471,6 +471,58 @@ def check_repository(
     }
 
 
+def arrow_contract_tsv(
+    manifest: dict[str, JsonValue], dispatcher_path: Path, manifest_sha256: str
+) -> str:
+    names, rows = _manifest_inventory(manifest)
+    routes = {name: module for name, module, _ in _dispatcher_routes(dispatcher_path)}
+    selected = [name for name in names if routes.get(name) in BUNDLE_MODULES["arrows"]]
+    lines = [
+        f"# manifest_sha256={manifest_sha256}",
+        f"# official_names_sha256={OFFICIAL_NAMES_SHA256}",
+        f"# supplement_sha256={OFFICIAL_SUPPLEMENT_SHA256}",
+        "preset\tkey\tdefault\tlower\tupper",
+    ]
+    lines[3:3] = [f"# preset_name={name}" for name in selected]
+    for preset in selected:
+        adjustments = rows[preset].get("adjustments")
+        if not isinstance(adjustments, list):
+            raise ContractError("MALFORMED_MANIFEST", f"{preset}.adjustments")
+        for adjustment in adjustments:
+            if not isinstance(adjustment, dict):
+                raise ContractError("MALFORMED_MANIFEST", f"{preset}.adjustment")
+            key = adjustment.get("name")
+            formula = adjustment.get("default_formula")
+            if not isinstance(key, str) or not isinstance(formula, str):
+                raise ContractError("MALFORMED_MANIFEST", f"{preset}.adjustment fields")
+            try:
+                default = float(formula.removeprefix("val "))
+            except ValueError as error:
+                raise ContractError(
+                    "MALFORMED_MANIFEST", f"{preset}.{key} default"
+                ) from error
+            constraints = adjustment.get("constraints")
+            first = (
+                constraints[0]
+                if isinstance(constraints, list) and constraints
+                else None
+            )
+            try:
+                lower = (
+                    float(first["minimum_formula"]) if isinstance(first, dict) else None
+                )
+                upper = (
+                    float(first["maximum_formula"]) if isinstance(first, dict) else None
+                )
+            except (KeyError, TypeError, ValueError):
+                lower = upper = None
+            if lower is None or upper is None:
+                span = max(abs(default), 10_000.0) / 2.0
+                lower, upper = default - span, default + span
+            lines.append(f"{preset}\t{key}\t{default:g}\t{lower:g}\t{upper:g}")
+    return "\n".join(lines) + "\n"
+
+
 def verify_official_artifact(path: Path, expected_sha256: str) -> str:
     try:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -757,6 +809,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--source-root", type=Path)
     parser.add_argument("--dispatcher", type=Path)
     parser.add_argument("--json", type=Path, dest="json_output")
+    parser.add_argument("--export-arrow-contract", type=Path)
     parser.add_argument("--official-artifact", type=Path)
     parser.add_argument("--official-supplement", type=Path)
     parser.add_argument("--bundle", choices=("basic", "arrows", "remaining"))
@@ -805,6 +858,21 @@ def main() -> int:
         except OSError as error:
             raise ContractError(
                 "JSON_OUTPUT_UNWRITABLE", f"path={args.json_output}"
+            ) from error
+    if args.export_arrow_contract:
+        try:
+            args.export_arrow_contract.parent.mkdir(parents=True, exist_ok=True)
+            args.export_arrow_contract.write_text(
+                arrow_contract_tsv(
+                    manifest,
+                    dispatcher_path,
+                    hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                ),
+                encoding="utf-8",
+            )
+        except OSError as error:
+            raise ContractError(
+                "CONTRACT_OUTPUT_UNWRITABLE", f"path={args.export_arrow_contract}"
             ) from error
     summary_keys = (
         "presets",

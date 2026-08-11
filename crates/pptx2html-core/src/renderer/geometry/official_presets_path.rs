@@ -106,17 +106,7 @@ pub(super) fn render_path(
                 if radius_x.abs() < 0.001 || radius_y.abs() < 0.001 || swing.abs() < 0.001 {
                     continue;
                 }
-                let start_radians = ooxml_radians(start);
-                let end_radians = ooxml_radians(start + swing);
-                current.0 += radius_x * (end_radians.cos() - start_radians.cos());
-                current.1 += radius_y * (end_radians.sin() - start_radians.sin());
-                let large_arc = i32::from(swing.abs() > 10_800_000.0);
-                let sweep = i32::from(swing > 0.0);
-                let _ = write!(
-                    output,
-                    "A{radius_x:.2},{radius_y:.2} 0 {large_arc},{sweep} {:.2},{:.2} ",
-                    current.0, current.1
-                );
+                append_arc(&mut output, &mut current, radius_x, radius_y, start, swing)?;
             }
             PathCommandDefinition::Close => output.push_str("Z "),
         }
@@ -126,6 +116,38 @@ pub(super) fn render_path(
         fill: definition.fill.clone(),
         stroke: definition.stroke,
     })
+}
+
+fn append_arc(
+    output: &mut String,
+    current: &mut (f64, f64),
+    radius_x: f64,
+    radius_y: f64,
+    start: f64,
+    swing: f64,
+) -> Result<(), String> {
+    const HALF_TURN: f64 = 10_800_000.0;
+    const MAX_SEGMENTS: f64 = 2_048.0;
+    let segment_count = (swing.abs() / HALF_TURN).ceil().max(1.0);
+    if !segment_count.is_finite() || segment_count > MAX_SEGMENTS {
+        return Err(format!("unrepresentable arc sweep: {swing}"));
+    }
+    let segments = segment_count as usize;
+    let segment_swing = swing / segments as f64;
+    let origin = *current;
+    let start_radians = ooxml_radians(start);
+    let sweep_flag = i32::from(swing > 0.0);
+    for index in 1..=segments {
+        let end_radians = ooxml_radians(start + segment_swing * index as f64);
+        current.0 = origin.0 + radius_x * (end_radians.cos() - start_radians.cos());
+        current.1 = origin.1 + radius_y * (end_radians.sin() - start_radians.sin());
+        let _ = write!(
+            output,
+            "A{radius_x:.2},{radius_y:.2} 0 0,{sweep_flag} {:.2},{:.2} ",
+            current.0, current.1
+        );
+    }
+    Ok(())
 }
 
 fn one_point<'a>(

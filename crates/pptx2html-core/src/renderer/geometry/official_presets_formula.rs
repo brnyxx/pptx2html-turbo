@@ -42,49 +42,57 @@ impl GuideEnvironment {
     }
 
     pub(super) fn resolve(&self, token: &str) -> Result<f64, String> {
-        token
-            .parse::<f64>()
-            .ok()
-            .or_else(|| self.values.get(token).copied())
+        if let Ok(value) = token.parse::<f64>() {
+            return if value.is_finite() {
+                Ok(value)
+            } else {
+                Err(format!("non-finite guide token: {token}"))
+            };
+        }
+        self.values
+            .get(token)
+            .copied()
             .ok_or_else(|| format!("unknown guide token: {token}"))
     }
 
     pub(super) fn evaluate(&self, formula: &str) -> Result<f64, String> {
         let parts = formula.split_whitespace().collect::<Vec<_>>();
         let value = match parts.as_slice() {
-            ["val", value, ..] => self.resolve(value)?,
-            ["+-", x, y, z, ..] => self.resolve(x)? + self.resolve(y)? - self.resolve(z)?,
-            ["*/", x, y, z, ..] => divide(self.resolve(x)? * self.resolve(y)?, self.resolve(z)?),
-            ["+/", x, y, z, ..] => divide(self.resolve(x)? + self.resolve(y)?, self.resolve(z)?),
-            ["?:", condition, positive, negative, ..] => {
+            ["val", value] => self.resolve(value)?,
+            ["+-", x, y, z] | ["+-", x, y, z, "0"] => {
+                self.resolve(x)? + self.resolve(y)? - self.resolve(z)?
+            }
+            ["*/", x, y, z] => divide(self.resolve(x)? * self.resolve(y)?, self.resolve(z)?),
+            ["+/", x, y, z] => divide(self.resolve(x)? + self.resolve(y)?, self.resolve(z)?),
+            ["?:", condition, positive, negative] => {
                 if self.resolve(condition)? > 0.0 {
                     self.resolve(positive)?
                 } else {
                     self.resolve(negative)?
                 }
             }
-            ["abs", value, ..] => self.resolve(value)?.abs(),
-            ["at2", x, y, ..] => self.resolve(y)?.atan2(self.resolve(x)?).to_degrees() * 60_000.0,
-            ["cat2", scale, x, y, ..] => {
+            ["abs", value] => self.resolve(value)?.abs(),
+            ["at2", x, y] => self.resolve(y)?.atan2(self.resolve(x)?).to_degrees() * 60_000.0,
+            ["cat2", scale, x, y] => {
                 self.resolve(scale)? * self.resolve(y)?.atan2(self.resolve(x)?).cos()
             }
-            ["cos", scale, angle, ..] => self.resolve(scale)? * radians(self.resolve(angle)?).cos(),
-            ["max", x, y, ..] => self.resolve(x)?.max(self.resolve(y)?),
-            ["min", x, y, ..] => self.resolve(x)?.min(self.resolve(y)?),
-            ["mod", x, y, z, ..] => self
+            ["cos", scale, angle] => self.resolve(scale)? * radians(self.resolve(angle)?).cos(),
+            ["max", x, y] => self.resolve(x)?.max(self.resolve(y)?),
+            ["min", x, y] => self.resolve(x)?.min(self.resolve(y)?),
+            ["mod", x, y, z] => self
                 .resolve(x)?
                 .hypot(self.resolve(y)?)
                 .hypot(self.resolve(z)?),
-            ["pin", minimum, value, maximum, ..] => self
+            ["pin", minimum, value, maximum] => self
                 .resolve(value)?
                 .max(self.resolve(minimum)?)
                 .min(self.resolve(maximum)?),
-            ["sat2", scale, x, y, ..] => {
+            ["sat2", scale, x, y] => {
                 self.resolve(scale)? * self.resolve(y)?.atan2(self.resolve(x)?).sin()
             }
-            ["sin", scale, angle, ..] => self.resolve(scale)? * radians(self.resolve(angle)?).sin(),
-            ["sqrt", value, ..] => self.resolve(value)?.max(0.0).sqrt(),
-            ["tan", scale, angle, ..] => self.resolve(scale)? * radians(self.resolve(angle)?).tan(),
+            ["sin", scale, angle] => self.resolve(scale)? * radians(self.resolve(angle)?).sin(),
+            ["sqrt", value] => self.resolve(value)?.max(0.0).sqrt(),
+            ["tan", scale, angle] => self.resolve(scale)? * radians(self.resolve(angle)?).tan(),
             _ => return Err(format!("unsupported guide formula: {formula}")),
         };
         Ok(finite(value))
@@ -145,12 +153,14 @@ mod tests {
             ("at2 x y", 3.187_806_141_249_358_7e6),
             ("cat2 10 y z", 3.162_277_660_168_38),
             ("sat2 10 y z", 9.486_832_980_505_138),
-            ("+- 8 3 2 999", 9.0),
+            ("+- 8 3 2 0", 9.0),
         ];
         for (formula, expected) in cases {
             let actual = environment.evaluate(formula).expect("official formula");
             assert!((actual - expected).abs() < 1e-6, "{formula}: {actual}");
         }
         assert!(environment.evaluate("unsupported x").is_err());
+        assert!(environment.evaluate("+- 8 3 2 999").is_err());
+        assert!(environment.evaluate("val 1 2").is_err());
     }
 }

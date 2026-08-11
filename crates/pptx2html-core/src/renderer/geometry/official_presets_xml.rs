@@ -4,7 +4,7 @@ use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
 use super::official_presets_path::{PathCommandDefinition, PathDefinition, PointDefinition};
-use crate::model::PathFill;
+use super::official_presets_schema::{attribute, local_name, path_definition, validate_attributes};
 
 const XML: &str = include_str!("official_arrow_presets.xml");
 
@@ -22,7 +22,13 @@ pub(super) struct GuideDefinition {
 }
 
 pub(super) fn parse_definitions() -> Result<HashMap<String, PresetDefinition>, String> {
-    let mut reader = Reader::from_str(XML);
+    parse_definitions_from(XML)
+}
+
+pub(super) fn parse_definitions_from(
+    source: &str,
+) -> Result<HashMap<String, PresetDefinition>, String> {
+    let mut reader = Reader::from_str(source);
     reader.config_mut().trim_text(true);
     let mut definitions = HashMap::new();
     let mut stack = Vec::new();
@@ -90,11 +96,41 @@ fn handle_start(
         .last()
         .is_some_and(|parent| parent == "presetShapeDefinitions")
     {
+        validate_attributes(reader, element, &[])?;
         *preset = Some((tag.to_owned(), empty_preset()));
-    } else if tag == "path" {
-        *path = Some(path_definition(reader, element)?);
-    } else if matches!(tag, "moveTo" | "lnTo" | "cubicBezTo" | "quadBezTo") {
-        *command = Some((tag.to_owned(), Vec::new()));
+    } else {
+        match tag {
+            "presetShapeDefinitions" => validate_attributes(reader, element, &[])?,
+            "avLst" | "gdLst" | "ahLst" | "cxnLst" | "pathLst" => {
+                validate_attributes(reader, element, &["xmlns"])?
+            }
+            "ahXY" => validate_attributes(
+                reader,
+                element,
+                &["xmlns", "gdRefX", "gdRefY", "minX", "maxX", "minY", "maxY"],
+            )?,
+            "ahPolar" => validate_attributes(
+                reader,
+                element,
+                &[
+                    "xmlns", "gdRefAng", "gdRefR", "minAng", "maxAng", "minR", "maxR",
+                ],
+            )?,
+            "cxn" => validate_attributes(reader, element, &["xmlns", "ang"])?,
+            "path" => {
+                validate_attributes(
+                    reader,
+                    element,
+                    &["xmlns", "w", "h", "fill", "stroke", "extrusionOk"],
+                )?;
+                *path = Some(path_definition(reader, element)?);
+            }
+            "moveTo" | "lnTo" | "cubicBezTo" | "quadBezTo" => {
+                validate_attributes(reader, element, &["xmlns"])?;
+                *command = Some((tag.to_owned(), Vec::new()));
+            }
+            _ => return Err(format!("unknown official XML element: {tag}")),
+        }
     }
     Ok(())
 }
@@ -110,6 +146,7 @@ fn handle_empty(
 ) -> Result<(), String> {
     match tag {
         "gd" => {
+            validate_attributes(reader, element, &["xmlns", "name", "fmla"])?;
             let guide = GuideDefinition {
                 name: attribute(reader, element, "name")?,
                 formula: attribute(reader, element, "fmla")?,
@@ -121,15 +158,19 @@ fn handle_empty(
                 definition.guides.push(guide);
             }
         }
-        "pt" => command
-            .as_mut()
-            .ok_or("point outside command")?
-            .1
-            .push(PointDefinition {
-                x: attribute(reader, element, "x")?,
-                y: attribute(reader, element, "y")?,
-            }),
+        "pt" => {
+            validate_attributes(reader, element, &["xmlns", "x", "y"])?;
+            command
+                .as_mut()
+                .ok_or("point outside command")?
+                .1
+                .push(PointDefinition {
+                    x: attribute(reader, element, "x")?,
+                    y: attribute(reader, element, "y")?,
+                })
+        }
         "arcTo" => {
+            validate_attributes(reader, element, &["xmlns", "wR", "hR", "stAng", "swAng"])?;
             path.as_mut()
                 .ok_or("arc outside path")?
                 .commands
@@ -140,12 +181,16 @@ fn handle_empty(
                     swing_angle: attribute(reader, element, "swAng")?,
                 })
         }
-        "close" => path
-            .as_mut()
-            .ok_or("close outside path")?
-            .commands
-            .push(PathCommandDefinition::Close),
-        _ => {}
+        "close" => {
+            validate_attributes(reader, element, &["xmlns"])?;
+            path.as_mut()
+                .ok_or("close outside path")?
+                .commands
+                .push(PathCommandDefinition::Close)
+        }
+        "pos" => validate_attributes(reader, element, &["xmlns", "x", "y"])?,
+        "rect" => validate_attributes(reader, element, &["xmlns", "l", "t", "r", "b"])?,
+        _ => return Err(format!("unknown empty official XML element: {tag}")),
     }
     Ok(())
 }
@@ -194,53 +239,7 @@ fn empty_preset() -> PresetDefinition {
     }
 }
 
-fn path_definition(
-    reader: &Reader<&[u8]>,
-    element: &BytesStart<'_>,
-) -> Result<PathDefinition, String> {
-    let fill = match optional_attribute(reader, element, "fill")?.as_deref() {
-        None | Some("norm") => PathFill::Norm,
-        Some("none") => PathFill::None,
-        Some("lighten") => PathFill::Lighten,
-        Some("lightenLess") => PathFill::LightenLess,
-        Some("darken") => PathFill::Darken,
-        Some("darkenLess") => PathFill::DarkenLess,
-        Some(value) => return Err(format!("unknown path fill: {value}")),
-    };
-    Ok(PathDefinition {
-        width: optional_attribute(reader, element, "w")?,
-        height: optional_attribute(reader, element, "h")?,
-        fill,
-        stroke: optional_attribute(reader, element, "stroke")?.as_deref() != Some("false"),
-        commands: Vec::new(),
-    })
-}
-
-fn attribute(
-    reader: &Reader<&[u8]>,
-    element: &BytesStart<'_>,
-    name: &str,
-) -> Result<String, String> {
-    optional_attribute(reader, element, name)?.ok_or_else(|| format!("missing {name}"))
-}
-
-fn optional_attribute(
-    reader: &Reader<&[u8]>,
-    element: &BytesStart<'_>,
-    name: &str,
-) -> Result<Option<String>, String> {
-    for attribute in element.attributes() {
-        let attribute = attribute.map_err(|error| error.to_string())?;
-        if attribute.key.as_ref() == name.as_bytes() {
-            return attribute
-                .decode_and_unescape_value(reader.decoder())
-                .map(|value| Some(value.into_owned()))
-                .map_err(|error| error.to_string());
-        }
-    }
-    Ok(None)
-}
-
-fn local_name(element: &BytesStart<'_>) -> String {
-    String::from_utf8_lossy(element.local_name().as_ref()).into_owned()
+#[cfg(test)]
+pub(super) fn source_xml() -> &'static str {
+    XML
 }
