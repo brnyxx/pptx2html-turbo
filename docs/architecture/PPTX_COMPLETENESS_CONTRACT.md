@@ -2,69 +2,32 @@
 
 ## Purpose
 
-This contract defines finite, observable completeness for PPTX conversion. It does not promise universal PowerPoint-to-browser equivalence. A feature is complete only when it is directly supported with evidence or preserved through the declared deterministic fallback policy. Content must not silently disappear.
+This contract makes completeness finite and observable. It does not promise universal PowerPoint-to-browser 1:1 rendering. Every inventoried feature must have direct output with an honest tier or a deterministic fallback diagnostic; content must not silently disappear.
 
-`evaluate/completeness_manifest.json` is the machine-readable inventory. Every feature row has a stable id, an official source URL, and an OOXML qualified name or relationship type. The source is format authority, not evidence that the current converter supports the feature.
+`evaluate/completeness_manifest.json` is schema version `2.0`. Its root `contract_scope` must exactly equal `current and target dispositions; no exact claim without feature evidence`. The checker reports `INVALID_CONTRACT_SCOPE` for drift.
 
-The root `contract_scope` must exactly equal `target disposition; this manifest does not claim current direct support without feature evidence`. The checker rejects any drift with `INVALID_CONTRACT_SCOPE`.
+## Disposition schema
 
-The validator accepts official source URLs only from `learn.microsoft.com` and `ecma-international.org`. A source URL must use HTTPS, have no credentials or explicit port, and include a non-root path. Other values fail with `UNOFFICIAL_SOURCE`.
+Every feature has independent `current` and `target` objects. Each contains exactly the `semantic`, `visual`, and `behavioral` dimensions, and each dimension has one tier and one stage.
 
-## Fidelity dimensions
+- `current` records observed implementation maturity from `docs/architecture/CAPABILITY_MATRIX.md` and `SUPPORTED_FEATURES.md`.
+- `target` records the required destination: direct output is `approximate` until native evidence permits `exact`; otherwise it is deterministic `fallback`.
+- `approximate` is direct-but-nonexact output, `fallback` is an explicit placeholder or sideband, and `unparsed` is not yet preserved sufficiently.
 
-Each feature declares these independent dimensions:
+The initial inventory has no `exact` row. `EXACT_REQUIRES_POWERPOINT_EVIDENCE` remains mandatory for all three dimensions in either disposition.
 
-- `semantic`: semantic preservation of package content and relationships.
-- `visual`: static visual rendering in generated HTML, CSS, or SVG.
-- `behavioral`: behavioral playback, including actions, media, timing, animation, and transitions.
+## Stable inventory and sources
 
-Each dimension has one tier and one stage. The allowed tiers are `exact`, `approximate`, `fallback`, and `unparsed`. The allowed stages are `parsed`, `resolved`, `rendered`, `fidelity-tested`, and `not-applicable`.
+Feature IDs are lowercase kebab case and the checker requires exact equality with its frozen inventory. Missing, extra, and duplicate IDs are rejected. Rows split different states rather than combining them: character/number bullets and picture bullets; ordinary fills and pattern fills; shadow effects and reflection/3D; direct chart subset, preview fallback, and placeholder fallback; run/cell hyperlinks and shape/action hyperlinks; and audio and video.
 
-- `exact` means a controlled PowerPoint-native comparison supports the claimed dimension.
-- `approximate` means there is direct output with known fidelity limits.
-- `fallback` means the feature is preserved or represented by deterministic fallback output and diagnostic metadata.
-- `unparsed` means the converter has not preserved the feature sufficiently for reliable downstream handling.
+The inventory includes the PresentationML parts exposed by Microsoft's structure document: notes master, handout master, comment authors, picture, additional characteristics, bibliography, custom XML, thumbnail, theme override, slide synchronization, content part, embedded control persistence, embedded package, and user-defined tags. It also isolates table styles and RTL text from their directly rendered parent families. A verified row has an approved Microsoft or ECMA source and an allowlisted QName or relationship type. `source_status: unavailable` means the official structure source confirmed the part family but this contract did not verify its QName or relationship URI; its empty `ooxml` field prevents an invented value and its target is deterministic fallback.
 
-The manifest describes target dispositions, not a claim of current direct support merely because an XML name appears in source code. This initial inventory promotes no feature to `exact`.
-
-## Stable feature inventory
-
-The manifest inventories the PresentationML, DrawingML, Office Math, markup-compatibility, and Open Packaging Convention relationship families that are in scope. It includes presentation, master, layout, theme, shapes, custom geometry, text and bullets, fills, effects and 3D, tables, images, charts, diagrams, OLE, Math, notes, comments, media, hyperlinks/actions, timing, transitions, extensions, and `mc:AlternateContent`.
-
-Each feature's `id` is stable and lowercase kebab case. Later tasks may add facts to an existing row, but must not rename the id. Every row must retain an `official_source`, `ooxml`, `fallback_policy`, and all three dimension declarations.
+The checker accepts sources only from `learn.microsoft.com` and `ecma-international.org`, rejects malformed or unapproved URLs with `UNOFFICIAL_SOURCE`, and rejects a QName or relationship type outside the known official inventory.
 
 ## Fallback diagnostic envelope
 
-Any fallback must emit the stable code declared by its feature row and retain this metadata whenever it is known:
-
-- `code`, `family`, `tier`, `stage`, and `slide_index`
-- `part_name`, `relationship_id`, and `relationship_type`
-- `qualified_name`, `bounds`, and `raw_reference`
-- `fallback_kind` and `reason`
-
-`raw_reference` identifies preserved XML or a package part without requiring raw XML to be embedded in HTML. A missing value is allowed only when the source package does not provide it. The fallback policy is still required for an `unparsed` row so downstream work has a deterministic, non-silent destination.
+Any fallback keeps the row's stable diagnostic code and, when known, the metadata `code`, `family`, `tier`, `stage`, `slide_index`, `part_name`, `relationship_id`, `relationship_type`, `qualified_name`, `bounds`, `raw_reference`, `fallback_kind`, and `reason`.
 
 ## Exact-promotion gate
 
-No row or dimension may use `exact` without a complete PowerPoint-native evidence bundle. The validator rejects a missing or incomplete bundle with `EXACT_REQUIRES_POWERPOINT_EVIDENCE`.
-
-The evidence bundle must identify:
-
-- `oracle` set to `PowerPoint-native`
-- `powerpoint_version` and `windows_version`
-- `capture_metadata` and the matching `fixture_bundle`
-- `artifact_paths` for the exported native result and comparison artifacts
-
-LibreOffice and browser output are useful regression evidence but cannot satisfy this gate. The native evidence workflow is documented in `evaluate/README.md` and `evaluate/powerpoint_golden/README.md`.
-
-## Implementation stop conditions
-
-Implementation stops only when all of these are true:
-
-1. Every manifest row has tested direct support or tested deterministic fallback.
-2. Unknown relationships and elements produce typed diagnostics instead of silent loss.
-3. The preset-adjustment contract has no unclassified preset or undocumented consumed key.
-4. The affected local test and workspace gates pass.
-5. No `exact` promotion lacks its complete PowerPoint-native evidence bundle.
-
-The current Mac environment cannot create a PowerPoint-native oracle. That limitation is an external gate, not permission to weaken or bypass `EXACT_REQUIRES_POWERPOINT_EVIDENCE`.
+No row or dimension may use `exact` without a complete PowerPoint-native evidence bundle: `oracle` set to `PowerPoint-native`, `powerpoint_version`, `windows_version`, `capture_metadata`, `fixture_bundle`, and nonempty `artifact_paths`. Browser and LibreOffice output are useful regression evidence but cannot satisfy this gate.

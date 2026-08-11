@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from evaluate.check_completeness_manifest import (
     CONTRACT_SCOPE,
+    REQUIRED_FEATURE_IDS,
     load_manifest,
     main,
     validate_manifest,
@@ -28,7 +29,7 @@ def contract_path_for_repository() -> Path:
 class CompletenessManifestTests(unittest.TestCase):
     def test_rejects_unclassified_dimension_tier(self) -> None:
         manifest = _valid_manifest()
-        manifest["features"][0]["dimensions"]["visual"]["tier"] = "direct"
+        manifest["features"][0]["current"]["visual"]["tier"] = "direct"
 
         errors = validate_manifest(manifest)
 
@@ -44,7 +45,7 @@ class CompletenessManifestTests(unittest.TestCase):
 
     def test_rejects_exact_dimension_without_powerpoint_evidence(self) -> None:
         manifest = _valid_manifest()
-        manifest["features"][0]["dimensions"]["visual"]["tier"] = "exact"
+        manifest["features"][0]["current"]["visual"]["tier"] = "exact"
 
         errors = validate_manifest(manifest)
 
@@ -119,7 +120,7 @@ class CompletenessManifestTests(unittest.TestCase):
 
     def test_rejects_invalid_root_contract_metadata(self) -> None:
         manifest = _valid_manifest()
-        manifest["schema_version"] = "2.0"
+        manifest["schema_version"] = "3.0"
         manifest["exact_promotion_gate"] = {
             "code": "wrong",
             "oracle": "browser",
@@ -147,11 +148,118 @@ class CompletenessManifestTests(unittest.TestCase):
 
         self.assertIn("INVALID_FEATURE_ID:Presentation_Master", errors)
 
+    def test_rejects_missing_current_disposition_dimension(self) -> None:
+        manifest = _valid_manifest()
+        manifest["features"][0]["current"] = {
+            "semantic": {"tier": "approximate", "stage": "parsed"}
+        }
+
+        errors = validate_manifest(manifest)
+
+        self.assertIn("MISSING_CURRENT_DIMENSION:presentation:visual", errors)
+
+    def test_rejects_missing_target_disposition_dimension(self) -> None:
+        manifest = _valid_manifest()
+        del manifest["features"][0]["target"]["visual"]
+
+        errors = validate_manifest(manifest)
+
+        self.assertIn("MISSING_TARGET_DIMENSION:presentation:visual", errors)
+
+    def test_rejects_extra_current_disposition_dimension(self) -> None:
+        manifest = _valid_manifest()
+        manifest["features"][0]["current"]["auxiliary"] = {
+            "tier": "fallback",
+            "stage": "not-applicable",
+        }
+
+        errors = validate_manifest(manifest)
+
+        self.assertIn("INVALID_CURRENT_DIMENSIONS:presentation", errors)
+
+    def test_rejects_unexpected_feature_id_from_the_frozen_inventory(self) -> None:
+        manifest = _valid_manifest()
+        unexpected_feature = json.loads(json.dumps(manifest["features"][0]))
+        unexpected_feature["id"] = "unexpected-relationship"
+        manifest["features"].append(unexpected_feature)
+
+        errors = validate_manifest(manifest)
+
+        self.assertIn("UNEXPECTED_FEATURE_ID:unexpected-relationship", errors)
+
+    def test_rejects_missing_new_official_inventory_row(self) -> None:
+        manifest = _valid_manifest()
+        manifest["features"] = [
+            feature
+            for feature in manifest["features"]
+            if feature["id"] != "content-part"
+        ]
+
+        errors = validate_manifest(manifest)
+
+        self.assertIn("MISSING_REQUIRED_FEATURE:content-part", errors)
+
+    def test_rejects_deletion_of_each_frozen_inventory_row(self) -> None:
+        for feature_id in REQUIRED_FEATURE_IDS:
+            with self.subTest(feature_id=feature_id):
+                manifest = _valid_manifest()
+                manifest["features"] = [
+                    feature
+                    for feature in manifest["features"]
+                    if feature["id"] != feature_id
+                ]
+
+                errors = validate_manifest(manifest)
+
+                self.assertIn(f"MISSING_REQUIRED_FEATURE:{feature_id}", errors)
+
+    def test_rejects_qualified_name_outside_the_official_inventory(self) -> None:
+        manifest = _valid_manifest()
+        manifest["features"][0]["ooxml"] = {"qualified_name": "p:notOfficial"}
+
+        errors = validate_manifest(manifest)
+
+        self.assertIn("UNKNOWN_QUALIFIED_NAME:presentation", errors)
+
+    def test_repository_inventory_contains_separated_subfeatures_and_parts(
+        self,
+    ) -> None:
+        manifest = _valid_manifest()
+        feature_ids = {feature["id"] for feature in manifest["features"]}
+
+        self.assertTrue(
+            {
+                "bullets",
+                "picture-bullets",
+                "fills",
+                "pattern-fill",
+                "effects",
+                "reflection-and-3d",
+                "chart-direct-subset",
+                "chart-preview-fallback",
+                "chart-placeholder-fallback",
+                "hyperlink-run-and-cell",
+                "shape-hyperlink-and-action",
+                "additional-characteristics",
+                "custom-xml",
+                "thumbnail",
+                "theme-override",
+                "slide-synchronization",
+                "content-part",
+                "embedded-package",
+                "user-defined-tags",
+                "bibliography",
+                "embedded-control-persistence",
+                "table-style",
+                "rtl-text",
+            }.issubset(feature_ids)
+        )
+
     def test_rejects_blank_family_and_invalid_exact_evidence_shape(self) -> None:
         manifest = _valid_manifest()
         feature = manifest["features"][0]
         feature["family"] = " "
-        feature["dimensions"]["visual"]["tier"] = "exact"
+        feature["current"]["visual"]["tier"] = "exact"
         feature["exact_evidence"] = {
             "oracle": "PowerPoint-native",
             "powerpoint_version": [],

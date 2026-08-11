@@ -9,8 +9,7 @@ from urllib.parse import urlsplit
 
 
 CONTRACT_SCOPE = (
-    "target disposition; this manifest does not claim current direct support "
-    "without feature evidence"
+    "current and target dispositions; no exact claim without feature evidence"
 )
 DIMENSIONS = ("semantic", "visual", "behavioral")
 TIERS = ("exact", "approximate", "fallback", "unparsed")
@@ -47,43 +46,118 @@ EXACT_PROMOTION_GATE = {
     "evidence_status": "required-before-promotion",
 }
 FEATURE_ID_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
+QUALIFIED_NAME_PATTERN = re.compile(r"(?:a|c|dgm|m|mc|p):[A-Za-z][A-Za-z0-9]*")
+SOURCE_STATUSES = ("verified", "unavailable")
+KNOWN_QUALIFIED_NAMES = frozenset(
+    {
+        "a:audioFile",
+        "a:buBlip",
+        "a:buChar",
+        "a:custGeom",
+        "a:outerShdw",
+        "a:pattFill",
+        "a:prstGeom",
+        "a:reflection",
+        "a:solidFill",
+        "a:tbl",
+        "a:theme",
+        "a:videoFile",
+        "dgm:colorsDef",
+        "dgm:dataModel",
+        "dgm:layoutDef",
+        "dgm:styleDef",
+        "m:oMath",
+        "mc:AlternateContent",
+        "p:cmAuthorLst",
+        "p:cmLst",
+        "p:contentPart",
+        "p:cxnSp",
+        "p:extLst",
+        "p:grpSp",
+        "p:handoutMaster",
+        "p:oleObj",
+        "p:notes",
+        "p:notesMaster",
+        "p:pic",
+        "p:presentation",
+        "p:presentationPr",
+        "p:sld",
+        "p:sldLayout",
+        "p:sldMaster",
+        "p:spTree",
+        "p:timing",
+        "p:transition",
+        "p:txBody",
+    }
+)
+KNOWN_RELATIONSHIP_TYPES = frozenset(
+    {
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video",
+    }
+)
 REQUIRED_FEATURE_IDS = frozenset(
     {
-        "presentation",
-        "presentation-properties",
-        "slide-master",
-        "slide-layout",
-        "slide",
-        "theme",
-        "shape-tree",
-        "preset-shape",
-        "custom-geometry",
-        "connector",
-        "group-shape",
-        "text-body",
+        "additional-characteristics",
+        "alternate-content",
+        "bibliography",
         "bullets",
-        "fills",
-        "effects-and-3d",
-        "table",
-        "image",
-        "chart",
+        "chart-direct-subset",
+        "chart-placeholder-fallback",
+        "chart-preview-fallback",
+        "comment-authors",
+        "comments",
+        "connector",
+        "content-part",
+        "custom-geometry",
+        "custom-xml",
         "diagram",
         "diagram-colors",
         "diagram-data",
         "diagram-layout",
         "diagram-styles",
-        "ole-embedded-object",
+        "effects",
+        "embedded-control-persistence",
+        "embedded-package",
+        "extensions",
+        "fills",
+        "group-shape",
+        "handout-master",
+        "hyperlink-run-and-cell",
+        "image",
         "math",
-        "notes",
-        "comments",
-        "media",
         "media-audio",
         "media-video",
-        "hyperlinks-and-actions",
+        "notes",
+        "notes-master",
+        "ole-embedded-object",
+        "pattern-fill",
+        "picture",
+        "picture-bullets",
+        "presentation",
+        "presentation-properties",
+        "preset-shape",
+        "reflection-and-3d",
+        "rtl-text",
+        "shape-hyperlink-and-action",
+        "shape-tree",
+        "slide",
+        "slide-layout",
+        "slide-master",
+        "slide-synchronization",
+        "table",
+        "table-style",
+        "text-body",
+        "theme",
+        "theme-override",
+        "thumbnail",
         "timing-and-animation",
         "transitions",
-        "extensions",
-        "alternate-content",
+        "user-defined-tags",
     }
 )
 
@@ -97,7 +171,7 @@ def validate_manifest(manifest: object) -> list[str]:
         return ["MANIFEST_ROOT_MUST_BE_OBJECT"]
 
     errors: list[str] = []
-    if manifest.get("schema_version") != "1.0":
+    if manifest.get("schema_version") != "2.0":
         errors.append("INVALID_SCHEMA_VERSION")
     if manifest.get("contract_scope") != CONTRACT_SCOPE:
         errors.append("INVALID_CONTRACT_SCOPE")
@@ -129,6 +203,8 @@ def validate_manifest(manifest: object) -> list[str]:
 
     for feature_id in sorted(REQUIRED_FEATURE_IDS - feature_ids):
         errors.append(f"MISSING_REQUIRED_FEATURE:{feature_id}")
+    for feature_id in sorted(feature_ids - REQUIRED_FEATURE_IDS):
+        errors.append(f"UNEXPECTED_FEATURE_ID:{feature_id}")
     return errors
 
 
@@ -154,12 +230,10 @@ def _validate_feature(
     if not _is_nonempty_string(feature.get("family")):
         errors.append(f"MISSING_FEATURE_FAMILY:{feature_id}")
 
-    ooxml = feature.get("ooxml")
-    if not isinstance(ooxml, dict) or not any(
-        _is_nonempty_string(ooxml.get(key))
-        for key in ("qualified_name", "relationship_type")
-    ):
-        errors.append(f"MISSING_OOXML_REFERENCE:{feature_id}")
+    source_status = feature.get("source_status")
+    if source_status not in SOURCE_STATUSES:
+        errors.append(f"INVALID_SOURCE_STATUS:{feature_id}")
+    _validate_ooxml(feature, feature_id, source_status, errors)
 
     fallback_policy = feature.get("fallback_policy")
     if (
@@ -169,15 +243,58 @@ def _validate_feature(
     ):
         errors.append(f"INVALID_FALLBACK_POLICY:{feature_id}")
 
-    dimensions = feature.get("dimensions")
-    if not isinstance(dimensions, dict):
-        errors.append(f"MISSING_DIMENSIONS:{feature_id}")
-        return
+    _validate_disposition(feature, feature_id, "current", errors)
+    _validate_disposition(feature, feature_id, "target", errors)
 
+
+def _validate_ooxml(
+    feature: dict[str, object],
+    feature_id: str,
+    source_status: object,
+    errors: list[str],
+) -> None:
+    ooxml = feature.get("ooxml")
+    if not isinstance(ooxml, dict):
+        errors.append(f"MISSING_OOXML_REFERENCE:{feature_id}")
+        return
+    qualified_name = ooxml.get("qualified_name")
+    relationship_type = ooxml.get("relationship_type")
+    if source_status == "unavailable":
+        if qualified_name is not None or relationship_type is not None:
+            errors.append(f"UNAVAILABLE_SOURCE_MUST_NOT_GUESS:{feature_id}")
+        return
+    if not _is_nonempty_string(qualified_name) and not _is_nonempty_string(
+        relationship_type
+    ):
+        errors.append(f"MISSING_OOXML_REFERENCE:{feature_id}")
+        return
+    if _is_nonempty_string(qualified_name):
+        if QUALIFIED_NAME_PATTERN.fullmatch(qualified_name) is None:
+            errors.append(f"INVALID_QUALIFIED_NAME:{feature_id}")
+        elif qualified_name not in KNOWN_QUALIFIED_NAMES:
+            errors.append(f"UNKNOWN_QUALIFIED_NAME:{feature_id}")
+    if (
+        _is_nonempty_string(relationship_type)
+        and relationship_type not in KNOWN_RELATIONSHIP_TYPES
+    ):
+        errors.append(f"UNKNOWN_RELATIONSHIP_TYPE:{feature_id}")
+
+
+def _validate_disposition(
+    feature: dict[str, object], feature_id: str, disposition: str, errors: list[str]
+) -> None:
+    dimensions = feature.get(disposition)
+    if not isinstance(dimensions, dict):
+        errors.append(f"MISSING_{disposition.upper()}_DISPOSITION:{feature_id}")
+        return
+    if set(dimensions) != set(DIMENSIONS):
+        errors.append(f"INVALID_{disposition.upper()}_DIMENSIONS:{feature_id}")
     for dimension in DIMENSIONS:
         dimension_value = dimensions.get(dimension)
         if not isinstance(dimension_value, dict):
-            errors.append(f"MISSING_DIMENSION:{feature_id}:{dimension}")
+            errors.append(
+                f"MISSING_{disposition.upper()}_DIMENSION:{feature_id}:{dimension}"
+            )
             continue
         tier = dimension_value.get("tier")
         stage = dimension_value.get("stage")
