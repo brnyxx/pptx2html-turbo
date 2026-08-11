@@ -1,0 +1,246 @@
+use std::collections::HashMap;
+
+use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
+
+use super::official_presets_path::{PathCommandDefinition, PathDefinition, PointDefinition};
+use crate::model::PathFill;
+
+const XML: &str = include_str!("official_arrow_presets.xml");
+
+#[derive(Debug)]
+pub(super) struct PresetDefinition {
+    pub(super) adjustments: Vec<GuideDefinition>,
+    pub(super) guides: Vec<GuideDefinition>,
+    pub(super) paths: Vec<PathDefinition>,
+}
+
+#[derive(Debug)]
+pub(super) struct GuideDefinition {
+    pub(super) name: String,
+    pub(super) formula: String,
+}
+
+pub(super) fn parse_definitions() -> Result<HashMap<String, PresetDefinition>, String> {
+    let mut reader = Reader::from_str(XML);
+    reader.config_mut().trim_text(true);
+    let mut definitions = HashMap::new();
+    let mut stack = Vec::new();
+    let mut preset: Option<(String, PresetDefinition)> = None;
+    let mut path: Option<PathDefinition> = None;
+    let mut command: Option<(String, Vec<PointDefinition>)> = None;
+    loop {
+        match reader.read_event().map_err(|error| error.to_string())? {
+            Event::Start(element) => {
+                let tag = local_name(&element);
+                handle_start(
+                    &reader,
+                    &element,
+                    &tag,
+                    &stack,
+                    &mut preset,
+                    &mut path,
+                    &mut command,
+                )?;
+                stack.push(tag);
+            }
+            Event::Empty(element) => {
+                let tag = local_name(&element);
+                handle_empty(
+                    &reader,
+                    &element,
+                    &tag,
+                    &stack,
+                    &mut preset,
+                    &mut path,
+                    &mut command,
+                )?;
+            }
+            Event::End(element) => {
+                let tag = String::from_utf8_lossy(element.local_name().as_ref()).into_owned();
+                handle_end(&tag, &mut definitions, &mut preset, &mut path, &mut command)?;
+                let actual = stack.pop().ok_or("unexpected XML end")?;
+                if actual != tag {
+                    return Err(format!("mismatched XML end: {actual}/{tag}"));
+                }
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    if definitions.len() != 55 {
+        return Err(format!(
+            "expected 55 official arrow presets, got {}",
+            definitions.len()
+        ));
+    }
+    Ok(definitions)
+}
+
+fn handle_start(
+    reader: &Reader<&[u8]>,
+    element: &BytesStart<'_>,
+    tag: &str,
+    stack: &[String],
+    preset: &mut Option<(String, PresetDefinition)>,
+    path: &mut Option<PathDefinition>,
+    command: &mut Option<(String, Vec<PointDefinition>)>,
+) -> Result<(), String> {
+    if stack
+        .last()
+        .is_some_and(|parent| parent == "presetShapeDefinitions")
+    {
+        *preset = Some((tag.to_owned(), empty_preset()));
+    } else if tag == "path" {
+        *path = Some(path_definition(reader, element)?);
+    } else if matches!(tag, "moveTo" | "lnTo" | "cubicBezTo" | "quadBezTo") {
+        *command = Some((tag.to_owned(), Vec::new()));
+    }
+    Ok(())
+}
+
+fn handle_empty(
+    reader: &Reader<&[u8]>,
+    element: &BytesStart<'_>,
+    tag: &str,
+    stack: &[String],
+    preset: &mut Option<(String, PresetDefinition)>,
+    path: &mut Option<PathDefinition>,
+    command: &mut Option<(String, Vec<PointDefinition>)>,
+) -> Result<(), String> {
+    match tag {
+        "gd" => {
+            let guide = GuideDefinition {
+                name: attribute(reader, element, "name")?,
+                formula: attribute(reader, element, "fmla")?,
+            };
+            let (_, definition) = preset.as_mut().ok_or("guide outside preset")?;
+            if stack.iter().any(|entry| entry == "avLst") {
+                definition.adjustments.push(guide);
+            } else if stack.iter().any(|entry| entry == "gdLst") {
+                definition.guides.push(guide);
+            }
+        }
+        "pt" => command
+            .as_mut()
+            .ok_or("point outside command")?
+            .1
+            .push(PointDefinition {
+                x: attribute(reader, element, "x")?,
+                y: attribute(reader, element, "y")?,
+            }),
+        "arcTo" => {
+            path.as_mut()
+                .ok_or("arc outside path")?
+                .commands
+                .push(PathCommandDefinition::Arc {
+                    width_radius: attribute(reader, element, "wR")?,
+                    height_radius: attribute(reader, element, "hR")?,
+                    start_angle: attribute(reader, element, "stAng")?,
+                    swing_angle: attribute(reader, element, "swAng")?,
+                })
+        }
+        "close" => path
+            .as_mut()
+            .ok_or("close outside path")?
+            .commands
+            .push(PathCommandDefinition::Close),
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_end(
+    tag: &str,
+    definitions: &mut HashMap<String, PresetDefinition>,
+    preset: &mut Option<(String, PresetDefinition)>,
+    path: &mut Option<PathDefinition>,
+    command: &mut Option<(String, Vec<PointDefinition>)>,
+) -> Result<(), String> {
+    if matches!(tag, "moveTo" | "lnTo" | "cubicBezTo" | "quadBezTo") {
+        let (kind, points) = command.take().ok_or("missing path command")?;
+        let command = match kind.as_str() {
+            "moveTo" => PathCommandDefinition::Move(points),
+            "lnTo" => PathCommandDefinition::Line(points),
+            "cubicBezTo" => PathCommandDefinition::Cubic(points),
+            "quadBezTo" => PathCommandDefinition::Quad(points),
+            _ => return Err(format!("unknown path command: {kind}")),
+        };
+        path.as_mut()
+            .ok_or("command outside path")?
+            .commands
+            .push(command);
+    } else if tag == "path" {
+        preset
+            .as_mut()
+            .ok_or("path outside preset")?
+            .1
+            .paths
+            .push(path.take().ok_or("missing path")?);
+    } else if preset.as_ref().is_some_and(|(name, _)| name == tag) {
+        let (name, definition) = preset.take().ok_or("missing preset")?;
+        if definitions.insert(name.clone(), definition).is_some() {
+            return Err(format!("duplicate official preset: {name}"));
+        }
+    }
+    Ok(())
+}
+
+fn empty_preset() -> PresetDefinition {
+    PresetDefinition {
+        adjustments: Vec::new(),
+        guides: Vec::new(),
+        paths: Vec::new(),
+    }
+}
+
+fn path_definition(
+    reader: &Reader<&[u8]>,
+    element: &BytesStart<'_>,
+) -> Result<PathDefinition, String> {
+    let fill = match optional_attribute(reader, element, "fill")?.as_deref() {
+        None | Some("norm") => PathFill::Norm,
+        Some("none") => PathFill::None,
+        Some("lighten") => PathFill::Lighten,
+        Some("lightenLess") => PathFill::LightenLess,
+        Some("darken") => PathFill::Darken,
+        Some("darkenLess") => PathFill::DarkenLess,
+        Some(value) => return Err(format!("unknown path fill: {value}")),
+    };
+    Ok(PathDefinition {
+        width: optional_attribute(reader, element, "w")?,
+        height: optional_attribute(reader, element, "h")?,
+        fill,
+        stroke: optional_attribute(reader, element, "stroke")?.as_deref() != Some("false"),
+        commands: Vec::new(),
+    })
+}
+
+fn attribute(
+    reader: &Reader<&[u8]>,
+    element: &BytesStart<'_>,
+    name: &str,
+) -> Result<String, String> {
+    optional_attribute(reader, element, name)?.ok_or_else(|| format!("missing {name}"))
+}
+
+fn optional_attribute(
+    reader: &Reader<&[u8]>,
+    element: &BytesStart<'_>,
+    name: &str,
+) -> Result<Option<String>, String> {
+    for attribute in element.attributes() {
+        let attribute = attribute.map_err(|error| error.to_string())?;
+        if attribute.key.as_ref() == name.as_bytes() {
+            return attribute
+                .decode_and_unescape_value(reader.decoder())
+                .map(|value| Some(value.into_owned()))
+                .map_err(|error| error.to_string());
+        }
+    }
+    Ok(None)
+}
+
+fn local_name(element: &BytesStart<'_>) -> String {
+    String::from_utf8_lossy(element.local_name().as_ref()).into_owned()
+}

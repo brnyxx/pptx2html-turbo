@@ -4224,7 +4224,7 @@ fn test_preset_shape_svg_right_arrow() {
     assert!(html.contains("shape-svg"));
     assert!(
         html.contains(
-            "M0,26.2 L157.5,26.2 L157.5,0 L210.0,52.5 L157.5,105.0 L157.5,78.7 L0,78.7 Z"
+            "M0.00,26.25 L157.48,26.25 L157.48,0.00 L209.97,52.49 L157.48,104.99 L157.48,78.74 L0.00,78.74 Z"
         ),
         "rightArrow should use the narrower default head length seen in Office decks: {html}"
     );
@@ -4252,7 +4252,7 @@ fn test_preset_shape_svg_left_arrow() {
     assert!(html.contains("shape-svg"));
     assert!(
         html.contains(
-            "M210.0,26.2 L52.5,26.2 L52.5,0 L0,52.5 L52.5,105.0 L52.5,78.7 L210.0,78.7 Z"
+            "M0.00,52.49 L52.49,0.00 L52.49,26.25 L209.97,26.25 L209.97,78.74 L52.49,78.74 L52.49,104.99 Z"
         ),
         "leftArrow should use the narrower default head length seen in Office decks: {html}"
     );
@@ -4274,7 +4274,7 @@ fn test_preset_shape_svg_up_arrow() {
     let html = render_html(&pptx);
     assert!(
         html.contains(
-            "M52.5,105.0 L52.5,52.5 L0,52.5 L105.0,0 L210.0,52.5 L157.5,52.5 L157.5,105.0 Z"
+            "M0.00,52.49 L104.99,0.00 L209.97,52.49 L157.48,52.49 L157.48,104.99 L52.49,104.99 L52.49,52.49 Z"
         ),
         "upArrow should keep the wider default shaft from Office decks: {html}"
     );
@@ -4295,7 +4295,7 @@ fn test_preset_shape_svg_down_arrow() {
     let pptx = fixtures::MinimalPptx::new(slide).build();
     let html = render_html(&pptx);
     assert!(
-        html.contains("M52.5,0 L157.5,0 L157.5,52.5 L210.0,52.5 L105.0,105.0 L0,52.5 L52.5,52.5 Z"),
+        html.contains("M0.00,52.49 L52.49,52.49 L52.49,0.00 L157.48,0.00 L157.48,52.49 L209.97,52.49 L104.99,104.99 Z"),
         "downArrow should keep the wider default shaft from Office decks: {html}"
     );
 }
@@ -7101,7 +7101,9 @@ fn test_bent_connector5_adjust_values_are_parsed_and_rendered() {
 
     let html = render_html(&pptx);
     assert!(
-        html.contains("M0,0 L42.0,0 L42.0,44.1 L168.0,44.1 L168.0,126.0 L210.0,126.0"),
+        html.contains(
+            "M0.00,0.00 L41.99,0.00 L41.99,44.09 L167.98,44.09 L167.98,125.98 L209.97,125.98"
+        ),
         "bentConnector5 should render the adjusted multi-bend path: {html}"
     );
     assert!(

@@ -1182,7 +1182,7 @@ fn test_curved_arrow_adjustment_profiles_match_benchmarked_anchors() {
 }
 
 #[test]
-fn test_curved_arrow_multi_svg_is_available_for_left_up_down_benchmark_profiles() {
+fn test_curved_arrow_multi_svg_preserves_all_official_path_roles() {
     let tight_adj = HashMap::from([
         ("adj1".to_string(), 12_000.0),
         ("adj2".to_string(), 70_000.0),
@@ -1194,7 +1194,12 @@ fn test_curved_arrow_multi_svg_is_available_for_left_up_down_benchmark_profiles(
         ("adj3".to_string(), 42_000.0),
     ]);
 
-    for preset in ["curvedLeftArrow", "curvedUpArrow", "curvedDownArrow"] {
+    for preset in [
+        "curvedRightArrow",
+        "curvedLeftArrow",
+        "curvedUpArrow",
+        "curvedDownArrow",
+    ] {
         let tight = preset_shape_multi_svg(preset, 120.0, 100.0, &tight_adj)
             .expect("tight multipath preset should be available");
         let wide = preset_shape_multi_svg(preset, 120.0, 100.0, &wide_adj)
@@ -1208,11 +1213,6 @@ fn test_curved_arrow_multi_svg_is_available_for_left_up_down_benchmark_profiles(
         assert!(!tight.paths[1].stroke);
         assert!(tight.paths[2].stroke);
     }
-
-    assert!(
-        preset_shape_multi_svg("curvedRightArrow", 120.0, 100.0, &tight_adj).is_none(),
-        "curvedRightArrow should keep the single-path renderer for now"
-    );
 }
 
 #[test]

@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 const OFFICIAL_PRESET_COUNT: usize = 55;
-const OFFICIAL_PAIR_COUNT: usize = 187;
+const OFFICIAL_PAIR_COUNT: usize = 189;
 const PREVIOUSLY_UNCONSUMED_COUNT: usize = 100;
 
 const PRESETS: &[&str] = &[
@@ -427,16 +427,20 @@ fn every_multi_key_preset_is_order_independent_and_key_isolated() {
 
 #[test]
 fn mirrored_arrows_have_opposite_orientation_with_matching_topology() {
-    for (left, right, adjustments) in [
+    for (left, right, adjustments, left_topology, right_topology) in [
         (
             "leftArrow",
             "rightArrow",
             vec![("adj1", 30_000.0), ("adj2", 40_000.0)],
+            "MLLLLLLZ",
+            "MLLLLLLZ",
         ),
         (
             "curvedLeftArrow",
             "curvedRightArrow",
             vec![("adj1", 20_000.0), ("adj2", 45_000.0), ("adj3", 30_000.0)],
+            "MLLAALZ",
+            "MALLLLAZ",
         ),
         (
             "leftArrowCallout",
@@ -447,6 +451,8 @@ fn mirrored_arrows_have_opposite_orientation_with_matching_topology() {
                 ("adj3", 30_000.0),
                 ("adj4", 55_000.0),
             ],
+            "MLLLLLLLLLLZ",
+            "MLLLLLLLLLLZ",
         ),
     ] {
         let left_html = render_html(left, &adjustments, 1_524_000, 952_500);
@@ -454,10 +460,20 @@ fn mirrored_arrows_have_opposite_orientation_with_matching_topology() {
         let left_path = svg_paths(&left_html)[0].to_owned();
         let right_path = svg_paths(&right_html)[0].to_owned();
         assert_ne!(left_path, right_path, "{left}/{right} orientation");
+        let topology = |path: &str| {
+            path.chars()
+                .filter(|character| matches!(character, 'M' | 'L' | 'C' | 'Q' | 'A' | 'Z'))
+                .collect::<String>()
+        };
         assert_eq!(
-            left_path.matches('L').count(),
-            right_path.matches('L').count(),
-            "{left}/{right} topology"
+            topology(&left_path),
+            left_topology,
+            "{left} official topology"
+        );
+        assert_eq!(
+            topology(&right_path),
+            right_topology,
+            "{right} official topology"
         );
     }
 }
@@ -544,4 +560,38 @@ fn official_formula_landmarks_and_coupled_constraints_hold() {
     let connector = path_numbers(svg_paths(&connector_html)[0]);
     assert_eq!(&connector[..4], &[0.0, 0.0, 32.0, 0.0]);
     assert_eq!(&connector[connector.len() - 2..], &[160.0, 100.0]);
+}
+
+#[test]
+fn microsoft_up_arrow_definition_covers_both_supplemental_handles() {
+    let absent = render_html("upArrow", &[], 1_524_000, 952_500);
+    let explicit = render_html(
+        "upArrow",
+        &[("adj1", 50_000.0), ("adj2", 50_000.0)],
+        1_524_000,
+        952_500,
+    );
+    assert_eq!(svg_paths(&absent), svg_paths(&explicit));
+    for key in ["adj1", "adj2"] {
+        let variants = [0.0, 12_500.0, 25_000.0, 37_500.0, 75_000.0, 100_000.0]
+            .map(|value| render_html("upArrow", &[(key, value)], 1_524_000, 952_500));
+        assert!(
+            variants
+                .windows(2)
+                .all(|pair| svg_paths(&pair[0]) != svg_paths(&pair[1])),
+            "upArrow.{key} must follow the accepted official definition continuously"
+        );
+        for html in variants {
+            assert_finite_html(&html, &format!("upArrow.{key}"));
+        }
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let html = render_html("upArrow", &[(key, value)], 1_524_000, 952_500);
+            assert_eq!(svg_paths(&html), svg_paths(&absent));
+        }
+    }
+    let topology = svg_paths(&absent)[0]
+        .chars()
+        .filter(|character| matches!(character, 'M' | 'L' | 'C' | 'Q' | 'A' | 'Z'))
+        .collect::<String>();
+    assert_eq!(topology, "MLLLLLLZ");
 }

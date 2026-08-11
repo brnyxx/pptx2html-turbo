@@ -22,6 +22,10 @@ mod custom_geom;
 mod flowchart;
 mod math;
 mod misc;
+mod official_presets;
+mod official_presets_formula;
+mod official_presets_path;
+mod official_presets_xml;
 mod rects;
 mod scrolls_tabs;
 mod shared;
@@ -65,6 +69,17 @@ pub fn preset_shape_svg(
     h: f64,
     adjust_values: &HashMap<String, f64>,
 ) -> Option<String> {
+    if official_presets::owns(name)
+        && let Ok(svg) = official_presets::render(name, w, h, adjust_values)
+    {
+        return Some(
+            svg.paths
+                .into_iter()
+                .map(|path| path.d)
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+    }
     match name {
         // Basic shapes
         "rect" => Some(basic_shapes::rect_path(w, h)),
@@ -315,6 +330,11 @@ pub fn preset_shape_multi_svg(
     h: f64,
     adjust_values: &HashMap<String, f64>,
 ) -> Option<CustomGeomSvg> {
+    if official_presets::owns(name)
+        && let Ok(svg) = official_presets::render(name, w, h, adjust_values)
+    {
+        return Some(svg);
+    }
     match name {
         "curvedLeftArrow"
             if shared::matches_curved_arrow_profile(
