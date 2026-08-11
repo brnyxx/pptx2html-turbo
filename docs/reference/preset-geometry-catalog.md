@@ -15,6 +15,8 @@ and adjustment-handle constraint in source order.
   <https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.adjustvaluelist?view=openxml-3.0.1>
 - Microsoft `a:prstGeom` contract:
   <https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry?view=openxml-3.0.1>
+- Microsoft Open Specifications accepted `upArrow` definition:
+  <https://learn.microsoft.com/en-ca/answers/questions/2275994/uparrow-is-missing-in-presetshapedefinitions-xml>
 
 The manifest records the edition, URLs, and SHA-256 checksums for the Part 1
 ZIP, nested `dml-main.xsd`, and `presetShapeDefinitions.xml`. The ordered
@@ -36,13 +38,15 @@ does not make any renderer implementation exact. Every manifest row remains
 `non-exact` until native PowerPoint evidence satisfies the repository exactness
 gate.
 
-The official geometry artifact repeats `upDownArrow` and omits `upArrow`.
-The checker requires the two `upDownArrow` definitions to be identical and
-normalizes them to one preset. The resulting official contract contains 298
-adjustments and 285 handle constraints. Consequently,
-`upArrow.source_status` is `unavailable`; its current Rust keys are recorded
-only as non-normative preservation data. They are not official defaults or
-ranges.
+The ECMA geometry artifact repeats `upDownArrow` and omits `upArrow`. The
+checker requires the two `upDownArrow` definitions to be identical and keeps
+the ECMA base audit fixed at 298 adjustments and 285 handle constraints. The
+missing `upArrow` definition is supplied by the accepted Microsoft Open
+Specifications answer in `evaluate/official_supplements/upArrow.xml`, whose
+SHA-256 and provenance are bound by the manifest and checker. Its two
+adjustments and two handle constraints produce a combined official contract of
+300 adjustments and 287 constraints. This source classification does not
+promote renderer fidelity beyond `non-exact` without native PowerPoint evidence.
 
 The checker also records implementation-only keys where current Rust consumes a
 key that the official definition does not assign to that preset. These entries

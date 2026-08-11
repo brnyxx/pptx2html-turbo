@@ -27,15 +27,28 @@ UNPARSEABLE_ADJUSTMENT_LOOKUP: Final = "UNPARSEABLE_ADJUSTMENT_LOOKUP"
 OFFICIAL_PRESET_INVENTORY_MISMATCH: Final = "OFFICIAL_PRESET_INVENTORY_MISMATCH"
 OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH: Final = "OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH"
 OFFICIAL_ARTIFACT_CHECKSUM_MISMATCH: Final = "OFFICIAL_ARTIFACT_CHECKSUM_MISMATCH"
+OFFICIAL_SUPPLEMENT_NOT_FOUND: Final = "OFFICIAL_SUPPLEMENT_NOT_FOUND"
+OFFICIAL_SUPPLEMENT_INVALID: Final = "OFFICIAL_SUPPLEMENT_INVALID"
+OFFICIAL_SUPPLEMENT_CHECKSUM_MISMATCH: Final = "OFFICIAL_SUPPLEMENT_CHECKSUM_MISMATCH"
 OFFICIAL_NAMES_SHA256: Final = (
     "f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587"
 )
 DEFAULT_MANIFEST: Final = Path("evaluate/preset_adjustments.json")
 DEFAULT_DISPATCHER: Final = Path("crates/pptx2html-core/src/renderer/geometry.rs")
 DEFAULT_SOURCE_ROOT: Final = Path("crates/pptx2html-core/src/renderer/geometry")
+DEFAULT_SUPPLEMENT: Final = Path("evaluate/official_supplements/upArrow.xml")
 DRAWINGML_NAMESPACE: Final = "http://schemas.openxmlformats.org/drawingml/2006/main"
 OFFICIAL_ADJUSTMENT_COUNT: Final = 298
 OFFICIAL_CONSTRAINT_COUNT: Final = 285
+OFFICIAL_TOTAL_ADJUSTMENT_COUNT: Final = 300
+OFFICIAL_TOTAL_CONSTRAINT_COUNT: Final = 287
+OFFICIAL_SUPPLEMENT_SHA256: Final = (
+    "23dc5bfc28c65bbac832c40452b29af40b535679f47c35d22e6db6f1292a48ad"
+)
+OFFICIAL_SUPPLEMENT_URL: Final = (
+    "https://learn.microsoft.com/en-ca/answers/questions/2275994/"
+    "uparrow-is-missing-in-presetshapedefinitions-xml"
+)
 BUNDLE_MODULES: Final = {
     "basic": frozenset(
         {"basic_shapes", "rects", "brackets_braces", "scrolls_tabs", "flowchart"}
@@ -345,10 +358,31 @@ def check_repository(
     manifest_path: Path | None = None,
     source_root: Path | None = None,
     dispatcher_path: Path | None = None,
+    supplement_path: Path | None = None,
     bundle: str | None = None,
 ) -> CheckReport:
     manifest = _load_manifest(manifest_path or repo_root / DEFAULT_MANIFEST)
     names, rows = _manifest_inventory(manifest)
+    supplement = _official_supplement(
+        supplement_path or repo_root / DEFAULT_SUPPLEMENT, manifest
+    )
+    contract = manifest.get("contract")
+    artifact = manifest.get("official_artifact")
+    if (
+        not isinstance(contract, dict)
+        or not isinstance(artifact, dict)
+        or contract.get("official_adjustment_count") != OFFICIAL_TOTAL_ADJUSTMENT_COUNT
+        or contract.get("official_handle_constraint_count")
+        != OFFICIAL_TOTAL_CONSTRAINT_COUNT
+        or artifact.get("adjustment_count") != OFFICIAL_ADJUSTMENT_COUNT
+        or artifact.get("handle_constraint_count") != OFFICIAL_CONSTRAINT_COUNT
+        or rows["upArrow"].get("source_status") != "available"
+        or rows["upArrow"].get("adjustments") != supplement["upArrow"]
+    ):
+        raise ContractError(
+            OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+            "official base plus supplement contract mismatch",
+        )
     routes = _dispatcher_routes(dispatcher_path or repo_root / DEFAULT_DISPATCHER)
     route_by_name = {route[0]: route for route in routes}
     aliases = manifest.get("dispatcher_aliases")
@@ -433,6 +467,7 @@ def check_repository(
         "unknown_consumed_key_details": unknown,
         "non_official_consumed_keys_preserved": preserved_count,
         "manifest_keys_never_consumed": len(official_pairs - consumed),
+        "official_adjustment_pairs": len(official_pairs),
     }
 
 
@@ -502,6 +537,61 @@ def _shape_adjustments(shape: ElementTree.Element) -> list[JsonValue]:
     return adjustments
 
 
+def _official_supplement(
+    path: Path, manifest: dict[str, JsonValue]
+) -> dict[str, list[JsonValue]]:
+    metadata = manifest.get("official_supplements")
+    expected_metadata = {
+        "preset": "upArrow",
+        "path": str(DEFAULT_SUPPLEMENT),
+        "url": OFFICIAL_SUPPLEMENT_URL,
+        "accepted_answer_author": (
+            "Tom Jebo, Microsoft Employee, Microsoft Open Specifications Support"
+        ),
+        "accepted_answer_timestamp": "2025-05-16T21:51:23.2866667+00:00",
+        "retrieved": "2026-08-11",
+        "sha256": OFFICIAL_SUPPLEMENT_SHA256,
+        "adjustment_count": 2,
+        "handle_constraint_count": 2,
+    }
+    if metadata != [expected_metadata]:
+        raise ContractError(
+            OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+            "official supplement metadata mismatch",
+        )
+    try:
+        payload = path.read_bytes()
+    except FileNotFoundError as error:
+        raise ContractError(OFFICIAL_SUPPLEMENT_NOT_FOUND, f"path={path}") from error
+    except (IsADirectoryError, PermissionError, OSError) as error:
+        raise ContractError(OFFICIAL_SUPPLEMENT_INVALID, f"path={path}") from error
+    actual_sha = hashlib.sha256(payload).hexdigest()
+    if actual_sha != OFFICIAL_SUPPLEMENT_SHA256:
+        raise ContractError(
+            OFFICIAL_SUPPLEMENT_CHECKSUM_MISMATCH,
+            f"expected={OFFICIAL_SUPPLEMENT_SHA256} actual={actual_sha}",
+        )
+    try:
+        root = ElementTree.fromstring(payload)
+    except ElementTree.ParseError as error:
+        raise ContractError(OFFICIAL_SUPPLEMENT_INVALID, f"path={path}") from error
+    if _local_name(root.tag) != "upArrow":
+        raise ContractError(OFFICIAL_SUPPLEMENT_INVALID, "root must be upArrow")
+    adjustments = _shape_adjustments(root)
+    constraint_count = sum(
+        len(adjustment["constraints"])
+        for adjustment in adjustments
+        if isinstance(adjustment, dict)
+        and isinstance(adjustment.get("constraints"), list)
+    )
+    if len(adjustments) != 2 or constraint_count != 2:
+        raise ContractError(
+            OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+            f"supplement adjustments={len(adjustments)} constraints={constraint_count}",
+        )
+    return {"upArrow": adjustments}
+
+
 def _official_adjustments(
     root: ElementTree.Element, names: list[str]
 ) -> dict[str, list[JsonValue]]:
@@ -551,9 +641,15 @@ def _verify_manifest_adjustments(
     artifact = manifest.get("official_artifact")
     if not isinstance(rows, list) or not isinstance(artifact, dict):
         raise ContractError("MALFORMED_MANIFEST", "preset semantics are required")
+    contract = manifest.get("contract")
+    if not isinstance(contract, dict):
+        raise ContractError("MALFORMED_MANIFEST", "contract is required")
     if (
         artifact.get("adjustment_count") != OFFICIAL_ADJUSTMENT_COUNT
         or artifact.get("handle_constraint_count") != OFFICIAL_CONSTRAINT_COUNT
+        or contract.get("official_adjustment_count") != OFFICIAL_TOTAL_ADJUSTMENT_COUNT
+        or contract.get("official_handle_constraint_count")
+        != OFFICIAL_TOTAL_CONSTRAINT_COUNT
     ):
         raise ContractError(
             OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
@@ -563,16 +659,6 @@ def _verify_manifest_adjustments(
         if not isinstance(row, dict) or not isinstance(row.get("name"), str):
             raise ContractError("MALFORMED_MANIFEST", "invalid preset row")
         name = row["name"]
-        if name == "upArrow":
-            if (
-                row.get("source_status") != "unavailable"
-                or row.get("adjustments") != []
-            ):
-                raise ContractError(
-                    OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
-                    "upArrow must remain unavailable",
-                )
-            continue
         if row.get("source_status") != "available" or row.get(
             "adjustments"
         ) != semantics.get(name):
@@ -583,7 +669,10 @@ def _verify_manifest_adjustments(
 
 
 def _verify_official_package(
-    path: Path, manifest: dict[str, JsonValue], names: list[str]
+    path: Path,
+    supplement_path: Path,
+    manifest: dict[str, JsonValue],
+    names: list[str],
 ) -> None:
     artifact = manifest.get("official_artifact")
     if not isinstance(artifact, dict):
@@ -656,7 +745,9 @@ def _verify_official_package(
         raise ContractError(
             OFFICIAL_PRESET_INVENTORY_MISMATCH, "artifact ST_ShapeType mismatch"
         )
-    _verify_manifest_adjustments(manifest, _official_adjustments(geometry_root, names))
+    semantics = _official_adjustments(geometry_root, names)
+    semantics.update(_official_supplement(supplement_path, manifest))
+    _verify_manifest_adjustments(manifest, semantics)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -667,6 +758,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--dispatcher", type=Path)
     parser.add_argument("--json", type=Path, dest="json_output")
     parser.add_argument("--official-artifact", type=Path)
+    parser.add_argument("--official-supplement", type=Path)
     parser.add_argument("--bundle", choices=("basic", "arrows", "remaining"))
     return parser.parse_args()
 
@@ -685,6 +777,11 @@ def main() -> int:
         if args.source_root
         else repo_root / DEFAULT_SOURCE_ROOT
     )
+    supplement_path = (
+        args.official_supplement.resolve()
+        if args.official_supplement
+        else repo_root / DEFAULT_SUPPLEMENT
+    )
     manifest = _load_manifest(manifest_path)
     names, _ = _manifest_inventory(manifest)
     report = check_repository(
@@ -692,10 +789,13 @@ def main() -> int:
         manifest_path=manifest_path,
         source_root=source_root,
         dispatcher_path=dispatcher_path,
+        supplement_path=supplement_path,
         bundle=args.bundle,
     )
     if args.official_artifact:
-        _verify_official_package(args.official_artifact, manifest, names)
+        _verify_official_package(
+            args.official_artifact, supplement_path, manifest, names
+        )
     if args.json_output:
         try:
             args.json_output.parent.mkdir(parents=True, exist_ok=True)

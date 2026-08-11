@@ -72,7 +72,7 @@ class CheckPresetAdjustmentsTests(unittest.TestCase):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         definitions = ElementTree.Element("presetShapeDefinitons")
         for row in manifest["presets"]:
-            if row["source_status"] != "available":
+            if row["source_status"] != "available" or row["name"] == "upArrow":
                 continue
             copies = 2 if row["name"] == "upDownArrow" else 1
             for _ in range(copies):
@@ -129,15 +129,69 @@ class CheckPresetAdjustmentsTests(unittest.TestCase):
         report = check_repository(REPO_ROOT)
         self.assertTrue(report["ok"])
         self.assertEqual(report["presets"], 187)
+        self.assertEqual(report["official_adjustment_pairs"], 300)
         self.assertEqual(report["unclassified_presets"], 0)
         self.assertEqual(report["unknown_consumed_keys"], 0)
         self.assertGreater(report["non_official_consumed_keys_preserved"], 0)
         self.assertGreater(report["manifest_keys_never_consumed"], 0)
 
-    def test_manifest_keeps_unavailable_source_and_custom_names_separate(self) -> None:
+    def test_manifest_includes_official_up_arrow_supplement(self) -> None:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         presets = {row["name"]: row for row in manifest["presets"]}
-        self.assertEqual(presets["upArrow"]["source_status"], "unavailable")
+        self.assertEqual(presets["upArrow"]["source_status"], "available")
+        self.assertEqual(
+            presets["upArrow"]["adjustments"],
+            [
+                {
+                    "name": "adj1",
+                    "default_formula": "val 50000",
+                    "source_status": "available",
+                    "range_status": "available",
+                    "constraints": [
+                        {
+                            "handle": "ahXY",
+                            "axis": "x",
+                            "minimum_formula": "0",
+                            "maximum_formula": "100000",
+                        }
+                    ],
+                },
+                {
+                    "name": "adj2",
+                    "default_formula": "val 50000",
+                    "source_status": "available",
+                    "range_status": "available",
+                    "constraints": [
+                        {
+                            "handle": "ahXY",
+                            "axis": "y",
+                            "minimum_formula": "0",
+                            "maximum_formula": "maxAdj2",
+                        }
+                    ],
+                },
+            ],
+        )
+        self.assertEqual(manifest["official_artifact"]["adjustment_count"], 298)
+        self.assertEqual(manifest["official_artifact"]["handle_constraint_count"], 285)
+        self.assertEqual(manifest["contract"]["official_adjustment_count"], 300)
+        self.assertEqual(manifest["contract"]["official_handle_constraint_count"], 287)
+        self.assertEqual(
+            manifest["official_supplements"],
+            [
+                {
+                    "preset": "upArrow",
+                    "path": "evaluate/official_supplements/upArrow.xml",
+                    "url": "https://learn.microsoft.com/en-ca/answers/questions/2275994/uparrow-is-missing-in-presetshapedefinitions-xml",
+                    "accepted_answer_author": "Tom Jebo, Microsoft Employee, Microsoft Open Specifications Support",
+                    "accepted_answer_timestamp": "2025-05-16T21:51:23.2866667+00:00",
+                    "retrieved": "2026-08-11",
+                    "sha256": "23dc5bfc28c65bbac832c40452b29af40b535679f47c35d22e6db6f1292a48ad",
+                    "adjustment_count": 2,
+                    "handle_constraint_count": 2,
+                }
+            ],
+        )
         self.assertNotEqual(presets["upArrow"]["preservation"]["fidelity"], "exact")
         self.assertEqual(
             manifest["custom_geometry_adjustments"]["name_contract"], "open"
@@ -152,6 +206,38 @@ class CheckPresetAdjustmentsTests(unittest.TestCase):
             self.assertEqual(
                 (report["presets"], report["unknown_consumed_keys"]), (187, 0)
             )
+
+    def test_arrows_bundle_includes_up_arrow_supplement_pairs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "report.json"
+            result = self._run_cli("--bundle", "arrows", "--json", str(output))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["official_adjustment_pairs"], 189)
+
+    def test_official_supplement_deletion_and_mutation_fail_stably(self) -> None:
+        supplement = REPO_ROOT / "evaluate/official_supplements/upArrow.xml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            missing = root / "missing.xml"
+            missing_result = self._run_cli("--official-supplement", str(missing))
+            self.assertEqual(missing_result.returncode, 1)
+            self.assertIn("OFFICIAL_SUPPLEMENT_NOT_FOUND", missing_result.stderr)
+            self.assertNotIn("Traceback", missing_result.stderr)
+
+            mutated = root / "upArrow.xml"
+            mutated.write_text(
+                supplement.read_text(encoding="utf-8").replace(
+                    'fmla="val 50000"', 'fmla="val 50001"', 1
+                ),
+                encoding="utf-8",
+            )
+            mutated_result = self._run_cli("--official-supplement", str(mutated))
+            self.assertEqual(mutated_result.returncode, 1)
+            self.assertIn(
+                "OFFICIAL_SUPPLEMENT_CHECKSUM_MISMATCH", mutated_result.stderr
+            )
+            self.assertNotIn("Traceback", mutated_result.stderr)
 
     def test_official_inventory_list_and_rows_reject_missing_extra_or_alias(
         self,

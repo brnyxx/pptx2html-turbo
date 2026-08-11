@@ -3,6 +3,8 @@
   "contract": {
     "preset_inventory": "ECMA-376 Part 1 5th edition ST_ShapeType",
     "preset_count": 187,
+    "official_adjustment_count": 300,
+    "official_handle_constraint_count": 287,
     "dispatch_completeness_is_not_adjustment_semantics_completeness": true,
     "exactness_policy": "Official formulas and constraints classify the source contract only; renderer fidelity remains non-exact until native PowerPoint evidence passes."
   },
@@ -17,9 +19,22 @@
     "geometry_member_sha256": "2f7c868d857c1e3c4b5a6068759fe0e07d77ad58377a6618d1b02ba3507b6939",
     "adjustment_count": 298,
     "handle_constraint_count": 285,
-    "duplicate_normalization": "The two byte-equivalent upDownArrow definitions normalize to one preset; upArrow remains unavailable.",
-    "known_source_gap": "presetShapeDefinitions.xml repeats upDownArrow and omits upArrow; upArrow semantics are unavailable rather than inferred."
+    "duplicate_normalization": "The two byte-equivalent upDownArrow definitions normalize to one preset.",
+    "known_source_gap": "presetShapeDefinitions.xml repeats upDownArrow and omits upArrow; the missing upArrow definition is supplied by the separately verified Microsoft Open Specifications accepted answer."
   },
+  "official_supplements": [
+    {
+      "preset": "upArrow",
+      "path": "evaluate/official_supplements/upArrow.xml",
+      "url": "https://learn.microsoft.com/en-ca/answers/questions/2275994/uparrow-is-missing-in-presetshapedefinitions-xml",
+      "accepted_answer_author": "Tom Jebo, Microsoft Employee, Microsoft Open Specifications Support",
+      "accepted_answer_timestamp": "2025-05-16T21:51:23.2866667+00:00",
+      "retrieved": "2026-08-11",
+      "sha256": "23dc5bfc28c65bbac832c40452b29af40b535679f47c35d22e6db6f1292a48ad",
+      "adjustment_count": 2,
+      "handle_constraint_count": 2
+    }
+  ],
   "official_sources": [
     {
       "scope": "a:avLst semantics",
@@ -28,6 +43,10 @@
     {
       "scope": "a:prstGeom contract",
       "url": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry?view=openxml-3.0.1"
+    },
+    {
+      "scope": "upArrow supplemental preset definition",
+      "url": "https://learn.microsoft.com/en-ca/answers/questions/2275994/uparrow-is-missing-in-presetshapedefinitions-xml"
     }
   ],
   "official_preset_names_sha256": "f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587",
@@ -1416,17 +1435,40 @@
     },
     {
       "name": "upArrow",
-      "source_status": "unavailable",
-      "adjustments": [],
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
       "preservation": {
         "fidelity": "non-exact",
-        "policy": "preserve-and-gate",
-        "reason": "The official 5th-edition geometry artifact omits this preset definition.",
-        "observed_consumed_keys": [
-          "adj1",
-          "adj2"
-        ],
-        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+        "policy": "preserve-and-gate"
       }
     },
     {
