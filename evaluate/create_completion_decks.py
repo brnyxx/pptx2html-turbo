@@ -132,8 +132,6 @@ def _publish(output: Path, artifacts: dict[str, bytes]) -> None:
         )
     if primary is not None:
         raise ContractError(primary_message) from primary
-    if cleanup_error is not None:
-        raise ContractError(primary_message) from cleanup_error
 
 
 def _validate_output(output: Path) -> None:
