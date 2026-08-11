@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
- - No unreleased changes after the 1.1.0 release line.
+### Breaking API notice - next semver-major only
+
+- Add the public `Bullet::Picture` variant for typed DrawingML picture bullets.
+- Rust consumers with exhaustive `Bullet` matches must add a `Bullet::Picture` arm.
+- Publish this public enum change only in the next semver-major release; package manifests remain unchanged on the current release line.
 
 ## [1.1.0] - 2026-04-14
 

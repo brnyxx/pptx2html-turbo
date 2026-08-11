@@ -196,6 +196,10 @@ See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element
 | Unsupported | SmartArt, OLE, Math — structured placeholders with metadata sideband (raw XML, type, position) |
 | LLM Enhance | Post-processing layer: SmartArt→HTML/CSS, OMML→MathML, DrawingML→CSS via LLM (pptx2html-enhance) |
 
+### Picture-bullet API compatibility
+
+Picture-bullet support adds the public `Bullet::Picture` enum variant. Rust consumers that exhaustively match `Bullet` must add a `Bullet::Picture` arm. Because adding a public enum variant is a breaking API change, this change must ship only in the next semver-major release; the current package manifests intentionally remain on the existing release line.
+
 DrawingML preset names beginning with `math`, such as `mathPlus`, are geometric shapes only and do not imply OMML equation support.
 
 ## Architecture
