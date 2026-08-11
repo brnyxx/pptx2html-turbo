@@ -1,34 +1,67 @@
+import hashlib
 import json
-import os
 import subprocess
 import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from typing import TypeAlias
 from xml.etree import ElementTree
 
+from evaluate.tests.completion_deck_content_contract import assert_content_types
+from evaluate.tests.completion_deck_feature_contract import (
+    NS,
+    RULES,
+    assert_feature_contract,
+)
+from evaluate.tests.completion_deck_graph_contract import assert_package_graph
 from evaluate.tests.completion_deck_test_support import (
+    CANONICAL_MANIFEST,
     COMMON_PARTS,
     DECKS,
-    REQUIRED_IDS,
     ROOT,
     assert_png,
-    assert_relationship_closure,
-    assert_stimuli,
     contract,
+    copy_contract,
     generate,
-    remove_token,
     run_generator,
     tree_hashes,
 )
 
 
+JsonValue: TypeAlias = (
+    str | int | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+)
+
+
 class CompletionDeckTests(unittest.TestCase):
-    def test_corpus_is_deterministic_and_structurally_valid(self) -> None:
+    def test_direct_and_module_cli_use_real_default_manifest(self) -> None:
+        checker = subprocess.run(
+            [
+                sys.executable,
+                "evaluate/check_preset_adjustments.py",
+                "--repo-root",
+                ".",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(checker.returncode, 0, checker.stderr)
+        self.assertIn("presets=187", checker.stdout)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = contract(root)
+            direct = run_generator(root / "direct")
+            module = run_generator(root / "module", module=True)
+            self.assertEqual(direct.returncode, 0, direct.stderr)
+            self.assertEqual(module.returncode, 0, module.stderr)
+            self.assertEqual(tree_hashes(root / "direct"), tree_hashes(root / "module"))
+
+    def test_corpus_is_deterministic_well_formed_and_graph_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, source = Path(tmp), contract(Path(tmp))
             first, second = root / "a", root / "b"
             generate(self, first, source)
             generate(self, second, source)
@@ -45,107 +78,71 @@ class CompletionDeckTests(unittest.TestCase):
                             for info in archive.infolist()
                         )
                     )
-                    assert_relationship_closure(self, archive)
-
-    def test_manifest_features_and_adjustments_bind_to_ooxml(self) -> None:
-        fixture_root = os.environ.get("PPTX_COMPLETION_FIXTURE_ROOT")
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            output = Path(fixture_root) if fixture_root else root / "out"
-            if not fixture_root:
-                generate(self, output, contract(root))
-            manifest = json.loads((output / "manifest.json").read_text())
-            features = {row["id"]: row for row in manifest["features"]}
-            self.assertEqual(set(features), REQUIRED_IDS)
-            self.assertTrue(manifest["powerpoint_capture_required"])
-            self.assertEqual(
-                manifest["native_evidence"], {"images": [], "metadata": None}
-            )
-            self.assertTrue(
-                all(
-                    row["native_evidence"] == {"images": [], "metadata": None}
-                    for row in features.values()
-                )
-            )
-            assert_stimuli(self, output)
-            cases = manifest["adjustment_case_scaffold"]
-            self.assertEqual(
-                manifest["adjustment_case_source"]["official_preset_count"], 187
-            )
-            self.assertEqual(len(cases), 12)
-            self.assertEqual(
-                {case["bundle"] for case in cases}, {"basic", "arrows", "remaining"}
-            )
-            self.assertEqual(
-                {case["kind"] for case in cases},
-                {"default", "lower", "upper", "representative"},
-            )
-            self.assertTrue(all(case["expected_pixels"] is None for case in cases))
-
-    def test_slide_level_timing_and_valid_png_previews(self) -> None:
-        ns = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
-        with tempfile.TemporaryDirectory() as tmp:
-            root, output = Path(tmp), Path(tmp) / "out"
-            generate(self, output, contract(root))
-            with zipfile.ZipFile(output / "timing-transitions.pptx") as archive:
-                fade = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
-                cut = ElementTree.fromstring(archive.read("ppt/slides/slide2.xml"))
-            self.assertIsNotNone(fade.find("p:transition/p:fade", ns))
-            self.assertIsNotNone(fade.find("p:timing", ns))
-            self.assertIsNotNone(cut.find("p:transition/p:cut", ns))
-            self.assertIsNone(fade.find("p:cSld/p:spTree/p:transition", ns))
-            for deck in ("picture-bullets", "media", "charts"):
-                with zipfile.ZipFile(output / f"{deck}.pptx") as archive:
                     for part in (
-                        name for name in archive.namelist() if name.endswith(".png")
+                        name
+                        for name in archive.namelist()
+                        if name.endswith((".xml", ".rels"))
                     ):
-                        assert_png(self, archive.read(part))
-            with zipfile.ZipFile(output / "charts.pptx") as archive:
-                self.assertTrue(
-                    {
-                        "ppt/charts/chart1.xml",
-                        "ppt/charts/chart2.xml",
-                        "ppt/charts/chart3.xml",
-                    }.issubset(archive.namelist())
-                )
+                        ElementTree.fromstring(archive.read(part))
+                    assert_package_graph(self, archive, deck)
+                    assert_content_types(self, archive)
+            assert_feature_contract(self, first)
 
-    def test_removed_stimulus_and_missing_feature_are_rejected(self) -> None:
+    def test_manifest_rows_match_independent_feature_and_real_adjustment_contracts(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root, output = Path(tmp), Path(tmp) / "out"
-            generate(self, output, contract(root))
-            manifest_path = output / "manifest.json"
-            manifest = json.loads(manifest_path.read_text())
-            audio = next(
-                row for row in manifest["features"] if row["id"] == "media-audio"
-            )
-            remove_token(output / audio["deck"], audio["stimulus"])
-            with self.assertRaisesRegex(AssertionError, "media-audio"):
-                assert_stimuli(self, output)
-            manifest["features"] = [
-                row for row in manifest["features"] if row["id"] != "media-audio"
-            ]
-            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "unittest",
-                    "evaluate.tests.test_create_completion_decks.CompletionDeckTests.test_manifest_features_and_adjustments_bind_to_ooxml",
-                    "-v",
-                ],
-                cwd=ROOT,
-                env={**os.environ, "PPTX_COMPLETION_FIXTURE_ROOT": str(output)},
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("media-audio", result.stderr)
+            output = Path(tmp) / "out"
+            generate(self, output, CANONICAL_MANIFEST)
+            manifest = json.loads((output / "manifest.json").read_text())
+            feature_rows = {row["id"]: row for row in manifest["features"]}
+            self.assertEqual(set(feature_rows), {rule.feature_id for rule in RULES})
+            for rule in RULES:
+                self.assertEqual(
+                    feature_rows[rule.feature_id]["deck"], f"{rule.deck}.pptx"
+                )
+                self.assertEqual(
+                    feature_rows[rule.feature_id]["stimulus"]["part"], rule.part
+                )
+                locator = feature_rows[rule.feature_id]["stimulus"]
+                with zipfile.ZipFile(output / f"{rule.deck}.pptx") as archive:
+                    self.assertIn(
+                        locator["token"].encode(),
+                        archive.read(locator["part"]),
+                        rule.feature_id,
+                    )
+            official = json.loads(CANONICAL_MANIFEST.read_text())
+            rows = {row["name"]: row for row in official["presets"]}
+            cases = manifest["adjustment_case_scaffold"]
+            self.assertEqual(len(cases), 12)
+            with zipfile.ZipFile(output / "patterns.pptx") as archive:
+                slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            for case in cases:
+                adjustment = rows[case["preset"]]["adjustments"][0]
+                self.assertEqual(case["key"], adjustment["name"])
+                self.assertEqual(case["source_status"], adjustment["source_status"])
+                shape = next(
+                    element
+                    for element in slide.findall(".//p:sp", NS)
+                    if element.find("p:nvSpPr/p:cNvPr", NS).get("name")
+                    == f"adjustment-{case['bundle']}-{case['kind']}"
+                )
+                geometry = shape.find("p:spPr/a:prstGeom", NS)
+                guide = geometry.find("a:avLst/a:gd", NS)
+                self.assertEqual(geometry.get("prst"), case["preset"])
+                self.assertEqual(guide.get("name"), case["key"])
+                formula = str(case["value_or_formula"])
+                self.assertEqual(
+                    guide.get("fmla"),
+                    formula if formula.startswith("val ") else f"val {formula}",
+                )
+                self.assertIsNone(case["expected_pixels"])
 
-    def test_invalid_adjustment_inventories_fail_stably(self) -> None:
+    def test_canonical_manifest_mutations_fail_without_partial_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            base = json.loads(contract(root).read_text())
+            base = json.loads(copy_contract(root).read_text())
+            malicious = 'adj"/><evil injected="yes'
             variants = {
                 "missing": {**base, "presets": base["presets"][:-1]},
                 "extra": {**base, "presets": [*base["presets"], {"name": "unknown"}]},
@@ -153,14 +150,83 @@ class CompletionDeckTests(unittest.TestCase):
                     **base,
                     "presets": [*base["presets"][:-1], base["presets"][0]],
                 },
+                "unknown": _mutate_adjustment(base, "name", "inventedAdjustment"),
+                "mutated": _mutate_adjustment(base, "default_formula", "val 99999"),
+                "malicious": _mutate_adjustment(base, "name", malicious),
             }
             for name, payload in variants.items():
-                path = root / f"{name}.json"
-                path.write_text(json.dumps(payload), encoding="utf-8")
-                result = run_generator(root / name, path)
-                self.assertEqual(result.returncode, 2, name)
-                self.assertIn("ADJUSTMENT_INVENTORY_MISMATCH", result.stderr)
+                with self.subTest(name=name):
+                    source, output = root / f"{name}.json", root / name
+                    source.write_text(json.dumps(payload), encoding="utf-8")
+                    result = run_generator(output, source)
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn("ADJUSTMENT_", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+                    self.assertFalse(output.exists())
+
+    def test_output_directory_policy_is_stable_and_non_destructive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            file_output = root / "file"
+            file_output.write_text("sentinel", encoding="utf-8")
+            nonempty = root / "nonempty"
+            nonempty.mkdir()
+            sentinel = nonempty / "sentinel.txt"
+            sentinel.write_text("keep", encoding="utf-8")
+            for output, code in (
+                (file_output, "OUTPUT_DIR_NOT_DIRECTORY"),
+                (nonempty, "OUTPUT_DIR_NOT_EMPTY"),
+            ):
+                result = run_generator(output)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(code, result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(file_output.read_text(), "sentinel")
+            self.assertEqual(
+                {path.name for path in nonempty.iterdir()}, {"sentinel.txt"}
+            )
+            canonical_digest = hashlib.sha256(
+                CANONICAL_MANIFEST.read_bytes()
+            ).hexdigest()
+            source_output = run_generator(CANONICAL_MANIFEST.parent)
+            self.assertEqual(source_output.returncode, 2)
+            self.assertIn("OUTPUT_DIR_NOT_EMPTY", source_output.stderr)
+            self.assertEqual(
+                hashlib.sha256(CANONICAL_MANIFEST.read_bytes()).hexdigest(),
+                canonical_digest,
+            )
+            empty = root / "empty"
+            empty.mkdir()
+            result = run_generator(empty)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(tuple(empty.iterdir())), 11)
+
+    def test_slide_level_timing_and_png_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "out"
+            generate(self, output, CANONICAL_MANIFEST)
+            with zipfile.ZipFile(output / "timing-transitions.pptx") as archive:
+                fade = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+                cut = ElementTree.fromstring(archive.read("ppt/slides/slide2.xml"))
+            self.assertIsNotNone(fade.find("p:transition/p:fade", NS))
+            self.assertIsNotNone(fade.find("p:timing", NS))
+            self.assertIsNotNone(cut.find("p:transition/p:cut", NS))
+            self.assertIsNone(fade.find("p:cSld/p:spTree/p:transition", NS))
+            for deck in ("picture-bullets", "media", "charts"):
+                with zipfile.ZipFile(output / f"{deck}.pptx") as archive:
+                    for part in (
+                        name for name in archive.namelist() if name.endswith(".png")
+                    ):
+                        assert_png(self, archive.read(part))
+
+
+def _mutate_adjustment(
+    source: dict[str, JsonValue], field: str, value: str
+) -> dict[str, JsonValue]:
+    payload = json.loads(json.dumps(source))
+    row = next(item for item in payload["presets"] if item["name"] == "roundRect")
+    row["adjustments"][0][field] = value
+    return payload
 
 
 if __name__ == "__main__":

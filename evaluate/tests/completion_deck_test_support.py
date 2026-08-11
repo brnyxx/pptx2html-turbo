@@ -1,19 +1,16 @@
 import binascii
 import hashlib
-import json
-import posixpath
 import struct
 import subprocess
 import sys
 import unittest
-import zipfile
 import zlib
 from pathlib import Path
-from xml.etree import ElementTree
 
 
 ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = ROOT / "evaluate" / "create_completion_decks.py"
+CANONICAL_MANIFEST = ROOT / "evaluate" / "preset_adjustments.json"
 DECKS = tuple(
     "patterns picture-bullets table-styles actions notes-comments reflection-3d media timing-transitions charts fallback-domains".split()
 )
@@ -34,61 +31,32 @@ COMMON_PARTS = set(
 )
 
 
-def contract(root: Path) -> Path:
-    names = [
-        "roundRect",
-        "rightArrow",
-        "wave",
-        *(f"synthetic{i:03}" for i in range(184)),
-    ]
-    keys = {"roundRect": "adjBasic", "rightArrow": "adjArrow", "wave": "adjWave"}
-    template = {
-        "default_formula": "val 11111",
-        "source_status": "available",
-        "range_status": "explicit",
-        "constraints": [
-            {
-                "handle": "xy",
-                "axis": "x",
-                "minimum_formula": "val 100",
-                "maximum_formula": "val 200",
-            }
-        ],
-    }
-    rows = [
-        {
-            "name": name,
-            "source_status": "available",
-            "adjustments": [{**template, "name": keys[name]}] if name in keys else [],
-            "preservation": {"fidelity": "fixture", "reason": "synthetic"},
-        }
-        for name in names
-    ]
+def contract(_root: Path) -> Path:
+    return CANONICAL_MANIFEST
+
+
+def copy_contract(root: Path) -> Path:
     path = root / "preset-adjustments.json"
-    path.write_text(
-        json.dumps(
-            {
-                "official_preset_names": names,
-                "official_preset_names_sha256": "synthetic",
-                "dispatcher_aliases": {},
-                "presets": rows,
-            }
-        ),
-        encoding="utf-8",
-    )
+    path.write_bytes(CANONICAL_MANIFEST.read_bytes())
     return path
 
 
-def run_generator(output: Path, source: Path) -> subprocess.CompletedProcess[str]:
+def run_generator(
+    output: Path,
+    source: Path | None = None,
+    *,
+    module: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    command = (
+        [sys.executable, "-m", "evaluate.create_completion_decks"]
+        if module
+        else [sys.executable, str(GENERATOR)]
+    )
+    command.extend(("--output-dir", str(output)))
+    if source is not None:
+        command.extend(("--adjustment-manifest", str(source)))
     return subprocess.run(
-        [
-            sys.executable,
-            str(GENERATOR),
-            "--output-dir",
-            str(output),
-            "--adjustment-manifest",
-            str(source),
-        ],
+        command,
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -100,47 +68,6 @@ def generate(case: unittest.TestCase, output: Path, source: Path) -> None:
     result = run_generator(output, source)
     if result.returncode:
         case.fail(result.stderr)
-
-
-def assert_stimuli(case: unittest.TestCase, root: Path) -> None:
-    for feature in json.loads((root / "manifest.json").read_text())["features"]:
-        stimulus = feature["stimulus"]
-        with zipfile.ZipFile(root / feature["deck"]) as archive:
-            case.assertIn(stimulus["part"], archive.namelist(), feature["id"])
-            case.assertIn(
-                stimulus["token"].encode(),
-                archive.read(stimulus["part"]),
-                feature["id"],
-            )
-
-
-def remove_token(deck: Path, stimulus: dict[str, str]) -> None:
-    copy = deck.with_suffix(".copy")
-    with zipfile.ZipFile(deck) as source, zipfile.ZipFile(copy, "w") as target:
-        for info in source.infolist():
-            payload = source.read(info.filename)
-            if info.filename == stimulus["part"]:
-                payload = payload.replace(stimulus["token"].encode(), b"")
-            target.writestr(info, payload)
-    deck.write_bytes(copy.read_bytes())
-
-
-def assert_relationship_closure(
-    case: unittest.TestCase, archive: zipfile.ZipFile
-) -> None:
-    names = set(archive.namelist())
-    ns = {"r": "http://schemas.openxmlformats.org/package/2006/relationships"}
-    for part in (name for name in names if name.endswith(".rels")):
-        source = "" if part == "_rels/.rels" else part.replace("/_rels/", "/")[:-5]
-        for rel in ElementTree.fromstring(archive.read(part)).findall(
-            "r:Relationship", ns
-        ):
-            if rel.get("TargetMode") == "External" or rel.get("Id") == "rIdMissing":
-                continue
-            target = posixpath.normpath(
-                posixpath.join(posixpath.dirname(source), rel.get("Target", ""))
-            )
-            case.assertIn(target, names, f"{part}:{rel.get('Id')}")
 
 
 def assert_png(case: unittest.TestCase, payload: bytes) -> None:

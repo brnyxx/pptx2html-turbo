@@ -2,19 +2,29 @@ from __future__ import annotations
 
 from typing import Final
 
-from completion_deck_package import (
-    NS,
-    REL,
-    Deck,
-    png_bytes,
-    relationships_xml,
-    wav_bytes,
-)
+if __package__:
+    from .completion_deck_package import (
+        NS,
+        REL,
+        Deck,
+        png_bytes,
+        relationships_xml,
+        wav_bytes,
+    )
+else:
+    from completion_deck_package import (
+        NS,
+        REL,
+        Deck,
+        png_bytes,
+        relationships_xml,
+        wav_bytes,
+    )
 
 
 PATTERNS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="known pattern"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:pattFill prst="pct5"><a:fgClr><a:srgbClr val="336699"/></a:fgClr><a:bgClr><a:srgbClr val="F2F2F2"/></a:bgClr></a:pattFill></p:spPr></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="unknown pattern"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:pattFill prst="unknownFuturePattern"><a:fgClr><a:srgbClr val="112233"/></a:fgClr><a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill></p:spPr></p:sp><p:sp><p:nvSpPr><p:cNvPr id="4" name="unknown custom formula"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:custGeom><a:avLst><a:gd name="unknownGuide" fmla="unknownOp 1 2"/></a:avLst><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="100000" h="100000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="100000" y="100000"/></a:lnTo></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>'
-PICTURE_BULLETS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="picture bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:buBlip><a:blip r:embed="rIdImage"/></a:buBlip></a:pPr><a:r><a:t>Present</a:t></a:r></a:p><a:p><a:pPr><a:buBlip><a:blip r:embed="rIdMissing"/></a:buBlip></a:pPr><a:r><a:t>Missing</a:t></a:r></a:p></p:txBody></p:sp>'
-TABLES: Final = '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="2" name="present style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>{11111111-1111-1111-1111-111111111111}</a:tableStyleId></a:tblPr><a:tblGrid><a:gridCol w="3000000"/></a:tblGrid><a:tr h="500000"><a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody><a:tcPr/></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame><p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="3" name="missing style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr><a:tableStyleId>{22222222-2222-2222-2222-222222222222}</a:tableStyleId></a:tblPr><a:tblGrid><a:gridCol w="3000000"/></a:tblGrid><a:tr h="500000"><a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody><a:tcPr/></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
+PICTURE_BULLETS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="picture bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:buBlip><a:blip r:embed="rIdImage"/></a:buBlip></a:pPr><a:r><a:t>Present</a:t></a:r></a:p><a:p><a:pPr><a:buBlip><a:blip/></a:buBlip></a:pPr><a:r><a:t>Missing</a:t></a:r></a:p></p:txBody></p:sp>'
+TABLES: Final = '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="2" name="present style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId></a:tblPr><a:tblGrid><a:gridCol w="3000000"/></a:tblGrid><a:tr h="500000"><a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody><a:tcPr/></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame><p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="3" name="missing style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr><a:tableStyleId>{22222222-2222-2222-2222-222222222222}</a:tableStyleId></a:tblPr><a:tblGrid><a:gridCol w="3000000"/></a:tblGrid><a:tr h="500000"><a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody><a:tcPr/></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
 ACTIONS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="internal"><a:hlinkClick action="ppaction://hlinkshowjump?jump=nextslide"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="external"><a:hlinkClick r:id="rIdExternal"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="4" name="unsafe"><a:hlinkClick r:id="rIdUnsafe"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
 REFLECTION: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="reflection 3d"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom><a:effectLst><a:reflection blurRad="40000" stA="50000"/></a:effectLst><a:scene3d><a:camera prst="perspectiveFront"/><a:lightRig rig="threePt" dir="t"/></a:scene3d><a:sp3d extrusionH="120000" prstMaterial="warmMatte"/></p:spPr></p:sp>'
 MEDIA: Final = '<p:pic><p:nvPicPr><p:cNvPr id="2" name="audio"><a:hlinkClick action="ppaction://media"/></p:cNvPr><p:cNvPicPr/><p:nvPr><a:audioFile r:link="rIdAudio"/></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rIdPoster"/></p:blipFill><p:spPr/></p:pic><p:pic><p:nvPicPr><p:cNvPr id="3" name="video"/><p:cNvPicPr/><p:nvPr><a:videoFile r:link="rIdVideo"/></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rIdPoster"/></p:blipFill><p:spPr/></p:pic><p:pic><p:nvPicPr><p:cNvPr id="4" name="unsupported"/><p:cNvPicPr/><p:nvPr><a:audioFile r:link="rIdUnsupported"/></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rIdPoster"/></p:blipFill><p:spPr/></p:pic>'
@@ -43,7 +53,7 @@ def _comment_parts() -> tuple[tuple[str, bytes], ...]:
         ),
         (
             "ppt/comments/modernComment1.xml",
-            f'<?xml version="1.0"?><p188:cmLst {NS}><p188:cm id="{{11111111-1111-1111-1111-111111111111}}" authorId="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" created="2026-01-01T00:00:00Z"><p188:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>MODERN_COMMENT</a:t></a:r></a:p></p188:txBody></p188:cm></p188:cmLst>'.encode(),
+            f'<?xml version="1.0"?><p188:cmLst {NS}><p188:cm id="{{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}}" authorId="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" created="2026-01-01T00:00:00Z"><p188:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>MODERN_COMMENT</a:t></a:r></a:p></p188:txBody></p188:cm></p188:cmLst>'.encode(),
         ),
         (
             "ppt/authors/author1.xml",
@@ -91,27 +101,12 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
         Deck(
             "picture-bullets",
             ((PICTURE_BULLETS, ""),),
-            (
-                ("rIdImage", REL + "image", "../media/bullet.png", None),
-                ("rIdMissing", REL + "image", "../media/missing.png", None),
-            ),
+            (("rIdImage", REL + "image", "../media/bullet.png", None),),
             parts=(("ppt/media/bullet.png", image),),
         ),
         Deck(
             "table-styles",
             ((TABLES, ""),),
-            parts=(
-                (
-                    "ppt/tableStyles.xml",
-                    b'<?xml version="1.0"?><a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{11111111-1111-1111-1111-111111111111}"><a:tblStyle styleId="{11111111-1111-1111-1111-111111111111}" styleName="Completion"/></a:tblStyleLst>',
-                ),
-            ),
-            types=(
-                (
-                    "/ppt/tableStyles.xml",
-                    "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml",
-                ),
-            ),
         ),
         Deck(
             "actions",

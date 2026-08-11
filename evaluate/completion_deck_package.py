@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import binascii
+import io
 import json
 import struct
 import zipfile
 import zlib
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Final, TypeAlias
 
 
@@ -74,16 +74,16 @@ def wav_bytes() -> bytes:
     )
 
 
-def write_deck(output: Path, deck: Deck) -> None:
-    with zipfile.ZipFile(
-        output / f"{deck.name}.pptx", "w", zipfile.ZIP_DEFLATED, compresslevel=9
-    ) as archive:
+def deck_bytes(deck: Deck) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name, data in sorted(_package_parts(deck).items()):
             info = zipfile.ZipInfo(name, FIXED_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.create_system = 0
             info.external_attr = 0
             archive.writestr(info, data)
+    return buffer.getvalue()
 
 
 def _slide(body: str, tail: str) -> bytes:

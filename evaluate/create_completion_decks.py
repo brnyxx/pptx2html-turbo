@@ -12,14 +12,24 @@ import logging
 from pathlib import Path
 from typing import Final
 
-from completion_deck_manifest import (
-    FEATURES,
-    ContractError,
-    adjustment_cases,
-    load_adjustments,
-)
-from completion_deck_package import write_deck
-from completion_deck_specs import build_decks
+if __package__:
+    from .completion_deck_features import FEATURES
+    from .completion_deck_manifest import (
+        ContractError,
+        adjustment_cases,
+        load_adjustments,
+    )
+    from .completion_deck_package import deck_bytes
+    from .completion_deck_specs import build_decks
+else:
+    from completion_deck_features import FEATURES
+    from completion_deck_manifest import (
+        ContractError,
+        adjustment_cases,
+        load_adjustments,
+    )
+    from completion_deck_package import deck_bytes
+    from completion_deck_specs import build_decks
 
 
 DEFAULT_ADJUSTMENTS: Final = Path(__file__).with_name("preset_adjustments.json")
@@ -27,12 +37,10 @@ logger = logging.getLogger(__name__)
 
 
 def generate(output: Path, adjustment_manifest: Path) -> None:
+    _validate_output(output)
     official_names, rows = load_adjustments(adjustment_manifest)
     cases, adjustment_shapes = adjustment_cases(rows)
     decks = build_decks(adjustment_shapes)
-    output.mkdir(parents=True, exist_ok=True)
-    for deck in decks:
-        write_deck(output, deck)
     manifest = {
         "schema_version": 2,
         "powerpoint_capture_required": True,
@@ -55,11 +63,26 @@ def generate(output: Path, adjustment_manifest: Path) -> None:
             for feature in FEATURES
         ],
     }
-    (output / "manifest.json").write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    artifacts = {f"{deck.name}.pptx": deck_bytes(deck) for deck in decks}
+    artifacts["manifest.json"] = (
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    ).encode()
+    try:
+        output.mkdir(parents=True, exist_ok=True)
+        for name, payload in sorted(artifacts.items()):
+            (output / name).write_bytes(payload)
+    except OSError as error:
+        raise ContractError(f"OUTPUT_WRITE_ERROR path={output}") from error
+
+
+def _validate_output(output: Path) -> None:
+    try:
+        if output.exists() and not output.is_dir():
+            raise ContractError(f"OUTPUT_DIR_NOT_DIRECTORY path={output}")
+        if output.is_dir() and any(output.iterdir()):
+            raise ContractError(f"OUTPUT_DIR_NOT_EMPTY path={output}")
+    except OSError as error:
+        raise ContractError(f"OUTPUT_DIR_ERROR path={output}") from error
 
 
 def main() -> int:
