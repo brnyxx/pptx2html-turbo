@@ -36,6 +36,7 @@ fn unsupported_shape(element_type: UnresolvedType, label: &str, raw_xml: &str) -
             label: label.to_owned(),
             element_type,
             raw_xml: Some(raw_xml.to_owned()),
+            custom_geometry: None,
         }),
         position: Position {
             x: Emu(100_000),

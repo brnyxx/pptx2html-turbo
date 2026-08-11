@@ -195,6 +195,281 @@ fn known_custom_operator_matrix_preserves_raw_formulas_and_finite_results() {
 }
 
 #[test]
+fn predefined_guides_and_coupled_references_render_at_shape_extent_scale() {
+    let formulas = [
+        ("half_w", "*/ w 1 2", 457_200.0),
+        ("shape_h", "val h", 457_200.0),
+        ("center_x", "val hc", 457_200.0),
+        ("center_y", "val vc", 228_600.0),
+        ("short", "val ss", 457_200.0),
+        ("long", "val ls", 914_400.0),
+        ("half_h", "val hd2", 228_600.0),
+        ("quarter_w", "val wd4", 228_600.0),
+        ("tenth_w", "val wd10", 91_440.0),
+        ("eighth_short", "val ssd8", 57_150.0),
+        ("quarter_turn", "val cd4", 5_400_000.0),
+        ("coupled", "*/ half_w 1 2", 228_600.0),
+    ];
+    let guide_xml = formulas
+        .iter()
+        .map(|(name, formula, _)| format!(r#"<a:gd name="{name}" fmla="{formula}"/>"#))
+        .collect::<String>();
+    let shape = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Predefined guides"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>
+<a:custGeom><a:avLst/><a:gdLst>{guide_xml}</a:gdLst><a:pathLst><a:path>
+<a:moveTo><a:pt x="coupled" y="center_y"/></a:moveTo><a:lnTo><a:pt x="r" y="b"/></a:lnTo>
+</a:path></a:pathLst></a:custGeom></p:spPr></p:sp>"#
+    );
+    let package = MinimalPptx::new(&shape).build();
+    let presentation = PptxParser::parse_bytes(&package).expect("parse predefined guides");
+    let ShapeType::CustomGeom(geometry) = &presentation.slides[0].shapes[0].shape_type else {
+        panic!("official predefined guides must render directly")
+    };
+    for (guide, (name, raw_formula, expected)) in geometry.guides.iter().zip(formulas) {
+        assert_eq!(guide.name, name);
+        assert_eq!(guide.raw_formula, raw_formula);
+        let actual = guide.evaluation.as_ref().expect("finite guide result");
+        assert!((actual - expected).abs() < 1e-6, "{name}: {actual}");
+    }
+    let result = convert_bytes_with_metadata(&package).expect("render predefined guides");
+    assert!(result.diagnostics().is_empty());
+    assert!(result.html.contains("d=\"M24.00,24.00 L96.00,48.00\""));
+}
+
+#[test]
+fn signed_angles_and_multi_turn_trigonometry_follow_drawingml_units() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Signed angles"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm>
+<a:custGeom><a:avLst/><a:gdLst>
+<a:gd name="negative_quadrant" fmla="at2 -1 -1"/>
+<a:gd name="sin_negative" fmla="sin 10 -5400000"/>
+<a:gd name="sin_multi_turn" fmla="sin 10 16200000"/>
+<a:gd name="cos_multi_turn" fmla="cos 10 21600000"/>
+</a:gdLst><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="0" y="0"/></a:moveTo></a:path></a:pathLst>
+</a:custGeom></p:spPr></p:sp>"#;
+    let package = MinimalPptx::new(shape).build();
+    let presentation = PptxParser::parse_bytes(&package).expect("parse signed angles");
+    let ShapeType::CustomGeom(geometry) = &presentation.slides[0].shapes[0].shape_type else {
+        panic!("signed angles must render directly")
+    };
+    let values = geometry
+        .guides
+        .iter()
+        .map(|guide| *guide.evaluation.as_ref().expect("finite angle result"))
+        .collect::<Vec<_>>();
+    assert!((values[0] - -8_100_000.0).abs() < 1e-6);
+    assert!((values[1] - -10.0).abs() < 1e-6);
+    assert!((values[2] - -10.0).abs() < 1e-6);
+    assert!((values[3] - 10.0).abs() < 1e-6);
+}
+
+#[test]
+fn unresolved_custom_geometry_tokens_preserve_typed_locations_and_fallback() {
+    let cases = [
+        (
+            "a:pt",
+            "x",
+            "missingPoint",
+            r#"<a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="missingPoint" y="0"/></a:moveTo></a:path></a:pathLst>"#,
+        ),
+        (
+            "a:rect",
+            "l",
+            "missingRect",
+            r#"<a:rect l="missingRect" t="0" r="10" b="10"/><a:pathLst><a:path w="10" h="10"/></a:pathLst>"#,
+        ),
+        (
+            "a:arcTo",
+            "wR",
+            "missingArcStart",
+            r#"<a:pathLst><a:path w="10" h="10"><a:arcTo wR="missingArcStart" hR="1" stAng="0" swAng="5400000"></a:arcTo></a:path></a:pathLst>"#,
+        ),
+        (
+            "a:arcTo",
+            "wR",
+            "missingArcEmpty",
+            r#"<a:pathLst><a:path w="10" h="10"><a:arcTo wR="missingArcEmpty" hR="1" stAng="0" swAng="5400000"/></a:path></a:pathLst>"#,
+        ),
+        (
+            "a:ahXY",
+            "minX",
+            "missingHandle",
+            r#"<a:ahLst><a:ahXY minX="missingHandle"><a:pos x="0" y="0"/></a:ahXY></a:ahLst><a:pathLst><a:path w="10" h="10"/></a:pathLst>"#,
+        ),
+        (
+            "a:cxn",
+            "ang",
+            "missingConnection",
+            r#"<a:cxnLst><a:cxn ang="missingConnection"><a:pos x="0" y="0"/></a:cxn></a:cxnLst><a:pathLst><a:path w="10" h="10"/></a:pathLst>"#,
+        ),
+        (
+            "a:pos",
+            "x",
+            "missingPosition",
+            r#"<a:ahLst><a:ahXY><a:pos x="missingPosition" y="0"/></a:ahXY></a:ahLst><a:pathLst><a:path w="10" h="10"/></a:pathLst>"#,
+        ),
+        (
+            "a:ahPolar",
+            "minR",
+            "missingPolar",
+            r#"<a:ahLst><a:ahPolar minR="missingPolar"><a:pos x="0" y="0"/></a:ahPolar></a:ahLst><a:pathLst><a:path w="10" h="10"/></a:pathLst>"#,
+        ),
+    ];
+    for (index, (element, attribute, token, body)) in cases.iter().enumerate() {
+        let shape = format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="{}" name="{token}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/>{body}</a:custGeom></p:spPr></p:sp>"#,
+            index + 2
+        );
+        let package = MinimalPptx::new(&shape).build();
+        let presentation = PptxParser::parse_bytes(&package).expect("parse unresolved token");
+        let ShapeType::Unsupported(data) = &presentation.slides[0].shapes[0].shape_type else {
+            panic!("provided unresolved token must force typed fallback")
+        };
+        let geometry = data
+            .custom_geometry
+            .as_ref()
+            .expect("typed custom geometry");
+        assert_eq!(geometry.issues.len(), 1);
+        let issue = &geometry.issues[0];
+        assert_eq!(issue.element, *element);
+        assert_eq!(issue.attribute, *attribute);
+        assert_eq!(issue.token, *token);
+        assert_eq!(
+            issue.error,
+            GuideFormulaError::UnresolvedToken((*token).to_owned())
+        );
+        let result = convert_bytes_with_metadata(&package).expect("render typed fallback");
+        let diagnostic = result
+            .diagnostics()
+            .iter()
+            .find(|item| item.code == "DRAWINGML_CUSTOM_GEOMETRY_FALLBACK")
+            .expect("custom geometry diagnostic");
+        assert!(
+            diagnostic
+                .raw_reference
+                .as_deref()
+                .is_some_and(|raw| raw.contains(token))
+        );
+        let unresolved = result
+            .unresolved_elements
+            .iter()
+            .find(|item| {
+                matches!(
+                    item.element_type,
+                    pptx2html_core::model::UnresolvedType::CustomGeometry
+                )
+            })
+            .expect("custom geometry unresolved element");
+        assert!(unresolved.data_model.as_deref().is_some_and(|json| {
+            json.contains(element) && json.contains(attribute) && json.contains(token)
+        }));
+        assert!(!result.html.contains("NaN") && !result.html.contains("Infinity"));
+    }
+}
+
+#[test]
+fn nonstandard_predefined_names_remain_typed_unresolved_tokens() {
+    for token in ["hd10", "ssd3"] {
+        let formula = format!("val {token}");
+        let shape = format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="{token}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst><a:gd name="bad" fmla="{formula}"/></a:gdLst><a:pathLst><a:path w="10" h="10"/></a:pathLst></a:custGeom></p:spPr></p:sp>"#
+        );
+        let package = MinimalPptx::new(&shape).build();
+        let presentation = PptxParser::parse_bytes(&package).expect("parse nonstandard guide");
+        let ShapeType::Unsupported(data) = &presentation.slides[0].shapes[0].shape_type else {
+            panic!("nonstandard predefined name must fall back")
+        };
+        let guide = &data
+            .custom_geometry
+            .as_ref()
+            .expect("typed geometry")
+            .guides[0];
+        assert_eq!(guide.raw_formula, formula);
+        assert_eq!(
+            guide.evaluation,
+            Err(GuideFormulaError::UnresolvedToken(token.to_owned()))
+        );
+    }
+}
+
+#[test]
+fn negative_sqrt_is_a_typed_domain_fallback_with_exact_formula() {
+    const FORMULA: &str = "sqrt -1";
+    let shape = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Negative sqrt"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst><a:gd name="badRoot" fmla="{FORMULA}"/></a:gdLst><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="badRoot" y="0"/></a:moveTo></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>"#
+    );
+    let package = MinimalPptx::new(&shape).build();
+    let presentation = PptxParser::parse_bytes(&package).expect("parse negative sqrt");
+    let ShapeType::Unsupported(data) = &presentation.slides[0].shapes[0].shape_type else {
+        panic!("negative sqrt must force fallback")
+    };
+    let guide = &data
+        .custom_geometry
+        .as_ref()
+        .expect("typed geometry")
+        .guides[0];
+    assert_eq!(guide.name, "badRoot");
+    assert_eq!(guide.raw_formula, FORMULA);
+    assert_eq!(
+        guide.evaluation,
+        Err(GuideFormulaError::DomainError {
+            operator: "sqrt".to_owned(),
+            operand: "-1".to_owned(),
+        })
+    );
+    let result = convert_bytes_with_metadata(&package).expect("render negative sqrt fallback");
+    assert_eq!(
+        result.diagnostics()[0].raw_reference.as_deref(),
+        Some(FORMULA)
+    );
+}
+
+#[test]
+fn multiple_invalid_guides_preserve_order_and_typed_metadata() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Two invalid guides"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst><a:gd name="first" fmla="unknownOp 1 2"/><a:gd name="second" fmla="sqrt -1"/></a:gdLst><a:pathLst><a:path w="10" h="10"/></a:pathLst></a:custGeom></p:spPr></p:sp>"#;
+    let package = MinimalPptx::new(shape).build();
+    let presentation = PptxParser::parse_bytes(&package).expect("parse two invalid guides");
+    let ShapeType::Unsupported(data) = &presentation.slides[0].shapes[0].shape_type else {
+        panic!("invalid guides must force fallback")
+    };
+    let guides = &data
+        .custom_geometry
+        .as_ref()
+        .expect("typed geometry")
+        .guides;
+    assert_eq!(guides.len(), 2);
+    assert_eq!(
+        (&guides[0].name, &guides[0].raw_formula),
+        (&"first".to_owned(), &"unknownOp 1 2".to_owned())
+    );
+    assert_eq!(
+        (&guides[1].name, &guides[1].raw_formula),
+        (&"second".to_owned(), &"sqrt -1".to_owned())
+    );
+    assert!(matches!(
+        guides[0].evaluation,
+        Err(GuideFormulaError::UnknownOperator(_))
+    ));
+    assert!(matches!(
+        guides[1].evaluation,
+        Err(GuideFormulaError::DomainError { .. })
+    ));
+    let result = convert_bytes_with_metadata(&package).expect("render two-guide fallback");
+    let raw = result.diagnostics()[0]
+        .raw_reference
+        .as_deref()
+        .expect("ordered reference");
+    assert!(raw.find("first").expect("first guide") < raw.find("second").expect("second guide"));
+    assert!(raw.contains("unknownOp 1 2") && raw.contains("sqrt -1"));
+    let model = result.unresolved_elements[0]
+        .data_model
+        .as_deref()
+        .expect("typed data model");
+    assert!(model.contains("UnknownOperator") && model.contains("DomainError"));
+}
+
+#[test]
 fn public_custom_guide_types_expose_typed_failure_contract() {
     let guide = CustomGuide {
         name: "unknownGuide".to_owned(),

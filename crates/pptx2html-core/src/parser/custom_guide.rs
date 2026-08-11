@@ -28,7 +28,17 @@ pub(super) fn evaluate(
             |condition, positive, negative| Ok(if condition > 0.0 { positive } else { negative }),
         )?,
         "abs" => unary(operator, operands, guides, f64::abs)?,
-        "sqrt" => unary(operator, operands, guides, |value| value.max(0.0).sqrt())?,
+        "sqrt" => {
+            exact_arity(operator, operands, 1)?;
+            let value = resolve(operands[0], guides)?;
+            if value < 0.0 {
+                return Err(GuideFormulaError::DomainError {
+                    operator: operator.to_owned(),
+                    operand: operands[0].to_owned(),
+                });
+            }
+            value.sqrt()
+        }
         "mod" => ternary(operator, operands, guides, |x, y, z| {
             Ok(x.hypot(y).hypot(z))
         })?,

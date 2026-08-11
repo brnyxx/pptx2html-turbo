@@ -488,11 +488,13 @@ pub(crate) fn unsupported_data(
     label: String,
     element_type: Option<UnresolvedType>,
     raw_xml: Option<String>,
+    custom_geometry: Option<crate::model::CustomGeometry>,
 ) -> UnsupportedData {
     UnsupportedData {
         label,
         element_type: element_type.unwrap_or(UnresolvedType::SmartArt),
         raw_xml,
+        custom_geometry,
     }
 }
 

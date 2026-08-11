@@ -45,6 +45,7 @@ pub struct CustomGeometry {
     pub adjust_handles: Vec<AdjustHandle>,
     pub connection_sites: Vec<ConnectionSite>,
     pub guides: Vec<CustomGuide>,
+    pub issues: Vec<CustomGeometryIssue>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +53,14 @@ pub struct CustomGuide {
     pub name: String,
     pub raw_formula: String,
     pub evaluation: Result<f64, GuideFormulaError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomGeometryIssue {
+    pub element: String,
+    pub attribute: String,
+    pub token: String,
+    pub error: GuideFormulaError,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +76,10 @@ pub enum GuideFormulaError {
     NonFiniteToken(String),
     NonFiniteResult,
     DivisionByZero,
+    DomainError {
+        operator: String,
+        operand: String,
+    },
 }
 
 #[derive(Debug, Clone)]

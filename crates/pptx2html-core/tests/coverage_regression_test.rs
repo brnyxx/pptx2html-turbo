@@ -1053,6 +1053,7 @@ fn renders_anchor_geometry_and_fill_fallbacks_through_public_renderer() {
                 angle: 0.0,
             }],
             guides: Vec::new(),
+            issues: Vec::new(),
         }),
         position: pptx2html_core::model::Position {
             x: Emu(x),
@@ -1204,6 +1205,7 @@ fn renders_renderer_none_label_marker_and_group_skip_paths_through_public_render
             adjust_handles: Vec::new(),
             connection_sites: Vec::new(),
             guides: Vec::new(),
+            issues: Vec::new(),
         }),
         text_body: Some(TextBody {
             paragraphs: vec![TextParagraph {
@@ -4801,7 +4803,18 @@ fn parses_custom_geometry_invalid_formula_matrix_through_public_parser() {
         unsupported.element_type,
         UnresolvedType::CustomGeometry
     ));
-    assert_eq!(unsupported.raw_xml.as_deref(), Some("mystery 1 2 3"));
+    assert!(unsupported.raw_xml.is_none());
+    let guides = &unsupported
+        .custom_geometry
+        .as_ref()
+        .expect("typed invalid formula matrix")
+        .guides;
+    assert_eq!(guides.len(), 18);
+    assert_eq!(guides[0].name, "g0");
+    assert_eq!(guides[0].raw_formula, "");
+    assert_eq!(guides[17].name, "g17");
+    assert_eq!(guides[17].raw_formula, "mystery 1 2 3");
+    assert!(guides.iter().all(|guide| guide.evaluation.is_err()));
 
     let result = render_with_metadata(&pptx).expect("invalid formula fallback conversion");
     let diagnostic = result
@@ -4814,7 +4827,13 @@ fn parses_custom_geometry_invalid_formula_matrix_through_public_parser() {
         diagnostic.fallback_kind,
         FallbackKind::CustomGeometryPlaceholder
     ));
-    assert_eq!(diagnostic.raw_reference.as_deref(), Some("mystery 1 2 3"));
+    let raw_reference = diagnostic
+        .raw_reference
+        .as_deref()
+        .expect("matrix reference");
+    assert!(raw_reference.contains("\"name\":\"g0\""));
+    assert!(raw_reference.contains("\"name\":\"g17\""));
+    assert!(raw_reference.contains("mystery 1 2 3"));
 }
 
 #[test]
@@ -4870,7 +4889,21 @@ fn parses_formula_short_arity_and_default_line_end_sizes_through_public_parser()
         unsupported.element_type,
         UnresolvedType::CustomGeometry
     ));
-    assert_eq!(unsupported.raw_xml.as_deref(), Some("+/ 1 2"));
+    assert!(unsupported.raw_xml.is_none());
+    let guides = &unsupported
+        .custom_geometry
+        .as_ref()
+        .expect("typed short formula matrix")
+        .guides;
+    assert_eq!(guides.len(), 2);
+    assert_eq!(
+        (&guides[0].name, &guides[0].raw_formula),
+        (&"g1".to_owned(), &"*/ 1 2".to_owned())
+    );
+    assert_eq!(
+        (&guides[1].name, &guides[1].raw_formula),
+        (&"g2".to_owned(), &"+/ 1 2".to_owned())
+    );
 
     let result = render_with_metadata(&pptx).expect("short formula fallback conversion");
     let diagnostic = result
@@ -4883,7 +4916,12 @@ fn parses_formula_short_arity_and_default_line_end_sizes_through_public_parser()
         diagnostic.fallback_kind,
         FallbackKind::CustomGeometryPlaceholder
     ));
-    assert_eq!(diagnostic.raw_reference.as_deref(), Some("+/ 1 2"));
+    let raw_reference = diagnostic
+        .raw_reference
+        .as_deref()
+        .expect("short matrix reference");
+    assert!(raw_reference.contains("*/ 1 2"));
+    assert!(raw_reference.contains("+/ 1 2"));
 
     let connector = shapes
         .iter()

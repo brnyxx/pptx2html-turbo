@@ -141,11 +141,13 @@ mod tests {
                 adjust_handles: Vec::new(),
                 connection_sites: Vec::new(),
                 guides: Vec::new(),
+                issues: Vec::new(),
             }),
             ShapeType::Unsupported(UnsupportedData {
                 label: "SmartArt".to_string(),
                 element_type: UnresolvedType::SmartArt,
                 raw_xml: Some("<dgm/>".to_string()),
+                custom_geometry: None,
             }),
         ];
 

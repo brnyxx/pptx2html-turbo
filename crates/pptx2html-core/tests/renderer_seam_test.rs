@@ -179,11 +179,13 @@ fn smartart_and_ole_keep_placeholder_and_metadata_contract() {
             label: "SmartArt".to_string(),
             element_type: UnresolvedType::SmartArt,
             raw_xml: Some("<dgm:relIds r:dm=\"rId1\"/>".to_string()),
+            custom_geometry: None,
         })),
         sized_shape(ShapeType::Unsupported(UnsupportedData {
             label: "OLE Object".to_string(),
             element_type: UnresolvedType::OleObject,
             raw_xml: Some("<p:oleObj progId=\"Excel.Sheet.12\"/>".to_string()),
+            custom_geometry: None,
         })),
     ];
     let presentation = Presentation {

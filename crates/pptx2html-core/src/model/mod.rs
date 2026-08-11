@@ -26,8 +26,9 @@ pub use capabilities::{
 };
 pub use color::{Color, ColorKind, ColorModifier, ResolvedColor};
 pub use geometry::{
-    AdjustHandle, ConnectionSite, CustomGeometry, CustomGuide, Emu, GeomRect, GeometryPath,
-    GuideFormulaError, PathCommand, PathFill, PolarAdjustHandle, Position, Size, XYAdjustHandle,
+    AdjustHandle, ConnectionSite, CustomGeometry, CustomGeometryIssue, CustomGuide, Emu, GeomRect,
+    GeometryPath, GuideFormulaError, PathCommand, PathFill, PolarAdjustHandle, Position, Size,
+    XYAdjustHandle,
 };
 pub use hierarchy::{
     ClrMapOverride, EffectStyle, FmtScheme, FontRef, ListStyle, ParagraphDefaults, PlaceholderInfo,

@@ -1,5 +1,7 @@
 use std::fmt::Write;
 
+use super::custom_geometry_diagnostic::{self, CustomGeometryMetadata};
+
 use super::{
     CapabilityStage, ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily,
     Position, RenderCtx, Size, SupportTier, UnresolvedElement, UnresolvedType, UnsupportedData,
@@ -36,15 +38,16 @@ pub(super) fn render_unsupported(
     let pos_non_zero = pos.x.0 != 0 || pos.y.0 != 0;
     let size_non_zero = size.width.0 != 0 || size.height.0 != 0;
     let slide_idx = coll.current_slide_index;
-    let diagnostic = fallback_diagnostic(data, slide_idx, pos, size, &placeholder_id);
+    let metadata = custom_geometry_diagnostic::metadata(data);
+    let diagnostic = fallback_diagnostic(data, slide_idx, pos, size, &placeholder_id, &metadata);
     let elem = UnresolvedElement {
         slide_index: slide_idx,
         element_type: data.element_type.clone(),
         placeholder_id,
         position: if pos_non_zero { Some(pos) } else { None },
         size: if size_non_zero { Some(size) } else { None },
-        raw_xml: data.raw_xml.clone(),
-        data_model: None,
+        raw_xml: metadata.raw_reference.clone(),
+        data_model: metadata.data_model,
     };
     coll.diagnostics.push(diagnostic);
     coll.elements.push(elem);
@@ -59,6 +62,7 @@ fn fallback_diagnostic(
     position: Position,
     size: Size,
     placeholder_id: &str,
+    metadata: &CustomGeometryMetadata,
 ) -> ConversionDiagnostic {
     let (code, qualified_name, fallback_kind) = match data.element_type {
         UnresolvedType::SmartArt => (
@@ -82,8 +86,8 @@ fn fallback_diagnostic(
             FallbackKind::CustomGeometryPlaceholder,
         ),
     };
-    let relationship_id = data
-        .raw_xml
+    let relationship_id = metadata
+        .raw_reference
         .as_deref()
         .and_then(extract_relationship_id)
         .unwrap_or_else(|| placeholder_id.to_owned());
@@ -101,7 +105,7 @@ fn fallback_diagnostic(
             size: Some(size),
             ..Default::default()
         },
-        raw_reference: data.raw_xml.clone(),
+        raw_reference: metadata.raw_reference.clone(),
         fallback_kind,
         reason: format!("{} was rendered as a non-fatal placeholder", data.label),
     }
@@ -226,7 +230,7 @@ fn write_size(json: &mut String, size: Option<Size>) {
     }
 }
 
-fn write_json_string(json: &mut String, value: &str) {
+pub(super) fn write_json_string(json: &mut String, value: &str) {
     json.push('"');
     for character in value.chars() {
         match character {

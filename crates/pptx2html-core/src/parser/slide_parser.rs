@@ -8,6 +8,7 @@ use zip::ZipArchive;
 use super::action_parser;
 #[cfg(test)]
 use super::action_parser::hyperlink_rel_id;
+use super::custom_geometry::CustomGeometryState;
 use super::custom_guide;
 #[cfg(test)]
 use super::fill_parser::assign_background_color_target;
@@ -92,8 +93,7 @@ pub fn parse_slide<R: Read + Seek>(
     let mut cust_geom_path_fill = PathFill::Norm;
     let mut cust_geom_pts: Vec<(f64, f64)> = Vec::new();
     let mut in_cust_geom_cmd: Option<String> = None;
-    let mut cust_geom_guides: HashMap<String, f64> = HashMap::new();
-    let mut cust_geom_guide_entries: Vec<CustomGuide> = Vec::new();
+    let mut cust_geom_state = CustomGeometryState::new();
     let mut cust_geom_text_rect: Option<GeomRect> = None;
     let mut cust_geom_handles: Vec<AdjustHandle> = Vec::new();
     let mut cust_geom_connection_sites: Vec<ConnectionSite> = Vec::new();
@@ -220,8 +220,12 @@ pub fn parse_slide<R: Read + Seek>(
                     "custGeom" if in_sp_pr && current_shape.is_some() => {
                         in_cust_geom = true;
                         cust_geom_paths.clear();
-                        cust_geom_guides.clear();
-                        cust_geom_guide_entries.clear();
+                        cust_geom_state.reset(
+                            current_shape
+                                .as_ref()
+                                .map(|shape| shape.size)
+                                .unwrap_or_default(),
+                        );
                         cust_geom_text_rect = None;
                         cust_geom_handles.clear();
                         cust_geom_connection_sites.clear();
@@ -230,12 +234,10 @@ pub fn parse_slide<R: Read + Seek>(
                     "path" if in_cust_geom => {
                         in_cust_geom_path = true;
                         cust_geom_cmds.clear();
-                        cust_geom_path_w = xml_utils::attr_str(e, "w")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .unwrap_or(0.0);
-                        cust_geom_path_h = xml_utils::attr_str(e, "h")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .unwrap_or(0.0);
+                        cust_geom_path_w = cust_geom_state
+                            .path_extent("w", xml_utils::attr_str(e, "w").as_deref());
+                        cust_geom_path_h = cust_geom_state
+                            .path_extent("h", xml_utils::attr_str(e, "h").as_deref());
                         cust_geom_path_fill = match xml_utils::attr_str(e, "fill").as_deref() {
                             Some("none") => PathFill::None,
                             Some("lighten") => PathFill::Lighten,
@@ -253,16 +255,20 @@ pub fn parse_slide<R: Read + Seek>(
                     // arcTo as Start element (some generators emit it with children)
                     "arcTo" if in_cust_geom_path => {
                         let wr = xml_utils::attr_str(e, "wR")
-                            .and_then(|v| v.parse::<f64>().ok())
+                            .as_deref()
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "wR", v))
                             .unwrap_or(0.0);
                         let hr = xml_utils::attr_str(e, "hR")
-                            .and_then(|v| v.parse::<f64>().ok())
+                            .as_deref()
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "hR", v))
                             .unwrap_or(0.0);
                         let st_ang = xml_utils::attr_str(e, "stAng")
-                            .and_then(|v| v.parse::<f64>().ok())
+                            .as_deref()
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "stAng", v))
                             .unwrap_or(0.0);
                         let sw_ang = xml_utils::attr_str(e, "swAng")
-                            .and_then(|v| v.parse::<f64>().ok())
+                            .as_deref()
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "swAng", v))
                             .unwrap_or(0.0);
                         cust_geom_cmds.push(PathCommand::ArcTo {
                             wr,
@@ -274,19 +280,19 @@ pub fn parse_slide<R: Read + Seek>(
                     "rect" if in_cust_geom => {
                         let left = xml_utils::attr_str(e, "l")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "l", v))
                             .unwrap_or(0.0);
                         let top = xml_utils::attr_str(e, "t")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "t", v))
                             .unwrap_or(0.0);
                         let right = xml_utils::attr_str(e, "r")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "r", v))
                             .unwrap_or(0.0);
                         let bottom = xml_utils::attr_str(e, "b")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "b", v))
                             .unwrap_or(0.0);
                         cust_geom_text_rect = Some(GeomRect {
                             left,
@@ -301,16 +307,16 @@ pub fn parse_slide<R: Read + Seek>(
                             gd_ref_y: xml_utils::attr_str(e, "gdRefY"),
                             min_x: xml_utils::attr_str(e, "minX")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahXY", "minX", v)),
                             max_x: xml_utils::attr_str(e, "maxX")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahXY", "maxX", v)),
                             min_y: xml_utils::attr_str(e, "minY")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahXY", "minY", v)),
                             max_y: xml_utils::attr_str(e, "maxY")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahXY", "maxY", v)),
                             pos_x: 0.0,
                             pos_y: 0.0,
                         });
@@ -321,16 +327,16 @@ pub fn parse_slide<R: Read + Seek>(
                             gd_ref_ang: xml_utils::attr_str(e, "gdRefAng"),
                             min_r: xml_utils::attr_str(e, "minR")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahPolar", "minR", v)),
                             max_r: xml_utils::attr_str(e, "maxR")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahPolar", "maxR", v)),
                             min_ang: xml_utils::attr_str(e, "minAng")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahPolar", "minAng", v)),
                             max_ang: xml_utils::attr_str(e, "maxAng")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides)),
+                                .map(|v| cust_geom_state.resolve("a:ahPolar", "maxAng", v)),
                             pos_x: 0.0,
                             pos_y: 0.0,
                         });
@@ -341,7 +347,7 @@ pub fn parse_slide<R: Read + Seek>(
                             y: 0.0,
                             angle: xml_utils::attr_str(e, "ang")
                                 .as_deref()
-                                .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                                .map(|v| cust_geom_state.resolve("a:cxn", "ang", v))
                                 .unwrap_or(0.0),
                         });
                     }
@@ -522,21 +528,7 @@ pub fn parse_slide<R: Read + Seek>(
                             xml_utils::attr_str(e, "fmla"),
                         ) {
                             if in_cust_geom {
-                                let evaluation =
-                                    parse_guide_formula_value(&fmla, &cust_geom_guides);
-                                if let Ok(value) = &evaluation {
-                                    cust_geom_guides.insert(name.clone(), *value);
-                                } else if let Some(shape) = current_shape.as_mut() {
-                                    shape.unsupported_content = Some("Custom Geometry".to_owned());
-                                    shape.unresolved_type =
-                                        Some(slide::UnresolvedType::CustomGeometry);
-                                    shape.raw_xml_capture = Some(fmla.clone());
-                                }
-                                cust_geom_guide_entries.push(CustomGuide {
-                                    name,
-                                    raw_formula: fmla,
-                                    evaluation,
-                                });
+                                cust_geom_state.add_guide(name, fmla);
                             } else if let Some(sb) = current_shape.as_mut()
                                 && let Ok(value) = parse_guide_formula_value(&fmla, &HashMap::new())
                             {
@@ -548,11 +540,11 @@ pub fn parse_slide<R: Read + Seek>(
                     "pt" if in_cust_geom_cmd.is_some() => {
                         let x = xml_utils::attr_str(e, "x")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:pt", "x", v))
                             .unwrap_or(0.0);
                         let y = xml_utils::attr_str(e, "y")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:pt", "y", v))
                             .unwrap_or(0.0);
                         cust_geom_pts.push((x, y));
                     }
@@ -560,19 +552,19 @@ pub fn parse_slide<R: Read + Seek>(
                     "arcTo" if in_cust_geom_path => {
                         let wr = xml_utils::attr_str(e, "wR")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "wR", v))
                             .unwrap_or(0.0);
                         let hr = xml_utils::attr_str(e, "hR")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "hR", v))
                             .unwrap_or(0.0);
                         let st_ang = xml_utils::attr_str(e, "stAng")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "stAng", v))
                             .unwrap_or(0.0);
                         let sw_ang = xml_utils::attr_str(e, "swAng")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:arcTo", "swAng", v))
                             .unwrap_or(0.0);
                         cust_geom_cmds.push(PathCommand::ArcTo {
                             wr,
@@ -584,19 +576,19 @@ pub fn parse_slide<R: Read + Seek>(
                     "rect" if in_cust_geom => {
                         let left = xml_utils::attr_str(e, "l")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "l", v))
                             .unwrap_or(0.0);
                         let top = xml_utils::attr_str(e, "t")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "t", v))
                             .unwrap_or(0.0);
                         let right = xml_utils::attr_str(e, "r")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "r", v))
                             .unwrap_or(0.0);
                         let bottom = xml_utils::attr_str(e, "b")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:rect", "b", v))
                             .unwrap_or(0.0);
                         cust_geom_text_rect = Some(GeomRect {
                             left,
@@ -608,11 +600,11 @@ pub fn parse_slide<R: Read + Seek>(
                     "pos" if in_cust_geom => {
                         let x = xml_utils::attr_str(e, "x")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:pos", "x", v))
                             .unwrap_or(0.0);
                         let y = xml_utils::attr_str(e, "y")
                             .as_deref()
-                            .map(|v| resolve_custom_geom_value(v, &cust_geom_guides))
+                            .map(|v| cust_geom_state.resolve("a:pos", "y", v))
                             .unwrap_or(0.0);
                         if let Some(handle) = current_xy_handle.as_mut() {
                             handle.pos_x = x;
@@ -631,12 +623,10 @@ pub fn parse_slide<R: Read + Seek>(
                     }
                     // ── Custom geometry: self-closing path (no commands) ──
                     "path" if in_cust_geom => {
-                        let w = xml_utils::attr_str(e, "w")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .unwrap_or(0.0);
-                        let h = xml_utils::attr_str(e, "h")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .unwrap_or(0.0);
+                        let w = cust_geom_state
+                            .path_extent("w", xml_utils::attr_str(e, "w").as_deref());
+                        let h = cust_geom_state
+                            .path_extent("h", xml_utils::attr_str(e, "h").as_deref());
                         let fill = match xml_utils::attr_str(e, "fill").as_deref() {
                             Some("none") => PathFill::None,
                             Some("lighten") => PathFill::Lighten,
@@ -840,15 +830,22 @@ pub fn parse_slide<R: Read + Seek>(
                     "custGeom" if in_cust_geom => {
                         in_cust_geom = false;
                         if let Some(sb) = current_shape.as_mut() {
+                            let has_failures = cust_geom_state.has_failures();
+                            let raw_formula = cust_geom_state.single_guide_error_formula();
                             sb.custom_geometry = Some(CustomGeometry {
                                 paths: std::mem::take(&mut cust_geom_paths),
                                 text_rect: cust_geom_text_rect.take(),
                                 adjust_handles: std::mem::take(&mut cust_geom_handles),
                                 connection_sites: std::mem::take(&mut cust_geom_connection_sites),
-                                guides: std::mem::take(&mut cust_geom_guide_entries),
+                                guides: cust_geom_state.take_guides(),
+                                issues: cust_geom_state.take_issues(),
                             });
+                            if has_failures {
+                                sb.unsupported_content = Some("Custom Geometry".to_owned());
+                                sb.unresolved_type = Some(slide::UnresolvedType::CustomGeometry);
+                                sb.raw_xml_capture = raw_formula;
+                            }
                         }
-                        cust_geom_guides.clear();
                         cust_geom_text_rect = None;
                     }
 
@@ -933,13 +930,6 @@ pub(crate) fn parse_guide_formula_value(
     guides: &HashMap<String, f64>,
 ) -> Result<f64, GuideFormulaError> {
     custom_guide::evaluate(fmla, guides)
-}
-
-fn resolve_custom_geom_value(raw: &str, guides: &HashMap<String, f64>) -> f64 {
-    raw.parse::<f64>()
-        .ok()
-        .or_else(|| guides.get(raw).copied())
-        .unwrap_or(0.0)
 }
 
 fn apply_shape_transform(sb: &mut ShapeBuilder, e: &quick_xml::events::BytesStart<'_>) {
@@ -1067,6 +1057,7 @@ impl ShapeBuilder {
                 label,
                 self.unresolved_type,
                 self.raw_xml_capture,
+                self.custom_geometry,
             ))
         } else if self.is_chart {
             ShapeType::Chart(ChartData {
@@ -1462,9 +1453,12 @@ mod tests {
         );
         assert!((evaluate_formula("tan 10 2700000") - 10.0).abs() < 1e-6);
         assert!(parse_guide_formula_value("unknown", &guides).is_err());
-        assert_eq!(resolve_custom_geom_value("42", &guides), 42.0);
-        assert_eq!(resolve_custom_geom_value("x", &guides), 3.0);
-        assert_eq!(resolve_custom_geom_value("missing", &guides), 0.0);
+        assert_eq!(custom_guide::resolve("42", &guides), Ok(42.0));
+        assert_eq!(custom_guide::resolve("x", &guides), Ok(3.0));
+        assert_eq!(
+            custom_guide::resolve("missing", &guides),
+            Err(GuideFormulaError::UnresolvedToken("missing".to_owned()))
+        );
 
         let mut shape = Some(ShapeBuilder::default());
         parse_body_pr(
@@ -1550,7 +1544,13 @@ mod tests {
                 "{formula}"
             );
         }
-        assert_eq!(parse_guide_formula_value("sqrt -9", &guides), Ok(0.0));
+        assert_eq!(
+            parse_guide_formula_value("sqrt -9", &guides),
+            Err(GuideFormulaError::DomainError {
+                operator: "sqrt".to_owned(),
+                operand: "-9".to_owned(),
+            })
+        );
 
         let auto_fit = parse_shape_auto_fit(
             "normAutofit",
@@ -2709,6 +2709,7 @@ mod tests {
                 label: String::new(),
                 element_type: UnresolvedType::SmartArt,
                 raw_xml: None,
+                custom_geometry: None,
             }))
         );
 
@@ -2719,6 +2720,7 @@ mod tests {
                 adjust_handles: Vec::new(),
                 connection_sites: Vec::new(),
                 guides: Vec::new(),
+                issues: Vec::new(),
             }),
             ..Default::default()
         }
@@ -2731,6 +2733,7 @@ mod tests {
                 adjust_handles: Vec::new(),
                 connection_sites: Vec::new(),
                 guides: Vec::new(),
+                issues: Vec::new(),
             }))
         );
 

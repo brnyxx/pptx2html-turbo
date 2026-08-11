@@ -4,6 +4,7 @@
 mod actions;
 mod bullets;
 mod charts;
+mod custom_geometry_diagnostic;
 mod embedded_fallback;
 mod fallback;
 mod fills;
@@ -2471,6 +2472,7 @@ mod tests {
                         label: "Custom Geometry".to_string(),
                         element_type: UnresolvedType::CustomGeometry,
                         raw_xml: Some("<custGeom/>".to_string()),
+                        custom_geometry: None,
                     }),
                     ..Default::default()
                 },

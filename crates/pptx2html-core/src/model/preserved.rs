@@ -1,4 +1,4 @@
-use super::geometry::{Position, Size};
+use super::geometry::{CustomGeometry, Position, Size};
 use super::{CapabilityStage, FeatureFamily, SupportTier};
 
 #[derive(Debug, Clone, Default)]
@@ -99,6 +99,7 @@ pub struct UnsupportedData {
     pub element_type: UnresolvedType,
     /// Raw XML snippet captured from the original PPTX
     pub raw_xml: Option<String>,
+    pub custom_geometry: Option<CustomGeometry>,
 }
 
 /// Metadata about an element that was rendered as a placeholder

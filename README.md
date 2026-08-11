@@ -1,6 +1,6 @@
 # pptx2html-turbo
 
-Convert PPTX slides to pixel-perfect HTML in pure Rust.
+Convert PPTX slides to high-fidelity HTML in pure Rust with direct rendering and structured fallbacks.
 
 Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bindings, just Rust.
 
