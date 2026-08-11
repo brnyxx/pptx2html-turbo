@@ -129,6 +129,21 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                 archive.read("ppt/tableStyles.xml").decode(),
             )
 
+    def test_missing_table_style_fixture_omits_invalid_style_reference(self) -> None:
+        with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
+            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            missing = next(
+                frame
+                for frame in slide.findall(".//p:graphicFrame", NS)
+                if frame.find("p:nvGraphicFramePr/p:cNvPr", NS).get("name")
+                == "missing style"
+            )
+            properties = missing.find(".//a:tblPr", NS)
+            self.assertIsNone(
+                properties.find("a:tableStyleId", NS),
+                "missing-style fallback fixture must not reference an unknown GUID",
+            )
+
     def test_fallback_domains_close_diagram_ole_and_mc(self) -> None:
         with zipfile.ZipFile(self.root / "fallback-domains.pptx") as archive:
             slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))

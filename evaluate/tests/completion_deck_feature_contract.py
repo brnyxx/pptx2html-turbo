@@ -99,8 +99,7 @@ RULES: Final = (
     _r(
         "table-style-missing",
         "table-styles",
-        ".//a:tblPr/a:tableStyleId",
-        text="{22222222-2222-2222-2222-222222222222}",
+        ".//p:cNvPr[@name='missing style']",
     ),
     _r(
         "action-external",
@@ -239,9 +238,10 @@ def _assert_picture_bullet_absence(
 
 def _assert_negative_absences(case: unittest.TestCase, root: Path) -> None:
     with zipfile.ZipFile(root / "table-styles.pptx") as archive:
+        slide = archive.read(S)
         case.assertNotIn(
             b"{22222222-2222-2222-2222-222222222222}",
-            archive.read("ppt/tableStyles.xml"),
+            slide,
         )
     with zipfile.ZipFile(root / "notes-comments.pptx") as archive:
         case.assertNotIn(b'id="404"', archive.read("ppt/commentAuthors.xml"))

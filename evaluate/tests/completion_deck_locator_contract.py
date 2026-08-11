@@ -35,7 +35,7 @@ def _l(token: str, part: str = S, negative: AbsenceRule | None = None) -> Locato
 ABSENT_REL: Final = AbsenceRule(AbsenceKind.TOKEN_ABSENT, SR, "rIdMissing")
 ABSENT_TABLE_STYLE: Final = AbsenceRule(
     AbsenceKind.TOKEN_ABSENT,
-    "ppt/tableStyles.xml",
+    S,
     "{22222222-2222-2222-2222-222222222222}",
 )
 ABSENT_AUTHOR: Final = AbsenceRule(
@@ -59,7 +59,7 @@ LOCATORS: Final = {
         "ppt/tableStyles.xml",
     ),
     "table-style-missing": _l(
-        "{22222222-2222-2222-2222-222222222222}", negative=ABSENT_TABLE_STYLE
+        '<p:cNvPr id="3" name="missing style"/>', negative=ABSENT_TABLE_STYLE
     ),
     "action-external": _l('<Relationship Id="rIdExternal"', SR),
     "action-internal": _l(
