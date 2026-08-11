@@ -331,6 +331,7 @@ impl HtmlRenderer {
         Self::render_table_paragraph(para, 0, (0, 0), 0, ctx, auto_num_counters, html);
     }
 
+    #[cfg(test)]
     pub(super) fn render_table_paragraph(
         para: &TextParagraph,
         shape_id: u32,

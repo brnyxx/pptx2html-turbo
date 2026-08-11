@@ -64,7 +64,7 @@ fn renders_svg_table_cell_and_direct_background_patterns() {
 
     assert!(html.matches("<pattern id=\"pattern-s1-cross-").count() >= 2);
     assert!(html.matches("data:image/svg+xml;base64,").count() >= 2);
-    assert!(html.contains("<td style=\"background-image:"));
+    assert!(html.contains("data-table-cell=\"r0c0\" style=\"background-image:"));
 }
 
 #[test]
