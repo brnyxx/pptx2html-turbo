@@ -24,23 +24,6 @@ pub(crate) fn collect_part_diagnostics(
     }
 }
 
-pub(crate) fn safe_external_target(target: &str) -> String {
-    let without_fragment = target.split('#').next().unwrap_or("");
-    let without_query = without_fragment.split('?').next().unwrap_or("");
-    let Some((scheme, remainder)) = without_query.split_once("://") else {
-        return "external-target".to_owned();
-    };
-    let (authority, path) = remainder
-        .split_once('/')
-        .map_or((remainder, ""), |(authority, path)| (authority, path));
-    let safe_authority = authority.rsplit('@').next().unwrap_or("");
-    if path.is_empty() {
-        format!("{scheme}://{safe_authority}")
-    } else {
-        format!("{scheme}://{safe_authority}/{path}")
-    }
-}
-
 pub(crate) fn collect_relationship_diagnostics(
     archive: &mut ZipArchive<Cursor<&[u8]>>,
     name: &str,
@@ -52,12 +35,7 @@ pub(crate) fn collect_relationship_diagnostics(
         if known_relationship_type(&relationship.relationship_type) {
             continue;
         }
-        let raw_reference = match relationship.target_mode {
-            relationships::TargetMode::External => safe_external_target(&relationship.target),
-            relationships::TargetMode::Internal | relationships::TargetMode::Other(_) => {
-                relationship.target
-            }
-        };
+        let raw_reference = format!("{source_part}#{}", relationship.id);
         diagnostics.push(ConversionDiagnostic {
             code: "OOXML_RELATIONSHIP_UNSUPPORTED".to_owned(),
             family: FeatureFamily::Unsupported,
@@ -80,6 +58,9 @@ pub(crate) fn collect_relationship_diagnostics(
 }
 
 fn relationship_source_part(name: &str) -> String {
+    if name == "_rels/.rels" {
+        return "/".to_owned();
+    }
     let Some((directory, file)) = name.rsplit_once("/_rels/") else {
         return name.to_owned();
     };
@@ -97,30 +78,45 @@ pub(crate) fn attribute_value(element: &BytesStart<'_>, local_name: &str) -> Opt
 }
 
 pub(crate) fn known_relationship_type(value: &str) -> bool {
+    const OFFICE_RELATIONSHIP_NAMESPACE: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+    const CORE_PROPERTIES_RELATIONSHIP: &str =
+        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+
+    let Some(kind) = value.strip_prefix(OFFICE_RELATIONSHIP_NAMESPACE) else {
+        return value == CORE_PROPERTIES_RELATIONSHIP;
+    };
     matches!(
-        value.rsplit('/').next(),
-        Some(
-            "officeDocument"
-                | "slide"
-                | "slideMaster"
-                | "slideLayout"
-                | "theme"
-                | "image"
-                | "chart"
-                | "hyperlink"
-                | "notesSlide"
-                | "comments"
-                | "oleObject"
-                | "package"
-                | "audio"
-                | "video"
-                | "media"
-                | "diagramData"
-                | "diagramLayout"
-                | "diagramStyle"
-                | "diagramColors"
-                | "core-properties"
-                | "extended-properties"
-        )
+        kind,
+        "officeDocument"
+            | "slide"
+            | "slideMaster"
+            | "slideLayout"
+            | "theme"
+            | "image"
+            | "chart"
+            | "hyperlink"
+            | "notesSlide"
+            | "comments"
+            | "oleObject"
+            | "package"
+            | "audio"
+            | "video"
+            | "media"
+            | "diagramData"
+            | "diagramLayout"
+            | "diagramStyle"
+            | "diagramColors"
+            | "extended-properties"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::relationship_source_part;
+
+    #[test]
+    fn root_relationship_source_is_the_package_root() {
+        assert_eq!(relationship_source_part("_rels/.rels"), "/");
+    }
 }

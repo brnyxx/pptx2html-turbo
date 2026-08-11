@@ -129,6 +129,26 @@ pub struct ConversionResult {
     pub slide_count: usize,
 }
 
+impl ConversionResult {
+    /// Creates a conversion result with empty metadata collections.
+    pub fn new(html: impl Into<String>, slide_count: usize) -> Self {
+        Self {
+            html: html.into(),
+            external_assets: Vec::new(),
+            font_resolution_entries: Vec::new(),
+            provenance_entries: Vec::new(),
+            diagnostics: Vec::new(),
+            unresolved_elements: Vec::new(),
+            slide_count,
+        }
+    }
+
+    /// Returns ordered, non-fatal preservation and fallback diagnostics.
+    pub fn diagnostics(&self) -> &[ConversionDiagnostic] {
+        &self.diagnostics
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ExternalAsset {
     pub relative_path: String,

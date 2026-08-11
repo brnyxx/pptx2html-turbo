@@ -1,12 +1,13 @@
 use log::warn;
-use quick_xml::Reader;
 use quick_xml::events::Event;
 use quick_xml::events::{BytesEnd, BytesStart};
+use quick_xml::name::ResolveResult;
+use quick_xml::reader::NsReader;
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
 use super::slide_parser::ShapeBuilder;
-use super::{embedded_parser, media_parser, notes_comments_parser, timing_parser};
+use super::{embedded_parser, media_parser, notes_comments_parser, timing_parser, xml_utils};
 use crate::error::PptxResult;
 use crate::model::slide::{UnresolvedType, UnsupportedData};
 use crate::model::{
@@ -52,35 +53,38 @@ fn collect_xml_diagnostics(
 ) -> PptxResult<()> {
     let xml = read_text_entry(archive, name)?;
     timing_parser::collect_diagnostics(name, &xml, diagnostics);
-    let mut reader = Reader::from_str(&xml);
+    let mut reader = NsReader::from_str(&xml);
+    let mut buffer = Vec::new();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(element)) | Ok(Event::Empty(element)) => {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element) | Event::Empty(element))) => {
                 let qualified_name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
-                if known_element_prefix(&qualified_name) {
-                    continue;
+                let element_name = element.name();
+                let local_name = xml_utils::local_name(element_name.as_ref());
+                if !known_element(namespace, local_name) {
+                    diagnostics.push(ConversionDiagnostic {
+                        code: "OOXML_ELEMENT_UNSUPPORTED".to_owned(),
+                        family: FeatureFamily::Unsupported,
+                        support_tier: SupportTier::Unparsed,
+                        stage: None,
+                        location: DiagnosticLocation {
+                            slide_index: slide_index_from_part(name),
+                            part_name: Some(name.to_owned()),
+                            qualified_element_name: Some(qualified_name.clone()),
+                            relationship_id: embedded_parser::attribute_value(&element, "id"),
+                            ..Default::default()
+                        },
+                        raw_reference: Some(format!("{name}#{qualified_name}")),
+                        fallback_kind: FallbackKind::UnknownElement,
+                        reason: "Element namespace or local name is not supported; the element was preserved but not rendered".to_owned(),
+                    });
                 }
-                diagnostics.push(ConversionDiagnostic {
-                    code: "OOXML_ELEMENT_UNSUPPORTED".to_owned(),
-                    family: FeatureFamily::Unsupported,
-                    support_tier: SupportTier::Unparsed,
-                    stage: None,
-                    location: DiagnosticLocation {
-                        slide_index: slide_index_from_part(name),
-                        part_name: Some(name.to_owned()),
-                        qualified_element_name: Some(qualified_name.clone()),
-                        relationship_id: embedded_parser::attribute_value(&element, "id"),
-                        ..Default::default()
-                    },
-                    raw_reference: Some(format!("{name}#{qualified_name}")),
-                    fallback_kind: FallbackKind::UnknownElement,
-                    reason: "Element namespace is not recognized; the element was preserved but not rendered".to_owned(),
-                });
             }
-            Ok(Event::Eof) => return Ok(()),
+            Ok((_, Event::Eof)) => return Ok(()),
             Err(error) => return Err(crate::error::PptxError::Xml(error)),
             _ => {}
         }
+        buffer.clear();
     }
 }
 
@@ -123,12 +127,285 @@ pub(crate) fn slide_index_from_part(name: &str) -> Option<usize> {
     file.parse::<usize>().ok()?.checked_sub(1)
 }
 
-fn known_element_prefix(qualified_name: &str) -> bool {
-    let prefix = qualified_name.split_once(':').map(|(prefix, _)| prefix);
+fn known_element(namespace: ResolveResult<'_>, local_name: &str) -> bool {
+    let ResolveResult::Bound(namespace) = namespace else {
+        return false;
+    };
+    match namespace.as_ref() {
+        b"http://schemas.openxmlformats.org/presentationml/2006/main" => {
+            known_presentationml_element(local_name)
+        }
+        b"http://schemas.openxmlformats.org/drawingml/2006/main" => {
+            known_drawingml_element(local_name)
+        }
+        b"http://schemas.openxmlformats.org/drawingml/2006/chart" => {
+            known_chart_element(local_name)
+        }
+        b"http://schemas.openxmlformats.org/drawingml/2006/diagram" => local_name == "relIds",
+        b"http://schemas.openxmlformats.org/officeDocument/2006/math" => {
+            matches!(local_name, "oMath" | "oMathPara" | "r" | "t")
+        }
+        b"http://schemas.openxmlformats.org/markup-compatibility/2006" => {
+            matches!(local_name, "AlternateContent" | "Choice" | "Fallback")
+        }
+        b"http://schemas.openxmlformats.org/package/2006/metadata/core-properties" => {
+            local_name == "coreProperties"
+        }
+        b"http://purl.org/dc/elements/1.1/" => local_name == "title",
+        b"http://purl.org/dc/terms/" => matches!(local_name, "created" | "modified"),
+        _ => false,
+    }
+}
+
+fn known_presentationml_element(local_name: &str) -> bool {
     matches!(
-        prefix,
-        Some("a" | "c" | "cp" | "dc" | "dcterms" | "dgm" | "m" | "mc" | "p" | "r" | "xsi")
-    ) || prefix.is_none()
+        local_name,
+        "presentation"
+            | "sldIdLst"
+            | "sldId"
+            | "sldMasterIdLst"
+            | "sldMasterId"
+            | "sldSz"
+            | "notesSz"
+            | "defaultTextStyle"
+            | "sld"
+            | "sldMaster"
+            | "sldLayout"
+            | "notes"
+            | "cmLst"
+            | "comment"
+            | "cSld"
+            | "spTree"
+            | "nvGrpSpPr"
+            | "cNvPr"
+            | "cNvGrpSpPr"
+            | "nvPr"
+            | "grpSpPr"
+            | "grpSp"
+            | "sp"
+            | "nvSpPr"
+            | "cNvSpPr"
+            | "spPr"
+            | "style"
+            | "txBody"
+            | "pic"
+            | "nvPicPr"
+            | "cNvPicPr"
+            | "blipFill"
+            | "graphicFrame"
+            | "nvGraphicFramePr"
+            | "cNvGraphicFramePr"
+            | "xfrm"
+            | "cxnSp"
+            | "nvCxnSpPr"
+            | "cNvCxnSpPr"
+            | "stCxn"
+            | "endCxn"
+            | "oleObj"
+            | "ph"
+            | "bg"
+            | "bgPr"
+            | "clrMap"
+            | "clrMapOvr"
+            | "overrideClrMapping"
+            | "masterClrMapping"
+            | "txStyles"
+            | "titleStyle"
+            | "bodyStyle"
+            | "otherStyle"
+            | "timing"
+            | "tnLst"
+            | "par"
+            | "seq"
+            | "cTn"
+            | "childTnLst"
+            | "condLst"
+            | "cond"
+            | "tgtEl"
+            | "spTgt"
+    )
+}
+
+fn known_drawingml_element(local_name: &str) -> bool {
+    matches!(
+        local_name,
+        "theme"
+            | "themeElements"
+            | "clrScheme"
+            | "fontScheme"
+            | "fmtScheme"
+            | "dk1"
+            | "lt1"
+            | "dk2"
+            | "lt2"
+            | "accent1"
+            | "accent2"
+            | "accent3"
+            | "accent4"
+            | "accent5"
+            | "accent6"
+            | "hlink"
+            | "folHlink"
+            | "srgbClr"
+            | "scrgbClr"
+            | "sysClr"
+            | "schemeClr"
+            | "prstClr"
+            | "majorFont"
+            | "minorFont"
+            | "latin"
+            | "ea"
+            | "cs"
+            | "fillStyleLst"
+            | "lnStyleLst"
+            | "effectStyleLst"
+            | "bgFillStyleLst"
+            | "solidFill"
+            | "gradFill"
+            | "noFill"
+            | "blipFill"
+            | "blip"
+            | "srcRect"
+            | "stretch"
+            | "fillRect"
+            | "gsLst"
+            | "gs"
+            | "lin"
+            | "path"
+            | "ln"
+            | "prstDash"
+            | "headEnd"
+            | "tailEnd"
+            | "effectLst"
+            | "outerShdw"
+            | "glow"
+            | "effectStyle"
+            | "xfrm"
+            | "off"
+            | "ext"
+            | "prstGeom"
+            | "custGeom"
+            | "avLst"
+            | "gdLst"
+            | "gd"
+            | "ahLst"
+            | "cxnLst"
+            | "cxn"
+            | "rect"
+            | "pathLst"
+            | "moveTo"
+            | "lnTo"
+            | "cubicBezTo"
+            | "quadBezTo"
+            | "arcTo"
+            | "pt"
+            | "close"
+            | "graphic"
+            | "graphicData"
+            | "txBody"
+            | "bodyPr"
+            | "lstStyle"
+            | "p"
+            | "pPr"
+            | "r"
+            | "rPr"
+            | "t"
+            | "br"
+            | "defRPr"
+            | "endParaRPr"
+            | "buChar"
+            | "lnSpc"
+            | "spcBef"
+            | "spcAft"
+            | "spcPct"
+            | "spcPts"
+            | "normAutofit"
+            | "spAutoFit"
+            | "noAutofit"
+            | "tbl"
+            | "tblPr"
+            | "tblGrid"
+            | "gridCol"
+            | "tr"
+            | "tc"
+            | "tcPr"
+            | "extLst"
+            | "hlinkClick"
+            | "fillRef"
+            | "lnRef"
+            | "effectRef"
+            | "fontRef"
+    )
+}
+
+fn known_chart_element(local_name: &str) -> bool {
+    matches!(
+        local_name,
+        "chartSpace"
+            | "chart"
+            | "title"
+            | "plotArea"
+            | "layout"
+            | "legend"
+            | "legendPos"
+            | "areaChart"
+            | "area3DChart"
+            | "barChart"
+            | "bar3DChart"
+            | "lineChart"
+            | "line3DChart"
+            | "pieChart"
+            | "pie3DChart"
+            | "doughnutChart"
+            | "ofPieChart"
+            | "radarChart"
+            | "scatterChart"
+            | "bubbleChart"
+            | "ser"
+            | "idx"
+            | "order"
+            | "tx"
+            | "cat"
+            | "val"
+            | "xVal"
+            | "yVal"
+            | "bubbleSize"
+            | "strLit"
+            | "numLit"
+            | "ptCount"
+            | "pt"
+            | "v"
+            | "varyColors"
+            | "grouping"
+            | "barDir"
+            | "overlap"
+            | "gapWidth"
+            | "holeSize"
+            | "firstSliceAng"
+            | "ofPieType"
+            | "splitType"
+            | "splitPos"
+            | "secondPieSize"
+            | "radarStyle"
+            | "scatterStyle"
+            | "bubbleScale"
+            | "sizeRepresents"
+            | "showNegBubbles"
+            | "marker"
+            | "symbol"
+            | "smooth"
+            | "dLbls"
+            | "dLblPos"
+            | "showVal"
+            | "showCatName"
+            | "showSerName"
+            | "showPercent"
+            | "catAx"
+            | "valAx"
+            | "axId"
+            | "crossAx"
+            | "rich"
+    )
 }
 
 #[derive(Default)]
