@@ -17,8 +17,10 @@ and adjustment-handle constraint in source order.
   <https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry?view=openxml-3.0.1>
 
 The manifest records the edition, URLs, and SHA-256 checksums for the Part 1
-ZIP, `dml-main.xsd`, and `presetShapeDefinitions.xml`. Verify a downloaded Part
-1 ZIP with:
+ZIP, nested `dml-main.xsd`, and `presetShapeDefinitions.xml`. The ordered
+`official_preset_names` inventory is independently bound to the checker's
+canonical SHA-256 digest. Verify a downloaded Part 1 ZIP and extract its nested
+`ST_ShapeType` enumeration with:
 
 ```bash
 python3 evaluate/check_preset_adjustments.py \
@@ -56,7 +58,10 @@ python3 -m unittest evaluate.tests.test_check_preset_adjustments -v
 ```
 
 The first command checks the 187-name dispatcher contract, traces literal
-`adjust_values.get("...")` consumption through geometry-family functions, and
-reports official manifest keys that the current renderer never consumes. Use
-`--source-root` to inspect a copied geometry-family directory and `--json` to
-write a stable machine-readable report.
+`adjust_values.get("...")` consumption through geometry-family functions with
+a comment/string-aware lexical scan, and reports official manifest keys that
+the current renderer never consumes. Use `--source-root` to inspect a copied
+geometry-family directory, `--dispatcher` to override the dispatcher source,
+and `--json` to write a stable machine-readable report. Invalid manifests,
+source roots, dispatchers, and official artifacts fail with stable error codes
+without Python tracebacks.
