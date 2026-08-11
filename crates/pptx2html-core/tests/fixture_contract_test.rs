@@ -242,6 +242,30 @@ fn package_builder_rejects_malformed_xml_feature_parts() {
 }
 
 #[test]
+fn package_builder_rejects_unknown_prefixed_xml_elements() {
+    let given_package = PackageBuilder::new(SlideXml::from_body("").build())
+        .with_part(FeaturePart::notes("<z:bad/>"));
+
+    let when_error = given_package
+        .validate()
+        .expect_err("unknown XML element prefix is rejected");
+
+    assert_eq!(when_error.code(), "INVALID_XML_PART");
+}
+
+#[test]
+fn package_builder_rejects_unknown_prefixed_xml_attributes() {
+    let given_package = PackageBuilder::new(SlideXml::from_body("").build())
+        .with_part(FeaturePart::notes("<p:extension z:bad=\"value\"/>"));
+
+    let when_error = given_package
+        .validate()
+        .expect_err("unknown XML attribute prefix is rejected");
+
+    assert_eq!(when_error.code(), "INVALID_XML_PART");
+}
+
+#[test]
 fn package_builder_uses_isolated_temp_namespaces_when_written_twice() {
     let given_package = PackageBuilder::new(SlideXml::from_body("").build());
 

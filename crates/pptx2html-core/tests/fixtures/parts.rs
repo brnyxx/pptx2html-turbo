@@ -213,22 +213,33 @@ fn valid_xml_document(bytes: &[u8]) -> bool {
         let Ok((namespace, event)) = reader.read_resolved_event_into(&mut buffer) else {
             return false;
         };
-        let has_unbound_prefix = matches!(namespace, ResolveResult::Unbound)
-            && match &event {
-                Event::Start(element) | Event::Empty(element) => {
-                    element.name().as_ref().contains(&b':')
+        match &event {
+            Event::Start(element) | Event::Empty(element) => {
+                if invalid_namespace_resolution(namespace)
+                    || element.attributes().any(|attribute| match attribute {
+                        Ok(attribute) => {
+                            invalid_namespace_resolution(reader.resolve_attribute(attribute.key).0)
+                        }
+                        Err(_) => true,
+                    })
+                {
+                    return false;
                 }
-                Event::End(element) => element.name().as_ref().contains(&b':'),
-                _ => false,
-            };
-        if has_unbound_prefix {
-            return false;
+            }
+            _ => {}
         }
         if matches!(event, Event::Eof) {
             return true;
         }
         buffer.clear();
     }
+}
+
+fn invalid_namespace_resolution(resolution: ResolveResult<'_>) -> bool {
+    matches!(
+        resolution,
+        ResolveResult::Unbound | ResolveResult::Unknown(_)
+    )
 }
 
 fn xml_escape(value: &str) -> String {
