@@ -9,8 +9,7 @@ use zip::ZipArchive;
 use super::slide_parser::ShapeBuilder;
 use super::{
     embedded_parser, media_parser, notes_comments_parser, picture_bullet_diagnostics,
-    table_style_package_diagnostics,
-    timing_parser, xml_utils,
+    table_style_package_diagnostics, timing_parser, xml_utils,
 };
 use crate::error::PptxResult;
 use crate::model::slide::{UnresolvedType, UnsupportedData};

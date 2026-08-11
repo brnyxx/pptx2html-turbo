@@ -1,6 +1,10 @@
 mod table_style_support;
 
-use pptx2html_core::{convert_bytes_with_metadata, model::ShapeType, parser::PptxParser};
+use pptx2html_core::{
+    convert_bytes_with_metadata,
+    model::{ShapeType, TableStyle, TableStyleReference, TableStyleSourceKind},
+    parser::PptxParser,
+};
 use table_style_support::{
     BUILT_IN_STYLE, INVALID_STYLE, OTHER_BUILT_IN_STYLE, cdata_id_package, corner_gate_package,
     duplicate_style_package, empty_id_package, invalid_bool_package, invalid_package,
@@ -249,4 +253,21 @@ fn invalid_table_boolean_falls_back_false_and_emits_typed_diagnostic() {
     let raw = diagnostic.raw_reference.as_deref().unwrap_or_default();
     assert!(raw.contains("table_id=2"));
     assert!(raw.contains("firstRow=maybe"));
+}
+
+#[test]
+fn table_style_metadata_keeps_shape_type_below_large_variant_threshold() {
+    assert!(std::mem::size_of::<ShapeType>() <= 256);
+}
+
+#[test]
+fn public_table_style_definition_uses_indirect_storage() {
+    let reference = TableStyleReference {
+        id: "{11111111-1111-1111-1111-111111111111}".to_owned(),
+        source_kind: TableStyleSourceKind::Package,
+        definition: Some(Box::new(TableStyle::default())),
+        issues: Vec::new(),
+    };
+
+    assert!(reference.definition.is_some());
 }

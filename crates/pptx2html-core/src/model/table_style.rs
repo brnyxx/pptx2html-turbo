@@ -125,7 +125,7 @@ impl TableStyle {
 pub struct TableStyleReference {
     pub id: String,
     pub source_kind: TableStyleSourceKind,
-    pub definition: Option<TableStyle>,
+    pub definition: Option<Box<TableStyle>>,
     pub issues: Vec<TableStyleIssue>,
 }
 

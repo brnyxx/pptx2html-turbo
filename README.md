@@ -201,6 +201,8 @@ See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element
 
 Picture-bullet support adds the public `Bullet::Picture` enum variant. Rust consumers that exhaustively match `Bullet` must add a `Bullet::Picture` arm. Because adding a public enum variant is a breaking API change, this change must ship only in the next semver-major release; the current package manifests intentionally remain on the existing release line.
 
+Table-style support stores `TableStyleReference::definition` as `Option<Box<TableStyle>>` to keep `ShapeType` compact. Rust consumers constructing or destructuring this public field must account for the indirection. This source-breaking table-style API ships only in the next semver-major release; current package manifests remain unchanged.
+
 DrawingML preset names beginning with `math`, such as `mathPlus`, are geometric shapes only and do not imply OMML equation support.
 
 ## Architecture

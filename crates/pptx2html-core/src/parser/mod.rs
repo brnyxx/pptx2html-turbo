@@ -630,7 +630,7 @@ fn resolve_table_style_references(shapes: &mut [Shape], styles: &[TableStyle]) {
                     let mut matching = styles.iter().filter(|style| style.id == reference.id);
                     if let Some(definition) = matching.next() {
                         reference.source_kind = TableStyleSourceKind::Package;
-                        reference.definition = Some(definition.clone());
+                        reference.definition = Some(Box::new(definition.clone()));
                         if matching.next().is_some() {
                             reference
                                 .issues
