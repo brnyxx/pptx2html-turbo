@@ -3,6 +3,8 @@ use std::io::{Cursor, Write};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
+use pptx2html_core::ConversionResult;
+
 const CUSTOM_STYLE: &str = "{11111111-1111-1111-1111-111111111111}";
 const TABLE_STYLES_REL: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
@@ -90,9 +92,36 @@ pub fn manual_qa_package() -> Vec<u8> {
         r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/><Relationship Id="rIdSlide2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/><Relationship Id="rIdTheme" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>{hostile}{valid}</Relationships>"#
     );
     let style = format!(
-        r#"<?xml version="1.0"?><a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:tblStyle styleId="{CUSTOM_STYLE}" styleName="manual"><a:wholeTbl><a:tcStyle><a:fillRef idx="2"><a:schemeClr val="accent2"><a:tint val="20000"/></a:schemeClr></a:fillRef></a:tcStyle></a:wholeTbl></a:tblStyle></a:tblStyleLst>"#
+        r#"<?xml version="1.0"?><a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:tblStyle styleId="{CUSTOM_STYLE}" styleName="manual"><a:tblBg><a:fillRef idx="2"><a:schemeClr val="accent2"><a:tint val="20000"/></a:schemeClr></a:fillRef><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef></a:tblBg><a:wholeTbl><a:tcStyle><a:tcBdr><a:left><a:lnRef idx="1"><a:schemeClr val="accent3"><a:shade val="30000"/></a:schemeClr></a:lnRef></a:left></a:tcBdr><a:fill><a:solidFill><a:srgbClr val="0D0D0D"/></a:solidFill></a:fill></a:tcStyle></a:wholeTbl></a:tblStyle></a:tblStyleLst>"#
     );
     package(&[first, second], &rels, Some(&style), theme())
+}
+
+pub fn assert_reference_diagnostics(result: &ConversionResult) {
+    let diagnostics: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|item| item.code == "TABLE_STYLE_PRIMITIVE_UNSUPPORTED")
+        .collect();
+    assert!(diagnostics.iter().all(|item| {
+        item.raw_reference
+            .as_deref()
+            .is_some_and(|raw| raw.contains("table_id=2"))
+    }));
+    for (name, expected) in [
+        ("a:effectRef", &["idx=1", "Theme(\"accent1\")"][..]),
+        (
+            "a:lnRef",
+            &["idx=1", "Theme(\"accent3\")", "Shade(30000)"][..],
+        ),
+    ] {
+        let raw = diagnostics
+            .iter()
+            .find(|item| item.location.qualified_element_name.as_deref() == Some(name))
+            .and_then(|item| item.raw_reference.as_deref())
+            .expect("scoped reference diagnostic");
+        assert!(expected.iter().all(|fragment| raw.contains(fragment)));
+    }
 }
 
 pub fn boundary_package() -> Vec<u8> {

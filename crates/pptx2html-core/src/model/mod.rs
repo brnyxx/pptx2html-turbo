@@ -56,6 +56,6 @@ pub use style::{
     StrikethroughType, TextCapitalization, TextShadow, TextStyle, UnderlineType,
 };
 pub use table_style::{
-    TableCellStyle, TableStyle, TableStyleIssue, TableStyleReference, TableStyleRegion,
-    TableStyleSourceKind, TableTextStyle,
+    TableCellStyle, TableStyle, TableStyleIssue, TableStylePrimitiveReference, TableStyleReference,
+    TableStyleRegion, TableStyleSourceKind, TableTextStyle,
 };

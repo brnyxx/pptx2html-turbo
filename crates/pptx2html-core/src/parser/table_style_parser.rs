@@ -5,7 +5,9 @@ use quick_xml::reader::NsReader;
 use super::table_style_values::{handle_empty, handle_start};
 use super::xml_utils;
 use crate::error::{PptxError, PptxResult};
-use crate::model::{TableCellStyle, TableStyle, TableStyleRegion};
+use crate::model::{
+    ColorModifier, TableCellStyle, TableStyle, TableStylePrimitiveReference, TableStyleRegion,
+};
 
 pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
     super::table_style_xml::validate(xml)?;
@@ -19,6 +21,7 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
     let mut in_fill = false;
     let mut in_fill_ref = false;
     let mut in_text_style = false;
+    let mut unsupported_reference: Option<TableStylePrimitiveReference> = None;
 
     loop {
         match reader.read_resolved_event_into(&mut buffer) {
@@ -36,6 +39,17 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
                     region = Some(parsed);
                     cell_style = TableCellStyle::default();
                 } else {
+                    if matches!(local.as_str(), "effectRef" | "lnRef") {
+                        unsupported_reference = Some(TableStylePrimitiveReference {
+                            name: local.clone(),
+                            idx: xml_utils::attr_str(&element, "idx"),
+                            color: None,
+                        });
+                    } else if let Some(reference) = unsupported_reference.as_mut()
+                        && let Some(color) = super::fill_parser::parse_color(&local, &element)
+                    {
+                        reference.color = Some(color);
+                    }
                     if matches!(local.as_str(), "gradFill" | "blipFill" | "pattFill")
                         && let Some(style) = style.as_mut()
                     {
@@ -54,6 +68,30 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
             }
             Ok((namespace, Event::Empty(element))) if drawingml(&namespace) => {
                 let local = xml_utils::local_name(element.name().as_ref()).to_owned();
+                if matches!(local.as_str(), "effectRef" | "lnRef") {
+                    if let Some(style) = style.as_mut() {
+                        style
+                            .unsupported_references
+                            .push(TableStylePrimitiveReference {
+                                name: local,
+                                idx: xml_utils::attr_str(&element, "idx"),
+                                color: None,
+                            });
+                    }
+                    buffer.clear();
+                    continue;
+                }
+                if let Some(reference) = unsupported_reference.as_mut() {
+                    if let Some(color) = super::fill_parser::parse_color(&local, &element) {
+                        reference.color = Some(color);
+                    } else if let Some(value) =
+                        xml_utils::attr_str(&element, "val").and_then(|value| value.parse().ok())
+                        && let Some(modifier) = ColorModifier::from_ooxml(&local, Some(value))
+                        && let Some(color) = reference.color.as_mut()
+                    {
+                        color.modifiers.push(modifier);
+                    }
+                }
                 if matches!(local.as_str(), "gradFill" | "blipFill" | "pattFill")
                     && let Some(style) = style.as_mut()
                 {
@@ -95,6 +133,13 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
                         }
                         "fill" => in_fill = false,
                         "fillRef" => in_fill_ref = false,
+                        "effectRef" | "lnRef" => {
+                            if let Some(reference) = unsupported_reference.take()
+                                && let Some(style) = style.as_mut()
+                            {
+                                style.unsupported_references.push(reference);
+                            }
+                        }
                         "tcTxStyle" => in_text_style = false,
                         "left" | "right" | "top" | "bottom" | "insideH" | "insideV" => {
                             border_side = None;

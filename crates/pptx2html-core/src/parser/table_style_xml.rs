@@ -79,9 +79,14 @@ fn validate_context(local: &str, parent: Option<&str>) -> PptxResult<()> {
         "tcStyle" | "tcTxStyle" => parent.is_some_and(is_region),
         "fill" => matches!(parent, Some("tcStyle" | "tblBg")),
         "fillRef" => matches!(parent, Some("tcStyle" | "tblBg")),
+        "effectRef" => parent == Some("tblBg"),
         "tcBdr" => parent == Some("tcStyle"),
         "left" | "right" | "top" | "bottom" | "insideH" | "insideV" => parent == Some("tcBdr"),
         "ln" => matches!(
+            parent,
+            Some("left" | "right" | "top" | "bottom" | "insideH" | "insideV")
+        ),
+        "lnRef" => matches!(
             parent,
             Some("left" | "right" | "top" | "bottom" | "insideH" | "insideV")
         ),
@@ -90,7 +95,16 @@ fn validate_context(local: &str, parent: Option<&str>) -> PptxResult<()> {
         }
         "srgbClr" | "schemeClr" | "sysClr" | "prstClr" => matches!(
             parent,
-            Some("solidFill" | "ln" | "fillRef" | "tcTxStyle" | "fontRef" | "gs")
+            Some(
+                "solidFill"
+                    | "ln"
+                    | "fillRef"
+                    | "effectRef"
+                    | "lnRef"
+                    | "tcTxStyle"
+                    | "fontRef"
+                    | "gs"
+            )
         ),
         "alpha" | "alphaMod" | "alphaOff" | "blue" | "blueMod" | "blueOff" | "gamma" | "gray"
         | "green" | "greenMod" | "greenOff" | "hue" | "hueMod" | "hueOff" | "inv" | "invGamma"

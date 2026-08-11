@@ -81,6 +81,13 @@ pub struct TableTextStyle {
     pub italic: Option<bool>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TableStylePrimitiveReference {
+    pub name: String,
+    pub idx: Option<String>,
+    pub color: Option<Color>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TableCellStyle {
     pub fill: Option<Fill>,
@@ -102,6 +109,7 @@ pub struct TableStyle {
     pub table_background: Option<Fill>,
     pub table_background_ref: Option<StyleRef>,
     pub unsupported_primitives: Vec<String>,
+    pub unsupported_references: Vec<TableStylePrimitiveReference>,
 }
 
 impl TableStyle {

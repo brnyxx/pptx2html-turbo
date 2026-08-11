@@ -113,8 +113,12 @@ fn active_xml_tokens_are_rejected_by_table_style_parser() {
 fn wrong_namespace_and_out_of_context_primitives_are_not_applied() {
     for injected in [
         r#"<x:wholeTbl xmlns:x="urn:spoof"><x:tcStyle><x:fill><x:solidFill><x:srgbClr val="ABCDEF"/></x:solidFill></x:fill></x:tcStyle></x:wholeTbl>"#,
+        r#"<a:tblBg><x:effectRef xmlns:x="urn:spoof" idx="1"><x:schemeClr val="accent1"/></x:effectRef></a:tblBg>"#,
+        r#"<a:wholeTbl><a:tcStyle><a:tcBdr><a:left><x:lnRef xmlns:x="urn:spoof" idx="1"><x:schemeClr val="accent1"/></x:lnRef></a:left></a:tcBdr></a:tcStyle></a:wholeTbl>"#,
         r#"<a:wholeTbl><a:tcStyle><a:fill><a:solidFill><a:srgbClr val="ABCDEF"/></a:solidFill></a:fill></a:tcStyle></a:wholeTbl>"#,
         r#"<a:srgbClr val="ABCDEF"/>"#,
+        r#"<a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef>"#,
+        r#"<a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef>"#,
     ] {
         let xml =
             review::valid_styles().replace("<a:tblStyle ", &format!("{injected}<a:tblStyle "));
@@ -236,12 +240,19 @@ fn hostile_fill_ref_and_multiplicity_manual_qa_package_is_convertible() {
             .count(),
         1
     );
+    assert!(result.html.contains("background-color: #0D0D0D"));
     assert_eq!(
         result
             .diagnostics
             .iter()
             .filter(|d| d.code == "TABLE_STYLE_PRIMITIVE_UNSUPPORTED")
             .count(),
-        1
+        3
     );
+    review::assert_reference_diagnostics(&result);
+    assert!(!has_diagnostic(&result, "TABLE_STYLE_XML_INVALID"));
+    assert!(!result.diagnostics.iter().any(|d| {
+        d.code.starts_with("OOXML_")
+            && d.location.part_name.as_deref() == Some("ppt/tableStyles.xml")
+    }));
 }

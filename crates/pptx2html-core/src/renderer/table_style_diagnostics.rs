@@ -55,6 +55,31 @@ pub(super) fn emit(
                 "Table style primitive was preserved but not rendered",
             );
         }
+        for primitive in &definition.unsupported_references {
+            push(
+                ctx,
+                "TABLE_STYLE_PRIMITIVE_UNSUPPORTED",
+                CapabilityStage::Parsed,
+                DiagnosticLocation {
+                    slide_index: Some(slide_index),
+                    part_name: Some("ppt/tableStyles.xml".to_owned()),
+                    qualified_element_name: Some(format!("a:{}", primitive.name)),
+                    ..Default::default()
+                },
+                format!(
+                    "table_id={table_id};style_id={};primitive={};idx={};color={:?};modifiers={:?}",
+                    reference.id,
+                    primitive.name,
+                    primitive.idx.as_deref().unwrap_or("absent"),
+                    primitive.color.as_ref().map(|color| &color.kind),
+                    primitive
+                        .color
+                        .as_ref()
+                        .map(|color| color.modifiers.as_slice())
+                ),
+                "Table style reference primitive was preserved but not rendered",
+            );
+        }
         for fill_ref in definition.table_background_ref.iter().chain(
             definition
                 .regions
