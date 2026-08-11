@@ -1,11 +1,13 @@
 use quick_xml::events::BytesStart;
 
+use super::master_parser::{is_lvl_ppr, parse_lvl_index};
 use super::text_parser::{
     ParagraphBuilder, RunBuilder, append_text as append_run_text,
     apply_paragraph_default_run_properties, assign_spacing_paragraph, assign_typeface_to_paragraph,
     assign_typeface_to_run, parse_bullet, parse_bullet_font, parse_bullet_size,
-    parse_paragraph_properties, parse_picture_bullet, parse_run_properties, parse_spacing,
-    start_paragraph as start_text_paragraph, start_run as start_text_run,
+    parse_paragraph_properties, parse_picture_bullet, parse_picture_bullet_size,
+    parse_run_properties, parse_spacing, picture_bullet, start_paragraph as start_text_paragraph,
+    start_run as start_text_run,
 };
 use super::xml_utils;
 use crate::model::*;
@@ -27,6 +29,10 @@ pub(crate) struct TableSaxState {
     pub(crate) in_run_properties: bool,
     pub(crate) in_bullet_color: bool,
     pub(crate) in_picture_bullet: bool,
+    pub(crate) in_list_style: bool,
+    pub(crate) list_level: Option<usize>,
+    pub(crate) list_style: Option<ListStyle>,
+    pub(crate) list_picture_size: Option<BulletSize>,
     pub(crate) in_default_run_properties: bool,
     pub(crate) in_line_spacing: bool,
     pub(crate) in_space_before: bool,
@@ -45,12 +51,17 @@ impl TableSaxState {
             "tblPr" if self.in_table => parse_table_properties(element, &mut self.builder),
             "gridCol" if self.in_table => parse_column(element, &mut self.builder),
             "tr" if self.in_table => start_row(element, &mut self.in_row, &mut self.row),
-            "tc" if self.in_row => start_cell(
-                element,
-                &mut self.in_cell,
-                &mut self.cell,
-                &mut self.paragraphs,
-            ),
+            "tc" if self.in_row => {
+                self.list_style = None;
+                self.list_level = None;
+                self.list_picture_size = None;
+                start_cell(
+                    element,
+                    &mut self.in_cell,
+                    &mut self.cell,
+                    &mut self.paragraphs,
+                )
+            }
             "tcPr" if self.in_cell => {
                 parse_cell_properties(element, &mut self.in_properties, &mut self.cell)
             }
@@ -61,6 +72,10 @@ impl TableSaxState {
                 parse_border_dash(element, self.border_side.as_deref(), &mut self.cell)
             }
             "p" if self.in_cell => start_paragraph(&mut self.paragraph),
+            "lstStyle" if self.in_cell => self.in_list_style = true,
+            tag if self.in_list_style && is_lvl_ppr(tag) => {
+                self.list_level = Some(parse_lvl_index(tag));
+            }
             "pPr" if self.in_cell && self.paragraph.is_some() => {
                 parse_paragraph_properties(element, &mut self.paragraph)
             }
@@ -77,8 +92,10 @@ impl TableSaxState {
             "spcBef" if self.in_cell && self.paragraph.is_some() => self.in_space_before = true,
             "spcAft" if self.in_cell && self.paragraph.is_some() => self.in_space_after = true,
             "buClr" if self.in_cell && self.paragraph.is_some() => self.in_bullet_color = true,
-            "buBlip" if self.in_cell && self.paragraph.is_some() => self.in_picture_bullet = true,
-            "blip" if self.in_picture_bullet => parse_picture_bullet(element, &mut self.paragraph),
+            "buBlip" if self.in_cell && (self.paragraph.is_some() || self.list_level.is_some()) => {
+                self.in_picture_bullet = true
+            }
+            "blip" if self.in_picture_bullet => self.assign_picture_bullet(element),
             "r" if self.in_cell && self.paragraph.is_some() => start_run(&mut self.run),
             "rPr" if self.in_cell && self.run.is_some() => {
                 self.in_run_properties = true;
@@ -109,15 +126,25 @@ impl TableSaxState {
             "p" if self.in_cell => finish_paragraph(&mut self.paragraph, &mut self.paragraphs),
             "buClr" if self.in_bullet_color => self.in_bullet_color = false,
             "buBlip" if self.in_picture_bullet => self.in_picture_bullet = false,
+            tag if self.in_list_style && is_lvl_ppr(tag) => self.list_level = None,
+            "lstStyle" if self.in_list_style => self.in_list_style = false,
             "lnL" | "lnR" | "lnT" | "lnB" if self.in_properties => self.border_side = None,
             "tcPr" => self.in_properties = false,
             "tc" => {
-                finish_cell(&mut self.cell, &mut self.paragraphs, &mut self.row);
+                finish_cell(
+                    &mut self.cell,
+                    &mut self.paragraphs,
+                    &mut self.list_style,
+                    &mut self.row,
+                );
                 self.in_cell = false;
                 self.paragraph = None;
                 self.run = None;
                 self.in_text = false;
                 self.in_run_properties = false;
+                self.in_list_style = false;
+                self.list_level = None;
+                self.list_picture_size = None;
             }
             "tr" => {
                 finish_row(&mut self.row, &mut self.builder);
@@ -174,12 +201,16 @@ impl TableSaxState {
             }
             "buFont" if self.in_cell => parse_bullet_font(element, &mut self.paragraph),
             "buSzPct" | "buSzPts" | "buSzTx" if self.in_cell => {
-                parse_bullet_size(local, element, &mut self.paragraph)
+                if self.in_list_style {
+                    self.list_picture_size = parse_picture_bullet_size(local, element);
+                } else {
+                    parse_bullet_size(local, element, &mut self.paragraph);
+                }
             }
             "buNone" | "buChar" | "buAutoNum" if self.in_cell => {
                 parse_bullet(local, element, &mut self.paragraph)
             }
-            "blip" if self.in_picture_bullet => parse_picture_bullet(element, &mut self.paragraph),
+            "blip" if self.in_picture_bullet => self.assign_picture_bullet(element),
             _ => return false,
         }
         true
@@ -193,6 +224,19 @@ impl TableSaxState {
         };
         if let Some(paragraph) = self.paragraph.as_mut() {
             paragraph.runs.push(run.build());
+        }
+    }
+
+    fn assign_picture_bullet(&mut self, element: &BytesStart<'_>) {
+        if let Some(level) = self.list_level {
+            let defaults = self
+                .list_style
+                .get_or_insert_with(ListStyle::default)
+                .levels[level]
+                .get_or_insert_with(ParagraphDefaults::default);
+            defaults.bullet = picture_bullet(element, self.list_picture_size.take());
+        } else {
+            parse_picture_bullet(element, &mut self.paragraph);
         }
     }
 
@@ -399,13 +443,14 @@ pub(crate) fn finish_paragraph(
 pub(crate) fn finish_cell(
     cell: &mut Option<TableCellBuilder>,
     paragraphs: &mut Vec<TextParagraph>,
+    list_style: &mut Option<ListStyle>,
     row: &mut Option<TableRowBuilder>,
 ) {
     if let Some(mut cell) = cell.take() {
-        if !paragraphs.is_empty() {
+        if !paragraphs.is_empty() || list_style.is_some() {
             cell.text_body = Some(TextBody {
                 paragraphs: std::mem::take(paragraphs),
-                list_style: None,
+                list_style: list_style.take(),
                 ..Default::default()
             });
         }

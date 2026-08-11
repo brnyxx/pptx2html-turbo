@@ -320,6 +320,7 @@ impl HtmlRenderer {
         style_ref::resolve_font_ref(font_ref, font_scheme, scheme, clr_map)
     }
 
+    #[cfg(test)]
     pub(super) fn render_paragraph(
         para: &TextParagraph,
         ctx: &RenderCtx<'_>,
@@ -1014,6 +1015,13 @@ pub(super) struct TextStyleCtx<'a> {
 }
 
 impl<'a> TextStyleCtx<'a> {
+    pub(super) fn from_local_list_style(list_style: Option<&'a ListStyle>) -> Self {
+        Self {
+            slide_list_style: list_style,
+            ..Self::default()
+        }
+    }
+
     pub(super) fn primary_source(&self) -> Option<ProvenanceSource> {
         if self.slide_list_style.is_some() {
             return Some(ProvenanceSource::SlideListStyle);

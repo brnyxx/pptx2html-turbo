@@ -504,7 +504,7 @@ pub(crate) fn parse_picture_bullet(
     paragraph.bullet = picture_bullet(element, paragraph.bu_picture_size.take());
 }
 
-fn picture_bullet(element: &BytesStart<'_>, size: Option<BulletSize>) -> Option<Bullet> {
+pub(crate) fn picture_bullet(element: &BytesStart<'_>, size: Option<BulletSize>) -> Option<Bullet> {
     let reference = xml_utils::attr_str(element, "embed")
         .map(|id| (id, Some(PictureBulletRelationshipMode::Embed)))
         .or_else(|| {
@@ -523,7 +523,10 @@ fn picture_bullet(element: &BytesStart<'_>, size: Option<BulletSize>) -> Option<
     }))
 }
 
-fn parse_picture_bullet_size(local: &str, element: &BytesStart<'_>) -> Option<BulletSize> {
+pub(crate) fn parse_picture_bullet_size(
+    local: &str,
+    element: &BytesStart<'_>,
+) -> Option<BulletSize> {
     if local == "buSzTx" {
         return Some(BulletSize::Text);
     }
@@ -724,6 +727,7 @@ pub(crate) fn parse_auto_fit(local: &str, element: &BytesStart<'_>) -> AutoFit {
 pub(crate) fn parse_autofit_ratio(element: &BytesStart<'_>, attribute: &str) -> Option<f64> {
     xml_utils::attr_str(element, attribute)
         .and_then(|value| value.parse::<f64>().ok())
+        .filter(|value| value.is_finite())
         .map(|value| (value / 100_000.0).clamp(0.0, 1.0))
 }
 

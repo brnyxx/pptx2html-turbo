@@ -1371,7 +1371,11 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 AutoFit::Normal {
                     font_scale,
                     line_spacing_reduction,
-                } => (font_scale, line_spacing_reduction),
+                } => (
+                    font_scale.filter(|value| value.is_finite() && (0.0..=1.0).contains(value)),
+                    line_spacing_reduction
+                        .filter(|value| value.is_finite() && (0.0..=1.0).contains(value)),
+                ),
                 _ => (None, None),
             };
             let content_width_px = (w
