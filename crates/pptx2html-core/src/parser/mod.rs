@@ -1,11 +1,17 @@
 //! PPTX ZIP/XML parser
 //! PPTX = ZIP archive containing OOXML (PresentationML) XML files
 
+mod action_parser;
 mod chart_parser;
+mod fill_parser;
+mod graphic_frame_parser;
 mod layout_parser;
 pub mod master_parser;
-mod relationships;
+mod preserved_parser;
+pub mod relationships;
 mod slide_parser;
+mod table_parser;
+mod text_parser;
 mod theme_parser;
 mod xml_utils;
 
@@ -71,10 +77,11 @@ impl PptxParser {
 
         // 2. Parse presentation.xml.rels (all relationships)
         let rels_xml = Self::read_entry(&mut archive, "ppt/_rels/presentation.xml.rels")?;
-        let pres_rels = relationships::parse_relationships(&rels_xml)?;
+        let pres_relationships = relationships::parse_relationship_records(&rels_xml)?;
+        let pres_rels = relationships::target_map(&pres_relationships);
 
         // 3. Parse themes
-        let theme_paths = collect_targets_by_type(&pres_rels, "theme");
+        let theme_paths = collect_targets_by_type(&pres_relationships, "theme");
         for theme_target in &theme_paths {
             let theme_full = normalize_ppt_path(theme_target);
             if let Ok(theme_xml) = Self::read_entry(&mut archive, &theme_full) {
@@ -85,7 +92,7 @@ impl PptxParser {
         }
 
         // 4. Parse slide masters
-        let master_targets = collect_targets_by_type(&pres_rels, "slideMaster");
+        let master_targets = collect_targets_by_type(&pres_relationships, "slideMaster");
         // Map: master target path -> index in presentation.masters
         let mut master_path_to_idx: HashMap<String, usize> = HashMap::new();
 
@@ -97,18 +104,20 @@ impl PptxParser {
             };
 
             let master_rels_path = Self::rels_path_for(&master_full);
-            let master_rels =
+            let (master_relationships, master_rels) =
                 if let Ok(rels_xml) = Self::read_entry(&mut archive, &master_rels_path) {
-                    relationships::parse_relationships(&rels_xml)?
+                    let records = relationships::parse_relationship_records(&rels_xml)?;
+                    let targets = relationships::target_map(&records);
+                    (records, targets)
                 } else {
-                    HashMap::new()
+                    (Vec::new(), HashMap::new())
                 };
 
             let mut master =
                 master_parser::parse_slide_master(&master_xml, &master_rels, &mut archive)?;
 
             // Find which theme this master references
-            let theme_ref = find_target_by_type(&master_rels, "theme");
+            let theme_ref = find_target_by_type(&master_relationships, "theme");
             if let Some(theme_target) = theme_ref {
                 let theme_full_path = resolve_relative_path(&master_full, &theme_target);
                 master.theme_idx = theme_paths
@@ -137,9 +146,9 @@ impl PptxParser {
         for master_target in &master_targets {
             let master_full = normalize_ppt_path(master_target);
             let master_rels_path = Self::rels_path_for(&master_full);
-            let master_rels =
+            let master_relationships =
                 if let Ok(rels_xml) = Self::read_entry(&mut archive, &master_rels_path) {
-                    relationships::parse_relationships(&rels_xml)?
+                    relationships::parse_relationship_records(&rels_xml)?
                 } else {
                     continue;
                 };
@@ -150,7 +159,7 @@ impl PptxParser {
                 .copied()
                 .unwrap_or(0);
 
-            let layout_targets = collect_targets_by_type(&master_rels, "slideLayout");
+            let layout_targets = collect_targets_by_type(&master_relationships, "slideLayout");
             for layout_target in &layout_targets {
                 let layout_full = resolve_relative_path(&master_full, layout_target);
                 let layout_canonical = canonical_part_name(&layout_full.replace("ppt/", ""));
@@ -191,11 +200,13 @@ impl PptxParser {
                 let full_path = normalize_ppt_path(slide_path);
                 if let Ok(slide_xml) = Self::read_entry(&mut archive, &full_path) {
                     let slide_rels_path = Self::rels_path_for(&full_path);
-                    let slide_rels =
+                    let (slide_relationships, slide_rels) =
                         if let Ok(rels_xml) = Self::read_entry(&mut archive, &slide_rels_path) {
-                            relationships::parse_relationships(&rels_xml)?
+                            let records = relationships::parse_relationship_records(&rels_xml)?;
+                            let targets = relationships::target_map(&records);
+                            (records, targets)
                         } else {
-                            HashMap::new()
+                            (Vec::new(), HashMap::new())
                         };
 
                     let mut slide =
@@ -203,7 +214,7 @@ impl PptxParser {
                     slide.hidden = slide_ref.hidden;
 
                     // Find which layout this slide references
-                    let layout_ref = find_target_by_type(&slide_rels, "slideLayout");
+                    let layout_ref = find_target_by_type(&slide_relationships, "slideLayout");
                     if let Some(layout_target) = layout_ref {
                         let layout_full = resolve_relative_path(&full_path, &layout_target);
                         let layout_canonical =
@@ -554,40 +565,27 @@ impl PptxParser {
 // -- Helper functions --
 
 /// Collect all relationship targets whose Type URL contains the given substring
-fn collect_targets_by_type(rels: &HashMap<String, String>, type_fragment: &str) -> Vec<String> {
-    // The relationships HashMap maps rId -> target path.
-    // For type-based filtering, we need the full rels. But our current parser
-    // only stores Id->Target. We use a name-based heuristic instead.
-    let mut targets: Vec<String> = Vec::new();
-    for target in rels.values() {
-        let lower = target.to_lowercase();
-        match type_fragment {
-            "theme" if lower.contains("theme") && lower.ends_with(".xml") => {
-                targets.push(target.clone());
-            }
-            "slideMaster" if lower.contains("slidemaster") => {
-                targets.push(target.clone());
-            }
-            "slideLayout" if lower.contains("slidelayout") => {
-                targets.push(target.clone());
-            }
-            "slide"
-                if lower.contains("slide")
-                    && !lower.contains("master")
-                    && !lower.contains("layout") =>
-            {
-                targets.push(target.clone());
-            }
-            _ => {}
-        }
-    }
+fn collect_targets_by_type(
+    relationships: &[relationships::Relationship],
+    type_fragment: &str,
+) -> Vec<String> {
+    let mut targets = relationships
+        .iter()
+        .filter(|relationship| {
+            relationship.relationship_type.rsplit('/').next() == Some(type_fragment)
+        })
+        .map(|relationship| relationship.target.clone())
+        .collect::<Vec<_>>();
     targets.sort();
     targets
 }
 
 /// Find single target by type fragment
-fn find_target_by_type(rels: &HashMap<String, String>, type_fragment: &str) -> Option<String> {
-    let results = collect_targets_by_type(rels, type_fragment);
+fn find_target_by_type(
+    relationships: &[relationships::Relationship],
+    type_fragment: &str,
+) -> Option<String> {
+    let results = collect_targets_by_type(relationships, type_fragment);
     results.into_iter().next()
 }
 
@@ -651,19 +649,15 @@ mod tests {
 
     #[test]
     fn relationship_target_and_path_helpers_cover_edge_cases() {
-        let rels = HashMap::from([
-            ("rId1".to_string(), "slides/slide2.xml".to_string()),
-            ("rId2".to_string(), "slides/slide1.xml".to_string()),
-            (
-                "rId3".to_string(),
-                "slideLayouts/slideLayout1.xml".to_string(),
-            ),
-            (
-                "rId4".to_string(),
-                "slideMasters/slideMaster1.xml".to_string(),
-            ),
-            ("rId5".to_string(), "theme/theme1.xml".to_string()),
-        ]);
+        let rels_xml = r#"<Relationships>
+            <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>
+            <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+            <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="slideLayouts/slideLayout1.xml"/>
+            <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+            <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+        </Relationships>"#;
+        let rels = relationships::parse_relationship_records(rels_xml)
+            .expect("relationship records should parse");
 
         assert_eq!(
             collect_targets_by_type(&rels, "slide"),

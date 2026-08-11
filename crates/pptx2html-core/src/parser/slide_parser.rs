@@ -1,14 +1,33 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 
-use log::warn;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use zip::ZipArchive;
 
+use super::action_parser::hyperlink_rel_id;
 use super::chart_parser;
+pub(crate) use super::fill_parser::parse_line_end;
+use super::fill_parser::{assign_style_ref_color, assign_style_ref_no_color, ensure_style_ref};
+use super::graphic_frame_parser::{
+    mime_from_extension, read_archive_bytes, read_archive_entry,
+    relationships_path as rels_path_for, resolve_relationship_path as resolve_rel_path,
+    resolve_relative_file_path,
+};
 use super::master_parser::{is_lvl_ppr, parse_def_rpr_attrs, parse_lvl_index, parse_lvl_ppr_attrs};
+use super::preserved_parser::{
+    append_empty_element, append_end_element, append_start_element, classify_unsupported_graphic,
+    unsupported_data,
+};
 use super::relationships;
+#[cfg(test)]
+use super::table_parser::assign_cell_color as assign_tc_color;
+use super::table_parser::{TableBuilder, TableCellBuilder, TableRowBuilder, assign_cell_color};
+use super::text_parser::{
+    ParagraphBuilder, RunBuilder,
+    apply_paragraph_default_run_properties as apply_paragraph_def_rpr,
+    parse_paragraph_properties as parse_para_props, parse_run_properties as parse_run_props,
+};
 use super::xml_utils;
 use crate::error::{PptxError, PptxResult};
 use crate::model::*;
@@ -167,18 +186,7 @@ pub fn parse_slide<R: Read + Seek>(
 
                 // Capture raw XML inside graphicData for unresolved content
                 if capturing_raw_xml && local != "graphicData" {
-                    raw_xml_buf.push('<');
-                    raw_xml_buf.push_str(std::str::from_utf8(e.name().as_ref()).unwrap_or(&local));
-                    for attr in e.attributes().flatten() {
-                        let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
-                        raw_xml_buf.push(' ');
-                        raw_xml_buf.push_str(key);
-                        raw_xml_buf.push_str("=\"");
-                        raw_xml_buf.push_str(val);
-                        raw_xml_buf.push('"');
-                    }
-                    raw_xml_buf.push('>');
+                    append_start_element(e, &local, &mut raw_xml_buf);
                 }
 
                 match local.as_str() {
@@ -214,27 +222,10 @@ pub fn parse_slide<R: Read + Seek>(
                                 if let Some(sb) = current_shape.as_mut() {
                                     sb.is_chart = true;
                                 }
-                            } else if uri.contains("diagram") || uri.contains("dgm") {
-                                warn!("SmartArt diagram detected — rendering placeholder");
+                            } else if let Some(unsupported) = classify_unsupported_graphic(&uri) {
                                 if let Some(sb) = current_shape.as_mut() {
-                                    sb.unsupported_content = Some("SmartArt".to_string());
-                                    sb.unresolved_type = Some(slide::UnresolvedType::SmartArt);
-                                }
-                                capturing_raw_xml = true;
-                                raw_xml_buf.clear();
-                            } else if uri.contains("oleObject") {
-                                warn!("OLE object detected — rendering placeholder");
-                                if let Some(sb) = current_shape.as_mut() {
-                                    sb.unsupported_content = Some("OLE Object".to_string());
-                                    sb.unresolved_type = Some(slide::UnresolvedType::OleObject);
-                                }
-                                capturing_raw_xml = true;
-                                raw_xml_buf.clear();
-                            } else if uri.contains("math") || uri.contains("omml") {
-                                warn!("Math equation detected — rendering placeholder");
-                                if let Some(sb) = current_shape.as_mut() {
-                                    sb.unsupported_content = Some("Math Equation".to_string());
-                                    sb.unresolved_type = Some(slide::UnresolvedType::MathEquation);
+                                    sb.unsupported_content = Some(unsupported.label.to_owned());
+                                    sb.unresolved_type = Some(unsupported.element_type);
                                 }
                                 capturing_raw_xml = true;
                                 raw_xml_buf.clear();
@@ -979,18 +970,7 @@ pub fn parse_slide<R: Read + Seek>(
 
                 // Capture self-closing elements inside graphicData
                 if capturing_raw_xml {
-                    raw_xml_buf.push('<');
-                    raw_xml_buf.push_str(std::str::from_utf8(e.name().as_ref()).unwrap_or(&local));
-                    for attr in e.attributes().flatten() {
-                        let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
-                        raw_xml_buf.push(' ');
-                        raw_xml_buf.push_str(key);
-                        raw_xml_buf.push_str("=\"");
-                        raw_xml_buf.push_str(val);
-                        raw_xml_buf.push('"');
-                    }
-                    raw_xml_buf.push_str("/>");
+                    append_empty_element(e, &local, &mut raw_xml_buf);
                 }
 
                 match local.as_str() {
@@ -1819,9 +1799,7 @@ pub fn parse_slide<R: Read + Seek>(
 
                 // Capture closing tags for raw XML (before graphicData end stops capture)
                 if capturing_raw_xml && local != "graphicData" {
-                    raw_xml_buf.push_str("</");
-                    raw_xml_buf.push_str(std::str::from_utf8(e.name().as_ref()).unwrap_or(&local));
-                    raw_xml_buf.push('>');
+                    append_end_element(e, &local, &mut raw_xml_buf);
                 }
 
                 match local.as_str() {
@@ -2277,7 +2255,7 @@ pub fn parse_slide<R: Read + Seek>(
                                     pb.bu_color = Some(color);
                                 }
                             } else if in_tc_pr {
-                                assign_tc_color(color, &tc_border_side, &mut current_cell);
+                                assign_cell_color(color, &tc_border_side, &mut current_cell);
                             } else if in_cell_r_pr {
                                 if let Some(rb) = cell_run.as_mut() {
                                     rb.color = color;
@@ -2490,144 +2468,6 @@ fn depth_contains(depth: &[String], tag: &str) -> bool {
     depth.iter().any(|d| d == tag)
 }
 
-/// Assign color to a style ref element (lnRef/fillRef/effectRef/fontRef)
-fn assign_style_ref_color(
-    ref_kind: &str,
-    idx_str: &str,
-    color: Color,
-    builder: &mut Option<ShapeStyleRef>,
-) {
-    let builder = match builder.as_mut() {
-        Some(b) => b,
-        None => return,
-    };
-    match ref_kind {
-        "fillRef" => {
-            builder.fill_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color,
-            });
-        }
-        "lnRef" => {
-            builder.ln_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color,
-            });
-        }
-        "effectRef" => {
-            builder.effect_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color,
-            });
-        }
-        "fontRef" => {
-            builder.font_ref = Some(FontRef {
-                idx: idx_str.to_string(),
-                color,
-            });
-        }
-        _ => {}
-    }
-}
-
-/// Ensure style ref exists (set idx but no color override, for End events when no child color was present)
-fn ensure_style_ref(ref_kind: &str, idx_str: &str, builder: &mut Option<ShapeStyleRef>) {
-    let builder = match builder.as_mut() {
-        Some(b) => b,
-        None => return,
-    };
-    match ref_kind {
-        "fillRef" if builder.fill_ref.is_none() => {
-            builder.fill_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color: Color::none(),
-            });
-        }
-        "lnRef" if builder.ln_ref.is_none() => {
-            builder.ln_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color: Color::none(),
-            });
-        }
-        "effectRef" if builder.effect_ref.is_none() => {
-            builder.effect_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color: Color::none(),
-            });
-        }
-        "fontRef" if builder.font_ref.is_none() => {
-            builder.font_ref = Some(FontRef {
-                idx: idx_str.to_string(),
-                color: Color::none(),
-            });
-        }
-        _ => {}
-    }
-}
-
-/// Assign style ref with no color (Empty variant self-closing)
-fn assign_style_ref_no_color(ref_kind: &str, idx_str: &str, builder: &mut Option<ShapeStyleRef>) {
-    let builder = match builder.as_mut() {
-        Some(b) => b,
-        None => return,
-    };
-    match ref_kind {
-        "fillRef" => {
-            builder.fill_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color: Color::none(),
-            });
-        }
-        "lnRef" => {
-            builder.ln_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color: Color::none(),
-            });
-        }
-        "effectRef" => {
-            builder.effect_ref = Some(StyleRef {
-                idx: idx_str.parse::<u32>().unwrap_or(0),
-                color: Color::none(),
-            });
-        }
-        "fontRef" => {
-            builder.font_ref = Some(FontRef {
-                idx: idx_str.to_string(),
-                color: Color::none(),
-            });
-        }
-        _ => {}
-    }
-}
-
-/// Parse <a:headEnd> or <a:tailEnd> attributes into a LineEnd
-pub(crate) fn parse_line_end(e: &quick_xml::events::BytesStart<'_>) -> Option<LineEnd> {
-    let end_type = match xml_utils::attr_str(e, "type").as_deref() {
-        Some("arrow") => LineEndType::Arrow,
-        Some("triangle") => LineEndType::Triangle,
-        Some("stealth") => LineEndType::Stealth,
-        Some("diamond") => LineEndType::Diamond,
-        Some("oval") => LineEndType::Oval,
-        Some("none") | None => return None,
-        Some(_) => return None,
-    };
-    let width = match xml_utils::attr_str(e, "w").as_deref() {
-        Some("sm") => LineEndSize::Small,
-        Some("lg") => LineEndSize::Large,
-        _ => LineEndSize::Medium,
-    };
-    let length = match xml_utils::attr_str(e, "len").as_deref() {
-        Some("sm") => LineEndSize::Small,
-        Some("lg") => LineEndSize::Large,
-        _ => LineEndSize::Medium,
-    };
-    Some(LineEnd {
-        end_type,
-        width,
-        length,
-    })
-}
-
 pub(crate) fn parse_guide_formula_value(fmla: &str, guides: &HashMap<String, f64>) -> f64 {
     let tokens: Vec<&str> = fmla.split_whitespace().collect();
     if tokens.is_empty() {
@@ -2790,33 +2630,6 @@ fn parse_shape_auto_fit(local: &str, e: &quick_xml::events::BytesStart<'_>) -> A
     }
 }
 
-fn apply_paragraph_def_rpr(pb: &mut ParagraphBuilder, e: &quick_xml::events::BytesStart<'_>) {
-    if let Some(sz) = xml_utils::attr_str(e, "sz") {
-        pb.def_rpr_font_size = sz.parse::<f64>().ok().map(|v| v / 100.0);
-    }
-    if let Some(spc) = xml_utils::attr_str(e, "spc") {
-        pb.def_rpr_letter_spacing = spc.parse::<f64>().ok().map(|v| v / 100.0);
-    }
-    if let Some(baseline) = xml_utils::attr_str(e, "baseline") {
-        pb.def_rpr_baseline = baseline.parse::<i32>().ok();
-    }
-    if let Some(cap) = xml_utils::attr_str(e, "cap") {
-        pb.def_rpr_capitalization = Some(TextCapitalization::from_ooxml(&cap));
-    }
-    if let Some(u) = xml_utils::attr_str(e, "u") {
-        pb.def_rpr_underline = Some(UnderlineType::from_ooxml(&u));
-    }
-    if let Some(strike) = xml_utils::attr_str(e, "strike") {
-        pb.def_rpr_strikethrough = Some(StrikethroughType::from_ooxml(&strike));
-    }
-    if let Some(b) = xml_utils::attr_str(e, "b") {
-        pb.def_rpr_bold = Some(b == "1" || b == "true");
-    }
-    if let Some(i) = xml_utils::attr_str(e, "i") {
-        pb.def_rpr_italic = Some(i == "1" || i == "true");
-    }
-}
-
 fn assign_background_color_target(
     color: Color,
     depth: &[String],
@@ -2895,7 +2708,7 @@ fn dispatch_parsed_color(
             defaults.color = Some(color);
         }
     } else if in_tc_pr {
-        assign_tc_color(color, tc_border_side, current_cell);
+        assign_cell_color(color, tc_border_side, current_cell);
     } else if in_cell_r_pr {
         if let Some(run) = cell_run.as_mut() {
             run.color = color;
@@ -3078,68 +2891,6 @@ fn parse_connector_ref(
     }
 }
 
-/// Parse pPr (paragraph properties)
-fn parse_para_props(e: &quick_xml::events::BytesStart<'_>, para: &mut Option<ParagraphBuilder>) {
-    if let Some(pb) = para.as_mut() {
-        if let Some(algn) = xml_utils::attr_str(e, "algn") {
-            pb.alignment = Alignment::from_ooxml(&algn);
-        }
-        if let Some(rtl) = xml_utils::attr_str(e, "rtl") {
-            pb.rtl = rtl == "1" || rtl == "true";
-        }
-        if let Some(lvl) = xml_utils::attr_str(e, "lvl") {
-            pb.level = lvl.parse::<u32>().unwrap_or(0);
-        }
-        if let Some(indent) = xml_utils::attr_str(e, "indent") {
-            pb.indent = Some(Emu::parse_emu(&indent).to_pt());
-        }
-        if let Some(mar_l) = xml_utils::attr_str(e, "marL") {
-            pb.margin_left = Some(Emu::parse_emu(&mar_l).to_pt());
-        }
-    }
-}
-
-/// Parse rPr (run properties)
-fn parse_run_props(e: &quick_xml::events::BytesStart<'_>, run: &mut Option<RunBuilder>) {
-    if let Some(rb) = run.as_mut() {
-        if let Some(sz) = xml_utils::attr_str(e, "sz") {
-            rb.font_size = sz.parse::<f64>().ok().map(|v| v / 100.0);
-        }
-        if let Some(b) = xml_utils::attr_str(e, "b") {
-            rb.bold = b == "1" || b == "true";
-        }
-        if let Some(i) = xml_utils::attr_str(e, "i") {
-            rb.italic = i == "1" || i == "true";
-        }
-        if let Some(u) = xml_utils::attr_str(e, "u") {
-            rb.underline = UnderlineType::from_ooxml(&u);
-        }
-        if let Some(strike) = xml_utils::attr_str(e, "strike") {
-            rb.strikethrough = StrikethroughType::from_ooxml(&strike);
-        }
-        if let Some(cap) = xml_utils::attr_str(e, "cap") {
-            rb.capitalization = TextCapitalization::from_ooxml(&cap);
-        }
-        if let Some(baseline) = xml_utils::attr_str(e, "baseline") {
-            rb.baseline = baseline.parse::<i32>().ok();
-        }
-        if let Some(spc) = xml_utils::attr_str(e, "spc") {
-            // spc is in 1/100 pt units
-            rb.letter_spacing = spc.parse::<f64>().ok().map(|v| v / 100.0);
-        }
-    }
-}
-
-fn hyperlink_rel_id(e: &quick_xml::events::BytesStart<'_>) -> Option<String> {
-    for attr in e.attributes().flatten() {
-        let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-        if key.ends_with("id") && key.contains(':') {
-            return Some(String::from_utf8_lossy(&attr.value).to_string());
-        }
-    }
-    None
-}
-
 // ── Builder pattern ──
 
 #[derive(Default)]
@@ -3218,13 +2969,11 @@ struct ShapeBuilder {
 impl ShapeBuilder {
     fn build(self) -> Shape {
         let shape_type = if let Some(label) = self.unsupported_content {
-            ShapeType::Unsupported(slide::UnsupportedData {
+            ShapeType::Unsupported(unsupported_data(
                 label,
-                element_type: self
-                    .unresolved_type
-                    .unwrap_or(slide::UnresolvedType::SmartArt),
-                raw_xml: self.raw_xml_capture,
-            })
+                self.unresolved_type,
+                self.raw_xml_capture,
+            ))
         } else if self.is_chart {
             ShapeType::Chart(ChartData {
                 rel_id: self.chart_rel_id.unwrap_or_default(),
@@ -3339,44 +3088,6 @@ impl ShapeBuilder {
     }
 }
 
-fn read_archive_entry<R: Read + Seek>(
-    archive: &mut ZipArchive<R>,
-    name: &str,
-) -> PptxResult<String> {
-    let mut file = archive
-        .by_name(name)
-        .map_err(|_| PptxError::MissingFile(name.to_string()))?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    Ok(contents)
-}
-
-fn read_archive_bytes<R: Read + Seek>(
-    archive: &mut ZipArchive<R>,
-    name: &str,
-) -> PptxResult<Vec<u8>> {
-    let mut file = archive
-        .by_name(name)
-        .map_err(|_| PptxError::MissingFile(name.to_string()))?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)?;
-    Ok(contents)
-}
-
-fn rels_path_for(part_path: &str) -> String {
-    let (dir, file) = part_path.rsplit_once('/').unwrap_or(("", part_path));
-    if dir.is_empty() {
-        format!("_rels/{file}.rels")
-    } else {
-        format!("{dir}/_rels/{file}.rels")
-    }
-}
-
-fn resolve_relative_file_path(base_file: &str, target: &str) -> String {
-    let base_dir = base_file.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
-    resolve_rel_path(base_dir, target)
-}
-
 fn store_shape_level_defaults(shape: &mut Option<ShapeBuilder>, lvl: usize, pd: ParagraphDefaults) {
     if lvl >= 9 {
         return;
@@ -3384,239 +3095,6 @@ fn store_shape_level_defaults(shape: &mut Option<ShapeBuilder>, lvl: usize, pd: 
     if let Some(shape) = shape.as_mut() {
         let list_style = shape.text_list_style.get_or_insert_with(ListStyle::default);
         list_style.levels[lvl] = Some(pd);
-    }
-}
-
-#[derive(Default)]
-struct ParagraphBuilder {
-    runs: Vec<TextRun>,
-    alignment: Alignment,
-    rtl: bool,
-    level: u32,
-    indent: Option<f64>,
-    margin_left: Option<f64>,
-    bullet: Option<Bullet>,
-    line_spacing: Option<SpacingValue>,
-    space_before: Option<SpacingValue>,
-    space_after: Option<SpacingValue>,
-    // Bullet property accumulation (applied when buChar/buAutoNum is encountered)
-    bu_font: Option<String>,
-    bu_size_pct: Option<f64>,
-    bu_color: Option<Color>,
-    // Paragraph-level defRPr properties
-    def_rpr_font_size: Option<f64>,
-    def_rpr_letter_spacing: Option<f64>,
-    def_rpr_baseline: Option<i32>,
-    def_rpr_capitalization: Option<TextCapitalization>,
-    def_rpr_underline: Option<UnderlineType>,
-    def_rpr_strikethrough: Option<StrikethroughType>,
-    def_rpr_bold: Option<bool>,
-    def_rpr_italic: Option<bool>,
-    def_rpr_color: Option<Color>,
-    def_rpr_font_latin: Option<String>,
-    def_rpr_font_ea: Option<String>,
-    def_rpr_font_cs: Option<String>,
-}
-
-impl ParagraphBuilder {
-    fn build(self) -> TextParagraph {
-        let def_rpr = if self.def_rpr_font_size.is_some()
-            || self.def_rpr_letter_spacing.is_some()
-            || self.def_rpr_baseline.is_some()
-            || self.def_rpr_capitalization.is_some()
-            || self.def_rpr_underline.is_some()
-            || self.def_rpr_strikethrough.is_some()
-            || self.def_rpr_bold.is_some()
-            || self.def_rpr_italic.is_some()
-            || self.def_rpr_color.is_some()
-            || self.def_rpr_font_latin.is_some()
-            || self.def_rpr_font_ea.is_some()
-            || self.def_rpr_font_cs.is_some()
-        {
-            Some(ParagraphDefRPr {
-                font_size: self.def_rpr_font_size,
-                letter_spacing: self.def_rpr_letter_spacing,
-                baseline: self.def_rpr_baseline,
-                capitalization: self.def_rpr_capitalization,
-                underline: self.def_rpr_underline,
-                strikethrough: self.def_rpr_strikethrough,
-                bold: self.def_rpr_bold,
-                italic: self.def_rpr_italic,
-                color: self.def_rpr_color,
-                font_latin: self.def_rpr_font_latin,
-                font_ea: self.def_rpr_font_ea,
-                font_cs: self.def_rpr_font_cs,
-            })
-        } else {
-            None
-        };
-        TextParagraph {
-            runs: self.runs,
-            alignment: self.alignment,
-            rtl: self.rtl,
-            line_spacing: self.line_spacing,
-            space_before: self.space_before,
-            space_after: self.space_after,
-            indent: self.indent,
-            margin_left: self.margin_left,
-            bullet: self.bullet,
-            level: self.level,
-            def_rpr,
-        }
-    }
-}
-
-#[derive(Default)]
-struct RunBuilder {
-    text: String,
-    font_size: Option<f64>,
-    bold: bool,
-    italic: bool,
-    underline: UnderlineType,
-    strikethrough: StrikethroughType,
-    capitalization: TextCapitalization,
-    color: Color,
-    font_latin: Option<String>,
-    font_ea: Option<String>,
-    font_cs: Option<String>,
-    baseline: Option<i32>,
-    letter_spacing: Option<f64>,
-    highlight: Option<Color>,
-    shadow: Option<TextShadow>,
-    hyperlink: Option<String>,
-    is_break: bool,
-}
-
-impl RunBuilder {
-    fn build(self) -> TextRun {
-        TextRun {
-            text: self.text,
-            style: TextStyle {
-                font_size: self.font_size,
-                bold: self.bold,
-                italic: self.italic,
-                underline: self.underline,
-                strikethrough: self.strikethrough,
-                capitalization: self.capitalization,
-                color: self.color,
-                baseline: self.baseline,
-                letter_spacing: self.letter_spacing,
-                highlight: self.highlight,
-                shadow: self.shadow,
-                ..Default::default()
-            },
-            font: FontStyle {
-                latin: self.font_latin,
-                east_asian: self.font_ea,
-                complex_script: self.font_cs,
-            },
-            hyperlink: self.hyperlink,
-            is_break: self.is_break,
-        }
-    }
-}
-
-// ── Table builder pattern ──
-
-#[derive(Default)]
-struct TableBuilder {
-    col_widths: Vec<f64>,
-    rows: Vec<TableRow>,
-    band_row: bool,
-    band_col: bool,
-    first_row: bool,
-    last_row: bool,
-    first_col: bool,
-    last_col: bool,
-}
-
-impl TableBuilder {
-    fn build(self) -> TableData {
-        TableData {
-            rows: self.rows,
-            col_widths: self.col_widths,
-            band_row: self.band_row,
-            band_col: self.band_col,
-            first_row: self.first_row,
-            last_row: self.last_row,
-            first_col: self.first_col,
-            last_col: self.last_col,
-        }
-    }
-}
-
-#[derive(Default)]
-struct TableRowBuilder {
-    height: f64,
-    cells: Vec<TableCell>,
-}
-
-impl TableRowBuilder {
-    fn build(self) -> TableRow {
-        TableRow {
-            height: self.height,
-            cells: self.cells,
-        }
-    }
-}
-
-struct TableCellBuilder {
-    text_body: Option<TextBody>,
-    fill: Fill,
-    border_left: Border,
-    border_right: Border,
-    border_top: Border,
-    border_bottom: Border,
-    col_span: u32,
-    row_span: u32,
-    v_merge: bool,
-    margin_left: f64,
-    margin_right: f64,
-    margin_top: f64,
-    margin_bottom: f64,
-    vertical_align: VerticalAlign,
-}
-
-impl Default for TableCellBuilder {
-    fn default() -> Self {
-        let cell = TableCell::default();
-        Self {
-            text_body: cell.text_body,
-            fill: cell.fill,
-            border_left: cell.border_left,
-            border_right: cell.border_right,
-            border_top: cell.border_top,
-            border_bottom: cell.border_bottom,
-            col_span: cell.col_span,
-            row_span: cell.row_span,
-            v_merge: cell.v_merge,
-            margin_left: cell.margin_left,
-            margin_right: cell.margin_right,
-            margin_top: cell.margin_top,
-            margin_bottom: cell.margin_bottom,
-            vertical_align: cell.vertical_align,
-        }
-    }
-}
-
-impl TableCellBuilder {
-    fn build(self) -> TableCell {
-        TableCell {
-            text_body: self.text_body,
-            fill: self.fill,
-            border_left: self.border_left,
-            border_right: self.border_right,
-            border_top: self.border_top,
-            border_bottom: self.border_bottom,
-            col_span: self.col_span,
-            row_span: self.row_span,
-            v_merge: self.v_merge,
-            margin_left: self.margin_left,
-            margin_right: self.margin_right,
-            margin_top: self.margin_top,
-            margin_bottom: self.margin_bottom,
-            vertical_align: self.vertical_align,
-        }
     }
 }
 
@@ -3628,86 +3106,6 @@ struct GroupContext {
     size: Size,
     child_offset: Position,
     child_extent: Size,
-}
-
-/// Assign color to table cell fill or border based on context
-fn assign_tc_color(
-    color: Color,
-    border_side: &Option<String>,
-    cell: &mut Option<TableCellBuilder>,
-) {
-    let cell = match cell.as_mut() {
-        Some(c) => c,
-        None => return,
-    };
-    match border_side.as_deref() {
-        Some("lnL") => {
-            cell.border_left.color = color;
-            if matches!(cell.border_left.style, BorderStyle::None) && cell.border_left.width > 0.0 {
-                cell.border_left.style = BorderStyle::Solid;
-            }
-        }
-        Some("lnR") => {
-            cell.border_right.color = color;
-            if matches!(cell.border_right.style, BorderStyle::None) && cell.border_right.width > 0.0
-            {
-                cell.border_right.style = BorderStyle::Solid;
-            }
-        }
-        Some("lnT") => {
-            cell.border_top.color = color;
-            if matches!(cell.border_top.style, BorderStyle::None) && cell.border_top.width > 0.0 {
-                cell.border_top.style = BorderStyle::Solid;
-            }
-        }
-        Some("lnB") => {
-            cell.border_bottom.color = color;
-            if matches!(cell.border_bottom.style, BorderStyle::None)
-                && cell.border_bottom.width > 0.0
-            {
-                cell.border_bottom.style = BorderStyle::Solid;
-            }
-        }
-        None => {
-            // Cell fill color (solidFill inside tcPr, not inside a border)
-            cell.fill = Fill::Solid(SolidFill { color });
-        }
-        _ => {}
-    }
-}
-
-/// Resolve a relative path from a base directory within the ZIP archive.
-/// e.g., resolve_rel_path("ppt/slides", "../media/image1.png") -> "ppt/media/image1.png"
-fn resolve_rel_path(base_dir: &str, target: &str) -> String {
-    if !target.contains("../") {
-        return format!("{base_dir}/{target}");
-    }
-    let mut parts: Vec<&str> = base_dir.split('/').collect();
-    for segment in target.split('/') {
-        if segment == ".." {
-            parts.pop();
-        } else if !segment.is_empty() && segment != "." {
-            parts.push(segment);
-        }
-    }
-    parts.join("/")
-}
-
-/// Determine MIME type from file extension
-fn mime_from_extension(path: &str) -> String {
-    let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
-    match ext.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "bmp" => "image/bmp",
-        "tif" | "tiff" => "image/tiff",
-        "svg" => "image/svg+xml",
-        "emf" => "image/x-emf",
-        "wmf" => "image/x-wmf",
-        _ => "image/png",
-    }
-    .to_string()
 }
 
 #[cfg(test)]

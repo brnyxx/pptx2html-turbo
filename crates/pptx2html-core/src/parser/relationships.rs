@@ -6,31 +6,60 @@ use quick_xml::events::Event;
 use super::xml_utils;
 use crate::error::PptxResult;
 
-/// Parse .rels file into {rId → target_path} map
-pub fn parse_relationships(xml: &str) -> PptxResult<HashMap<String, String>> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Relationship {
+    pub id: String,
+    pub relationship_type: String,
+    pub target: String,
+    pub target_mode: TargetMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TargetMode {
+    Internal,
+    External,
+    Other(String),
+}
+
+pub fn parse_relationship_records(xml: &str) -> PptxResult<Vec<Relationship>> {
     let mut reader = Reader::from_str(xml);
-    let mut rels = HashMap::new();
+    let mut relationships = Vec::new();
 
     loop {
         match reader.read_event() {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let local = xml_utils::local_name(name.as_ref());
-                if local == "Relationship" {
-                    let mut id = String::new();
-                    let mut target = String::new();
-                    for attr in e.attributes().flatten() {
-                        let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
-                        match key {
-                            "Id" => id = val,
-                            "Target" => target = val,
-                            _ => {}
+                if xml_utils::local_name(name.as_ref()) != "Relationship" {
+                    continue;
+                }
+                let mut id = String::new();
+                let mut relationship_type = String::new();
+                let mut target = String::new();
+                let mut target_mode = TargetMode::Internal;
+                for attr in e.attributes().flatten() {
+                    let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
+                    let value = String::from_utf8_lossy(&attr.value).to_string();
+                    match key {
+                        "Id" => id = value,
+                        "Type" => relationship_type = value,
+                        "Target" => target = value,
+                        "TargetMode" if value == "External" => {
+                            target_mode = TargetMode::External;
                         }
+                        "TargetMode" if value == "Internal" => {
+                            target_mode = TargetMode::Internal;
+                        }
+                        "TargetMode" => target_mode = TargetMode::Other(value),
+                        _ => {}
                     }
-                    if !id.is_empty() && !target.is_empty() {
-                        rels.insert(id, target);
-                    }
+                }
+                if !id.is_empty() && !target.is_empty() {
+                    relationships.push(Relationship {
+                        id,
+                        relationship_type,
+                        target,
+                        target_mode,
+                    });
                 }
             }
             Ok(Event::Eof) => break,
@@ -39,5 +68,18 @@ pub fn parse_relationships(xml: &str) -> PptxResult<HashMap<String, String>> {
         }
     }
 
-    Ok(rels)
+    Ok(relationships)
+}
+
+/// Parse .rels file into {rId → target_path} map
+pub fn parse_relationships(xml: &str) -> PptxResult<HashMap<String, String>> {
+    Ok(target_map(&parse_relationship_records(xml)?))
+}
+
+pub fn target_map(relationships: &[Relationship]) -> HashMap<String, String> {
+    relationships
+        .iter()
+        .cloned()
+        .map(|relationship| (relationship.id, relationship.target))
+        .collect()
 }
