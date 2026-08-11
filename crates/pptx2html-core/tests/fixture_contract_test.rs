@@ -242,6 +242,16 @@ fn package_builder_rejects_malformed_xml_feature_parts() {
 }
 
 #[test]
+fn package_builder_allows_unqualified_xml_names() {
+    let given_package = PackageBuilder::new(SlideXml::from_body("").build())
+        .with_part(FeaturePart::notes("<extension id=\"1\"/>"));
+
+    given_package
+        .validate()
+        .expect("unqualified XML names are valid");
+}
+
+#[test]
 fn package_builder_rejects_unknown_prefixed_xml_elements() {
     let given_package = PackageBuilder::new(SlideXml::from_body("").build())
         .with_part(FeaturePart::notes("<z:bad/>"));

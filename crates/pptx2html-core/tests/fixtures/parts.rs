@@ -236,10 +236,7 @@ fn valid_xml_document(bytes: &[u8]) -> bool {
 }
 
 fn invalid_namespace_resolution(resolution: ResolveResult<'_>) -> bool {
-    matches!(
-        resolution,
-        ResolveResult::Unbound | ResolveResult::Unknown(_)
-    )
+    matches!(resolution, ResolveResult::Unknown(_))
 }
 
 fn xml_escape(value: &str) -> String {
