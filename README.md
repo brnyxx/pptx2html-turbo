@@ -181,7 +181,7 @@ The included demo exposes image-like whole-slide zoom controls that keep the ori
 
 ## Supported Features
 
-See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element inventory and [docs/architecture/CAPABILITY_MATRIX.md](docs/architecture/CAPABILITY_MATRIX.md) for the authoritative support-stage matrix.
+See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element inventory, [docs/architecture/CAPABILITY_MATRIX.md](docs/architecture/CAPABILITY_MATRIX.md) for the authoritative support-stage matrix, and [docs/architecture/PPTX_COMPLETENESS_PROGRESS.md](docs/architecture/PPTX_COMPLETENESS_PROGRESS.md) for the delivered-task ledger and remaining acceptance plan.
 
 | Category | Highlights |
 |----------|-----------|

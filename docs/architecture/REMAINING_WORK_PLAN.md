@@ -2,6 +2,8 @@
 
 > Detailed development plan for the remaining OOXML implementation and fidelity work.
 
+The dated delivery ledger and executable Task 1-23 status are maintained in [`PPTX_COMPLETENESS_PROGRESS.md`](PPTX_COMPLETENESS_PROGRESS.md). This file remains the strategic backlog; when the two documents differ, the delivery ledger is authoritative for shipped, evidence-pending, active, and unstarted work.
+
 ## Goal
 
 Provide a sequenced backlog for the remaining pptx2html-rs work, grounded in the current capability contract and repository state.
