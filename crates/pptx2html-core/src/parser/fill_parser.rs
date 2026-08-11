@@ -5,6 +5,7 @@ use quick_xml::events::BytesStart;
 use zip::ZipArchive;
 
 use super::graphic_frame_parser::{mime_from_extension, resolve_relationship_path};
+use super::pattern_fill_parser::PatternSaxState;
 use super::slide_parser::ShapeBuilder;
 #[cfg(test)]
 use super::table_parser::TableCellBuilder;
@@ -52,6 +53,7 @@ pub(crate) struct FillSaxState {
     background_gradient_angle: f64,
     background_gradient_type: GradientType,
     background_stop_position: f64,
+    pattern: PatternSaxState,
 }
 
 pub(crate) struct ColorTargets<'a> {
@@ -110,12 +112,16 @@ impl Default for FillSaxState {
             background_gradient_angle: 0.0,
             background_gradient_type: GradientType::Linear,
             background_stop_position: 0.0,
+            pattern: PatternSaxState::default(),
         }
     }
 }
 
 impl FillSaxState {
     pub(crate) fn route_color(&mut self, color: Color, targets: ColorTargets<'_>) {
+        if self.pattern.assign_color(color.clone()) {
+            return;
+        }
         if self.in_highlight {
             if targets.table.in_run_properties {
                 if let Some(run) = targets.table.run.as_mut() {
@@ -204,8 +210,20 @@ impl FillSaxState {
         element: &BytesStart<'_>,
         in_shape_properties: bool,
         shape: &mut Option<ShapeBuilder>,
+        table: &mut TableSaxState,
+        slide: &mut Slide,
     ) -> bool {
         match local {
+            "pattFill" => {
+                if self.pattern.start(
+                    element,
+                    in_shape_properties,
+                    table.in_properties,
+                    self.in_background,
+                ) {
+                    self.pattern.finish(shape, table, slide);
+                }
+            }
             "lin" if self.in_background_gradient => {
                 self.background_gradient_angle = xml_utils::attr_str(element, "ang")
                     .and_then(|value| value.parse::<f64>().ok())
@@ -305,8 +323,8 @@ impl FillSaxState {
                     self.gradient_type = GradientType::from_path_attr(&value);
                 }
             }
-            "tint" | "shade" | "alpha" | "lumMod" | "lumOff" | "satMod" | "satOff" | "hueMod"
-            | "hueOff" | "comp" | "inv" | "gray" => {
+            "tint" | "shade" | "alpha" | "alphaOff" | "alphaMod" | "lumMod" | "lumOff"
+            | "satMod" | "satOff" | "hueMod" | "hueOff" | "comp" | "inv" | "gray" => {
                 let value =
                     xml_utils::attr_str(element, "val").and_then(|value| value.parse::<i32>().ok());
                 if let Some(modifier) = ColorModifier::from_ooxml(local, value) {
@@ -333,6 +351,19 @@ impl FillSaxState {
         table: &TableSaxState,
     ) -> bool {
         match local {
+            "pattFill" => {
+                if !self.pattern.start(
+                    element,
+                    in_shape_properties,
+                    table.in_properties,
+                    self.in_background,
+                ) {
+                    return false;
+                }
+            }
+            "fgClr" | "bgClr" if self.pattern.is_active() => {
+                self.pattern.start_color_role(local);
+            }
             "bgPr" => self.in_background = true,
             "style" if shape.is_some() && !in_shape_properties => {
                 self.in_style = true;
@@ -467,6 +498,13 @@ impl FillSaxState {
         targets: FillEndTargets<'_, R>,
     ) -> bool {
         match local {
+            "fgClr" | "bgClr" if self.pattern.is_active() => {
+                self.pattern.finish_color_role(local);
+            }
+            "pattFill" if self.pattern.is_active() => {
+                self.pattern
+                    .finish(targets.shape, targets.table, targets.slide);
+            }
             "blipFill" if self.in_background_image => self.in_background_image = false,
             "bgPr" if self.in_background => {
                 self.in_background = false;

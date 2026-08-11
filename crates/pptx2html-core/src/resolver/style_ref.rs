@@ -6,7 +6,7 @@
 use crate::model::color::{ColorKind, ResolvedColor};
 use crate::model::hierarchy::{FmtScheme, FontRef, StyleRef};
 use crate::model::presentation::{ClrMap, ColorScheme, FontScheme};
-use crate::model::{Border, BorderStyle, Fill, ShapeEffects, SolidFill};
+use crate::model::{Border, BorderStyle, Color, Fill, PatternFill, ShapeEffects, SolidFill};
 
 /// Resolve fillRef: lookup fmtScheme.fill_style_lst by idx, apply ref color.
 ///
@@ -51,8 +51,24 @@ pub fn resolve_fill_ref(
             };
             Some(Fill::Solid(SolidFill { color }))
         }
+        Fill::Pattern(pattern) => Some(Fill::Pattern(PatternFill {
+            preset: pattern.preset.clone(),
+            foreground: substitute_pattern_color(pattern.foreground.as_ref(), &fill_ref.color),
+            background: substitute_pattern_color(pattern.background.as_ref(), &fill_ref.color),
+        })),
         other => Some(other.clone()),
     }
+}
+
+fn substitute_pattern_color(color: Option<&Color>, reference: &Color) -> Option<Color> {
+    color.map(|color| {
+        if !is_placeholder_color(&color.kind) {
+            return color.clone();
+        }
+        let mut substituted = reference.clone();
+        substituted.modifiers.extend(color.modifiers.clone());
+        substituted
+    })
 }
 
 /// Resolve lnRef: lookup fmtScheme.ln_style_lst by idx, override color with ln_ref.color.

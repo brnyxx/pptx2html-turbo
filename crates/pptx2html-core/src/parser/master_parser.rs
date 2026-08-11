@@ -5,6 +5,7 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 use zip::ZipArchive;
 
+use super::pattern_fill_parser::PatternBuilder;
 use super::slide_parser::{parse_autofit_ratio, parse_guide_formula_value, parse_line_end};
 use super::xml_utils;
 use crate::error::{PptxError, PptxResult};
@@ -61,12 +62,38 @@ pub fn parse_slide_master<R: Read + Seek>(
     let mut bg_grad_angle: f64 = 0.0;
     let mut bg_grad_type = GradientType::Linear;
     let mut bg_gs_pos: f64 = 0.0;
+    let mut bg_pattern: Option<PatternBuilder> = None;
+    let mut shape_pattern: Option<PatternBuilder> = None;
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
                 depth.push(local.clone());
+
+                if local == "pattFill" && in_bg_pr {
+                    let mut pattern = PatternBuilder::default();
+                    pattern.begin(e);
+                    bg_pattern = Some(pattern);
+                    continue;
+                }
+                if local == "pattFill" && current_shape.is_some() {
+                    let mut pattern = PatternBuilder::default();
+                    pattern.begin(e);
+                    shape_pattern = Some(pattern);
+                    continue;
+                }
+                if matches!(local.as_str(), "fgClr" | "bgClr")
+                    && let Some(pattern) = bg_pattern.as_mut().or(shape_pattern.as_mut())
+                {
+                    pattern.start_color_role(&local);
+                    continue;
+                }
+                if let Some(pattern) = bg_pattern.as_mut().or(shape_pattern.as_mut())
+                    && (pattern.parse_color(&local, e) || pattern.append_modifier(&local, e))
+                {
+                    continue;
+                }
 
                 match local.as_str() {
                     // Background properties
@@ -283,6 +310,24 @@ pub fn parse_slide_master<R: Read + Seek>(
             Ok(Event::Empty(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
 
+                if local == "pattFill" {
+                    let mut pattern = PatternBuilder::default();
+                    pattern.begin(e);
+                    if in_bg_pr {
+                        master.background = Some(Fill::Pattern(pattern.finish()));
+                        continue;
+                    }
+                    if let Some(shape) = current_shape.as_mut() {
+                        shape.fill = Fill::Pattern(pattern.finish());
+                        continue;
+                    }
+                }
+                if let Some(pattern) = bg_pattern.as_mut().or(shape_pattern.as_mut())
+                    && (pattern.parse_color(&local, e) || pattern.append_modifier(&local, e))
+                {
+                    continue;
+                }
+
                 match local.as_str() {
                     // Background blip (Empty variant)
                     "blip" if in_bg_blip_fill => {
@@ -498,6 +543,23 @@ pub fn parse_slide_master<R: Read + Seek>(
                 depth.pop();
 
                 match local.as_str() {
+                    "fgClr" | "bgClr" => {
+                        if let Some(pattern) = bg_pattern.as_mut().or(shape_pattern.as_mut()) {
+                            pattern.finish_color_role();
+                        }
+                    }
+                    "pattFill" if bg_pattern.is_some() => {
+                        master.background = bg_pattern
+                            .take()
+                            .map(|mut pattern| Fill::Pattern(pattern.finish()));
+                    }
+                    "pattFill" if shape_pattern.is_some() => {
+                        if let (Some(mut pattern), Some(shape)) =
+                            (shape_pattern.take(), current_shape.as_mut())
+                        {
+                            shape.fill = Fill::Pattern(pattern.finish());
+                        }
+                    }
                     "blipFill" if in_bg_blip_fill => in_bg_blip_fill = false,
                     "gradFill" if in_bg_grad_fill => {
                         in_bg_grad_fill = false;
@@ -963,6 +1025,7 @@ struct MasterShapeBuilder {
     vertical_text: Option<String>,
     vertical_text_explicit: bool,
     border: Border,
+    fill: Fill,
 }
 
 impl MasterShapeBuilder {
@@ -981,6 +1044,7 @@ impl MasterShapeBuilder {
         };
         let adjust_values = (!self.adjust_values.is_empty()).then_some(self.adjust_values);
         Shape {
+            fill: self.fill,
             shape_type,
             position: self.position,
             size: self.size,

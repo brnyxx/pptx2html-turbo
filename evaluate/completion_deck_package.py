@@ -38,6 +38,7 @@ class Deck:
     presentation_rels: tuple[Relationship, ...] = ()
     parts: tuple[Part, ...] = ()
     types: tuple[ContentType, ...] = ()
+    backgrounds: tuple[str, ...] = ()
 
 
 def relationships_xml(rows: tuple[Relationship, ...]) -> bytes:
@@ -92,10 +93,10 @@ def deck_bytes(deck: Deck) -> bytes:
     return buffer.getvalue()
 
 
-def _slide(body: str, tail: str) -> bytes:
+def _slide(body: str, tail: str, background: str = "") -> bytes:
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        f"<p:sld {NS}><p:cSld><p:spTree><p:nvGrpSpPr>"
+        f"<p:sld {NS}><p:cSld>{background}<p:spTree><p:nvGrpSpPr>"
         '<p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
         '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/>'
         '<a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>'
@@ -204,7 +205,10 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
         **dict(deck.parts),
     }
     for index, (body, tail) in enumerate(deck.slides, 1):
-        parts[f"ppt/slides/slide{index}.xml"] = _slide(body, tail)
+        background = (
+            deck.backgrounds[index - 1] if index <= len(deck.backgrounds) else ""
+        )
+        parts[f"ppt/slides/slide{index}.xml"] = _slide(body, tail, background)
         feature_rels = deck.slide_rels if index == 1 else ()
         parts[f"ppt/slides/_rels/slide{index}.xml.rels"] = relationships_xml(
             (

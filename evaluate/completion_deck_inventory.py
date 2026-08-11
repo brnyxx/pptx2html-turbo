@@ -59,7 +59,7 @@ SCENARIO_CANONICAL: Final = {
     "fallback-unknown-extension": "extensions",
 }
 SCHEMA_NEGATIVES: Final = {
-    "pattern-fill-unknown": "PPTX_COMPLETENESS_FALLBACK",
+    "pattern-fill-unknown": "DRAWINGML_PATTERN_UNSUPPORTED",
 }
 
 

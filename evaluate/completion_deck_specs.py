@@ -23,6 +23,7 @@ if __package__:
         png_bytes,
         wav_bytes,
     )
+    from .completion_deck_patterns import pattern_backgrounds, pattern_slides
     from .completion_deck_tables import (
         TABLES,
         content_types as table_content_types,
@@ -49,6 +50,7 @@ else:
         png_bytes,
         wav_bytes,
     )
+    from completion_deck_patterns import pattern_backgrounds, pattern_slides
     from completion_deck_tables import (
         TABLES,
         content_types as table_content_types,
@@ -57,7 +59,7 @@ else:
     )
 
 
-PATTERNS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="known pattern"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:pattFill prst="pct5"><a:fgClr><a:srgbClr val="336699"/></a:fgClr><a:bgClr><a:srgbClr val="F2F2F2"/></a:bgClr></a:pattFill></p:spPr></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="unknown pattern"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:pattFill prst="unknownFuturePattern"><a:fgClr><a:srgbClr val="112233"/></a:fgClr><a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill></p:spPr></p:sp><p:sp><p:nvSpPr><p:cNvPr id="4" name="unknown custom formula"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:custGeom><a:avLst><a:gd name="unknownGuide" fmla="unknownOp 1 2"/></a:avLst><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="100000" h="100000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="100000" y="100000"/></a:lnTo></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>'
+PATTERNS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="50" name="unknown custom formula"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:custGeom><a:avLst><a:gd name="unknownGuide" fmla="unknownOp 1 2"/></a:avLst><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="100000" h="100000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="100000" y="100000"/></a:lnTo></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>'
 PICTURE_BULLETS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="picture bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:buBlip><a:blip r:embed="rIdImage"/></a:buBlip></a:pPr><a:r><a:t>Present</a:t></a:r></a:p><a:p><a:pPr><a:buBlip><a:blip/></a:buBlip></a:pPr><a:r><a:t>Missing</a:t></a:r></a:p></p:txBody></p:sp>'
 ACTIONS: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="internal"><a:hlinkClick action="ppaction://hlinkshowjump?jump=nextslide"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="external"><a:hlinkClick r:id="rIdExternal"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="4" name="unsafe"><a:hlinkClick r:id="rIdUnsafe"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
 REFLECTION: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="reflection 3d"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom><a:effectLst><a:reflection blurRad="40000" stA="50000"/></a:effectLst><a:scene3d><a:camera prst="perspectiveFront"/><a:lightRig rig="threePt" dir="t"/></a:scene3d><a:sp3d extrusionH="120000" prstMaterial="warmMatte"/></p:spPr></p:sp>'
@@ -78,7 +80,11 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
     image = png_bytes()
     comments_tail = '<p:extLst><p:ext uri="{6950BFC3-D8DA-4A85-94F7-54DA5524770B}"><p188:commentRel r:id="rIdModernComments"/></p:ext></p:extLst>'
     return (
-        Deck("patterns", ((PATTERNS + adjustment_shapes, ""),)),
+        Deck(
+            "patterns",
+            pattern_slides(PATTERNS + adjustment_shapes),
+            backgrounds=pattern_backgrounds(),
+        ),
         Deck(
             "picture-bullets",
             ((PICTURE_BULLETS, ""),),

@@ -193,6 +193,14 @@ impl HtmlRenderer {
                     }
                 }
             }
+            Fill::Pattern(pattern) => {
+                if let Some((foreground, background)) = ctx.pattern_colors(pattern)
+                    && let Some(css) = super::patterns::css(pattern, &foreground, &background)
+                {
+                    push_sep(buf);
+                    buf.push_str(&css);
+                }
+            }
         }
     }
 
@@ -256,6 +264,12 @@ impl HtmlRenderer {
                     String::new()
                 }
             }
+            Fill::Pattern(pattern) => ctx
+                .pattern_colors(pattern)
+                .and_then(|(foreground, background)| {
+                    super::patterns::css(pattern, &foreground, &background)
+                })
+                .unwrap_or_default(),
         }
     }
 }

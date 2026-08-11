@@ -1,6 +1,7 @@
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
+use super::pattern_fill_parser::PatternBuilder;
 use super::xml_utils;
 use crate::error::PptxResult;
 use crate::model::presentation::{ColorScheme, Theme};
@@ -21,6 +22,7 @@ pub fn parse_theme(xml: &str) -> PptxResult<Theme> {
     let mut in_fmt_scheme = false;
     let mut fmt_list_kind: Option<FmtKind> = None;
     let mut current_fill_color: Option<Color> = None;
+    let mut current_pattern: Option<PatternBuilder> = None;
     let mut in_ln = false;
     let mut current_ln_width: f64 = 0.0;
     let mut current_ln_color: Option<Color> = None;
@@ -51,6 +53,25 @@ pub fn parse_theme(xml: &str) -> PptxResult<Theme> {
             Ok(Event::Start(ref e)) => {
                 let name = e.name();
                 let local = xml_utils::local_name(name.as_ref());
+                if local == "pattFill"
+                    && matches!(fmt_list_kind, Some(FmtKind::Fill | FmtKind::BgFill))
+                {
+                    let mut pattern = PatternBuilder::default();
+                    pattern.begin(e);
+                    current_pattern = Some(pattern);
+                    continue;
+                }
+                if matches!(local, "fgClr" | "bgClr")
+                    && let Some(pattern) = current_pattern.as_mut()
+                {
+                    pattern.start_color_role(local);
+                    continue;
+                }
+                if let Some(pattern) = current_pattern.as_mut()
+                    && (pattern.parse_color(local, e) || pattern.append_modifier(local, e))
+                {
+                    continue;
+                }
                 match local {
                     "clrScheme" => {
                         in_color_scheme = true;
@@ -197,6 +218,23 @@ pub fn parse_theme(xml: &str) -> PptxResult<Theme> {
             Ok(Event::Empty(ref e)) => {
                 let name = e.name();
                 let local = xml_utils::local_name(name.as_ref());
+                if local == "pattFill"
+                    && matches!(fmt_list_kind, Some(FmtKind::Fill | FmtKind::BgFill))
+                {
+                    let mut pattern = PatternBuilder::default();
+                    pattern.begin(e);
+                    push_fill(
+                        &fmt_list_kind,
+                        &mut theme.fmt_scheme,
+                        Fill::Pattern(pattern.finish()),
+                    );
+                    continue;
+                }
+                if let Some(pattern) = current_pattern.as_mut()
+                    && (pattern.parse_color(local, e) || pattern.append_modifier(local, e))
+                {
+                    continue;
+                }
                 match local {
                     "srgbClr" if current_color_role.is_some() => {
                         if let Some(val) = xml_utils::attr_str(e, "val") {
@@ -360,6 +398,20 @@ pub fn parse_theme(xml: &str) -> PptxResult<Theme> {
                 let name = e.name();
                 let local = xml_utils::local_name(name.as_ref());
                 match local {
+                    "fgClr" | "bgClr" if current_pattern.is_some() => {
+                        if let Some(pattern) = current_pattern.as_mut() {
+                            pattern.finish_color_role();
+                        }
+                    }
+                    "pattFill" if current_pattern.is_some() => {
+                        if let Some(mut pattern) = current_pattern.take() {
+                            push_fill(
+                                &fmt_list_kind,
+                                &mut theme.fmt_scheme,
+                                Fill::Pattern(pattern.finish()),
+                            );
+                        }
+                    }
                     "clrScheme" => in_color_scheme = false,
                     "majorFont" => in_major_font = false,
                     "minorFont" => in_minor_font = false,

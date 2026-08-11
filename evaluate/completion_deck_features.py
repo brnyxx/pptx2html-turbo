@@ -88,7 +88,7 @@ FEATURES = (
         "pattern-fill-unknown",
         '<a:pattFill prst="unknownFuturePattern">',
         schema_expectation=SchemaExpectation.NEGATIVE,
-        expected_diagnostic="PPTX_COMPLETENESS_FALLBACK",
+        expected_diagnostic="DRAWINGML_PATTERN_UNSUPPORTED",
     ),
     _f(
         13, "picture-bullets", "picture-bullet-embedded", '<a:blip r:embed="rIdImage"/>'

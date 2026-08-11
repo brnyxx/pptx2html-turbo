@@ -76,7 +76,7 @@ class CompletionDeckBoundaryTests(unittest.TestCase):
                 (
                     "pattern-fill-unknown",
                     SchemaExpectation.NEGATIVE,
-                    "PPTX_COMPLETENESS_FALLBACK",
+                    "DRAWINGML_PATTERN_UNSUPPORTED",
                 )
             ],
         )

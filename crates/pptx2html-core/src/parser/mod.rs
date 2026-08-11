@@ -12,6 +12,7 @@ mod layout_parser;
 pub mod master_parser;
 mod media_parser;
 mod notes_comments_parser;
+mod pattern_fill_parser;
 mod preserved_parser;
 pub mod relationships;
 mod slide_parser;

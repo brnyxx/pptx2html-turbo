@@ -395,7 +395,14 @@ pub fn parse_slide<R: Read + Seek>(
                 ) {
                     continue;
                 }
-                if fill.handle_empty(&local, e, in_sp_pr, &mut current_shape) {
+                if fill.handle_empty(
+                    &local,
+                    e,
+                    in_sp_pr,
+                    &mut current_shape,
+                    &mut table,
+                    &mut slide,
+                ) {
                     continue;
                 }
                 if let Some(color) = fill.parse_empty_color(&local, e) {

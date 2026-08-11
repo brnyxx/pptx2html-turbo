@@ -1,7 +1,9 @@
 use super::color::Color;
 
 pub use super::effects::{GlowEffect, OuterShadow, ShapeEffects};
-pub use super::fill::{Fill, GradientFill, GradientStop, GradientType, ImageFill, SolidFill};
+pub use super::fill::{
+    Fill, GradientFill, GradientStop, GradientType, ImageFill, PatternFill, SolidFill,
+};
 pub use super::text::{
     Alignment, FontStyle, StrikethroughType, TextCapitalization, TextShadow, TextStyle,
     UnderlineType,

@@ -10,6 +10,8 @@ mod fallback;
 mod fills;
 mod geometry;
 mod media;
+mod pattern_tiles;
+mod patterns;
 pub mod provenance;
 mod tables;
 pub mod text_metrics;
@@ -44,6 +46,7 @@ struct UnresolvedCollector {
     counter: usize,
     current_slide_index: usize,
     gradient_counter: usize,
+    pattern_counter: usize,
     marker_counter: usize,
     asset_counter: usize,
 }
@@ -79,11 +82,68 @@ impl<'a> RenderCtx<'a> {
             .or_else(|| color.to_css())
     }
 
+    fn pattern_colors(&self, pattern: &PatternFill) -> Option<(String, String)> {
+        if matches!(pattern.preset, PatternPreset::Unknown(_)) {
+            self.record_pattern_diagnostic(pattern);
+            return None;
+        }
+        let colors = pattern.foreground.as_ref().and_then(|foreground| {
+            pattern.background.as_ref().and_then(|background| {
+                Some((
+                    self.resolve_color(foreground)?.to_css(),
+                    self.resolve_color(background)?.to_css(),
+                ))
+            })
+        });
+        if colors.is_none() {
+            self.record_pattern_diagnostic(pattern);
+        }
+        colors
+    }
+
+    fn record_pattern_diagnostic(&self, pattern: &PatternFill) {
+        let mut coll = self.collector.borrow_mut();
+        let encounter = coll.counter;
+        coll.counter += 1;
+        let slide_index = coll.current_slide_index;
+        coll.diagnostics.push(ConversionDiagnostic {
+            code: "DRAWINGML_PATTERN_UNSUPPORTED".to_owned(),
+            family: FeatureFamily::Shapes,
+            support_tier: SupportTier::Fallback,
+            stage: Some(CapabilityStage::Rendered),
+            location: DiagnosticLocation {
+                slide_index: Some(slide_index),
+                part_name: Some(format!("ppt/slides/slide{}.xml", slide_index + 1)),
+                relationship_id: Some(format!("pattern-s{slide_index}-e{encounter}")),
+                qualified_element_name: Some("a:pattFill".to_owned()),
+                ..Default::default()
+            },
+            raw_reference: Some(patterns::raw_semantics(pattern)),
+            fallback_kind: FallbackKind::UnknownElement,
+            reason:
+                "Pattern preset or color cannot be rendered without inventing fallback semantics"
+                    .to_owned(),
+        });
+    }
+
     fn next_gradient_id(&self) -> String {
         let mut coll = self.collector.borrow_mut();
         let id = coll.gradient_counter;
         coll.gradient_counter += 1;
         format!("grad{id}")
+    }
+
+    fn next_pattern_id(&self, preset: &PatternPreset) -> String {
+        let mut coll = self.collector.borrow_mut();
+        let id = coll.pattern_counter;
+        coll.pattern_counter += 1;
+        let slide = coll.current_slide_index + 1;
+        let safe_preset: String = preset
+            .as_ooxml()
+            .chars()
+            .filter(|character| character.is_ascii_alphanumeric())
+            .collect();
+        format!("pattern-s{slide}-{safe_preset}-{id}")
     }
 
     fn next_marker_id(&self, suffix: &str) -> String {
@@ -190,6 +250,7 @@ impl HtmlRenderer {
             counter: 0,
             current_slide_index: 0,
             gradient_counter: 0,
+            pattern_counter: 0,
             marker_counter: 0,
             asset_counter: 0,
         });
@@ -912,7 +973,10 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                     html,
                     "<svg viewBox=\"0 0 {svg_w:.1} {svg_h:.1}\" class=\"shape-svg\" preserveAspectRatio=\"none\">"
                 );
-                let grad_id = ctx.next_gradient_id();
+                let grad_id = match &resolved_fill {
+                    Fill::Pattern(pattern) => ctx.next_pattern_id(&pattern.preset),
+                    _ => ctx.next_gradient_id(),
+                };
                 let mut defs_buf = String::new();
                 let gradient_fill_ref =
                     svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf);
@@ -977,7 +1041,10 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                     "<svg viewBox=\"0 0 {svg_w:.1} {svg_h:.1}\" class=\"shape-svg\" preserveAspectRatio=\"none\">"
                 );
                 // Build <defs> for gradient and/or marker definitions
-                let grad_id = ctx.next_gradient_id();
+                let grad_id = match &resolved_fill {
+                    Fill::Pattern(pattern) => ctx.next_pattern_id(&pattern.preset),
+                    _ => ctx.next_gradient_id(),
+                };
                 let mut defs_buf = String::new();
                 let gradient_fill_ref =
                     svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf);
@@ -1120,7 +1187,10 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 "<svg viewBox=\"0 0 {w:.1} {h:.1}\" class=\"shape-svg\" preserveAspectRatio=\"none\">"
             );
             // Gradient fill support for custom geometry
-            let grad_id = ctx.next_gradient_id();
+            let grad_id = match &resolved_fill {
+                Fill::Pattern(pattern) => ctx.next_pattern_id(&pattern.preset),
+                _ => ctx.next_gradient_id(),
+            };
             let mut defs_buf = String::new();
             let gradient_fill_ref = svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf);
             // Emit marker defs for custom geometry arrows.
@@ -1917,6 +1987,10 @@ fn svg_gradient_def(
     ctx: &RenderCtx<'_>,
     html: &mut String,
 ) -> Option<String> {
+    if let Fill::Pattern(pattern) = fill {
+        let (foreground, background) = ctx.pattern_colors(pattern)?;
+        return patterns::svg_def(pattern, grad_id, &foreground, &background, html);
+    }
     if let Fill::Gradient(gf) = fill {
         let stops: Vec<(f64, String)> = gf
             .stops
@@ -2065,6 +2139,7 @@ mod tests {
             counter: 0,
             current_slide_index: 0,
             gradient_counter: 0,
+            pattern_counter: 0,
             marker_counter: 0,
             asset_counter: 0,
         });

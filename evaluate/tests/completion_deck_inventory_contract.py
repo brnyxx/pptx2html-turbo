@@ -67,4 +67,4 @@ def assert_inventory(
     case.assertEqual(expectations["pattern-fill-known"], "positive")
     case.assertEqual(expectations["pattern-fill-unknown"], "negative")
     unknown = next(row for row in rows if row["id"] == "pattern-fill-unknown")
-    case.assertEqual(unknown["expected_diagnostic"], "PPTX_COMPLETENESS_FALLBACK")
+    case.assertEqual(unknown["expected_diagnostic"], "DRAWINGML_PATTERN_UNSUPPORTED")

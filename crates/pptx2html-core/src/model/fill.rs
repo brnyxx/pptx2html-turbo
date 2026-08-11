@@ -1,4 +1,5 @@
 use super::color::Color;
+use super::pattern::PatternPreset;
 
 /// Fill (shape/slide background)
 #[derive(Debug, Clone, Default)]
@@ -11,6 +12,7 @@ pub enum Fill {
     Solid(SolidFill),
     Gradient(GradientFill),
     Image(ImageFill),
+    Pattern(PatternFill),
 }
 
 /// Image fill data for backgrounds
@@ -31,9 +33,17 @@ impl Fill {
                 .first()
                 .map(|s| s.color.clone())
                 .unwrap_or_else(Color::none),
+            Fill::Pattern(pattern) => pattern.foreground.clone().unwrap_or_else(Color::none),
             _ => Color::none(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct PatternFill {
+    pub preset: PatternPreset,
+    pub foreground: Option<Color>,
+    pub background: Option<Color>,
 }
 
 #[derive(Debug, Clone, Default)]
