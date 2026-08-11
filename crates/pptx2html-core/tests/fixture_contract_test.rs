@@ -176,6 +176,33 @@ fn package_builder_rejects_duplicate_part_paths() {
 }
 
 #[test]
+fn package_builder_rejects_generated_part_path_collisions_before_writing() {
+    for given_path in [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "ppt/presentation.xml",
+        "ppt/_rels/presentation.xml.rels",
+        "ppt/slideMasters/slideMaster1.xml",
+        "ppt/slideMasters/_rels/slideMaster1.xml.rels",
+        "ppt/slideLayouts/slideLayout1.xml",
+        "ppt/slideLayouts/_rels/slideLayout1.xml.rels",
+        "ppt/slides/slide1.xml",
+        "ppt/slides/_rels/slide1.xml.rels",
+        "ppt/theme/theme1.xml",
+    ] {
+        let given_package = PackageBuilder::new(SlideXml::from_body("").build()).with_part(
+            FeaturePart::extra(given_path, "application/octet-stream", b"collision"),
+        );
+
+        let when_error = given_package
+            .build()
+            .expect_err("generated part path is rejected before ZIP writing");
+
+        assert_eq!(when_error.code(), "RESERVED_PART_PATH");
+    }
+}
+
+#[test]
 fn package_builder_rejects_invalid_part_paths() {
     for given_part in [
         FeaturePart::extra("", "application/octet-stream", b"invalid"),
@@ -190,16 +217,74 @@ fn package_builder_rejects_invalid_part_paths() {
             "application/octet-stream",
             b"invalid",
         ),
+        FeaturePart::extra("ppt/./file", "application/octet-stream", b"invalid"),
+        FeaturePart::extra("ppt//file", "application/octet-stream", b"invalid"),
+        FeaturePart::extra("ppt/file/", "application/octet-stream", b"invalid"),
     ] {
         let given_package =
             PackageBuilder::new(SlideXml::from_body("").build()).with_part(given_part);
 
         let when_error = given_package
-            .validate()
-            .expect_err("invalid package part path is rejected");
+            .build()
+            .expect_err("invalid package part path is rejected before ZIP writing");
 
         assert_eq!(when_error.code(), "INVALID_PART_PATH");
     }
+}
+
+#[test]
+fn package_builder_rejects_invalid_or_duplicate_slide_relationship_ids() {
+    for given_id in ["", "1chart", "r:chart", "r chart"] {
+        let given_package = PackageBuilder::new(SlideXml::from_body("").build())
+            .with_slide_relationship(Relationship::external(
+                given_id,
+                "https://example.test/relationship",
+                "https://example.test/target",
+            ));
+
+        let when_error = given_package
+            .build()
+            .expect_err("invalid relationship ID is rejected before ZIP writing");
+
+        assert_eq!(when_error.code(), "INVALID_RELATIONSHIP_ID");
+    }
+
+    let given_package = PackageBuilder::new(SlideXml::from_body("").build())
+        .with_slide_relationship(Relationship::external(
+            "custom-id",
+            "https://example.test/relationship",
+            "https://example.test/first",
+        ))
+        .with_slide_relationship(Relationship::external(
+            "custom-id",
+            "https://example.test/relationship",
+            "https://example.test/second",
+        ));
+
+    let when_error = given_package
+        .build()
+        .expect_err("duplicate owner-local relationship ID is rejected before ZIP writing");
+
+    assert_eq!(when_error.code(), "DUPLICATE_RELATIONSHIP_ID");
+}
+
+#[test]
+fn package_builder_allows_ascii_and_unicode_ncname_relationship_ids() {
+    let given_package = PackageBuilder::new(SlideXml::from_body("").build())
+        .with_slide_relationship(Relationship::external(
+            "custom-id_7",
+            "https://example.test/relationship",
+            "https://example.test/ascii",
+        ))
+        .with_slide_relationship(Relationship::external(
+            "관계",
+            "https://example.test/relationship",
+            "https://example.test/unicode",
+        ));
+
+    given_package
+        .build()
+        .expect("ASCII and Unicode NCName relationship IDs are valid");
 }
 
 #[test]

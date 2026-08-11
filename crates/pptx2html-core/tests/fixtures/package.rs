@@ -10,7 +10,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipWriter};
 
 use super::parts::{
-    FeaturePart, PartValidationError, Relationship, content_types_xml, relationships_xml,
+    FeaturePart, Relationship, content_types_xml, relationships_xml,
     resolve_internal_relationship_target,
 };
 
@@ -24,13 +24,24 @@ const OFFICE_DOCUMENT_RELATIONSHIP: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
 const SLIDE_RELATIONSHIP: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+const ADDITIONAL_RESERVED_PATHS: &[&str] = &[
+    "docProps/core.xml",
+    "ppt/slideLayouts/_rels/slideLayout1.xml.rels",
+    "ppt/slideLayouts/slideLayout1.xml",
+    "ppt/slideMasters/_rels/slideMaster1.xml.rels",
+    "ppt/slideMasters/slideMaster1.xml",
+    "ppt/theme/theme1.xml",
+];
 
 #[derive(Debug)]
 pub enum FixtureError {
     DanglingRelationship { target: String },
     DuplicatePartPath,
+    ReservedPartPath,
     InvalidPartPath,
     InvalidXmlPart,
+    DuplicateRelationshipId,
+    InvalidRelationshipId,
     InvalidRelationshipTarget,
     Io(std::io::Error),
     Zip(zip::result::ZipError),
@@ -41,8 +52,11 @@ impl FixtureError {
         match self {
             Self::DanglingRelationship { .. } => "DANGLING_RELATIONSHIP",
             Self::DuplicatePartPath => "DUPLICATE_PART_PATH",
+            Self::ReservedPartPath => "RESERVED_PART_PATH",
             Self::InvalidPartPath => "INVALID_PART_PATH",
             Self::InvalidXmlPart => "INVALID_XML_PART",
+            Self::DuplicateRelationshipId => "DUPLICATE_RELATIONSHIP_ID",
+            Self::InvalidRelationshipId => "INVALID_RELATIONSHIP_ID",
             Self::InvalidRelationshipTarget => "INVALID_RELATIONSHIP_TARGET",
             Self::Io(_) => "FIXTURE_IO_ERROR",
             Self::Zip(_) => "FIXTURE_ZIP_ERROR",
@@ -50,14 +64,10 @@ impl FixtureError {
     }
 
     pub fn target(&self) -> Option<&str> {
-        match self {
-            Self::DanglingRelationship { target } => Some(target),
-            Self::DuplicatePartPath
-            | Self::InvalidPartPath
-            | Self::InvalidXmlPart
-            | Self::InvalidRelationshipTarget
-            | Self::Io(_)
-            | Self::Zip(_) => None,
+        if let Self::DanglingRelationship { target } = self {
+            Some(target)
+        } else {
+            None
         }
     }
 }
@@ -67,11 +77,7 @@ impl Display for FixtureError {
         match self {
             Self::Io(error) => Display::fmt(error, formatter),
             Self::Zip(error) => Display::fmt(error, formatter),
-            Self::DanglingRelationship { .. }
-            | Self::DuplicatePartPath
-            | Self::InvalidPartPath
-            | Self::InvalidXmlPart
-            | Self::InvalidRelationshipTarget => write!(formatter, "{}", self.code()),
+            _ => formatter.write_str(self.code()),
         }
     }
 }
@@ -117,21 +123,25 @@ impl PackageBuilder {
     }
 
     pub fn validate(&self) -> Result<(), FixtureError> {
+        let generated_entries = self.generated_entries();
         let mut part_paths = BTreeSet::new();
         for part in &self.parts {
+            if generated_entries.contains_key(&part.path)
+                || ADDITIONAL_RESERVED_PATHS.contains(&part.path.as_str())
+            {
+                return Err(FixtureError::ReservedPartPath);
+            }
+            if !valid_part_path(&part.path) {
+                return Err(FixtureError::InvalidPartPath);
+            }
             if !part_paths.insert(part.path.as_str()) {
                 return Err(FixtureError::DuplicatePartPath);
             }
-            match part.validate() {
-                Ok(()) => {}
-                Err(PartValidationError::InvalidPath) => {
-                    return Err(FixtureError::InvalidPartPath);
-                }
-                Err(PartValidationError::InvalidXml) => {
-                    return Err(FixtureError::InvalidXmlPart);
-                }
+            if !part.has_valid_xml() {
+                return Err(FixtureError::InvalidXmlPart);
             }
         }
+        validate_relationship_ids(&self.slide_relationships)?;
         let entries = self.entries();
         for (source, target) in [
             ("", PRESENTATION_PATH),
@@ -176,6 +186,14 @@ impl PackageBuilder {
     }
 
     fn entries(&self) -> BTreeMap<String, Vec<u8>> {
+        let mut entries = self.generated_entries();
+        for part in &self.parts {
+            entries.insert(part.path.clone(), part.bytes.clone());
+        }
+        entries
+    }
+
+    fn generated_entries(&self) -> BTreeMap<String, Vec<u8>> {
         let mut entries = BTreeMap::new();
         for (path, bytes) in [
             (
@@ -195,9 +213,6 @@ impl PackageBuilder {
             ),
         ] {
             entries.insert(path.to_owned(), bytes);
-        }
-        for part in &self.parts {
-            entries.insert(part.path.clone(), part.bytes.clone());
         }
         entries
     }
@@ -254,4 +269,59 @@ fn validate_relationship_target(
     Err(FixtureError::DanglingRelationship {
         target: resolved_target,
     })
+}
+
+fn validate_relationship_ids(relationships: &[Relationship]) -> Result<(), FixtureError> {
+    let mut ids = BTreeSet::new();
+    for relationship in relationships {
+        if !valid_ncname(&relationship.id) {
+            return Err(FixtureError::InvalidRelationshipId);
+        }
+        if !ids.insert(relationship.id.as_str()) {
+            return Err(FixtureError::DuplicateRelationshipId);
+        }
+    }
+    Ok(())
+}
+
+fn valid_part_path(path: &str) -> bool {
+    path.starts_with("ppt/")
+        && !path.contains('\\')
+        && path
+            .split('/')
+            .all(|segment| !matches!(segment, "" | "." | ".."))
+}
+
+fn valid_ncname(value: &str) -> bool {
+    let mut characters = value.chars();
+    characters.next().is_some_and(is_ncname_start) && characters.all(is_ncname_character)
+}
+
+fn is_ncname_start(character: char) -> bool {
+    matches!(
+        character,
+        'A'..='Z'
+            | '_'
+            | 'a'..='z'
+            | '\u{C0}'..='\u{D6}'
+            | '\u{D8}'..='\u{F6}'
+            | '\u{F8}'..='\u{2FF}'
+            | '\u{370}'..='\u{37D}'
+            | '\u{37F}'..='\u{1FFF}'
+            | '\u{200C}'..='\u{200D}'
+            | '\u{2070}'..='\u{218F}'
+            | '\u{2C00}'..='\u{2FEF}'
+            | '\u{3001}'..='\u{D7FF}'
+            | '\u{F900}'..='\u{FDCF}'
+            | '\u{FDF0}'..='\u{FFFD}'
+            | '\u{10000}'..='\u{EFFFF}'
+    )
+}
+
+fn is_ncname_character(character: char) -> bool {
+    is_ncname_start(character)
+        || matches!(
+            character,
+            '-' | '.' | '0'..='9' | '\u{B7}' | '\u{300}'..='\u{36F}' | '\u{203F}'..='\u{2040}'
+        )
 }

@@ -61,12 +61,6 @@ impl Relationship {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum PartValidationError {
-    InvalidPath,
-    InvalidXml,
-}
-
 #[derive(Clone, Debug)]
 pub struct FeaturePart {
     pub(super) path: String,
@@ -101,14 +95,8 @@ impl FeaturePart {
         }
     }
 
-    pub(super) fn validate(&self) -> Result<(), PartValidationError> {
-        if !valid_part_path(&self.path) {
-            return Err(PartValidationError::InvalidPath);
-        }
-        if self.xml && !valid_xml_document(&self.bytes) {
-            return Err(PartValidationError::InvalidXml);
-        }
-        Ok(())
+    pub(super) fn has_valid_xml(&self) -> bool {
+        !self.xml || valid_xml_document(&self.bytes)
     }
 
     fn xml(spec: XmlPartSpec, content: &str) -> Self {
@@ -192,14 +180,6 @@ fn standalone_xml(root: &str, content: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><{root} xmlns:a="{DRAWINGML_NAMESPACE}" xmlns:c="{CHART_NAMESPACE}" xmlns:mc="{MARKUP_COMPATIBILITY_NAMESPACE}" xmlns:p="{PRESENTATIONML_NAMESPACE}" xmlns:r="{RELATIONSHIP_NAMESPACE}">{content}</{root}>"#
     )
-}
-
-fn valid_part_path(path: &str) -> bool {
-    path.starts_with("ppt/")
-        && !path.contains('\\')
-        && path
-            .split('/')
-            .all(|segment| !matches!(segment, "" | "." | ".."))
 }
 
 fn valid_xml_document(bytes: &[u8]) -> bool {
