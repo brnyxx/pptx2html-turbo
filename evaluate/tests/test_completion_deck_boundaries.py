@@ -85,7 +85,7 @@ class CompletionDeckBoundaryTests(unittest.TestCase):
             for feature in FEATURES
             if feature.schema_expectation is SchemaExpectation.POSITIVE
         ]
-        self.assertEqual(len(positive), 33)
+        self.assertEqual(len(positive), 35)
         self.assertTrue(
             all(feature.expected_diagnostic is None for feature in positive)
         )

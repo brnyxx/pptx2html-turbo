@@ -123,6 +123,18 @@ FEATURES = (
     ),
     _f(15, "actions", "action-unsafe", '<Relationship Id="rIdUnsafe"', SR),
     _f(
+        15,
+        "actions",
+        "action-table-frame",
+        '<p:cNvPr id="17" name="action table">',
+    ),
+    _f(
+        15,
+        "actions",
+        "action-group",
+        '<p:cNvPr id="18" name="outer action group">',
+    ),
+    _f(
         16,
         "notes-comments",
         "notes-slide",

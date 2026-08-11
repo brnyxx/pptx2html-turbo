@@ -12,6 +12,7 @@ use super::{
 };
 
 pub(super) struct ParagraphRenderContext<'context, 'model> {
+    pub(super) owner: super::action_diagnostics::TextActionOwner,
     pub(super) text_style: &'context TextStyleCtx<'model>,
     pub(super) font_ref_font: Option<&'context str>,
     pub(super) font_ref_color: Option<&'context ResolvedColor>,
@@ -327,12 +328,29 @@ impl HtmlRenderer {
         auto_num_counters: &mut [i32; 9],
         html: &mut String,
     ) {
+        Self::render_table_paragraph(para, 0, (0, 0), 0, ctx, auto_num_counters, html);
+    }
+
+    pub(super) fn render_table_paragraph(
+        para: &TextParagraph,
+        shape_id: u32,
+        table_cell: (usize, usize),
+        paragraph_index: usize,
+        ctx: &RenderCtx<'_>,
+        auto_num_counters: &mut [i32; 9],
+        html: &mut String,
+    ) {
         let text_style = TextStyleCtx::default();
         Self::render_paragraph_with_defaults(
             para,
             ctx,
             auto_num_counters,
             ParagraphRenderContext {
+                owner: super::action_diagnostics::TextActionOwner {
+                    shape_id,
+                    paragraph_index,
+                    table_cell: Some(table_cell),
+                },
                 text_style: &text_style,
                 font_ref_font: None,
                 font_ref_color: None,
@@ -550,9 +568,11 @@ impl HtmlRenderer {
         // Get inherited run defaults for this level
         let run_defaults = inherited.and_then(|d| d.def_run_props.as_ref());
 
-        for run in &para.runs {
+        for (run_index, run) in para.runs.iter().enumerate() {
+            let identity = render.owner.run_identity(ctx, run_index);
             Self::render_run_with_defaults(
                 run,
+                &identity,
                 ctx,
                 RunRenderDefaults {
                     para_def_rpr: para.def_rpr.as_ref(),
@@ -575,6 +595,7 @@ impl HtmlRenderer {
     /// Render run with inherited defaults from txStyles/defaultTextStyle
     pub(super) fn render_run_with_defaults(
         run: &TextRun,
+        identity: &str,
         ctx: &RenderCtx<'_>,
         defaults: RunRenderDefaults<'_>,
         html: &mut String,
@@ -929,6 +950,7 @@ impl HtmlRenderer {
             run.hyperlink.as_deref(),
             &run_style,
             &segment_html,
+            identity,
             ctx,
             html,
         );

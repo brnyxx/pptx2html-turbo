@@ -1,12 +1,12 @@
 use std::fmt::Write;
 
 use crate::model::{
-    Action, ActionSet, ActionTarget, ActionTrigger, CapabilityStage, ConversionDiagnostic,
-    DiagnosticLocation, FallbackKind, FeatureFamily, Presentation, Shape, ShapeType, SupportTier,
-    TextBody, is_safe_external_uri,
+    Action, ActionSet, ActionTarget, CapabilityStage, ConversionDiagnostic, DiagnosticLocation,
+    FallbackKind, FeatureFamily, Presentation, Shape, ShapeType, SupportTier, TextBody,
+    is_safe_external_uri,
 };
 
-use super::{RenderCtx, escape_html};
+use super::{RenderCtx, action_diagnostics, escape_html};
 
 fn target_name(target: &ActionTarget) -> &'static str {
     match target {
@@ -50,64 +50,16 @@ fn action_attributes(actions: &ActionSet) -> String {
     attributes
 }
 
-fn emit_diagnostics(actions: &ActionSet, ctx: &RenderCtx<'_>, identity: &str) {
-    for action in [actions.click.as_ref(), actions.hover.as_ref()]
-        .into_iter()
-        .flatten()
-    {
-        let Some(issue) = action.issue else {
-            continue;
-        };
-        let trigger = match action.trigger {
-            ActionTrigger::Click => "click",
-            ActionTrigger::Hover => "hover",
-        };
-        let mode = action.relationship_mode.as_deref().unwrap_or("none");
-        let slide_index = ctx.collector.borrow().current_slide_index;
-        ctx.collector
-            .borrow_mut()
-            .diagnostics
-            .push(ConversionDiagnostic {
-                code: issue.code().to_owned(),
-                family: FeatureFamily::Text,
-                support_tier: SupportTier::Fallback,
-                stage: Some(CapabilityStage::Rendered),
-                location: DiagnosticLocation {
-                    slide_index: Some(slide_index),
-                    part_name: action.source_part.clone(),
-                    relationship_id: action.relationship_id.clone(),
-                    relationship_type: action.relationship_type.clone(),
-                    qualified_element_name: Some(
-                        match action.trigger {
-                            ActionTrigger::Click => "a:hlinkClick",
-                            ActionTrigger::Hover => "a:hlinkMouseOver",
-                        }
-                        .to_owned(),
-                    ),
-                    ..Default::default()
-                },
-                raw_reference: action.raw_action.clone(),
-                fallback_kind: FallbackKind::ActionMetadata,
-                reason: format!("trigger={trigger};mode={mode};identity={identity}"),
-            });
-    }
-}
-
 pub(super) fn render_run_wrapper(
     actions: &ActionSet,
     legacy_hyperlink: Option<&str>,
     run_style: &str,
     segment_html: &str,
+    identity: &str,
     ctx: &RenderCtx<'_>,
     html: &mut String,
 ) {
-    let identity = {
-        let mut collector = ctx.collector.borrow_mut();
-        let value = collector.action_counter;
-        collector.action_counter += 1;
-        format!("run-{value}")
-    };
-    emit_diagnostics(actions, ctx, &identity);
+    action_diagnostics::emit(actions, ctx, identity);
     if actions.click.is_none() && legacy_hyperlink.is_some_and(|uri| !is_safe_external_uri(uri)) {
         let slide_index = ctx.collector.borrow().current_slide_index;
         ctx.collector
@@ -172,7 +124,7 @@ pub(super) fn render_shape_surface(
     if actions.click.is_none() && actions.hover.is_none() {
         return;
     }
-    emit_diagnostics(actions, ctx, &format!("shape-{shape_id}"));
+    action_diagnostics::emit(actions, ctx, &format!("shape-{shape_id}"));
     let attributes = action_attributes(actions);
     let safe_external = actions
         .click
@@ -197,7 +149,7 @@ pub(super) fn render_shape_surface(
 
 pub(super) const RUNTIME: &str = r#"<script>(()=>{const go=(e)=>{const n=e.target.closest('[data-action]');if(!n)return;const a=n.dataset.action;if(!['slide','next','previous','first','last'].includes(a))return;e.preventDefault();const s=[...document.querySelectorAll('.slide')],c=n.closest('.slide'),i=s.indexOf(c);let t=a==='slide'?document.getElementById('slide-'+n.dataset.slideTarget):a==='first'?s[0]:a==='last'?s.at(-1):s[Math.max(0,Math.min(s.length-1,i+(a==='next'?1:-1)))];if(t)location.hash=t.id};document.addEventListener('click',go);document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role=button][data-action]')){e.preventDefault();e.target.click()}})})();</script>"#;
 
-pub(super) const CSS: &str = ".run[data-action],.run[data-hover-action]{pointer-events:auto}.shape-action-surface{position:absolute;inset:0;z-index:1;border:0;background:transparent;cursor:pointer}.shape-action-surface~.text-body{position:relative;z-index:2;pointer-events:none}";
+pub(super) const CSS: &str = ".run[data-action],.run[data-hover-action],.shape-action-surface~.shape>.shape-action-surface{pointer-events:auto}.shape-action-surface{position:absolute;inset:0;z-index:1;border:0;background:transparent;cursor:pointer}.shape-action-surface~.text-body,.shape-action-surface~table{position:relative}.shape-action-surface~.text-body,.shape-action-surface~table,.shape-action-surface~.shape{z-index:2;pointer-events:none}";
 
 fn text_has_actions(body: &TextBody) -> bool {
     body.paragraphs

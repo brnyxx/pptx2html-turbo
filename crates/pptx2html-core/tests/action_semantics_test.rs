@@ -1,4 +1,6 @@
 mod fixtures;
+#[path = "action_semantics_test/ownership.rs"]
+mod ownership;
 #[path = "action_semantics_test/security.rs"]
 mod security;
 

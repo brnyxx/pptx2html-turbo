@@ -18,6 +18,7 @@ REQUIRED_IDS = set(
     """adjustment-basic adjustment-arrows adjustment-remaining custom-geometry-unknown-formula
     pattern-fill-known pattern-fill-unknown picture-bullet-embedded picture-bullet-missing
     table-style-regions table-style-missing action-external action-internal action-unsafe
+    action-table-frame action-group
     notes-slide comments-legacy comments-modern comment-author-missing reflection
     drawingml-3d-fallback media-audio media-video media-unsupported transition-cut transition-fade
     animation-bounded animation-unsupported chart-direct chart-preview-fallback chart-placeholder

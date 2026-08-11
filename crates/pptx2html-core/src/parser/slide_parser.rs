@@ -90,6 +90,7 @@ fn parse_slide_impl<R: Read + Seek>(
     let mut reader = NsReader::from_str(xml);
     let mut slide = Slide::default();
     let mut depth: Vec<String> = Vec::new();
+    let mut presentationml_depth: Vec<bool> = Vec::new();
 
     let mut current_shape: Option<ShapeBuilder> = None;
     let mut text = TextSaxState::default();
@@ -98,7 +99,7 @@ fn parse_slide_impl<R: Read + Seek>(
     let mut fill = FillSaxState::default();
     let mut in_sp_pr = false;
     let mut in_nv_pr = false;
-    let mut in_c_nv_pr = false;
+    let mut c_nv_pr_owner = None;
 
     // Table parsing state
     let mut graphic_frame = GraphicFrameSaxState::default();
@@ -134,17 +135,31 @@ fn parse_slide_impl<R: Read + Seek>(
         match reader.read_event() {
             Ok(Event::Start(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
+                let resolved_namespace = reader.resolve_element(e.name()).0;
                 let drawingml = matches!(
-                    reader.resolve_element(e.name()).0,
+                    resolved_namespace,
                     ResolveResult::Bound(namespace)
                         if namespace.as_ref()
                             == b"http://schemas.openxmlformats.org/drawingml/2006/main"
                 );
                 depth.push(local.clone());
+                presentationml_depth.push(is_presentationml(&resolved_namespace));
 
-                if local == "cNvPr" && current_shape.is_some() {
-                    parse_shape_identity(e, &mut current_shape);
-                    in_c_nv_pr = true;
+                if local == "cNvPr"
+                    && is_presentationml(&resolved_namespace)
+                    && let Some(owner) = start_c_nv_pr_owner(
+                        &depth,
+                        &presentationml_depth,
+                        &current_shape,
+                        &grp_stack,
+                        graphic_frame.in_frame(),
+                    )
+                {
+                    parse_owner_identity(e, owner, &mut current_shape, &mut grp_stack);
+                    c_nv_pr_owner = Some(ActiveActionOwner {
+                        owner,
+                        depth: depth.len(),
+                    });
                     continue;
                 }
                 if local == "stCxn" && current_shape.as_ref().is_some_and(|s| s.is_connector) {
@@ -169,7 +184,9 @@ fn parse_slide_impl<R: Read + Seek>(
                     continue;
                 }
                 if drawingml
-                    && (text.in_run_properties || table.in_run_properties || in_c_nv_pr)
+                    && (text.in_run_properties
+                        || table.in_run_properties
+                        || c_nv_pr_owner.is_some_and(|active| depth.len() == active.depth + 1))
                     && action_parser::handle(
                         &local,
                         e,
@@ -179,6 +196,7 @@ fn parse_slide_impl<R: Read + Seek>(
                         resolved_relationship_id(&reader, e),
                         ActionTargets {
                             shape: &mut current_shape,
+                            group: group_actions(c_nv_pr_owner, &mut grp_stack),
                             shape_run: &mut text.run,
                             cell_run: &mut table.run,
                         },
@@ -194,6 +212,9 @@ fn parse_slide_impl<R: Read + Seek>(
                     // ── Group shape ──
                     "grpSp" => {
                         grp_stack.push(GroupContext {
+                            id: 0,
+                            name: String::new(),
+                            actions: ActionSet::default(),
                             shapes: Vec::new(),
                             position: Position::default(),
                             size: Size::default(),
@@ -405,15 +426,25 @@ fn parse_slide_impl<R: Read + Seek>(
             }
             Ok(Event::Empty(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
+                let resolved_namespace = reader.resolve_element(e.name()).0;
                 let drawingml = matches!(
-                    reader.resolve_element(e.name()).0,
+                    resolved_namespace,
                     ResolveResult::Bound(namespace)
                         if namespace.as_ref()
                             == b"http://schemas.openxmlformats.org/drawingml/2006/main"
                 );
 
-                if local == "cNvPr" && current_shape.is_some() {
-                    parse_shape_identity(e, &mut current_shape);
+                if local == "cNvPr"
+                    && is_presentationml(&resolved_namespace)
+                    && let Some(owner) = empty_c_nv_pr_owner(
+                        &depth,
+                        &presentationml_depth,
+                        &current_shape,
+                        &grp_stack,
+                        graphic_frame.in_frame(),
+                    )
+                {
+                    parse_owner_identity(e, owner, &mut current_shape, &mut grp_stack);
                     continue;
                 }
                 if local == "stCxn" && current_shape.as_ref().is_some_and(|s| s.is_connector) {
@@ -436,7 +467,9 @@ fn parse_slide_impl<R: Read + Seek>(
                     continue;
                 }
                 if drawingml
-                    && (text.in_run_properties || table.in_run_properties || in_c_nv_pr)
+                    && (text.in_run_properties
+                        || table.in_run_properties
+                        || c_nv_pr_owner.is_some_and(|active| depth.len() == active.depth))
                     && action_parser::handle(
                         &local,
                         e,
@@ -446,6 +479,7 @@ fn parse_slide_impl<R: Read + Seek>(
                         resolved_relationship_id(&reader, e),
                         ActionTargets {
                             shape: &mut current_shape,
+                            group: group_actions(c_nv_pr_owner, &mut grp_stack),
                             shape_run: &mut text.run,
                             cell_run: &mut table.run,
                         },
@@ -755,7 +789,9 @@ fn parse_slide_impl<R: Read + Seek>(
             }
             Ok(Event::End(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
+                let presentationml = is_presentationml(&reader.resolve_element(e.name()).0);
                 depth.pop();
+                presentationml_depth.pop();
 
                 preserved.capture_end(e, &local);
                 if table.handle_end(&local, &mut fill.current_color) {
@@ -819,6 +855,9 @@ fn parse_slide_impl<R: Read + Seek>(
                                 child_extent: gc.child_extent,
                             };
                             let shape = Shape {
+                                id: gc.id,
+                                name: gc.name,
+                                actions: gc.actions,
                                 position: gc.position,
                                 size: gc.size,
                                 shape_type: ShapeType::Group(gc.shapes, group_data),
@@ -927,7 +966,13 @@ fn parse_slide_impl<R: Read + Seek>(
                     "nvPr" => {
                         in_nv_pr = false;
                     }
-                    "cNvPr" => in_c_nv_pr = false,
+                    "cNvPr"
+                        if presentationml
+                            && c_nv_pr_owner
+                                .is_some_and(|active| active.depth == depth.len() + 1) =>
+                    {
+                        c_nv_pr_owner = None;
+                    }
                     // End of shape properties
                     "spPr" => {
                         in_sp_pr = false;
@@ -1024,6 +1069,139 @@ fn parse_shape_identity(e: &quick_xml::events::BytesStart<'_>, shape: &mut Optio
             .unwrap_or(0);
         sb.name = xml_utils::attr_str(e, "name").unwrap_or_default();
     }
+}
+
+#[derive(Clone, Copy)]
+enum ActionOwner {
+    Shape,
+    Group,
+}
+
+#[derive(Clone, Copy)]
+struct ActiveActionOwner {
+    owner: ActionOwner,
+    depth: usize,
+}
+
+fn is_presentationml(namespace: &ResolveResult<'_>) -> bool {
+    matches!(
+        namespace,
+        ResolveResult::Bound(value)
+            if value.as_ref()
+                == b"http://schemas.openxmlformats.org/presentationml/2006/main"
+    )
+}
+
+fn owner_for_parent(
+    owner_element: Option<&str>,
+    owner_is_presentationml: bool,
+    parent: Option<&str>,
+    parent_is_presentationml: bool,
+    shape: &Option<ShapeBuilder>,
+    groups: &[GroupContext],
+    in_graphic_frame: bool,
+) -> Option<ActionOwner> {
+    if !owner_is_presentationml || !parent_is_presentationml {
+        return None;
+    }
+    match (owner_element, parent) {
+        (Some("grpSp"), Some("nvGrpSpPr")) if !groups.is_empty() && shape.is_none() => {
+            Some(ActionOwner::Group)
+        }
+        (Some("graphicFrame"), Some("nvGraphicFramePr")) if in_graphic_frame && shape.is_some() => {
+            Some(ActionOwner::Shape)
+        }
+        (Some("pic"), Some("nvPicPr")) if shape.as_ref().is_some_and(|value| value.is_picture) => {
+            Some(ActionOwner::Shape)
+        }
+        (Some("cxnSp"), Some("nvCxnSpPr"))
+            if shape.as_ref().is_some_and(|value| value.is_connector) =>
+        {
+            Some(ActionOwner::Shape)
+        }
+        (Some("sp"), Some("nvSpPr"))
+            if !in_graphic_frame
+                && shape
+                    .as_ref()
+                    .is_some_and(|value| !value.is_picture && !value.is_connector) =>
+        {
+            Some(ActionOwner::Shape)
+        }
+        _ => None,
+    }
+}
+
+fn start_c_nv_pr_owner(
+    depth: &[String],
+    presentationml_depth: &[bool],
+    shape: &Option<ShapeBuilder>,
+    groups: &[GroupContext],
+    in_graphic_frame: bool,
+) -> Option<ActionOwner> {
+    owner_for_parent(
+        depth.get(depth.len().saturating_sub(3)).map(String::as_str),
+        presentationml_depth
+            .get(presentationml_depth.len().saturating_sub(3))
+            .copied()
+            .unwrap_or(false),
+        depth.get(depth.len().saturating_sub(2)).map(String::as_str),
+        presentationml_depth
+            .get(presentationml_depth.len().saturating_sub(2))
+            .copied()
+            .unwrap_or(false),
+        shape,
+        groups,
+        in_graphic_frame,
+    )
+}
+
+fn empty_c_nv_pr_owner(
+    depth: &[String],
+    presentationml_depth: &[bool],
+    shape: &Option<ShapeBuilder>,
+    groups: &[GroupContext],
+    in_graphic_frame: bool,
+) -> Option<ActionOwner> {
+    owner_for_parent(
+        depth.get(depth.len().saturating_sub(2)).map(String::as_str),
+        presentationml_depth
+            .get(presentationml_depth.len().saturating_sub(2))
+            .copied()
+            .unwrap_or(false),
+        depth.last().map(String::as_str),
+        presentationml_depth.last().copied().unwrap_or(false),
+        shape,
+        groups,
+        in_graphic_frame,
+    )
+}
+
+fn parse_owner_identity(
+    element: &quick_xml::events::BytesStart<'_>,
+    owner: ActionOwner,
+    shape: &mut Option<ShapeBuilder>,
+    groups: &mut [GroupContext],
+) {
+    match owner {
+        ActionOwner::Shape => parse_shape_identity(element, shape),
+        ActionOwner::Group => {
+            if let Some(group) = groups.last_mut() {
+                group.id = xml_utils::attr_str(element, "id")
+                    .and_then(|value| value.parse::<u32>().ok())
+                    .unwrap_or(0);
+                group.name = xml_utils::attr_str(element, "name").unwrap_or_default();
+            }
+        }
+    }
+}
+
+fn group_actions(
+    active: Option<ActiveActionOwner>,
+    groups: &mut [GroupContext],
+) -> Option<&mut ActionSet> {
+    matches!(active.map(|value| value.owner), Some(ActionOwner::Group))
+        .then(|| groups.last_mut().map(|group| &mut group.actions))
+        .flatten()
 }
 
 fn resolved_relationship_id(
@@ -1277,6 +1455,9 @@ impl ShapeBuilder {
 // ── Group shape context ──
 
 struct GroupContext {
+    id: u32,
+    name: String,
+    actions: ActionSet,
     shapes: Vec<Shape>,
     position: Position,
     size: Size,

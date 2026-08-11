@@ -125,6 +125,18 @@ RULES: Final = (
         part=SR,
     ),
     _r(
+        "action-table-frame",
+        "actions",
+        ".//p:graphicFrame/p:nvGraphicFramePr/p:cNvPr[@id='17']",
+        ("name", "action table"),
+    ),
+    _r(
+        "action-group",
+        "actions",
+        ".//p:grpSp/p:nvGrpSpPr/p:cNvPr[@id='18']",
+        ("name", "outer action group"),
+    ),
+    _r(
         "notes-slide",
         "notes-comments",
         ".//a:t",

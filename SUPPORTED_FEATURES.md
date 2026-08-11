@@ -80,6 +80,7 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Mouse-over action metadata | `<a:hlinkMouseOver>` | Approximate |
 | Internal slide / first / last / next / previous action | `<a:hlinkClick action="ppaction://...">` | Approximate |
 | Media, program, macro, file, and custom action preservation | `<a:hlinkClick action="...">` | fallback |
+| Group and table graphic-frame action ownership | `p:grpSp/p:nvGrpSpPr/p:cNvPr`, `p:graphicFrame/p:nvGraphicFramePr/p:cNvPr` | Approximate |
 | Text alignment | `<a:pPr algn="...">` | Supported |
 | Line spacing | `<a:lnSpc>` | Supported |
 | Space before/after | `<a:spcBef>` / `<a:spcAft>` | Supported |

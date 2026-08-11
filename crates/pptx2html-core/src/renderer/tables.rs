@@ -151,12 +151,17 @@ impl HtmlRenderer {
                 if let Some(ref tb) = cell.text_body {
                     let mut auto_num_counters: [i32; 9] = [0; 9];
                     let text_style = TextStyleCtx::from_local_list_style(tb.list_style.as_ref());
-                    for para in &tb.paragraphs {
+                    for (paragraph_index, para) in tb.paragraphs.iter().enumerate() {
                         Self::render_paragraph_with_defaults(
                             para,
                             ctx,
                             &mut auto_num_counters,
                             ParagraphRenderContext {
+                                owner: super::action_diagnostics::TextActionOwner {
+                                    shape_id: table_id,
+                                    paragraph_index,
+                                    table_cell: Some((row_idx, logical_col)),
+                                },
                                 text_style: &text_style,
                                 font_ref_font: None,
                                 font_ref_color: None,

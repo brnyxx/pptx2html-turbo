@@ -1,6 +1,7 @@
 //! HTML/CSS renderer
 //! Presentation model -> self-contained HTML string generation
 
+mod action_diagnostics;
 mod actions;
 mod bullets;
 mod charts;
@@ -52,7 +53,6 @@ struct UnresolvedCollector {
     pattern_counter: usize,
     marker_counter: usize,
     asset_counter: usize,
-    action_counter: usize,
 }
 
 /// Rendering context -- propagates theme/ClrMap references and full presentation
@@ -257,7 +257,6 @@ impl HtmlRenderer {
             pattern_counter: 0,
             marker_counter: 0,
             asset_counter: 0,
-            action_counter: 0,
         });
 
         let ctx = RenderCtx {
@@ -1487,12 +1486,17 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
             );
             // Track auto-number counters per level for this text body
             let mut auto_num_counters: [i32; 9] = [0; 9];
-            for para in &text_body.paragraphs {
+            for (paragraph_index, para) in text_body.paragraphs.iter().enumerate() {
                 Self::render_paragraph_with_defaults(
                     para,
                     ctx,
                     &mut auto_num_counters,
                     bullets::ParagraphRenderContext {
+                        owner: action_diagnostics::TextActionOwner {
+                            shape_id: shape.id,
+                            paragraph_index,
+                            table_cell: None,
+                        },
                         text_style: &text_style_ctx,
                         font_ref_font: font_ref_font.as_deref(),
                         font_ref_color: font_ref_color.as_ref(),
@@ -2160,7 +2164,6 @@ mod tests {
             pattern_counter: 0,
             marker_counter: 0,
             asset_counter: 0,
-            action_counter: 0,
         });
         (pres, collector)
     }

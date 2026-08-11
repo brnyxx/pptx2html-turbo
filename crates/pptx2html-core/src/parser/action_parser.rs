@@ -131,6 +131,7 @@ fn parsed_action(
 
 pub(crate) struct ActionTargets<'a> {
     pub(crate) shape: &'a mut Option<ShapeBuilder>,
+    pub(crate) group: Option<&'a mut crate::model::ActionSet>,
     pub(crate) shape_run: &'a mut Option<RunBuilder>,
     pub(crate) cell_run: &'a mut Option<RunBuilder>,
 }
@@ -165,6 +166,8 @@ pub(crate) fn handle(
         }
     } else if let Some(shape) = targets.shape {
         shape.actions.assign(action);
+    } else if let Some(group) = targets.group {
+        group.assign(action);
     }
     true
 }

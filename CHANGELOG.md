@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ### Rendering / Public API
 - Preserve click and mouse-over actions as typed `ActionSet` data across shapes, pictures, connectors, graphic frames, and shape/table text runs
 - Render only strict product-allowlisted `http`, `https`, and `mailto` links, use actual presentation slide order for internal navigation, and keep unsafe or unsupported actions inert with stable diagnostics
+- Preserve group and table graphic-frame action ownership, require exact PresentationML owner stacks, and use stable owner-derived run/table-cell diagnostic identities
 - Add public `Shape::actions`, `TextRun::actions`, typed action enums, and `FallbackKind::ActionMetadata`; exhaustive matches and struct literals require a next-semver-major source migration while the manifest version remains unchanged
 - Resolve package-defined DrawingML table styles in Office region precedence order, including theme-aware fills, text, outer/inside borders, explicit-cell overrides, and logical merged-cell coordinates
 - Preserve unavailable built-in and invalid table style IDs plus all six flags in `TABLE_STYLE_DEFINITION_UNAVAILABLE` diagnostics without synthesizing Office appearances
@@ -22,7 +23,7 @@ All notable changes to this project will be documented in this file.
 - Preserve scoped table-style `tblBg/effectRef` and border-side `lnRef` index/color/modifiers and diagnose them as unsupported without discarding sibling styles or inventing effects/lines
 
 ### Fixtures / Documentation
-- Expand `actions.pptx` to three presentation-ordered slides with nonsequential part names plus external, navigation, hover, media, blocked, shape, run, table, picture, and connector stimuli
+- Expand `actions.pptx` to three presentation-ordered slides with nonsequential part names plus external, navigation, hover, media, blocked, shape, nested group, table-frame/table-run, picture, and connector stimuli
 - Expand the completion table deck to a region matrix with explicit fill/noFill overrides and a horizontal merge row
 - Mark the header/footer-relative band origin as `[교차검증 필요]` because the Office application-order note does not define that offset
 

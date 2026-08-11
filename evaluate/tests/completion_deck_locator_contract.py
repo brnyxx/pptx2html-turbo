@@ -67,6 +67,8 @@ LOCATORS: Final = {
         '<a:hlinkClick action="ppaction://hlinkshowjump?jump=nextslide"/>'
     ),
     "action-unsafe": _l('<Relationship Id="rIdUnsafe"', SR),
+    "action-table-frame": _l('<p:cNvPr id="17" name="action table">'),
+    "action-group": _l('<p:cNvPr id="18" name="outer action group">'),
     "notes-slide": _l("<p:notes ", "ppt/notesSlides/notesSlide1.xml"),
     "comments-legacy": _l(
         "<p:text>LEGACY_COMMENT</p:text>", "ppt/comments/comment1.xml"

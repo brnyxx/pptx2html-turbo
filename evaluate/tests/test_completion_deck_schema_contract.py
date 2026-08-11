@@ -156,6 +156,38 @@ class CompletionDeckSchemaTests(unittest.TestCase):
             self.assertIsNotNone(
                 slide.find(".//a:prstGeom[@prst='actionButtonForwardNext']", NS)
             )
+            group = next(
+                item
+                for item in slide.findall(".//p:grpSp", NS)
+                if item.find("p:nvGrpSpPr/p:cNvPr", NS).get("name")
+                == "outer action group"
+            )
+            group_properties = group.find("p:nvGrpSpPr/p:cNvPr", NS)
+            self.assertEqual(
+                group_properties.find("a:hlinkClick", NS).get(f"{{{NS['r']}}}id"),
+                "rIdExternal",
+            )
+            self.assertEqual(
+                group_properties.find("a:hlinkMouseOver", NS).get("action"),
+                "ppaction://hlinkshowjump?jump=lastslide",
+            )
+            table = next(
+                item
+                for item in slide.findall(".//p:graphicFrame", NS)
+                if item.find("p:nvGraphicFramePr/p:cNvPr", NS).get("name")
+                == "action table"
+            )
+            table_properties = table.find("p:nvGraphicFramePr/p:cNvPr", NS)
+            self.assertEqual(
+                table_properties.find("a:hlinkClick", NS).get(f"{{{NS['r']}}}id"),
+                "rIdExternal",
+            )
+            self.assertEqual(
+                table_properties.find("a:hlinkMouseOver", NS).get("action"),
+                "ppaction://program",
+            )
+            table_run = table.find(".//a:rPr/a:hlinkClick", NS)
+            self.assertEqual(table_run.get(f"{{{NS['r']}}}id"), "rIdMailto")
 
     def test_missing_table_style_fixture_preserves_id_and_flags(self) -> None:
         with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:

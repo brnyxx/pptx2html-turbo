@@ -137,16 +137,10 @@ pub(crate) fn finish_frame<R: Read + Seek>(
     {
         return shape.take().map(ShapeBuilder::build);
     }
-    let shape = shape.take()?;
+    let mut shape = shape.take()?.build();
     let table = table.take()?;
-    Some(Shape {
-        id: shape.id,
-        name: shape.name,
-        position: shape.position,
-        size: shape.size,
-        shape_type: ShapeType::Table(table.build()),
-        ..Default::default()
-    })
+    shape.shape_type = ShapeType::Table(table.build());
+    Some(shape)
 }
 
 fn load_chart<R: Read + Seek>(

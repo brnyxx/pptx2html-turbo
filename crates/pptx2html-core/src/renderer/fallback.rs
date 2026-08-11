@@ -126,11 +126,16 @@ fn extract_relationship_id(xml: &str) -> Option<String> {
 }
 
 pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) {
-    diagnostics.sort_by(|left, right| diagnostic_key(left).cmp(&diagnostic_key(right)));
+    diagnostics.sort_by(|left, right| {
+        diagnostic_key(left)
+            .cmp(&diagnostic_key(right))
+            .then_with(|| super::action_diagnostics::compare(left, right))
+    });
     diagnostics.dedup_by(|left, right| {
-        !left.code.starts_with("ACTION_")
-            && !right.code.starts_with("ACTION_")
-            && diagnostic_key(left) == diagnostic_key(right)
+        super::action_diagnostics::exact_duplicate(left, right)
+            || (!left.code.starts_with("ACTION_")
+                && !right.code.starts_with("ACTION_")
+                && diagnostic_key(left) == diagnostic_key(right))
     });
 }
 

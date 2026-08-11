@@ -36,6 +36,8 @@ SCENARIO_CANONICAL: Final = {
     "action-external": "shape-hyperlink-and-action",
     "action-internal": "shape-hyperlink-and-action",
     "action-unsafe": "shape-hyperlink-and-action",
+    "action-table-frame": "shape-hyperlink-and-action",
+    "action-group": "shape-hyperlink-and-action",
     "notes-slide": "notes",
     "comments-legacy": "comments",
     "comments-modern": "comments",
