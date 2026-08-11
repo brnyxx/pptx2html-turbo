@@ -11,7 +11,7 @@ python3 -m evaluate.create_completion_decks \
   --output-dir /tmp/completion-decks-module
 ```
 
-Both commands use the committed `evaluate/preset_adjustments.json` by default and write ten small PPTX packages plus `manifest.json`. The output path must either not exist or be an empty directory; files and nonempty directories are refused without overwriting or partially adding files. The generator uses only the Python standard library and fixes ZIP entry order, timestamps, compression settings, XML bytes, and JSON serialization so repeated runs are byte-identical.
+Both commands use the committed `evaluate/preset_adjustments.json` by default and write ten small PPTX packages plus `manifest.json`. The output path must either not exist or be an empty, non-symlink directory; files, symlinks, and nonempty directories are refused. Artifacts are written to a temporary directory beside the target and the completed directory is published only after every write succeeds, so failures leave a nonexistent target absent and an existing empty target empty. The generator uses only the Python standard library and fixes ZIP entry order, timestamps, compression settings, XML bytes, and JSON serialization so repeated runs are byte-identical.
 
 The manifest maps every planned Tasks 8-21 feature id to an observable ZIP part and byte token. Tests open each package, validate the common PresentationML relationship graph, and require every locator to resolve to real OOXML. Every feature has `powerpoint_capture_required: true` and empty `native_evidence` slots. These slots are scaffolding only: generated decks contain no PowerPoint-native screenshots or claimed pixel expectations.
 

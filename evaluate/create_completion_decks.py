@@ -7,9 +7,12 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import suppress
 import json
 import logging
 from pathlib import Path
+import shutil
+import tempfile
 from typing import Final
 
 if __package__:
@@ -56,7 +59,21 @@ def generate(output: Path, adjustment_manifest: Path) -> None:
                 "task": feature.task,
                 "deck": f"{feature.deck}.pptx",
                 "id": feature.feature_id,
-                "stimulus": {"part": feature.part, "token": feature.token},
+                "stimulus": {
+                    "part": feature.part,
+                    "token": feature.token,
+                    **(
+                        {
+                            "negative": {
+                                "kind": feature.negative.kind,
+                                "part": feature.negative.part,
+                                "token": feature.negative.token,
+                            }
+                        }
+                        if feature.negative
+                        else {}
+                    ),
+                },
                 "powerpoint_capture_required": True,
                 "native_evidence": {"images": [], "metadata": None},
             }
@@ -67,16 +84,44 @@ def generate(output: Path, adjustment_manifest: Path) -> None:
     artifacts["manifest.json"] = (
         json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     ).encode()
+    _publish(output, artifacts)
+
+
+def _publish(output: Path, artifacts: dict[str, bytes]) -> None:
+    staging: Path | None = None
     try:
-        output.mkdir(parents=True, exist_ok=True)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(
+            tempfile.mkdtemp(prefix=f".{output.name}.stage-", dir=output.parent)
+        )
         for name, payload in sorted(artifacts.items()):
-            (output / name).write_bytes(payload)
+            if Path(name).name != name:
+                raise OSError("artifact name must not contain a path")
+            (staging / name).write_bytes(payload)
+        _validate_output(output)
+        existed = output.exists()
+        if existed:
+            output.rmdir()
+        try:
+            staging.replace(output)
+            staging = None
+        except OSError:
+            if existed:
+                with suppress(OSError):
+                    output.mkdir()
+            raise
     except OSError as error:
         raise ContractError(f"OUTPUT_WRITE_ERROR path={output}") from error
+    finally:
+        if staging is not None:
+            with suppress(OSError):
+                shutil.rmtree(staging)
 
 
 def _validate_output(output: Path) -> None:
     try:
+        if output.is_symlink():
+            raise ContractError(f"OUTPUT_DIR_SYMLINK path={output}")
         if output.exists() and not output.is_dir():
             raise ContractError(f"OUTPUT_DIR_NOT_DIRECTORY path={output}")
         if output.is_dir() and any(output.iterdir()):

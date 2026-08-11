@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 import zipfile
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Final
 from xml.etree import ElementTree
@@ -29,9 +30,14 @@ class FeatureRule:
     feature_id: str
     deck: str
     part: str
-    xpath: str
+    xpath: str | None
     attributes: tuple[tuple[str, str], ...] = ()
     text: str | None = None
+    negative: "NegativePredicate | None" = None
+
+
+class NegativePredicate(StrEnum):
+    PICTURE_RELATION_ABSENT = "picture_relation_absent"
 
 
 def _r(
@@ -43,6 +49,12 @@ def _r(
     text: str | None = None,
 ) -> FeatureRule:
     return FeatureRule(feature_id, deck, part, xpath, attributes, text)
+
+
+def _negative_r(
+    feature_id: str, deck: str, predicate: NegativePredicate
+) -> FeatureRule:
+    return FeatureRule(feature_id, deck, S, None, negative=predicate)
 
 
 RULES: Final = (
@@ -72,8 +84,10 @@ RULES: Final = (
         ".//a:buBlip/a:blip",
         (f"{{{NS['r']}}}embed", "rIdImage"),
     ),
-    _r(
-        "picture-bullet-missing", "picture-bullets", ".//a:buBlip/a:blip[not-supported]"
+    _negative_r(
+        "picture-bullet-missing",
+        "picture-bullets",
+        NegativePredicate.PICTURE_RELATION_ABSENT,
     ),
     _r(
         "table-style-regions",
@@ -196,9 +210,10 @@ def assert_feature_contract(case: unittest.TestCase, root: Path) -> None:
         with zipfile.ZipFile(root / f"{rule.deck}.pptx") as archive:
             case.assertIn(rule.part, archive.namelist(), rule.feature_id)
             xml = ElementTree.fromstring(archive.read(rule.part))
-            if rule.feature_id == "picture-bullet-missing":
+            if rule.negative is NegativePredicate.PICTURE_RELATION_ABSENT:
                 _assert_picture_bullet_absence(case, archive, xml)
                 continue
+            case.assertIsNotNone(rule.xpath, rule.feature_id)
             matches = xml.findall(rule.xpath, NS)
             if rule.text is not None:
                 matches = [element for element in matches if element.text == rule.text]

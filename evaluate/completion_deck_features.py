@@ -1,6 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class NegativeKind(StrEnum):
+    TOKEN_ABSENT = "token_absent"
+
+
+@dataclass(frozen=True, slots=True)
+class NegativeSpec:
+    kind: NegativeKind
+    part: str
+    token: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -10,14 +22,35 @@ class FeatureSpec:
     feature_id: str
     part: str
     token: str
+    negative: NegativeSpec | None = None
 
 
 S = "ppt/slides/slide1.xml"
 SR = "ppt/slides/_rels/slide1.xml.rels"
 
 
-def _f(task: int, deck: str, feature_id: str, token: str, part: str = S) -> FeatureSpec:
-    return FeatureSpec(task, deck, feature_id, part, token)
+def _f(
+    task: int,
+    deck: str,
+    feature_id: str,
+    token: str,
+    part: str = S,
+    negative: NegativeSpec | None = None,
+) -> FeatureSpec:
+    return FeatureSpec(task, deck, feature_id, part, token, negative)
+
+
+ABSENT_REL = NegativeSpec(NegativeKind.TOKEN_ABSENT, SR, "rIdMissing")
+ABSENT_TABLE_STYLE = NegativeSpec(
+    NegativeKind.TOKEN_ABSENT,
+    "ppt/_rels/presentation.xml.rels",
+    "tableStyles",
+)
+ABSENT_AUTHOR = NegativeSpec(
+    NegativeKind.TOKEN_ABSENT,
+    "ppt/authors/author1.xml",
+    'authorId="404"',
+)
 
 
 FEATURES = (
@@ -45,6 +78,7 @@ FEATURES = (
         "picture-bullets",
         "picture-bullet-missing",
         "<a:buBlip><a:blip/></a:buBlip>",
+        negative=ABSENT_REL,
     ),
     _f(
         14,
@@ -57,6 +91,7 @@ FEATURES = (
         "table-styles",
         "table-style-missing",
         "{22222222-2222-2222-2222-222222222222}",
+        negative=ABSENT_TABLE_STYLE,
     ),
     _f(15, "actions", "action-external", '<Relationship Id="rIdExternal"', SR),
     _f(
@@ -93,6 +128,7 @@ FEATURES = (
         "comment-author-missing",
         '<p:cm authorId="404"',
         "ppt/comments/comment1.xml",
+        negative=ABSENT_AUTHOR,
     ),
     _f(17, "reflection-3d", "reflection", "<a:reflection "),
     _f(17, "reflection-3d", "drawingml-3d-fallback", "<a:scene3d>"),

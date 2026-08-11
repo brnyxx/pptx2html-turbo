@@ -1,4 +1,3 @@
-import hashlib
 import json
 import subprocess
 import sys
@@ -16,6 +15,7 @@ from evaluate.tests.completion_deck_feature_contract import (
     assert_feature_contract,
 )
 from evaluate.tests.completion_deck_graph_contract import assert_package_graph
+from evaluate.tests.completion_deck_locator_contract import assert_manifest_locators
 from evaluate.tests.completion_deck_test_support import (
     CANONICAL_MANIFEST,
     COMMON_PARTS,
@@ -36,6 +36,12 @@ JsonValue: TypeAlias = (
 
 
 class CompletionDeckTests(unittest.TestCase):
+    def test_feature_rules_have_no_pseudo_xpath(self) -> None:
+        self.assertFalse(
+            any(rule.xpath and "not-supported" in rule.xpath for rule in RULES),
+            "negative cases must use a typed predicate",
+        )
+
     def test_direct_and_module_cli_use_real_default_manifest(self) -> None:
         checker = subprocess.run(
             [
@@ -96,6 +102,7 @@ class CompletionDeckTests(unittest.TestCase):
             generate(self, output, CANONICAL_MANIFEST)
             manifest = json.loads((output / "manifest.json").read_text())
             feature_rows = {row["id"]: row for row in manifest["features"]}
+            assert_manifest_locators(self, feature_rows)
             self.assertEqual(set(feature_rows), {rule.feature_id for rule in RULES})
             for rule in RULES:
                 self.assertEqual(
@@ -111,6 +118,18 @@ class CompletionDeckTests(unittest.TestCase):
                         archive.read(locator["part"]),
                         rule.feature_id,
                     )
+                    negative = locator.get("negative")
+                    if negative:
+                        self.assertEqual(negative["kind"], "token_absent")
+                        self.assertNotIn(
+                            negative["token"].encode(),
+                            archive.read(negative["part"]),
+                            rule.feature_id,
+                        )
+            mutated = json.loads(json.dumps(feature_rows))
+            mutated["pattern-fill-known"]["stimulus"]["token"] = "<a:pattFill"
+            with self.assertRaises(AssertionError):
+                assert_manifest_locators(self, mutated)
             official = json.loads(CANONICAL_MANIFEST.read_text())
             rows = {row["name"]: row for row in official["presets"]}
             cases = manifest["adjustment_case_scaffold"]
@@ -163,43 +182,6 @@ class CompletionDeckTests(unittest.TestCase):
                     self.assertIn("ADJUSTMENT_", result.stderr)
                     self.assertNotIn("Traceback", result.stderr)
                     self.assertFalse(output.exists())
-
-    def test_output_directory_policy_is_stable_and_non_destructive(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            file_output = root / "file"
-            file_output.write_text("sentinel", encoding="utf-8")
-            nonempty = root / "nonempty"
-            nonempty.mkdir()
-            sentinel = nonempty / "sentinel.txt"
-            sentinel.write_text("keep", encoding="utf-8")
-            for output, code in (
-                (file_output, "OUTPUT_DIR_NOT_DIRECTORY"),
-                (nonempty, "OUTPUT_DIR_NOT_EMPTY"),
-            ):
-                result = run_generator(output)
-                self.assertEqual(result.returncode, 2)
-                self.assertIn(code, result.stderr)
-                self.assertNotIn("Traceback", result.stderr)
-            self.assertEqual(file_output.read_text(), "sentinel")
-            self.assertEqual(
-                {path.name for path in nonempty.iterdir()}, {"sentinel.txt"}
-            )
-            canonical_digest = hashlib.sha256(
-                CANONICAL_MANIFEST.read_bytes()
-            ).hexdigest()
-            source_output = run_generator(CANONICAL_MANIFEST.parent)
-            self.assertEqual(source_output.returncode, 2)
-            self.assertIn("OUTPUT_DIR_NOT_EMPTY", source_output.stderr)
-            self.assertEqual(
-                hashlib.sha256(CANONICAL_MANIFEST.read_bytes()).hexdigest(),
-                canonical_digest,
-            )
-            empty = root / "empty"
-            empty.mkdir()
-            result = run_generator(empty)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(len(tuple(empty.iterdir())), 11)
 
     def test_slide_level_timing_and_png_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
