@@ -2527,23 +2527,45 @@ fn test_left_up_arrow_default_path_matches_extracted_office_polygon() {
 }
 
 #[test]
-fn test_right_brace_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("rightBrace", 120.0, 100.0, &default_adj).unwrap();
+fn test_right_brace_default_follows_official_continuous_formula() {
+    let default_path = preset_shape_svg("rightBrace", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "rightBrace",
+        120.0,
+        100.0,
+        &HashMap::from([
+            ("adj1".to_string(), 8_333.0),
+            ("adj2".to_string(), 50_000.0),
+        ]),
+    )
+    .unwrap();
 
-    assert!(path.contains("M 3.6,1.4"));
-    assert!(path.contains("116.4,48.4"));
-    assert!(path.contains("3.6,95.5"));
+    assert_eq!(default_path, explicit_path);
+    assert!(default_path.starts_with("M0,0 A60.0,8.3"));
+    assert!(default_path.contains("L60.0,41.7"));
+    assert_eq!(default_path.matches('A').count(), 4);
+    assert!(default_path.ends_with('Z'));
 }
 
 #[test]
-fn test_left_brace_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("leftBrace", 120.0, 100.0, &default_adj).unwrap();
+fn test_left_brace_default_follows_official_continuous_formula() {
+    let default_path = preset_shape_svg("leftBrace", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "leftBrace",
+        120.0,
+        100.0,
+        &HashMap::from([
+            ("adj1".to_string(), 8_333.0),
+            ("adj2".to_string(), 50_000.0),
+        ]),
+    )
+    .unwrap();
 
-    assert!(path.contains("M 116.4,95.5"));
-    assert!(path.contains("3.6,48.4"));
-    assert!(path.contains("116.4,1.5"));
+    assert_eq!(default_path, explicit_path);
+    assert!(default_path.starts_with("M120.0,100.0 A60.0,8.3"));
+    assert!(default_path.contains("L60.0,58.3"));
+    assert_eq!(default_path.matches('A').count(), 4);
+    assert!(default_path.ends_with('Z'));
 }
 
 #[test]

@@ -2,6 +2,9 @@ mod fixtures;
 
 use fixtures::MinimalPptx;
 use pptx2html_core::convert_bytes;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+use std::process::Command;
 
 const OFFICIAL_BASIC_PRESET_COUNT: usize = 69;
 const OFFICIAL_BASIC_ADJUSTMENT_COUNT: usize = 46;
@@ -351,6 +354,91 @@ fn assert_approx(actual: f64, expected: f64) {
     );
 }
 
+fn json_array<'a>(source: &'a str, key: &str) -> &'a str {
+    let field = format!(r#""{key}""#);
+    let field_start = source.find(&field).expect("JSON field");
+    let array_start = source[field_start + field.len()..]
+        .find('[')
+        .map(|offset| field_start + field.len() + offset)
+        .expect("JSON array");
+    let mut depth = 0;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (offset, character) in source[array_start..].char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match character {
+            '"' => in_string = true,
+            '[' => depth += 1,
+            ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &source[array_start + 1..array_start + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated JSON array: {key}");
+}
+
+fn json_objects(array: &str) -> Vec<&str> {
+    let mut objects = Vec::new();
+    let mut start = None;
+    let mut depth = 0;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (offset, character) in array.char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match character {
+            '"' => in_string = true,
+            '{' => {
+                if depth == 0 {
+                    start = Some(offset);
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    objects.push(&array[start.expect("JSON object start")..=offset]);
+                }
+            }
+            _ => {}
+        }
+    }
+    objects
+}
+
+fn json_string_field<'a>(source: &'a str, key: &str) -> &'a str {
+    let field = format!(r#""{key}""#);
+    let field_start = source.find(&field).expect("JSON string field");
+    let value_source = &source[field_start + field.len()..];
+    let value_start = value_source.find('"').expect("JSON string value") + 1;
+    let value_end = value_source[value_start..]
+        .find('"')
+        .map(|offset| value_start + offset)
+        .expect("JSON string end");
+    &value_source[value_start..value_end]
+}
+
 fn assert_finite_path(path: &str, case: AdjustmentCase, value: f64) {
     assert!(
         !path.contains("NaN") && !path.to_ascii_lowercase().contains("inf"),
@@ -384,18 +472,68 @@ fn assert_finite_path(path: &str, case: AdjustmentCase, value: f64) {
 
 #[test]
 fn official_basic_adjustment_table_matches_task_two_bundle() {
-    // Given: Task 2's ECMA-derived basic-family contract.
-    let presets = CASES
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let checker = Command::new("python3")
+        .current_dir(&repo_root)
+        .args([
+            "evaluate/check_preset_adjustments.py",
+            "--repo-root",
+            ".",
+            "--bundle",
+            "basic",
+        ])
+        .output()
+        .expect("run Task 2 checker");
+    assert!(
+        checker.status.success(),
+        "Task 2 checker failed: {}",
+        String::from_utf8_lossy(&checker.stderr)
+    );
+    let checker_stdout = String::from_utf8(checker.stdout).expect("checker UTF-8");
+    assert!(
+        checker_stdout.contains(&format!("presets={OFFICIAL_BASIC_PRESET_COUNT}")),
+        "unexpected checker inventory: {checker_stdout}"
+    );
+    assert!(checker_stdout.contains("manifest_keys_never_consumed=0"));
+
+    let table_presets = CASES
         .iter()
         .map(|case| case.preset)
-        .collect::<std::collections::HashSet<_>>();
+        .collect::<BTreeSet<_>>();
+    let manifest = include_str!("../../../evaluate/preset_adjustments.json");
+    let mut manifest_cases = BTreeMap::new();
+    for row in json_objects(json_array(manifest, "presets")) {
+        let preset = json_string_field(row, "name");
+        if !table_presets.contains(preset) {
+            continue;
+        }
+        for adjustment in json_objects(json_array(row, "adjustments")) {
+            let key = json_string_field(adjustment, "name");
+            let default_formula = json_string_field(adjustment, "default_formula");
+            let constrained = !json_objects(json_array(adjustment, "constraints")).is_empty();
+            manifest_cases.insert((preset, key), (default_formula, constrained));
+        }
+    }
 
-    // When: the independently encoded adjustment table is counted.
-    let adjustment_count = CASES.len();
-
-    // Then: all 46 keys are represented and belong to the 69-preset basic bundle.
-    assert_eq!(adjustment_count, OFFICIAL_BASIC_ADJUSTMENT_COUNT);
-    assert!(presets.len() <= OFFICIAL_BASIC_PRESET_COUNT);
+    assert_eq!(manifest_cases.len(), OFFICIAL_BASIC_ADJUSTMENT_COUNT);
+    assert_eq!(CASES.len(), manifest_cases.len());
+    for case in CASES {
+        let &(default_formula, constrained) = manifest_cases
+            .get(&(case.preset, case.key))
+            .unwrap_or_else(|| panic!("manifest missing {}.{}", case.preset, case.key));
+        assert_eq!(
+            default_formula,
+            format!("val {:.0}", case.default),
+            "{}.{} default",
+            case.preset,
+            case.key
+        );
+        assert_eq!(
+            constrained, case.constrained,
+            "{}.{} constraint",
+            case.preset, case.key
+        );
+    }
 }
 
 #[test]
@@ -528,6 +666,10 @@ fn official_axes_are_continuous_at_three_non_anchor_values() {
         ("bracketPair", "adj", [11_111.0, 12_222.0, 13_333.0]),
         ("halfFrame", "adj1", [21_111.0, 22_222.0, 23_333.0]),
         ("halfFrame", "adj2", [21_111.0, 22_222.0, 23_333.0]),
+        ("leftBrace", "adj1", [7_111.0, 9_333.0, 11_555.0]),
+        ("leftBrace", "adj2", [41_111.0, 53_333.0, 65_555.0]),
+        ("rightBrace", "adj1", [7_111.0, 9_333.0, 11_555.0]),
+        ("rightBrace", "adj2", [41_111.0, 53_333.0, 65_555.0]),
         ("snip2SameRect", "adj1", [11_111.0, 12_222.0, 13_333.0]),
         ("snip2SameRect", "adj2", [11_111.0, 12_222.0, 13_333.0]),
         ("snip2DiagRect", "adj1", [11_111.0, 12_222.0, 13_333.0]),
@@ -554,7 +696,94 @@ fn official_axes_are_continuous_at_three_non_anchor_values() {
 }
 
 #[test]
-fn multi_key_order_and_unknown_legacy_key_do_not_override_official_values() {
+fn every_multi_key_shape_preserves_order_and_key_isolation() {
+    let cases = [
+        (
+            "pentagon",
+            vec![("hf", 90_000.0), ("vf", 90_000.0)],
+            vec![100_000.0, 100_000.0],
+        ),
+        (
+            "hexagon",
+            vec![("adj", 20_000.0), ("vf", 90_000.0)],
+            vec![35_000.0, 110_000.0],
+        ),
+        (
+            "snip2SameRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            vec![30_000.0, 40_000.0],
+        ),
+        (
+            "snip2DiagRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            vec![30_000.0, 40_000.0],
+        ),
+        (
+            "snipRoundRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            vec![30_000.0, 40_000.0],
+        ),
+        (
+            "round2SameRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            vec![30_000.0, 40_000.0],
+        ),
+        (
+            "round2DiagRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            vec![30_000.0, 40_000.0],
+        ),
+        (
+            "halfFrame",
+            vec![("adj1", 20_000.0), ("adj2", 30_000.0)],
+            vec![30_000.0, 40_000.0],
+        ),
+        (
+            "leftBrace",
+            vec![("adj1", 8_000.0), ("adj2", 40_000.0)],
+            vec![12_000.0, 60_000.0],
+        ),
+        (
+            "rightBrace",
+            vec![("adj1", 8_000.0), ("adj2", 40_000.0)],
+            vec![12_000.0, 60_000.0],
+        ),
+        (
+            "ellipseRibbon",
+            vec![("adj1", 20_000.0), ("adj2", 40_000.0), ("adj3", 10_000.0)],
+            vec![40_000.0, 60_000.0, 15_000.0],
+        ),
+        (
+            "ellipseRibbon2",
+            vec![("adj1", 20_000.0), ("adj2", 40_000.0), ("adj3", 10_000.0)],
+            vec![40_000.0, 60_000.0, 15_000.0],
+        ),
+        (
+            "corner",
+            vec![("adj1", 30_000.0), ("adj2", 40_000.0)],
+            vec![40_000.0, 50_000.0],
+        ),
+        (
+            "nonIsoscelesTrapezoid",
+            vec![("adj1", 20_000.0), ("adj2", 30_000.0)],
+            vec![30_000.0, 40_000.0],
+        ),
+    ];
+
+    for (preset, base, alternatives) in cases {
+        let forward = render_path_with(preset, &base, 1_524_000, 952_500);
+        let reversed = base.iter().copied().rev().collect::<Vec<_>>();
+        let reversed = render_path_with(preset, &reversed, 1_524_000, 952_500);
+        assert_eq!(forward, reversed, "{preset} key order");
+
+        for (index, (key, _)) in base.iter().enumerate() {
+            let mut isolated = base.clone();
+            isolated[index].1 = alternatives[index];
+            let changed = render_path_with(preset, &isolated, 1_524_000, 952_500);
+            assert_ne!(forward, changed, "{preset}.{key} isolation");
+        }
+    }
+
     for preset in [
         "snip2DiagRect",
         "snipRoundRect",
@@ -567,35 +796,84 @@ fn multi_key_order_and_unknown_legacy_key_do_not_override_official_values() {
             1_524_000,
             952_500,
         );
-        let reversed = render_path_with(
-            preset,
-            &[("adj2", 32_109.0), ("adj1", 12_345.0)],
-            1_524_000,
-            952_500,
-        );
         let with_unknown = render_path_with(
             preset,
             &[("adj", 45_000.0), ("adj1", 12_345.0), ("adj2", 32_109.0)],
             1_524_000,
             952_500,
         );
-        assert_eq!(forward, reversed, "{preset} key order");
         assert_eq!(forward, with_unknown, "{preset} legacy override");
     }
+}
 
-    let forward = render_path_with(
+#[test]
+fn coupled_constraints_change_only_at_official_bounds() {
+    for preset in ["leftBrace", "rightBrace"] {
+        let clamped = render_path_with(
+            preset,
+            &[("adj1", 40_000.0), ("adj2", 20_000.0)],
+            952_500,
+            952_500,
+        );
+        let boundary = render_path_with(
+            preset,
+            &[("adj1", 10_000.0), ("adj2", 20_000.0)],
+            952_500,
+            952_500,
+        );
+        assert_eq!(clamped, boundary, "{preset} dynamic maxAdj1");
+    }
+
+    for preset in ["ellipseRibbon", "ellipseRibbon2"] {
+        let clamped = render_path_with(
+            preset,
+            &[("adj1", 40_000.0), ("adj2", 60_000.0), ("adj3", 0.0)],
+            952_500,
+            952_500,
+        );
+        let boundary = render_path_with(
+            preset,
+            &[("adj1", 40_000.0), ("adj2", 60_000.0), ("adj3", 10_000.0)],
+            952_500,
+            952_500,
+        );
+        assert_eq!(clamped, boundary, "{preset} adj3 lower bound from adj1");
+    }
+
+    let clamped = render_path_with(
         "halfFrame",
-        &[("adj1", 22_345.0), ("adj2", 42_109.0)],
-        1_524_000,
+        &[("adj1", 90_000.0), ("adj2", 80_000.0)],
+        952_500,
         952_500,
     );
-    let reversed = render_path_with(
+    let boundary = render_path_with(
         "halfFrame",
-        &[("adj2", 42_109.0), ("adj1", 22_345.0)],
-        1_524_000,
+        &[("adj1", 20_000.0), ("adj2", 80_000.0)],
+        952_500,
         952_500,
     );
-    assert_eq!(forward, reversed, "halfFrame key order");
+    assert_eq!(clamped, boundary, "halfFrame dynamic maxAdj1");
+}
+
+#[test]
+fn brace_official_defaults_are_continuous_with_epsilon_neighbors() {
+    for preset in ["leftBrace", "rightBrace"] {
+        let default = render_path_with(
+            preset,
+            &[("adj1", 8_333.0), ("adj2", 50_000.0)],
+            1_524_000,
+            952_500,
+        );
+        for neighbor in [
+            [("adj1", 8_332.0), ("adj2", 50_000.0)],
+            [("adj1", 8_334.0), ("adj2", 50_000.0)],
+            [("adj1", 8_333.0), ("adj2", 49_999.0)],
+            [("adj1", 8_333.0), ("adj2", 50_001.0)],
+        ] {
+            let neighbor = render_path_with(preset, &neighbor, 1_524_000, 952_500);
+            assert_eq!(default, neighbor, "{preset} default discontinuity");
+        }
+    }
 }
 
 #[test]
@@ -644,6 +922,92 @@ fn official_landmarks_match_ecma_derived_coordinates() {
 }
 
 #[test]
+fn every_multi_key_shape_matches_official_derived_landmarks() {
+    let cases = [
+        (
+            "pentagon",
+            vec![("hf", 100_000.0), ("vf", 100_000.0)],
+            ["M3.9,34.5", "L127.0,90.5"],
+        ),
+        (
+            "hexagon",
+            vec![("adj", 20_000.0), ("vf", 90_000.0)],
+            ["L20.0,11.0", "L140.0,89.0"],
+        ),
+        (
+            "snip2SameRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            ["M10.0,0", "L140.0,100.0"],
+        ),
+        (
+            "snip2DiagRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            ["M10.0,0", "L20.0,100.0"],
+        ),
+        (
+            "snipRoundRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            ["M10.0,0", "L140.0,0"],
+        ),
+        (
+            "round2SameRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            ["A10.0,10.0", "A20.0,20.0"],
+        ),
+        (
+            "round2DiagRect",
+            vec![("adj1", 10_000.0), ("adj2", 20_000.0)],
+            ["A10.0,10.0", "A20.0,20.0"],
+        ),
+        (
+            "halfFrame",
+            vec![("adj1", 20_000.0), ("adj2", 30_000.0)],
+            ["L128.0,20.0", "L30.0,81.2"],
+        ),
+        (
+            "leftBrace",
+            vec![("adj1", 8_333.0), ("adj2", 50_000.0)],
+            ["A80.0,8.3", "L80.0,58.3"],
+        ),
+        (
+            "rightBrace",
+            vec![("adj1", 8_333.0), ("adj2", 50_000.0)],
+            ["A80.0,8.3", "L80.0,41.7"],
+        ),
+        (
+            "ellipseRibbon",
+            vec![("adj1", 20_000.0), ("adj2", 40_000.0), ("adj3", 10_000.0)],
+            ["M0,80.0", "L160.0,10.0"],
+        ),
+        (
+            "ellipseRibbon2",
+            vec![("adj1", 20_000.0), ("adj2", 40_000.0), ("adj3", 10_000.0)],
+            ["M0,20.0", "L160.0,90.0"],
+        ),
+        (
+            "corner",
+            vec![("adj1", 30_000.0), ("adj2", 40_000.0)],
+            ["L40.0,0", "L40.0,70.0"],
+        ),
+        (
+            "nonIsoscelesTrapezoid",
+            vec![("adj1", 20_000.0), ("adj2", 30_000.0)],
+            ["M20.0,0", "L130.0,0"],
+        ),
+    ];
+
+    for (preset, adjustments, landmarks) in cases {
+        let path = render_path_with(preset, &adjustments, 1_524_000, 952_500);
+        for landmark in landmarks {
+            assert!(
+                path.contains(landmark),
+                "{preset}: missing {landmark} in {path}"
+            );
+        }
+    }
+}
+
+#[test]
 fn official_paths_keep_closed_topology_and_expected_arc_counts() {
     for (preset, adjustments, arc_count) in [
         ("round1Rect", vec![("adj", 23_456.0)], 1),
@@ -664,6 +1028,8 @@ fn official_paths_keep_closed_topology_and_expected_arc_counts() {
         ),
         ("bracePair", vec![("adj", 12_345.0)], 8),
         ("bracketPair", vec![("adj", 23_456.0)], 4),
+        ("leftBrace", vec![("adj1", 8_333.0), ("adj2", 50_000.0)], 4),
+        ("rightBrace", vec![("adj1", 8_333.0), ("adj2", 50_000.0)], 4),
     ] {
         let path = render_path_with(preset, &adjustments, 1_524_000, 952_500);
         assert_eq!(
@@ -700,6 +1066,8 @@ fn safe_official_values_remain_inside_square_view_box() {
             vec![("adj1", 20_000.0), ("adj2", 30_000.0)],
         ),
         ("halfFrame", vec![("adj1", 20_000.0), ("adj2", 40_000.0)]),
+        ("leftBrace", vec![("adj1", 8_333.0), ("adj2", 50_000.0)]),
+        ("rightBrace", vec![("adj1", 8_333.0), ("adj2", 50_000.0)]),
     ] {
         let path = render_path_with(preset, &adjustments, 952_500, 952_500);
         assert!(
