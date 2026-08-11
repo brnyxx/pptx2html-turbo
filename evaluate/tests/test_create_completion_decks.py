@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 import subprocess
@@ -7,125 +6,161 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree
 
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-GENERATOR = REPO_ROOT / "evaluate" / "create_completion_decks.py"
-DECK_NAMES = (
-    "patterns",
-    "picture-bullets",
-    "table-styles",
-    "actions",
-    "notes-comments",
-    "reflection-3d",
-    "media",
-    "timing-transitions",
-    "charts",
-    "fallback-domains",
+from evaluate.tests.completion_deck_test_support import (
+    COMMON_PARTS,
+    DECKS,
+    REQUIRED_IDS,
+    ROOT,
+    assert_png,
+    assert_relationship_closure,
+    assert_stimuli,
+    contract,
+    generate,
+    remove_token,
+    run_generator,
+    tree_hashes,
 )
-REQUIRED_FEATURE_IDS = {
-    "adjustment-basic",
-    "adjustment-arrows",
-    "adjustment-remaining",
-    "custom-geometry-unknown-formula",
-    "pattern-fill-known",
-    "pattern-fill-unknown",
-    "picture-bullet-embedded",
-    "picture-bullet-missing",
-    "table-style-regions",
-    "table-style-missing",
-    "action-external",
-    "action-internal",
-    "action-unsafe",
-    "notes-slide",
-    "comments-legacy",
-    "comments-modern",
-    "comment-author-missing",
-    "reflection",
-    "drawingml-3d-fallback",
-    "media-audio",
-    "media-video",
-    "media-unsupported",
-    "transition-cut",
-    "transition-fade",
-    "animation-bounded",
-    "animation-unsupported",
-    "chart-direct",
-    "chart-preview-fallback",
-    "chart-placeholder",
-    "fallback-smartart",
-    "fallback-ole",
-    "fallback-math",
-    "fallback-alternate-content",
-    "fallback-unknown-extension",
-}
 
 
 class CompletionDeckTests(unittest.TestCase):
-    def test_generates_required_deterministic_corpus(self) -> None:
-        with tempfile.TemporaryDirectory() as first_tmp, tempfile.TemporaryDirectory() as second_tmp:
-            first = Path(first_tmp)
-            second = Path(second_tmp)
+    def test_corpus_is_deterministic_and_structurally_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = contract(root)
+            first, second = root / "a", root / "b"
+            generate(self, first, source)
+            generate(self, second, source)
+            expected = {"manifest.json", *(f"{deck}.pptx" for deck in DECKS)}
+            self.assertEqual({path.name for path in first.iterdir()}, expected)
+            self.assertEqual(tree_hashes(first), tree_hashes(second))
+            for deck in DECKS:
+                with zipfile.ZipFile(first / f"{deck}.pptx") as archive:
+                    self.assertEqual(archive.namelist(), sorted(archive.namelist()))
+                    self.assertTrue(COMMON_PARTS.issubset(archive.namelist()))
+                    self.assertTrue(
+                        all(
+                            info.date_time == (1980, 1, 1, 0, 0, 0)
+                            for info in archive.infolist()
+                        )
+                    )
+                    assert_relationship_closure(self, archive)
 
-            self._generate(first)
-            self._generate(second)
-
-            expected_names = {"manifest.json", *(f"{name}.pptx" for name in DECK_NAMES)}
-            self.assertEqual({path.name for path in first.iterdir()}, expected_names)
-            self.assertEqual(self._tree_hashes(first), self._tree_hashes(second))
-
-    def test_packages_have_fixed_zip_metadata_and_required_parts(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_dir = Path(tmpdir)
-            self._generate(output_dir)
-
-            for deck_name in DECK_NAMES:
-                with self.subTest(deck=deck_name), zipfile.ZipFile(output_dir / f"{deck_name}.pptx") as archive:
-                    names = archive.namelist()
-                    self.assertEqual(names, sorted(names))
-                    self.assertTrue({"[Content_Types].xml", "_rels/.rels", "ppt/presentation.xml", "ppt/slides/slide1.xml"}.issubset(names))
-                    self.assertTrue(all(info.date_time == (1980, 1, 1, 0, 0, 0) for info in archive.infolist()))
-
-    def test_manifest_covers_planned_features_without_native_evidence(self) -> None:
+    def test_manifest_features_and_adjustments_bind_to_ooxml(self) -> None:
         fixture_root = os.environ.get("PPTX_COMPLETION_FIXTURE_ROOT")
-        if fixture_root:
-            manifest_path = Path(fixture_root) / "manifest.json"
-        else:
-            temporary = tempfile.TemporaryDirectory()
-            self.addCleanup(temporary.cleanup)
-            output_dir = Path(temporary.name)
-            self._generate(output_dir)
-            manifest_path = output_dir / "manifest.json"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = Path(fixture_root) if fixture_root else root / "out"
+            if not fixture_root:
+                generate(self, output, contract(root))
+            manifest = json.loads((output / "manifest.json").read_text())
+            features = {row["id"]: row for row in manifest["features"]}
+            self.assertEqual(set(features), REQUIRED_IDS)
+            self.assertTrue(manifest["powerpoint_capture_required"])
+            self.assertEqual(
+                manifest["native_evidence"], {"images": [], "metadata": None}
+            )
+            self.assertTrue(
+                all(
+                    row["native_evidence"] == {"images": [], "metadata": None}
+                    for row in features.values()
+                )
+            )
+            assert_stimuli(self, output)
+            cases = manifest["adjustment_case_scaffold"]
+            self.assertEqual(
+                manifest["adjustment_case_source"]["official_preset_count"], 187
+            )
+            self.assertEqual(len(cases), 12)
+            self.assertEqual(
+                {case["bundle"] for case in cases}, {"basic", "arrows", "remaining"}
+            )
+            self.assertEqual(
+                {case["kind"] for case in cases},
+                {"default", "lower", "upper", "representative"},
+            )
+            self.assertTrue(all(case["expected_pixels"] is None for case in cases))
 
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        features = {row["id"]: row for row in manifest["features"]}
+    def test_slide_level_timing_and_valid_png_previews(self) -> None:
+        ns = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
+        with tempfile.TemporaryDirectory() as tmp:
+            root, output = Path(tmp), Path(tmp) / "out"
+            generate(self, output, contract(root))
+            with zipfile.ZipFile(output / "timing-transitions.pptx") as archive:
+                fade = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+                cut = ElementTree.fromstring(archive.read("ppt/slides/slide2.xml"))
+            self.assertIsNotNone(fade.find("p:transition/p:fade", ns))
+            self.assertIsNotNone(fade.find("p:timing", ns))
+            self.assertIsNotNone(cut.find("p:transition/p:cut", ns))
+            self.assertIsNone(fade.find("p:cSld/p:spTree/p:transition", ns))
+            for deck in ("picture-bullets", "media", "charts"):
+                with zipfile.ZipFile(output / f"{deck}.pptx") as archive:
+                    for part in (
+                        name for name in archive.namelist() if name.endswith(".png")
+                    ):
+                        assert_png(self, archive.read(part))
+            with zipfile.ZipFile(output / "charts.pptx") as archive:
+                self.assertTrue(
+                    {
+                        "ppt/charts/chart1.xml",
+                        "ppt/charts/chart2.xml",
+                        "ppt/charts/chart3.xml",
+                    }.issubset(archive.namelist())
+                )
 
-        self.assertTrue(manifest["powerpoint_capture_required"])
-        self.assertEqual(manifest["native_evidence"], {"images": [], "metadata": None})
-        self.assertEqual(set(features), REQUIRED_FEATURE_IDS)
-        self.assertTrue(all(row["powerpoint_capture_required"] for row in features.values()))
-        self.assertTrue(all(row["native_evidence"] == {"images": [], "metadata": None} for row in features.values()))
-        self.assertEqual(
-            [case["kind"] for case in manifest["adjustment_case_scaffold"]],
-            ["default", "lower", "upper", "representative"],
-        )
-        self.assertEqual(manifest["adjustment_case_source"]["status"], "awaiting-task-2-manifest")
+    def test_removed_stimulus_and_missing_feature_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, output = Path(tmp), Path(tmp) / "out"
+            generate(self, output, contract(root))
+            manifest_path = output / "manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            audio = next(
+                row for row in manifest["features"] if row["id"] == "media-audio"
+            )
+            remove_token(output / audio["deck"], audio["stimulus"])
+            with self.assertRaisesRegex(AssertionError, "media-audio"):
+                assert_stimuli(self, output)
+            manifest["features"] = [
+                row for row in manifest["features"] if row["id"] != "media-audio"
+            ]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "unittest",
+                    "evaluate.tests.test_create_completion_decks.CompletionDeckTests.test_manifest_features_and_adjustments_bind_to_ooxml",
+                    "-v",
+                ],
+                cwd=ROOT,
+                env={**os.environ, "PPTX_COMPLETION_FIXTURE_ROOT": str(output)},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("media-audio", result.stderr)
 
-    def _generate(self, output_dir: Path) -> None:
-        subprocess.run(
-            [sys.executable, str(GENERATOR), "--output-dir", str(output_dir)],
-            cwd=REPO_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-    def _tree_hashes(self, root: Path) -> dict[str, str]:
-        return {
-            path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in sorted(root.iterdir())
-            if path.is_file()
-        }
+    def test_invalid_adjustment_inventories_fail_stably(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = json.loads(contract(root).read_text())
+            variants = {
+                "missing": {**base, "presets": base["presets"][:-1]},
+                "extra": {**base, "presets": [*base["presets"], {"name": "unknown"}]},
+                "duplicate": {
+                    **base,
+                    "presets": [*base["presets"][:-1], base["presets"][0]],
+                },
+            }
+            for name, payload in variants.items():
+                path = root / f"{name}.json"
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                result = run_generator(root / name, path)
+                self.assertEqual(result.returncode, 2, name)
+                self.assertIn("ADJUSTMENT_INVENTORY_MISMATCH", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":
