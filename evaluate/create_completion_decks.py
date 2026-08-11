@@ -89,6 +89,8 @@ def generate(output: Path, adjustment_manifest: Path) -> None:
 
 def _publish(output: Path, artifacts: dict[str, bytes]) -> None:
     staging: Path | None = None
+    primary: OSError | ContractError | None = None
+    primary_message = ""
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(
@@ -110,12 +112,28 @@ def _publish(output: Path, artifacts: dict[str, bytes]) -> None:
                 with suppress(OSError):
                     output.mkdir()
             raise
+    except ContractError as error:
+        primary = error
+        primary_message = str(error)
     except OSError as error:
-        raise ContractError(f"OUTPUT_WRITE_ERROR path={output}") from error
-    finally:
-        if staging is not None:
-            with suppress(OSError):
-                shutil.rmtree(staging)
+        primary = error
+        primary_message = f"OUTPUT_WRITE_ERROR path={output}"
+
+    cleanup_error: OSError | None = None
+    if staging is not None:
+        try:
+            shutil.rmtree(staging)
+        except OSError as error:
+            cleanup_error = error
+    if cleanup_error is not None:
+        cleanup_path = staging.absolute() if staging is not None else output.absolute()
+        primary_message += (
+            f" OUTPUT_CLEANUP_ERROR staging={cleanup_path} detail={cleanup_error}"
+        )
+    if primary is not None:
+        raise ContractError(primary_message) from primary
+    if cleanup_error is not None:
+        raise ContractError(primary_message) from cleanup_error
 
 
 def _validate_output(output: Path) -> None:

@@ -1,4 +1,8 @@
 import hashlib
+import io
+import logging
+import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -100,18 +104,78 @@ class CompletionDeckAtomicTests(unittest.TestCase):
                     raise OSError("original write failure")
                 return original_write(path, payload)
 
+            stderr = io.StringIO()
+            handler = logging.StreamHandler(stderr)
+            logger = create_completion_decks.logger
+            previous_propagate = logger.propagate
+            logger.addHandler(handler)
+            logger.propagate = False
+            try:
+                with (
+                    mock.patch.object(Path, "write_bytes", fail_with_cleanup_error),
+                    mock.patch.object(
+                        create_completion_decks.shutil,
+                        "rmtree",
+                        side_effect=OSError("cleanup failure"),
+                    ),
+                    mock.patch.object(
+                        sys,
+                        "argv",
+                        ["create_completion_decks.py", "--output-dir", str(output)],
+                    ),
+                ):
+                    self.assertEqual(create_completion_decks.main(), 2)
+            finally:
+                logger.removeHandler(handler)
+                logger.propagate = previous_propagate
+            logged = stderr.getvalue()
+            leftovers = tuple(Path(tmp).glob(".out.stage-*"))
+            try:
+                self.assertIn("OUTPUT_WRITE_ERROR", logged)
+                self.assertIn("OUTPUT_CLEANUP_ERROR", logged)
+                self.assertIn("cleanup failure", logged)
+                self.assertEqual(len(leftovers), 1)
+                self.assertIn(str(leftovers[0].absolute()), logged)
+                self.assertNotIn("Traceback", logged)
+                self.assertFalse(output.exists())
+            finally:
+                for leftover in leftovers:
+                    shutil.rmtree(leftover)
+
+    def test_cleanup_report_preserves_primary_exception_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "out"
+            original_write = Path.write_bytes
+            writes = 0
+
+            def fail_second_write(path: Path, payload: bytes) -> int:
+                nonlocal writes
+                writes += 1
+                if writes == 2:
+                    raise OSError("primary failure")
+                return original_write(path, payload)
+
             with (
-                mock.patch.object(Path, "write_bytes", fail_with_cleanup_error),
+                mock.patch.object(Path, "write_bytes", fail_second_write),
                 mock.patch.object(
                     create_completion_decks.shutil,
                     "rmtree",
                     side_effect=OSError("cleanup failure"),
                 ),
-                self.assertRaisesRegex(ContractError, "OUTPUT_WRITE_ERROR") as raised,
+                self.assertRaises(ContractError) as raised,
             ):
-                create_completion_decks.generate(output, CANONICAL_MANIFEST)
-            self.assertEqual(str(raised.exception.__cause__), "original write failure")
-            self.assertFalse(output.exists())
+                create_completion_decks._publish(
+                    output, {"first.pptx": b"first", "manifest.json": b"second"}
+                )
+            leftovers = tuple(Path(tmp).glob(".out.stage-*"))
+            try:
+                self.assertEqual(str(raised.exception.__cause__), "primary failure")
+                self.assertIn("OUTPUT_WRITE_ERROR", str(raised.exception))
+                self.assertIn("OUTPUT_CLEANUP_ERROR", str(raised.exception))
+                self.assertEqual(len(leftovers), 1)
+            finally:
+                for leftover in leftovers:
+                    shutil.rmtree(leftover)
 
 
 if __name__ == "__main__":
