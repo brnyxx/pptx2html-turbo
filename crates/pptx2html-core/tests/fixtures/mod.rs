@@ -1,5 +1,11 @@
 //! Test helper for generating minimal PPTX files
 
+mod package;
+mod parts;
+
+pub use package::{PackageBuilder, Relationship};
+pub use parts::{FeaturePart, SlideXml};
+
 use std::io::{Cursor, Write};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
@@ -371,3 +377,88 @@ const DEFAULT_THEME: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="
     </a:fontScheme>
   </a:themeElements>
 </a:theme>"#;
+
+#[cfg(test)]
+mod fixture_api_contract {
+    use super::{FeaturePart, MinimalPptx, PackageBuilder, Relationship, SlideXml};
+
+    #[test]
+    fn minimal_fixture_custom_xml_options_build_a_package() {
+        let package = MinimalPptx::new("")
+            .with_raw_slide("<p:sld/>")
+            .with_theme("<a:dk1/>")
+            .with_full_theme("<a:theme/>")
+            .with_clr_map("")
+            .with_master_shapes("")
+            .with_full_master("<p:sldMaster/>")
+            .build();
+
+        assert!(!package.is_empty());
+    }
+
+    #[test]
+    fn minimal_fixture_relationship_and_extra_file_options_build_a_package() {
+        let package = MinimalPptx::new("")
+            .with_layout("<p:sldLayout/>")
+            .with_slide_layout_rel()
+            .with_layout_rels("<Relationships/>")
+            .with_presentation_xml("<p:presentation/>")
+            .with_slide_rels("<Relationships/>")
+            .with_core_properties("<cp:coreProperties/>")
+            .with_extra_file("ppt/media/fixture.bin", b"fixture")
+            .build();
+
+        assert!(!package.is_empty());
+    }
+
+    #[test]
+    fn feature_fixture_builders_create_and_validate_a_package() {
+        let slide = SlideXml::from_body("")
+            .with_alternate_content("<mc:AlternateContent/>")
+            .build();
+
+        let package = PackageBuilder::new(slide)
+            .with_slide_relationship(Relationship::internal(
+                "rId1",
+                "chart",
+                "../charts/chart1.xml",
+            ))
+            .with_slide_relationship(Relationship::external(
+                "rId2",
+                "hyperlink",
+                "https://example.test",
+            ))
+            .with_part(FeaturePart::notes("<p:notes/>"))
+            .with_part(FeaturePart::comments("<p:cmLst/>"))
+            .with_part(FeaturePart::media(
+                "fixture.bin",
+                "application/octet-stream",
+                b"media",
+            ))
+            .with_part(FeaturePart::chart("<c:chartSpace/>"))
+            .with_part(FeaturePart::extra(
+                "ppt/charts/chart1.xml",
+                "application/xml",
+                b"chart",
+            ));
+        package
+            .validate()
+            .expect("declared feature package is valid");
+        assert!(!package.build().expect("feature package builds").is_empty());
+        let temporary = package
+            .write_to_temp("fixture-api-contract")
+            .expect("feature package writes to an isolated path");
+        assert!(temporary.path().is_file());
+
+        let error = PackageBuilder::new(SlideXml::from_body("").build())
+            .with_slide_relationship(Relationship::internal(
+                "rIdMissing",
+                "image",
+                "../media/missing.png",
+            ))
+            .validate()
+            .expect_err("missing relationship target is rejected");
+        assert_eq!(error.code(), "DANGLING_RELATIONSHIP");
+        assert_eq!(error.target(), Some("ppt/media/missing.png"));
+    }
+}
