@@ -6,9 +6,12 @@ pub mod capabilities;
 pub mod chart;
 pub mod color;
 pub mod effects;
+pub mod embedded;
 pub mod fill;
 mod geometry;
 pub mod hierarchy;
+pub mod media;
+pub mod notes_comments;
 pub mod presentation;
 pub mod preserved;
 pub mod shape;
@@ -16,6 +19,7 @@ pub mod slide;
 mod style;
 pub mod table;
 pub mod text;
+pub mod timing;
 
 pub use capabilities::{
     CapabilityMatrix, CapabilityStage, FeatureCapability, FeatureFamily, SupportTier,
@@ -31,6 +35,7 @@ pub use hierarchy::{
     TxStyles,
 };
 pub use presentation::{ClrMap, FontScheme, Presentation};
+pub use preserved::{ConversionDiagnostic, DiagnosticLocation, FallbackKind};
 pub use slide::{
     AutoFit, Bullet, BulletAutoNum, BulletChar, ChartBubbleSizeRepresents, ChartData,
     ChartDataLabelPosition, ChartDataLabelSettings, ChartGrouping, ChartMarkerSpec, ChartOfPieType,

@@ -3,17 +3,23 @@
 
 mod action_parser;
 mod chart_parser;
+mod embedded_parser;
 mod fill_parser;
 mod graphic_frame_parser;
 mod layout_parser;
 pub mod master_parser;
+mod media_parser;
+mod notes_comments_parser;
 mod preserved_parser;
 pub mod relationships;
 mod slide_parser;
 mod table_parser;
 mod text_parser;
 mod theme_parser;
+mod timing_parser;
 mod xml_utils;
+
+pub(crate) use preserved_parser::collect_package_diagnostics;
 
 use std::collections::HashMap;
 use std::io::{Cursor, Read};

@@ -4,9 +4,11 @@
 mod actions;
 mod bullets;
 mod charts;
+mod embedded_fallback;
 mod fallback;
 mod fills;
 mod geometry;
+mod media;
 pub mod provenance;
 mod tables;
 pub mod text_metrics;
@@ -34,6 +36,7 @@ use std::cell::RefCell;
 /// Mutable state for collecting unresolved elements during rendering
 struct UnresolvedCollector {
     elements: Vec<UnresolvedElement>,
+    diagnostics: Vec<ConversionDiagnostic>,
     external_assets: Vec<ExternalAsset>,
     font_resolution_entries: Vec<FontResolutionEntry>,
     provenance_entries: Vec<RenderedProvenanceEntry>,
@@ -165,12 +168,21 @@ impl HtmlRenderer {
         pres: &Presentation,
         opts: &ConversionOptions,
     ) -> PptxResult<ConversionResult> {
+        Self::render_with_options_diagnostics(pres, opts, Vec::new())
+    }
+
+    pub(crate) fn render_with_options_diagnostics(
+        pres: &Presentation,
+        opts: &ConversionOptions,
+        diagnostics: Vec<ConversionDiagnostic>,
+    ) -> PptxResult<ConversionResult> {
         let slide_w = pres.slide_size.width.to_px();
         let slide_h = pres.slide_size.height.to_px();
         let slide_scale = opts.effective_scale();
 
         let collector = RefCell::new(UnresolvedCollector {
             elements: Vec::new(),
+            diagnostics,
             external_assets: Vec::new(),
             font_resolution_entries: Vec::new(),
             provenance_entries: Vec::new(),
@@ -232,10 +244,17 @@ impl HtmlRenderer {
             slide_count += 1;
         }
 
-        html.push_str("</div>\n</body>\n</html>");
-        let coll = collector.into_inner();
+        html.push_str("</div>\n");
+        media::append_diagnostics(pres, &collector);
+        embedded_fallback::append_diagnostics(pres, &collector);
+        let mut coll = collector.into_inner();
+        fallback::sort_and_deduplicate(&mut coll.diagnostics);
+        html.push_str("<script type=\"application/json\" id=\"pptx2html-diagnostics\">");
+        html.push_str(&fallback::diagnostics_json(&coll.diagnostics));
+        html.push_str("</script>\n</body>\n</html>");
         Ok(ConversionResult {
             html,
+            diagnostics: coll.diagnostics,
             external_assets: coll.external_assets,
             font_resolution_entries: coll.font_resolution_entries,
             provenance_entries: coll.provenance_entries,
@@ -2038,6 +2057,7 @@ mod tests {
         });
         let collector = RefCell::new(UnresolvedCollector {
             elements: Vec::new(),
+            diagnostics: Vec::new(),
             external_assets: Vec::new(),
             font_resolution_entries: Vec::new(),
             provenance_entries: Vec::new(),

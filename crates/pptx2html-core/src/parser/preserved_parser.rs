@@ -1,8 +1,135 @@
 use log::warn;
+use quick_xml::Reader;
+use quick_xml::events::Event;
 use quick_xml::events::{BytesEnd, BytesStart};
+use std::io::{Cursor, Read};
+use zip::ZipArchive;
 
 use super::slide_parser::ShapeBuilder;
+use super::{embedded_parser, media_parser, notes_comments_parser, timing_parser};
+use crate::error::PptxResult;
 use crate::model::slide::{UnresolvedType, UnsupportedData};
+use crate::model::{
+    ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily, SupportTier,
+};
+
+pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<ConversionDiagnostic>> {
+    let mut archive = ZipArchive::new(Cursor::new(data))?;
+    let mut diagnostics = Vec::new();
+    let mut names = (0..archive.len())
+        .filter_map(|index| {
+            archive
+                .by_index(index)
+                .ok()
+                .map(|file| file.name().to_owned())
+        })
+        .collect::<Vec<_>>();
+    names.sort();
+
+    for name in names {
+        notes_comments_parser::collect_part_diagnostics(&name, &mut diagnostics);
+        media_parser::collect_part_diagnostics(&name, &mut diagnostics);
+        embedded_parser::collect_part_diagnostics(&name, &mut diagnostics);
+        if name.ends_with(".rels") {
+            embedded_parser::collect_relationship_diagnostics(
+                &mut archive,
+                &name,
+                &mut diagnostics,
+            )?;
+            continue;
+        }
+        if name.starts_with("ppt/") && name.ends_with(".xml") {
+            collect_xml_diagnostics(&mut archive, &name, &mut diagnostics)?;
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn collect_xml_diagnostics(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    name: &str,
+    diagnostics: &mut Vec<ConversionDiagnostic>,
+) -> PptxResult<()> {
+    let xml = read_text_entry(archive, name)?;
+    timing_parser::collect_diagnostics(name, &xml, diagnostics);
+    let mut reader = Reader::from_str(&xml);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element)) | Ok(Event::Empty(element)) => {
+                let qualified_name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
+                if known_element_prefix(&qualified_name) {
+                    continue;
+                }
+                diagnostics.push(ConversionDiagnostic {
+                    code: "OOXML_ELEMENT_UNSUPPORTED".to_owned(),
+                    family: FeatureFamily::Unsupported,
+                    support_tier: SupportTier::Unparsed,
+                    stage: None,
+                    location: DiagnosticLocation {
+                        slide_index: slide_index_from_part(name),
+                        part_name: Some(name.to_owned()),
+                        qualified_element_name: Some(qualified_name.clone()),
+                        relationship_id: embedded_parser::attribute_value(&element, "id"),
+                        ..Default::default()
+                    },
+                    raw_reference: Some(format!("{name}#{qualified_name}")),
+                    fallback_kind: FallbackKind::UnknownElement,
+                    reason: "Element namespace is not recognized; the element was preserved but not rendered".to_owned(),
+                });
+            }
+            Ok(Event::Eof) => return Ok(()),
+            Err(error) => return Err(crate::error::PptxError::Xml(error)),
+            _ => {}
+        }
+    }
+}
+
+pub(crate) fn read_text_entry(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    name: &str,
+) -> PptxResult<String> {
+    let mut file = archive
+        .by_name(name)
+        .map_err(|_| crate::error::PptxError::MissingFile(name.to_owned()))?;
+    let mut xml = String::new();
+    file.read_to_string(&mut xml)?;
+    Ok(xml)
+}
+
+pub(crate) fn part_diagnostic(
+    name: &str,
+    family: FeatureFamily,
+    reason: &str,
+) -> ConversionDiagnostic {
+    ConversionDiagnostic {
+        code: "OOXML_PART_UNSUPPORTED".to_owned(),
+        family,
+        support_tier: SupportTier::Unparsed,
+        stage: None,
+        location: DiagnosticLocation {
+            part_name: Some(name.to_owned()),
+            ..Default::default()
+        },
+        raw_reference: Some(name.to_owned()),
+        fallback_kind: FallbackKind::PreservedPart,
+        reason: reason.to_owned(),
+    }
+}
+
+pub(crate) fn slide_index_from_part(name: &str) -> Option<usize> {
+    let file = name
+        .strip_prefix("ppt/slides/slide")?
+        .strip_suffix(".xml")?;
+    file.parse::<usize>().ok()?.checked_sub(1)
+}
+
+fn known_element_prefix(qualified_name: &str) -> bool {
+    let prefix = qualified_name.split_once(':').map(|(prefix, _)| prefix);
+    matches!(
+        prefix,
+        Some("a" | "c" | "cp" | "dc" | "dcterms" | "dgm" | "m" | "mc" | "p" | "r" | "xsi")
+    ) || prefix.is_none()
+}
 
 #[derive(Default)]
 pub(crate) struct PreservedSaxState {

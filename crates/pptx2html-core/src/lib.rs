@@ -37,7 +37,7 @@ pub mod resolver;
 use std::path::Path;
 
 use error::PptxResult;
-use model::UnresolvedElement;
+use model::{ConversionDiagnostic, UnresolvedElement};
 use parser::PptxParser;
 use renderer::HtmlRenderer;
 pub use renderer::provenance::{ProvenanceSource, ProvenanceSubject, RenderedProvenanceEntry};
@@ -121,6 +121,8 @@ pub struct ConversionResult {
     pub external_assets: Vec<ExternalAsset>,
     pub font_resolution_entries: Vec<FontResolutionEntry>,
     pub provenance_entries: Vec<RenderedProvenanceEntry>,
+    /// Ordered, non-fatal preservation and fallback diagnostics.
+    pub diagnostics: Vec<ConversionDiagnostic>,
     /// Metadata about elements that were rendered as placeholders.
     pub unresolved_elements: Vec<UnresolvedElement>,
     /// Number of slides processed.
@@ -174,8 +176,8 @@ pub fn convert_file_with_options_metadata(
     path: &Path,
     opts: &ConversionOptions,
 ) -> PptxResult<ConversionResult> {
-    let presentation = PptxParser::parse_file(path)?;
-    HtmlRenderer::render_with_options_metadata(&presentation, opts)
+    let data = std::fs::read(path)?;
+    convert_bytes_with_options_metadata(&data, opts)
 }
 
 /// Convert PPTX byte data to HTML with options and metadata about unresolved elements.
@@ -184,7 +186,8 @@ pub fn convert_bytes_with_options_metadata(
     opts: &ConversionOptions,
 ) -> PptxResult<ConversionResult> {
     let presentation = PptxParser::parse_bytes(data)?;
-    HtmlRenderer::render_with_options_metadata(&presentation, opts)
+    let diagnostics = parser::collect_package_diagnostics(data)?;
+    HtmlRenderer::render_with_options_diagnostics(&presentation, opts, diagnostics)
 }
 
 /// Lightweight presentation metadata (no rendering performed).
