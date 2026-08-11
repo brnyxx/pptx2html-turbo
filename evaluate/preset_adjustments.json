@@ -15,6 +15,9 @@
     "inventory_member_sha256": "078871240cff323ddd22a395281421b737fa61508fd39ffaa2947ba2bc01175e",
     "geometry_member": "OfficeOpenXML-DrawingMLGeometries.zip/presetShapeDefinitions.xml",
     "geometry_member_sha256": "2f7c868d857c1e3c4b5a6068759fe0e07d77ad58377a6618d1b02ba3507b6939",
+    "adjustment_count": 298,
+    "handle_constraint_count": 285,
+    "duplicate_normalization": "The two byte-equivalent upDownArrow definitions normalize to one preset; upArrow remains unavailable.",
     "known_source_gap": "presetShapeDefinitions.xml repeats upDownArrow and omits upArrow; upArrow semantics are unavailable rather than inferred."
   },
   "official_sources": [

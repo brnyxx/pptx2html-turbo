@@ -20,7 +20,7 @@ The manifest records the edition, URLs, and SHA-256 checksums for the Part 1
 ZIP, nested `dml-main.xsd`, and `presetShapeDefinitions.xml`. The ordered
 `official_preset_names` inventory is independently bound to the checker's
 canonical SHA-256 digest. Verify a downloaded Part 1 ZIP and extract its nested
-`ST_ShapeType` enumeration with:
+`ST_ShapeType` enumeration and `presetShapeDefinitions.xml` semantics with:
 
 ```bash
 python3 evaluate/check_preset_adjustments.py \
@@ -37,9 +37,12 @@ does not make any renderer implementation exact. Every manifest row remains
 gate.
 
 The official geometry artifact repeats `upDownArrow` and omits `upArrow`.
-Consequently, `upArrow.source_status` is `unavailable`; its current Rust keys
-are recorded only as non-normative preservation data. They are not official
-defaults or ranges.
+The checker requires the two `upDownArrow` definitions to be identical and
+normalizes them to one preset. The resulting official contract contains 298
+adjustments and 285 handle constraints. Consequently,
+`upArrow.source_status` is `unavailable`; its current Rust keys are recorded
+only as non-normative preservation data. They are not official defaults or
+ranges.
 
 The checker also records implementation-only keys where current Rust consumes a
 key that the official definition does not assign to that preset. These entries
@@ -54,14 +57,19 @@ validated against the closed preset adjustment names.
 
 ```bash
 python3 evaluate/check_preset_adjustments.py --repo-root .
+python3 evaluate/check_preset_adjustments.py --repo-root . --bundle basic
+python3 evaluate/check_preset_adjustments.py --repo-root . --bundle arrows
+python3 evaluate/check_preset_adjustments.py --repo-root . --bundle remaining
 python3 -m unittest evaluate.tests.test_check_preset_adjustments -v
 ```
 
 The first command checks the 187-name dispatcher contract, traces literal
 `adjust_values.get("...")` consumption through geometry-family functions with
-a comment/string-aware lexical scan, and reports official manifest keys that
-the current renderer never consumes. Use `--source-root` to inspect a copied
-geometry-family directory, `--dispatcher` to override the dispatcher source,
-and `--json` to write a stable machine-readable report. Invalid manifests,
-source roots, dispatchers, and official artifacts fail with stable error codes
-without Python tracebacks.
+a Rust comment/string/raw-string-aware lexical scan, and reports official
+manifest keys that the current renderer never consumes. Dynamic or otherwise
+unparseable adjustment lookups fail closed. The bundle commands scope consumed,
+unknown, and unconsumed counts to the module groups required by Tasks 8-10. Use
+`--source-root` to inspect a copied geometry-family directory, `--dispatcher`
+to override the dispatcher source, and `--json` to write a stable
+machine-readable report. Invalid manifests, source roots, dispatchers, and
+official artifacts fail with stable error codes without Python tracebacks.

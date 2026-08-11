@@ -23,7 +23,9 @@ from xml.etree import ElementTree
 
 
 UNKNOWN_ADJUSTMENT_KEY: Final = "UNKNOWN_ADJUSTMENT_KEY"
+UNPARSEABLE_ADJUSTMENT_LOOKUP: Final = "UNPARSEABLE_ADJUSTMENT_LOOKUP"
 OFFICIAL_PRESET_INVENTORY_MISMATCH: Final = "OFFICIAL_PRESET_INVENTORY_MISMATCH"
+OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH: Final = "OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH"
 OFFICIAL_ARTIFACT_CHECKSUM_MISMATCH: Final = "OFFICIAL_ARTIFACT_CHECKSUM_MISMATCH"
 OFFICIAL_NAMES_SHA256: Final = (
     "f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587"
@@ -31,6 +33,25 @@ OFFICIAL_NAMES_SHA256: Final = (
 DEFAULT_MANIFEST: Final = Path("evaluate/preset_adjustments.json")
 DEFAULT_DISPATCHER: Final = Path("crates/pptx2html-core/src/renderer/geometry.rs")
 DEFAULT_SOURCE_ROOT: Final = Path("crates/pptx2html-core/src/renderer/geometry")
+DRAWINGML_NAMESPACE: Final = "http://schemas.openxmlformats.org/drawingml/2006/main"
+OFFICIAL_ADJUSTMENT_COUNT: Final = 298
+OFFICIAL_CONSTRAINT_COUNT: Final = 285
+BUNDLE_MODULES: Final = {
+    "basic": frozenset(
+        {"basic_shapes", "rects", "brackets_braces", "scrolls_tabs", "flowchart"}
+    ),
+    "arrows": frozenset(
+        {
+            "arrows",
+            "bent_u_arrows",
+            "curved_arrows",
+            "circular_arrows",
+            "arrow_callouts",
+            "callouts",
+            "connectors",
+        }
+    ),
+}
 JsonValue: TypeAlias = (
     str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 )
@@ -112,8 +133,8 @@ def _manifest_inventory(
     return names, by_name
 
 
-def _starts_get_argument(output: list[str], quote_index: int) -> bool:
-    cursor = quote_index - 1
+def _starts_get_argument(output: list[str], literal_index: int) -> bool:
+    cursor = literal_index - 1
     while cursor >= 0 and output[cursor].isspace():
         cursor -= 1
     if cursor < 0 or output[cursor] != "(":
@@ -124,14 +145,49 @@ def _starts_get_argument(output: list[str], quote_index: int) -> bool:
     end = cursor + 1
     while cursor >= 0 and (output[cursor].isalnum() or output[cursor] == "_"):
         cursor -= 1
-    return (
-        cursor >= 0
-        and output[cursor] == "."
-        and "".join(output[cursor + 1 : end]) == "get"
-    )
+    if (
+        cursor < 0
+        or output[cursor] != "."
+        or "".join(output[cursor + 1 : end]) != "get"
+    ):
+        return False
+    cursor -= 1
+    receiver_end = cursor + 1
+    while cursor >= 0 and (output[cursor].isalnum() or output[cursor] == "_"):
+        cursor -= 1
+    return "".join(output[cursor + 1 : receiver_end]) in {"adj", "adjust_values"}
 
 
-def _lexical_source(source: str) -> str:
+def _normal_string_end(source: str, start: int) -> int:
+    cursor = start + 1
+    while cursor < len(source):
+        if source[cursor] == "\\":
+            cursor += 2
+        elif source[cursor] == '"':
+            return cursor + 1
+        else:
+            cursor += 1
+    raise ContractError("UNPARSEABLE_RUST_SOURCE", "unterminated string literal")
+
+
+def _raw_string_end(source: str, start: int) -> int | None:
+    if source[start] != "r":
+        return None
+    cursor = start + 1
+    while cursor < len(source) and source[cursor] == "#":
+        cursor += 1
+    if cursor >= len(source) or source[cursor] != '"':
+        return None
+    delimiter = '"' + source[start + 1 : cursor]
+    closing = source.find(delimiter, cursor + 1)
+    if closing < 0:
+        raise ContractError(
+            "UNPARSEABLE_RUST_SOURCE", "unterminated raw string literal"
+        )
+    return closing + len(delimiter)
+
+
+def _lexical_source(source: str, *, dispatcher: bool = False) -> str:
     output = list(source)
     index = 0
     while index < len(source):
@@ -149,19 +205,17 @@ def _lexical_source(source: str) -> str:
                     depth, end = depth - 1, end + 2
                 else:
                     end += 1
+            if depth:
+                raise ContractError("UNPARSEABLE_RUST_SOURCE", "unterminated comment")
             output[index:end] = " " * (end - index)
             index = end
+        elif (raw_end := _raw_string_end(source, index)) is not None:
+            if dispatcher or not _starts_get_argument(output, index):
+                output[index:raw_end] = " " * (raw_end - index)
+            index = raw_end
         elif source[index] == '"':
-            end = index + 1
-            while end < len(source):
-                if source[end] == "\\":
-                    end += 2
-                elif source[end] == '"':
-                    end += 1
-                    break
-                else:
-                    end += 1
-            if not _starts_get_argument(output, index):
+            end = _normal_string_end(source, index)
+            if not dispatcher and not _starts_get_argument(output, index):
                 output[index:end] = " " * (end - index)
             index = end
         else:
@@ -183,12 +237,14 @@ def _balanced_body(source: str, opening_brace: int) -> str:
 
 def _dispatcher_routes(dispatcher: Path) -> list[Route]:
     try:
-        source = dispatcher.read_text(encoding="utf-8")
+        raw_source = dispatcher.read_text(encoding="utf-8")
     except (FileNotFoundError, IsADirectoryError, PermissionError, OSError) as error:
         raise ContractError("INVALID_DISPATCHER", f"path={dispatcher}") from error
+    source = _lexical_source(raw_source, dispatcher=True)
+    structure = _lexical_source(raw_source)
     try:
         block = source[
-            source.index("pub fn preset_shape_svg(") : source.index(
+            structure.index("pub fn preset_shape_svg(") : structure.index(
                 "pub fn preset_shape_multi_svg("
             )
         ]
@@ -226,7 +282,20 @@ def _function_bodies(source_root: Path) -> dict[tuple[str, str], str]:
 
 
 def _direct_keys(body: str) -> set[str]:
-    return set(re.findall(r'\.get\s*\(\s*"([A-Za-z0-9_]+)"\s*\)', body))
+    keys: set[str] = set()
+    for match in re.finditer(r"\b(?:adj|adjust_values)\.get\s*\(\s*", body):
+        argument = body[match.end() :]
+        normal = re.match(r'"(?P<key>[A-Za-z0-9_]+)"\s*\)', argument)
+        raw = re.match(
+            r'r(?P<hashes>#{0,255})"(?P<key>[A-Za-z0-9_]+)"(?P=hashes)\s*\)',
+            argument,
+        )
+        literal = normal or raw
+        if literal is None:
+            snippet = " ".join(argument[:40].split())
+            raise ContractError(UNPARSEABLE_ADJUSTMENT_LOOKUP, f"argument={snippet}")
+        keys.add(literal.group("key"))
+    return keys
 
 
 def _consumed_keys(
@@ -276,6 +345,7 @@ def check_repository(
     manifest_path: Path | None = None,
     source_root: Path | None = None,
     dispatcher_path: Path | None = None,
+    bundle: str | None = None,
 ) -> CheckReport:
     manifest = _load_manifest(manifest_path or repo_root / DEFAULT_MANIFEST)
     names, rows = _manifest_inventory(manifest)
@@ -295,11 +365,26 @@ def check_repository(
         raise ContractError(
             OFFICIAL_PRESET_INVENTORY_MISMATCH, "dispatcher missing/extra names"
         )
+    selected_modules: frozenset[str] | None = None
+    if bundle in BUNDLE_MODULES:
+        selected_modules = BUNDLE_MODULES[bundle]
+    elif bundle == "remaining":
+        selected_modules = frozenset(
+            module
+            for _, module, _ in routes
+            if module not in BUNDLE_MODULES["basic"]
+            and module not in BUNDLE_MODULES["arrows"]
+        )
+    selected_names = [
+        name
+        for name in names
+        if selected_modules is None or route_by_name[name][1] in selected_modules
+    ]
     functions = _function_bodies(source_root or repo_root / DEFAULT_SOURCE_ROOT)
     consumed: set[tuple[str, str]] = set()
     unknown: list[dict[str, str]] = []
     preserved_count = 0
-    for preset in names:
+    for preset in selected_names:
         _, module, function = route_by_name[preset]
         official = _row_keys(rows[preset], "adjustments")
         preserved = _row_keys(rows[preset], "preservation")
@@ -319,12 +404,15 @@ def check_repository(
     official_pairs = {
         (preset, key)
         for preset, row in rows.items()
+        if preset in selected_names
         for key in _row_keys(row, "adjustments")
     }
     known = {key for _, key in official_pairs}
     known.update(key for row in rows.values() for key in _row_keys(row, "preservation"))
     reported = {(item["family"], item["key"]) for item in unknown}
     for (module, _), body in functions.items():
+        if selected_modules is not None and module not in selected_modules:
+            continue
         for key in _direct_keys(body) - known:
             if (module, key) not in reported:
                 unknown.append(
@@ -337,7 +425,8 @@ def check_repository(
                 )
     return {
         "ok": not unknown,
-        "presets": len(names),
+        "bundle": bundle or "all",
+        "presets": len(selected_names),
         "unclassified_presets": 0,
         "unclassified_preset_names": [],
         "unknown_consumed_keys": len(unknown),
@@ -362,17 +451,153 @@ def verify_official_artifact(path: Path, expected_sha256: str) -> str:
     return digest
 
 
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _shape_adjustments(shape: ElementTree.Element) -> list[JsonValue]:
+    namespace = f"{{{DRAWINGML_NAMESPACE}}}"
+    adjustment_list = shape.find(f"{namespace}avLst")
+    handle_list = shape.find(f"{namespace}ahLst")
+    guides = (
+        [] if adjustment_list is None else adjustment_list.findall(f"{namespace}gd")
+    )
+    handles = [] if handle_list is None else list(handle_list)
+    axes = (
+        ("X", "x", "minX", "maxX"),
+        ("Y", "y", "minY", "maxY"),
+        ("R", "radius", "minR", "maxR"),
+        ("Ang", "angle", "minAng", "maxAng"),
+    )
+    adjustments: list[JsonValue] = []
+    for guide in guides:
+        name = guide.get("name")
+        formula = guide.get("fmla")
+        if name is None or formula is None:
+            raise ContractError(
+                OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+                f"preset={_local_name(shape.tag)} invalid adjustment guide",
+            )
+        constraints: list[JsonValue] = []
+        for handle in handles:
+            for suffix, axis, minimum, maximum in axes:
+                if handle.get(f"gdRef{suffix}") == name:
+                    constraints.append(
+                        {
+                            "handle": _local_name(handle.tag),
+                            "axis": axis,
+                            "minimum_formula": handle.get(minimum),
+                            "maximum_formula": handle.get(maximum),
+                        }
+                    )
+        adjustments.append(
+            {
+                "name": name,
+                "default_formula": formula,
+                "source_status": "available",
+                "range_status": "available" if constraints else "unavailable",
+                "constraints": constraints,
+            }
+        )
+    return adjustments
+
+
+def _official_adjustments(
+    root: ElementTree.Element, names: list[str]
+) -> dict[str, list[JsonValue]]:
+    semantics: dict[str, list[JsonValue]] = {}
+    duplicates: dict[str, int] = {}
+    for shape in root:
+        name = _local_name(shape.tag)
+        adjustments = _shape_adjustments(shape)
+        if name in semantics:
+            duplicates[name] = duplicates.get(name, 1) + 1
+            if name != "upDownArrow" or semantics[name] != adjustments:
+                raise ContractError(
+                    OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+                    f"unexpected duplicate preset={name}",
+                )
+            continue
+        semantics[name] = adjustments
+    expected_names = set(names) - {"upArrow"}
+    if set(semantics) != expected_names or duplicates != {"upDownArrow": 2}:
+        raise ContractError(
+            OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+            "presetShapeDefinitions normalization mismatch",
+        )
+    adjustment_count = sum(len(adjustments) for adjustments in semantics.values())
+    constraint_count = sum(
+        len(adjustment["constraints"])
+        for adjustments in semantics.values()
+        for adjustment in adjustments
+        if isinstance(adjustment, dict)
+        and isinstance(adjustment.get("constraints"), list)
+    )
+    if (
+        adjustment_count != OFFICIAL_ADJUSTMENT_COUNT
+        or constraint_count != OFFICIAL_CONSTRAINT_COUNT
+    ):
+        raise ContractError(
+            OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+            f"adjustments={adjustment_count} constraints={constraint_count}",
+        )
+    return semantics
+
+
+def _verify_manifest_adjustments(
+    manifest: dict[str, JsonValue], semantics: dict[str, list[JsonValue]]
+) -> None:
+    rows = manifest.get("presets")
+    artifact = manifest.get("official_artifact")
+    if not isinstance(rows, list) or not isinstance(artifact, dict):
+        raise ContractError("MALFORMED_MANIFEST", "preset semantics are required")
+    if (
+        artifact.get("adjustment_count") != OFFICIAL_ADJUSTMENT_COUNT
+        or artifact.get("handle_constraint_count") != OFFICIAL_CONSTRAINT_COUNT
+    ):
+        raise ContractError(
+            OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+            "manifest official semantic counts mismatch",
+        )
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+            raise ContractError("MALFORMED_MANIFEST", "invalid preset row")
+        name = row["name"]
+        if name == "upArrow":
+            if (
+                row.get("source_status") != "unavailable"
+                or row.get("adjustments") != []
+            ):
+                raise ContractError(
+                    OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+                    "upArrow must remain unavailable",
+                )
+            continue
+        if row.get("source_status") != "available" or row.get(
+            "adjustments"
+        ) != semantics.get(name):
+            raise ContractError(
+                OFFICIAL_ADJUSTMENT_SEMANTICS_MISMATCH,
+                f"preset={name}",
+            )
+
+
 def _verify_official_package(
     path: Path, manifest: dict[str, JsonValue], names: list[str]
 ) -> None:
     artifact = manifest.get("official_artifact")
     if not isinstance(artifact, dict):
         raise ContractError("MALFORMED_MANIFEST", "official_artifact is required")
-    outer_sha, member_sha = (
+    outer_sha, member_sha, geometry_sha = (
         artifact.get("sha256"),
         artifact.get("inventory_member_sha256"),
+        artifact.get("geometry_member_sha256"),
     )
-    if not isinstance(outer_sha, str) or not isinstance(member_sha, str):
+    if (
+        not isinstance(outer_sha, str)
+        or not isinstance(member_sha, str)
+        or not isinstance(geometry_sha, str)
+    ):
         raise ContractError(
             "MALFORMED_MANIFEST", "official artifact checksums are required"
         )
@@ -380,10 +605,20 @@ def _verify_official_package(
     try:
         with zipfile.ZipFile(path) as outer:
             nested_bytes = outer.read("OfficeOpenXML-XMLSchema-Strict.zip")
+            geometry_bytes = outer.read("OfficeOpenXML-DrawingMLGeometries.zip")
         with zipfile.ZipFile(io.BytesIO(nested_bytes)) as nested:
             xsd = nested.read("dml-main.xsd")
-        root = ElementTree.fromstring(xsd)
-    except (zipfile.BadZipFile, KeyError, ElementTree.ParseError) as error:
+        with zipfile.ZipFile(io.BytesIO(geometry_bytes)) as nested:
+            geometry = nested.read("presetShapeDefinitions.xml")
+        xsd_root = ElementTree.fromstring(xsd)
+        geometry_root = ElementTree.fromstring(geometry)
+    except (
+        zipfile.BadZipFile,
+        KeyError,
+        OSError,
+        RuntimeError,
+        ElementTree.ParseError,
+    ) as error:
         raise ContractError("OFFICIAL_ARTIFACT_INVALID", f"path={path}") from error
     actual_member_sha = hashlib.sha256(xsd).hexdigest()
     if actual_member_sha != member_sha:
@@ -391,11 +626,17 @@ def _verify_official_package(
             OFFICIAL_ARTIFACT_CHECKSUM_MISMATCH,
             f"nested expected={member_sha} actual={actual_member_sha}",
         )
+    actual_geometry_sha = hashlib.sha256(geometry).hexdigest()
+    if actual_geometry_sha != geometry_sha:
+        raise ContractError(
+            OFFICIAL_ARTIFACT_CHECKSUM_MISMATCH,
+            f"geometry expected={geometry_sha} actual={actual_geometry_sha}",
+        )
     namespace = {"x": "http://www.w3.org/2001/XMLSchema"}
     shape_type = next(
         (
             item
-            for item in root.findall("x:simpleType", namespace)
+            for item in xsd_root.findall("x:simpleType", namespace)
             if item.get("name") == "ST_ShapeType"
         ),
         None,
@@ -415,6 +656,7 @@ def _verify_official_package(
         raise ContractError(
             OFFICIAL_PRESET_INVENTORY_MISMATCH, "artifact ST_ShapeType mismatch"
         )
+    _verify_manifest_adjustments(manifest, _official_adjustments(geometry_root, names))
 
 
 def _parse_args() -> argparse.Namespace:
@@ -425,6 +667,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--dispatcher", type=Path)
     parser.add_argument("--json", type=Path, dest="json_output")
     parser.add_argument("--official-artifact", type=Path)
+    parser.add_argument("--bundle", choices=("basic", "arrows", "remaining"))
     return parser.parse_args()
 
 
@@ -449,6 +692,7 @@ def main() -> int:
         manifest_path=manifest_path,
         source_root=source_root,
         dispatcher_path=dispatcher_path,
+        bundle=args.bundle,
     )
     if args.official_artifact:
         _verify_official_package(args.official_artifact, manifest, names)
