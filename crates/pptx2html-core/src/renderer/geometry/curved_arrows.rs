@@ -1,79 +1,154 @@
-// Auto-split from renderer/geometry.rs (mechanical move, no logic edits).
-// Family: curved_arrows
-
 use super::shared::{
     CURVED_DOWN_ARROW_ADJ_TIGHT_NORMALIZED_PATH, CURVED_DOWN_ARROW_ADJ_WIDE_NORMALIZED_PATH,
     CURVED_LEFT_ARROW_ADJ_TIGHT_NORMALIZED_PATH, CURVED_LEFT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
     CURVED_RIGHT_ARROW_ADJ_TIGHT_NORMALIZED_PATH, CURVED_RIGHT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
     CURVED_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH, CURVED_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-    curved_arrow_adjust_profile, interpolate_normalized_paths, scale_normalized_path,
+    curved_arrow_adjust_profile, interpolate_normalized_paths,
 };
 use std::collections::HashMap;
+
+fn finite(value: Option<f64>, default: f64) -> f64 {
+    value.filter(|value| value.is_finite()).unwrap_or(default)
+}
+
+fn extent(value: f64) -> f64 {
+    if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    }
+}
+
+fn scaled(base: f64, adjustment: f64) -> f64 {
+    let value = base * (adjustment / 100_000.0);
+    if value.is_finite() { value } else { 0.0 }
+}
+
+fn degenerate(w: f64, h: f64, start: &str, end: &str) -> String {
+    let defaults = HashMap::new();
+    interpolate_normalized_paths(start, end, curved_arrow_adjust_profile(&defaults), w, h)
+}
+
+fn values(w: f64, h: f64, adj: &HashMap<String, f64>, vertical: bool) -> (f64, f64, f64) {
+    let a2 = finite(adj.get("adj2").copied(), 50_000.0).clamp(0.0, 100_000.0);
+    let a1 = finite(adj.get("adj1").copied(), 25_000.0).clamp(0.0, a2);
+    let max_a3 = 100_000.0 - a2 / 2.0;
+    let a3 = finite(adj.get("adj3").copied(), 25_000.0).clamp(0.0, max_a3);
+    let cross = if vertical { w } else { h };
+    (
+        scaled(cross, a1),
+        scaled(cross, a2),
+        scaled(if vertical { h } else { w }, a3),
+    )
+}
+
 pub(super) fn curved_right_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(
-            "M 0.000342,0.388195 L 0.000342,0.388195 C 0.000342,0.456269 0.046543,0.523266 0.134155,0.582292 0.222108,0.641318 0.348049,0.690220 0.500342,0.724257 0.578371,0.741922 0.662560,0.755278 0.750171,0.764110 L 0.749829,0.685480 1.000000,0.855019 0.749829,1.000000 0.749829,0.921370 0.749829,0.921370 C 0.662218,0.912538 0.578371,0.899181 0.500000,0.881732 0.348049,0.847695 0.221766,0.798578 0.134155,0.739552 0.046201,0.680526 0.000000,0.613744 0.000000,0.545455 L 0.000342,0.388195 0.000342,0.388195 C 0.000342,0.320121 0.046543,0.253124 0.134155,0.194097 0.222108,0.135071 0.348049,0.086170 0.500342,0.052133 0.652293,0.017880 0.824435,0.000000 1.000000,0.000000 L 1.000000,0.157475 1.000000,0.157475 C 0.824435,0.157475 0.652293,0.175355 0.500342,0.209393 0.348049,0.243645 0.222108,0.292546 0.134155,0.351573 0.080767,0.387333 0.042779,0.426325 0.021218,0.467040",
+    let (w, h) = (extent(w), extent(h));
+    let (inner, outer, head) = values(w, h, adj, false);
+    let cy = h / 2.0;
+    if w == 0.0 || h == 0.0 {
+        return degenerate(
             w,
             h,
+            CURVED_RIGHT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
+            CURVED_RIGHT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
         );
     }
-
-    interpolate_normalized_paths(
-        CURVED_RIGHT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        CURVED_RIGHT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        curved_arrow_adjust_profile(adj),
-        w,
-        h,
+    format!(
+        "M0,{:.1} C{:.1},0 {:.1},0 {:.1},{:.1} L{:.1},{:.1} L{w:.1},{cy:.1} L{:.1},{:.1} L{:.1},{:.1} C{:.1},{h:.1} {:.1},{h:.1} 0,{:.1} Z",
+        cy - outer,
+        w * 0.35,
+        w * 0.65,
+        w - head,
+        cy - outer,
+        w - head,
+        cy - outer * 1.5,
+        w - head,
+        cy + outer * 1.5,
+        w - head,
+        cy + inner,
+        w * 0.65,
+        w * 0.35,
+        cy - inner
     )
 }
+
 pub(super) fn curved_left_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(
-            "M 1.000000,0.564799 L 1.000000,0.564799 1.000000,0.564799 C 1.000000,0.509797 0.953820,0.455483 0.865929,0.408044 0.778251,0.360261 0.652054,0.320729 0.499894,0.292884 0.347946,0.265383 0.175569,0.250945 0.000000,0.250945 L 0.000000,0.000000 0.000000,0.000000 C 0.175569,0.000000 0.347946,0.014438 0.499894,0.041939 0.652054,0.069440 0.778251,0.109316 0.865929,0.156755 0.953820,0.204538 1.000000,0.258852 1.000000,0.313854 L 1.000000,0.313854 1.000000,0.564799 1.000000,0.564799 C 1.000000,0.619801 0.953820,0.674115 0.865929,0.721554 0.778251,0.769337 0.652054,0.808869 0.500106,0.836714 0.393701,0.855964 0.276867,0.868683 0.155352,0.874871 L 0.155352,1.000000 0.000000,0.752836 0.155352,0.498109 0.155352,0.623582 0.155352,0.623582 C 0.276655,0.617738 0.393488,0.604675 0.499894,0.585425 0.652054,0.557924 0.778251,0.518047 0.865929,0.470608 0.884656,0.460296 0.901468,0.449983 0.916365,0.438982",
+    let (w, h) = (extent(w), extent(h));
+    let (inner, outer, head) = values(w, h, adj, false);
+    let cy = h / 2.0;
+    if w == 0.0 || h == 0.0 {
+        return degenerate(
             w,
             h,
+            CURVED_LEFT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
+            CURVED_LEFT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
         );
     }
-
-    interpolate_normalized_paths(
-        CURVED_LEFT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        CURVED_LEFT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        curved_arrow_adjust_profile(adj),
-        w,
-        h,
+    format!(
+        "M{w:.1},{:.1} C{:.1},0 {:.1},0 {head:.1},{:.1} L{head:.1},{:.1} L0,{cy:.1} L{head:.1},{:.1} L{head:.1},{:.1} C{:.1},{h:.1} {:.1},{h:.1} {w:.1},{:.1} Z",
+        cy - outer,
+        w * 0.65,
+        w * 0.35,
+        cy - outer,
+        cy - outer * 1.5,
+        cy + outer * 1.5,
+        cy + inner,
+        w * 0.35,
+        w * 0.65,
+        cy - inner
     )
 }
+
 pub(super) fn curved_up_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(
-            "M 0.441878,0.916434 L 0.441878,0.916434 C 0.452656,0.901448 0.463177,0.884684 0.473441,0.865888 0.521427,0.778258 0.561201,0.652019 0.588915,0.499873 0.603285,0.421641 0.614062,0.337567 0.621247,0.249936 L 0.494996,0.249936 0.757506,0.000000 1.000000,0.249936 0.873749,0.249936 0.873749,0.249936 C 0.866564,0.337567 0.855787,0.421641 0.841416,0.499873 0.813703,0.652019 0.773929,0.778258 0.725943,0.865888 0.677957,0.953772 0.623557,1.000000 0.568129,1.000000 L 0.315627,1.000000 0.315627,1.000000 C 0.260200,1.000000 0.205799,0.953772 0.157814,0.866142 0.109828,0.778258 0.070054,0.652019 0.042340,0.500127 0.014627,0.347981 0.000000,0.175514 0.000000,0.000000 L 0.252502,0.000000 0.252502,0.000000 C 0.252502,0.175514 0.267129,0.347981 0.294842,0.500127 0.322556,0.652019 0.362330,0.778258 0.410316,0.866142 0.458301,0.953772 0.512702,1.000000 0.568129,1.000000",
+    let (w, h) = (extent(w), extent(h));
+    let (inner, outer, head) = values(w, h, adj, true);
+    let cx = w / 2.0;
+    if w == 0.0 || h == 0.0 {
+        return degenerate(
             w,
             h,
+            CURVED_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
+            CURVED_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
         );
     }
-
-    interpolate_normalized_paths(
-        CURVED_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        CURVED_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        curved_arrow_adjust_profile(adj),
-        w,
-        h,
+    format!(
+        "M{:.1},{h:.1} C0,{:.1} 0,{:.1} {:.1},{head:.1} L{:.1},{head:.1} L{cx:.1},0 L{:.1},{head:.1} L{:.1},{head:.1} C{w:.1},{:.1} {w:.1},{:.1} {:.1},{h:.1} Z",
+        cx - outer,
+        h * 0.65,
+        h * 0.35,
+        cx - outer,
+        cx - outer * 1.5,
+        cx + outer * 1.5,
+        cx + inner,
+        h * 0.35,
+        h * 0.65,
+        cx - inner
     )
 }
+
 pub(super) fn curved_down_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(
-            "M 0.438982,0.083617 L 0.438982,0.083617 C 0.428326,0.098511 0.417669,0.115319 0.407700,0.134043 0.359917,0.221915 0.320385,0.348085 0.292884,0.500000 0.265040,0.652128 0.250602,0.824468 0.250602,1.000000 L 0.000000,1.000000 0.000000,1.000000 C 0.000000,0.824468 0.014438,0.652128 0.041939,0.500213 0.069440,0.348085 0.109316,0.221915 0.156755,0.134255 0.204538,0.046383 0.258852,0.000213 0.313854,0.000213 L 0.564799,0.000213 0.564799,0.000213 C 0.619801,0.000213 0.674115,0.046383 0.721554,0.134255 0.769337,0.221915 0.808869,0.348085 0.836714,0.500000 0.855964,0.606383 0.868683,0.723191 0.874871,0.844681 L 1.000000,0.844468 0.752836,1.000000 0.498109,0.844468 0.623582,0.844468 0.623582,0.844468 C 0.617738,0.723191 0.604675,0.606383 0.585425,0.500000 0.557924,0.347872 0.518047,0.221702 0.470608,0.134043 0.422826,0.046170 0.368855,0.000000 0.313510,0.000000",
+    let (w, h) = (extent(w), extent(h));
+    let (inner, outer, head) = values(w, h, adj, true);
+    let cx = w / 2.0;
+    if w == 0.0 || h == 0.0 {
+        return degenerate(
             w,
             h,
+            CURVED_DOWN_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
+            CURVED_DOWN_ARROW_ADJ_WIDE_NORMALIZED_PATH,
         );
     }
-
-    interpolate_normalized_paths(
-        CURVED_DOWN_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        CURVED_DOWN_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        curved_arrow_adjust_profile(adj),
-        w,
-        h,
+    format!(
+        "M{start:.1},0 C0,{c1:.1} 0,{c2:.1} {inner_left:.1},{neck:.1} L{outer_left:.1},{neck:.1} L{cx:.1},{h:.1} L{outer_right:.1},{neck:.1} L{inner_right:.1},{neck:.1} C{w:.1},{c2:.1} {w:.1},{c1:.1} {end:.1},0 Z",
+        start = cx - outer,
+        c1 = h * 0.35,
+        c2 = h * 0.65,
+        inner_left = cx - inner,
+        neck = h - head,
+        outer_left = cx - outer * 1.5,
+        outer_right = cx + outer * 1.5,
+        inner_right = cx + inner,
+        end = cx + outer
     )
 }

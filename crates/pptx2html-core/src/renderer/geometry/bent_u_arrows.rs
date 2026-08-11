@@ -1,338 +1,152 @@
-// Auto-split from renderer/geometry.rs (mechanical move, no logic edits).
-// Family: bent_u_arrows
-
-use super::shared::{polygon_path, scale_normalized_path, scale_unit_point};
+use super::shared::polygon_path;
 use std::collections::HashMap;
-pub(super) const BENT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.849795 L 0.774820,0.849795 0.774820,0.149863 0.699846,0.149863 0.849795,-0.000086 0.999914,0.149863 0.924769,0.149863 0.924769,0.999914 -0.000086,0.999914 -0.000086,0.849795 Z"#;
-pub(super) const BENT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.649863 L 0.474752,0.649863 0.474752,0.399777 0.299812,0.399777 0.649863,-0.000086 0.999914,0.399777 0.824803,0.399777 0.824803,0.999914 -0.000086,0.999914 -0.000086,0.649863 Z"#;
-pub(super) const BENT_UP_ARROW_ADJ_TALL_NORMALIZED_PATH: &str = r#"M 0.966667,1.039048 L 0.006667,1.039048 -0.021905,1.010476 -0.021905,0.774286 -0.000952,0.741905 0.705714,0.740000 0.705714,0.541905 0.682857,0.503810 0.823810,0.023810 0.848571,-0.008571 0.873333,0.016190 1.018095,0.496190 1.018095,0.519048 0.995238,0.545714 0.995238,1.014286 Z"#;
-pub(super) const BENT_UP_ARROW_ADJ_DEEP_NORMALIZED_PATH: &str = r#"M -0.000086,0.799812 L 0.449760,0.799812 0.449760,0.199846 0.099880,0.199846 0.549897,-0.000086 0.999914,0.199846 0.649863,0.199846 0.649863,0.999914 -0.000086,0.999914 -0.000086,0.799812 Z"#;
-pub(super) fn bent_up_arrow_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(25_000.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(25_000.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(25_000.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            BENT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            40_000.0,
-            BENT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            25_000.0,
-            15_000.0,
-            50_000.0,
-            BENT_UP_ARROW_ADJ_TALL_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            BENT_UP_ARROW_ADJ_DEEP_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a2x, a3x, _), (a1y, a2y, a3y, _)| {
-            let dx1 = (adj1 - *a1x) / 20_000.0;
-            let dx2 = (adj2 - *a2x) / 30_000.0;
-            let dx3 = (adj3 - *a3x) / 35_000.0;
-            let dy1 = (adj1 - *a1y) / 20_000.0;
-            let dy2 = (adj2 - *a2y) / 30_000.0;
-            let dy3 = (adj3 - *a3y) / 35_000.0;
-            (dx1 * dx1 + dx2 * dx2 + dx3 * dx3)
-                .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, _, path)| path)
-        .unwrap_or(BENT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH)
+fn finite(value: Option<f64>, default: f64) -> f64 {
+    value.filter(|value| value.is_finite()).unwrap_or(default)
 }
+
+fn extent(value: f64) -> f64 {
+    if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    }
+}
+
+fn scaled(base: f64, adjustment: f64) -> f64 {
+    let value = base * (adjustment / 100_000.0);
+    if value.is_finite() { value } else { 0.0 }
+}
+
 pub(super) fn bent_up_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(
-            "M 0.000000,0.736994 L 0.755396,0.736994 0.757194,0.260116 0.681655,0.242775 0.832734,0.000000 0.996403,0.228324 0.937050,0.312139 0.937050,0.994220 0.000000,0.994220 0.000000,0.736994 Z",
-            w,
-            h,
-        );
+    let (w, h) = (extent(w), extent(h));
+    if w == 0.0 && h == 0.0 {
+        return polygon_path(&[(0.0, 0.0)]);
     }
-
-    scale_normalized_path(bent_up_arrow_adjust_anchor(adj), w, h)
+    let a1 = finite(adj.get("adj1").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let a2 = finite(adj.get("adj2").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let a3 = finite(adj.get("adj3").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let (shaft, head, turn) = (scaled(w, a1), scaled(w, a2), scaled(h, a3));
+    format!(
+        "M0,{h:.1} L0,{base:.1} L{neck:.1},{base:.1} L{neck:.1},{head:.1} L{tip_left:.1},{head:.1} L{tip:.1},0 L{w:.1},{head:.1} L{right:.1},{head:.1} L{right:.1},{h:.1} Z",
+        base = h - shaft,
+        neck = w - head,
+        tip_left = w - head * 2.0,
+        tip = w - head,
+        right = w - turn
+    )
 }
-pub(super) const UTURN_ARROW_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.999914 L -0.000086,0.349795 -0.000086,0.349795 C -0.000086,0.288343 0.016005,0.227919 0.046816,0.174855 0.077456,0.121619 0.121790,0.077456 0.174855,0.046645 0.228090,0.016005 0.288514,-0.000257 0.349966,-0.000257 L 0.574889,-0.000086 0.574889,-0.000086 C 0.636340,-0.000086 0.696765,0.016005 0.749829,0.046816 0.803064,0.077456 0.847227,0.121790 0.878038,0.174855 0.908679,0.228090 0.924940,0.288514 0.924940,0.349966 L 0.924940,0.349966 0.924769,0.499914 0.999914,0.499914 0.849795,0.649863 0.699846,0.499914 0.774820,0.499914 0.774820,0.349795 0.774820,0.349795 0.774820,0.349795 C 0.774820,0.314704 0.765577,0.280127 0.747946,0.249829 0.730486,0.219360 0.705152,0.194197 0.674855,0.176566 0.644385,0.159106 0.609979,0.149863 0.574889,0.149863 L 0.349795,0.149863 0.349795,0.149863 C 0.314704,0.149863 0.280127,0.159106 0.249829,0.176737 0.219360,0.194197 0.194197,0.219531 0.176566,0.249829 0.159106,0.280298 0.149863,0.314704 0.149863,0.349795 L 0.149863,0.999914 -0.000086,0.999914 Z"#;
-pub(super) const UTURN_ARROW_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.999914 L -0.000086,0.462256 -0.000086,0.462256 C -0.000086,0.381119 0.021311,0.301352 0.061879,0.231000 0.102448,0.160647 0.160818,0.102277 0.231171,0.061708 0.301523,0.021140 0.381291,-0.000257 0.462427,-0.000257 L 0.462256,-0.000086 0.462256,-0.000086 C 0.543393,-0.000086 0.623160,0.021311 0.693512,0.061879 0.763865,0.102448 0.822236,0.160818 0.862804,0.231171 0.903372,0.301523 0.924769,0.381291 0.924769,0.462427 L 0.924769,0.462427 0.924769,0.499914 0.999914,0.499914 0.749829,0.849795 0.499914,0.499914 0.574889,0.499914 0.574889,0.462256 0.574889,0.462256 0.574889,0.462256 C 0.574889,0.442571 0.569754,0.423057 0.559825,0.405940 0.549897,0.388822 0.535690,0.374786 0.518572,0.364858 0.501455,0.354930 0.482112,0.349795 0.462427,0.349795 L 0.462256,0.349795 0.462256,0.349795 C 0.442571,0.349795 0.423057,0.354930 0.405940,0.364858 0.388822,0.374786 0.374786,0.388993 0.364858,0.406111 0.354930,0.423228 0.349795,0.442571 0.349795,0.462256 L 0.349795,0.999914 -0.000086,0.999914 Z"#;
-pub(super) const UTURN_ARROW_ADJ_SHALLOW_NORMALIZED_PATH: &str = r#"M -0.000086,0.999914 L -0.000086,0.489815 -0.000086,0.489815 C -0.000086,0.403886 0.022509,0.319326 0.065645,0.244865 0.108610,0.170404 0.170404,0.108439 0.244865,0.065474 0.319326,0.022509 0.403886,-0.000257 0.489986,-0.000257 L 0.489815,-0.000086 0.489815,-0.000086 C 0.575745,-0.000086 0.660305,0.022509 0.734765,0.065645 0.809226,0.108610 0.871191,0.170404 0.914156,0.244865 0.957121,0.319326 0.979887,0.403886 0.979887,0.489986 L 0.979887,0.489986 0.979887,0.599880 0.999914,0.599880 0.879750,0.849795 0.759757,0.599880 0.779784,0.599880 0.779784,0.489815 0.779784,0.489815 0.779784,0.489815 C 0.779784,0.438976 0.766433,0.388822 0.740928,0.344831 0.715423,0.300668 0.678792,0.264036 0.634800,0.238702 0.590637,0.213198 0.540654,0.199846 0.489815,0.199846 L 0.489815,0.199846 0.489815,0.199846 C 0.438976,0.199846 0.388822,0.213198 0.344831,0.238702 0.300668,0.264207 0.264036,0.300839 0.238702,0.344831 0.213198,0.388993 0.199846,0.438976 0.199846,0.489815 L 0.199846,0.999914 -0.000086,0.999914 Z"#;
-pub(super) const UTURN_ARROW_ADJ_DEEP_NORMALIZED_PATH: &str = r#"M -0.000086,0.999914 L -0.000086,0.249829 -0.000086,0.249829 C -0.000086,0.206008 0.011383,0.162872 0.033465,0.124872 0.055375,0.086871 0.086871,0.055204 0.124872,0.033293 0.162872,0.011383 0.206008,-0.000086 0.250000,-0.000086 L 0.624872,-0.000086 0.624872,-0.000086 C 0.668692,-0.000086 0.711828,0.011383 0.749829,0.033465 0.787830,0.055375 0.819497,0.086871 0.841407,0.124872 0.863317,0.162872 0.874957,0.206008 0.874957,0.250000 L 0.874957,0.250000 0.874786,0.599880 0.999914,0.599880 0.749829,0.699846 0.499914,0.599880 0.624872,0.599880 0.624872,0.249829 0.624872,0.249829 0.249829,0.249829 0.249829,0.249829 0.249829,0.999914 -0.000086,0.999914 Z"#;
-pub(super) fn uturn_arrow_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(25_000.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(25_000.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(25_000.0);
-    let adj4 = adj.get("adj4").copied().unwrap_or(43_750.0);
-    let adj5 = adj.get("adj5").copied().unwrap_or(75_000.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            35_000.0,
-            65_000.0,
-            UTURN_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            30_000.0,
-            35_000.0,
-            50_000.0,
-            85_000.0,
-            UTURN_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            12_000.0,
-            25_000.0,
-            65_000.0,
-            85_000.0,
-            UTURN_ARROW_ADJ_SHALLOW_NORMALIZED_PATH,
-        ),
-        (
-            25_000.0,
-            45_000.0,
-            10_000.0,
-            25_000.0,
-            70_000.0,
-            UTURN_ARROW_ADJ_DEEP_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(
-            |(a1x, a2x, a3x, a4x, a5x, _), (a1y, a2y, a3y, a4y, a5y, _)| {
-                let dx1 = (adj1 - *a1x) / 20_000.0;
-                let dx2 = (adj2 - *a2x) / 35_000.0;
-                let dx3 = (adj3 - *a3x) / 25_000.0;
-                let dx4 = (adj4 - *a4x) / 40_000.0;
-                let dx5 = (adj5 - *a5x) / 20_000.0;
-                let dy1 = (adj1 - *a1y) / 20_000.0;
-                let dy2 = (adj2 - *a2y) / 35_000.0;
-                let dy3 = (adj3 - *a3y) / 25_000.0;
-                let dy4 = (adj4 - *a4y) / 40_000.0;
-                let dy5 = (adj5 - *a5y) / 20_000.0;
-                (dx1 * dx1 + dx2 * dx2 + dx3 * dx3 + dx4 * dx4 + dx5 * dx5)
-                    .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3 + dy4 * dy4 + dy5 * dy5))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            },
-        )
-        .map(|(_, _, _, _, _, path)| path)
-        .unwrap_or(UTURN_ARROW_ADJ_TIGHT_NORMALIZED_PATH)
-}
 pub(super) fn uturn_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(
-            "M 0.266000,0.972000 L 0.028000,0.962000 0.028000,0.418000 0.044000,0.322000 0.124000,0.174000 0.250000,0.072000 0.394000,0.028000 0.554000,0.040000 0.686000,0.104000 0.776000,0.194000 0.844000,0.334000 0.856000,0.490000 0.972000,0.502000 0.730000,0.736000 0.496000,0.502000 0.612000,0.486000 0.608000,0.406000 0.576000,0.338000 0.482000,0.276000 0.362000,0.292000 0.308000,0.338000 0.276000,0.410000 Z",
-            w,
-            h,
-        );
-    }
-
-    scale_normalized_path(uturn_arrow_adjust_anchor(adj), w, h)
+    let (w, h) = (extent(w), extent(h));
+    let a2 = finite(adj.get("adj2").copied(), 25_000.0).clamp(0.0, 25_000.0);
+    let max_a1 = (50_000.0 - a2).max(0.0);
+    let a1 = finite(adj.get("adj1").copied(), 25_000.0).clamp(0.0, max_a1);
+    let a3 = finite(adj.get("adj3").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let max_a4 = (100_000.0 - a3).max(0.0);
+    let a4 = finite(adj.get("adj4").copied(), 43_750.0).clamp(0.0, max_a4);
+    let min_a5 = a3 + a4;
+    let a5 = finite(adj.get("adj5").copied(), 75_000.0).clamp(min_a5, 100_000.0);
+    let (shaft, gap, head, head_y, depth) = (
+        scaled(w, a1),
+        scaled(w, a2),
+        scaled(w, a3),
+        scaled(h, a4),
+        scaled(h, a5),
+    );
+    let outer = w - gap;
+    format!(
+        "M0,{h:.1} L0,{:.1} Q0,0 {outer:.1},0 Q{w:.1},0 {w:.1},{:.1} L{w:.1},{depth:.1} L{:.1},{depth:.1} L{:.1},{:.1} L{:.1},{depth:.1} L{outer:.1},{head_y:.1} Q{outer:.1},{shaft:.1} {shaft:.1},{shaft:.1} L{shaft:.1},{h:.1} Z",
+        shaft,
+        head_y,
+        w - head,
+        w - head,
+        depth + head,
+        w - head * 2.0
+    )
 }
-pub(super) const LEFT_RIGHT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.849795 L 0.149863,0.699846 0.149863,0.774820 0.424769,0.774820 0.424769,0.149863 0.349795,0.149863 0.499914,-0.000086 0.649863,0.149863 0.574889,0.149863 0.574889,0.774820 0.849795,0.774820 0.849795,0.699846 0.999914,0.849795 0.849795,0.999914 0.849795,0.924769 0.149863,0.924769 0.149863,0.999914 -0.000086,0.849795 Z"#;
-pub(super) const LEFT_RIGHT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.649863 L 0.149863,0.299812 0.149863,0.474752 0.324803,0.474752 0.324803,0.149863 0.149863,0.149863 0.499914,-0.000086 0.849795,0.149863 0.674855,0.149863 0.674855,0.474752 0.849795,0.474752 0.849795,0.299812 0.999914,0.649863 0.849795,0.999914 0.849795,0.824803 0.149863,0.824803 0.149863,0.999914 -0.000086,0.649863 Z"#;
-pub(super) const LEFT_RIGHT_UP_ARROW_ADJ_TALL_NORMALIZED_PATH: &str = r#"M -0.000086,0.799812 L 0.299812,0.599880 0.299812,0.699846 0.399777,0.699846 0.399777,0.299812 0.299812,0.299812 0.499914,-0.000086 0.699846,0.299812 0.599880,0.299812 0.599880,0.699846 0.699846,0.699846 0.699846,0.599880 0.999914,0.799812 0.699846,0.999914 0.699846,0.899777 0.299812,0.899777 0.299812,0.999914 -0.000086,0.799812 Z"#;
-pub(super) const LEFT_RIGHT_UP_ARROW_ADJ_THICK_NORMALIZED_PATH: &str = r#"M -0.000086,0.849795 L 0.249829,0.699846 0.249829,0.699846 0.349795,0.699846 0.349795,0.249829 0.349795,0.249829 0.499914,-0.000086 0.649863,0.249829 0.649863,0.249829 0.649863,0.699846 0.749829,0.699846 0.749829,0.699846 0.999914,0.849795 0.749829,0.999914 0.749829,0.999914 0.249829,0.999914 0.249829,0.999914 -0.000086,0.849795 Z"#;
-pub(super) fn left_right_up_arrow_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(25_000.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(25_000.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(25_000.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            20_000.0,
-            50_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_TALL_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            15_000.0,
-            25_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a2x, a3x, _), (a1y, a2y, a3y, _)| {
-            let dx1 = (adj1 - *a1x) / 30_000.0;
-            let dx2 = (adj2 - *a2x) / 20_000.0;
-            let dx3 = (adj3 - *a3x) / 35_000.0;
-            let dy1 = (adj1 - *a1y) / 30_000.0;
-            let dy2 = (adj2 - *a2y) / 20_000.0;
-            let dy3 = (adj3 - *a3y) / 35_000.0;
-            (dx1 * dx1 + dx2 * dx2 + dx3 * dx3)
-                .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, _, path)| path)
-        .unwrap_or(LEFT_RIGHT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH)
-}
 pub(super) fn left_right_up_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        let points = [
-            scale_unit_point(w, h, 0.000000, 0.749743),
-            scale_unit_point(w, h, 0.155352, 0.499829),
-            scale_unit_point(w, h, 0.155352, 0.624786),
-            scale_unit_point(w, h, 0.422217, 0.624786),
-            scale_unit_point(w, h, 0.422217, 0.249914),
-            scale_unit_point(w, h, 0.344541, 0.249914),
-            scale_unit_point(w, h, 0.499894, 0.000000),
-            scale_unit_point(w, h, 0.655246, 0.249914),
-            scale_unit_point(w, h, 0.577570, 0.249914),
-            scale_unit_point(w, h, 0.577570, 0.624786),
-            scale_unit_point(w, h, 0.844435, 0.624786),
-            scale_unit_point(w, h, 0.844435, 0.499829),
-            scale_unit_point(w, h, 1.000000, 0.749743),
-            scale_unit_point(w, h, 0.844435, 1.000000),
-            scale_unit_point(w, h, 0.844435, 0.874700),
-            scale_unit_point(w, h, 0.155352, 0.874700),
-            scale_unit_point(w, h, 0.155352, 1.000000),
-        ];
-        return polygon_path(&points);
-    }
-
-    scale_normalized_path(left_right_up_arrow_adjust_anchor(adj), w, h)
+    let (w, h) = (extent(w), extent(h));
+    let a2 = finite(adj.get("adj2").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let max_a1 = (50_000.0 - a2).max(0.0);
+    let a1 = finite(adj.get("adj1").copied(), 25_000.0).clamp(0.0, max_a1);
+    let max_a3 = (100_000.0 - a2).max(0.0);
+    let a3 = finite(adj.get("adj3").copied(), 25_000.0).clamp(0.0, max_a3);
+    let (shaft, head, y) = (scaled(w, a1), scaled(w, a2), scaled(h, a3));
+    let cx = w / 2.0;
+    let (shaft_left, shaft_right) = (cx - shaft / 2.0, cx + shaft / 2.0);
+    format!(
+        "M0,{base:.1} L{head:.1},{base:.1} L{head:.1},{y:.1} L{shaft_left:.1},{y:.1} L{shaft_left:.1},{head:.1} L{up_left:.1},{head:.1} L{cx:.1},0 L{up_right:.1},{head:.1} L{shaft_right:.1},{head:.1} L{shaft_right:.1},{y:.1} L{right_neck:.1},{y:.1} L{right_neck:.1},{base:.1} L{w:.1},{h:.1} L{right_neck:.1},{h:.1} L{right_neck:.1},{h:.1} L{head:.1},{h:.1} Z",
+        base = h - head,
+        up_left = cx - head,
+        up_right = cx + head,
+        right_neck = w - head
+    )
 }
-pub(super) const QUAD_ARROW_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.149863,0.349795 0.149863,0.424769 0.424769,0.424769 0.424769,0.149863 0.349795,0.149863 0.499914,-0.000086 0.649863,0.149863 0.574889,0.149863 0.574889,0.424769 0.849795,0.424769 0.849795,0.349795 0.999914,0.499914 0.849795,0.649863 0.849795,0.574889 0.574889,0.574889 0.574889,0.849795 0.649863,0.849795 0.499914,0.999914 0.349795,0.849795 0.424769,0.849795 0.424769,0.574889 0.149863,0.574889 0.149863,0.649863 -0.000086,0.499914 Z"#;
-pub(super) const QUAD_ARROW_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.149863,0.149863 0.149863,0.324803 0.324803,0.324803 0.324803,0.149863 0.149863,0.149863 0.499914,-0.000086 0.849795,0.149863 0.674855,0.149863 0.674855,0.324803 0.849795,0.324803 0.849795,0.149863 0.999914,0.499914 0.849795,0.849795 0.849795,0.674855 0.674855,0.674855 0.674855,0.849795 0.849795,0.849795 0.499914,0.999914 0.149863,0.849795 0.324803,0.849795 0.324803,0.674855 0.149863,0.674855 0.149863,0.849795 -0.000086,0.499914 Z"#;
-pub(super) const QUAD_ARROW_ADJ_TALL_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.299812,0.299812 0.299812,0.399777 0.399777,0.399777 0.399777,0.299812 0.299812,0.299812 0.499914,-0.000086 0.699846,0.299812 0.599880,0.299812 0.599880,0.399777 0.699846,0.399777 0.699846,0.299812 0.999914,0.499914 0.699846,0.699846 0.699846,0.599880 0.599880,0.599880 0.599880,0.699846 0.699846,0.699846 0.499914,0.999914 0.299812,0.699846 0.399777,0.699846 0.399777,0.599880 0.299812,0.599880 0.299812,0.699846 -0.000086,0.499914 Z"#;
-pub(super) const QUAD_ARROW_ADJ_THICK_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.249829,0.349795 0.249829,0.349795 0.349795,0.349795 0.349795,0.249829 0.349795,0.249829 0.499914,-0.000086 0.649863,0.249829 0.649863,0.249829 0.649863,0.349795 0.749829,0.349795 0.749829,0.349795 0.999914,0.499914 0.749829,0.649863 0.749829,0.649863 0.649863,0.649863 0.649863,0.749829 0.649863,0.749829 0.499914,0.999914 0.349795,0.749829 0.349795,0.749829 0.349795,0.649863 0.249829,0.649863 0.249829,0.649863 -0.000086,0.499914 Z"#;
-pub(super) fn quad_arrow_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(22_500.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(22_500.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(22_500.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            QUAD_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            QUAD_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            20_000.0,
-            50_000.0,
-            QUAD_ARROW_ADJ_TALL_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            15_000.0,
-            25_000.0,
-            QUAD_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a2x, a3x, _), (a1y, a2y, a3y, _)| {
-            let dx1 = (adj1 - *a1x) / 30_000.0;
-            let dx2 = (adj2 - *a2x) / 20_000.0;
-            let dx3 = (adj3 - *a3x) / 35_000.0;
-            let dy1 = (adj1 - *a1y) / 30_000.0;
-            let dy2 = (adj2 - *a2y) / 20_000.0;
-            let dy3 = (adj3 - *a3y) / 35_000.0;
-            (dx1 * dx1 + dx2 * dx2 + dx3 * dx3)
-                .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, _, path)| path)
-        .unwrap_or(QUAD_ARROW_ADJ_TIGHT_NORMALIZED_PATH)
-}
 pub(super) fn quad_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    scale_normalized_path(quad_arrow_adjust_anchor(adj), w, h)
+    let (w, h) = (extent(w), extent(h));
+    let a2 = finite(adj.get("adj2").copied(), 22_500.0).clamp(0.0, 50_000.0);
+    let max_a1 = (50_000.0 - a2).max(0.0);
+    let a1 = finite(adj.get("adj1").copied(), 22_500.0).clamp(0.0, max_a1);
+    let max_a3 = (100_000.0 - a2).max(0.0);
+    let a3 = finite(adj.get("adj3").copied(), 22_500.0).clamp(0.0, max_a3);
+    let (shaft, head_x, head_y) = (scaled(w.min(h), a1), scaled(w, a2), scaled(h, a3));
+    let (cx, cy) = (w / 2.0, h / 2.0);
+    format!(
+        "M0,{cy:.1} L{head_x:.1},{:.1} L{head_x:.1},{:.1} L{:.1},{:.1} L{:.1},{head_y:.1} L{:.1},{head_y:.1} L{cx:.1},0 L{:.1},{head_y:.1} L{:.1},{head_y:.1} L{:.1},{:.1} L{:.1},{:.1} L{w:.1},{cy:.1} L{:.1},{:.1} L{:.1},{:.1} L{:.1},{:.1} L{:.1},{:.1} L{cx:.1},{h:.1} L{:.1},{:.1} L{:.1},{:.1} L{:.1},{:.1} L{head_x:.1},{:.1} L{head_x:.1},{:.1} Z",
+        cy - head_y,
+        cy - shaft / 2.0,
+        cx - shaft / 2.0,
+        cy - shaft / 2.0,
+        cx - shaft / 2.0,
+        cx + shaft / 2.0,
+        cx + shaft / 2.0,
+        cy - shaft / 2.0,
+        w - head_x,
+        cy - shaft / 2.0,
+        w - head_x,
+        cy - head_y,
+        w - head_x,
+        cy + head_y,
+        w - head_x,
+        cy + shaft / 2.0,
+        cx + shaft / 2.0,
+        cy + shaft / 2.0,
+        cx + shaft / 2.0,
+        h - head_y,
+        cx - shaft / 2.0,
+        h - head_y,
+        cx - shaft / 2.0,
+        cy + shaft / 2.0,
+        head_x,
+        cy + shaft / 2.0,
+        head_x,
+        cy + head_y
+    )
 }
-pub(super) const LEFT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.849795 L 0.149863,0.699846 0.149863,0.774820 0.774820,0.774820 0.774820,0.149863 0.699846,0.149863 0.849795,-0.000086 0.999914,0.149863 0.924769,0.149863 0.924769,0.924769 0.149863,0.924769 0.149863,0.999914 -0.000086,0.849795 Z"#;
-pub(super) const LEFT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.649863 L 0.299812,0.299812 0.299812,0.474752 0.474752,0.474752 0.474752,0.299812 0.299812,0.299812 0.649863,-0.000086 0.999914,0.299812 0.824803,0.299812 0.824803,0.824803 0.299812,0.824803 0.299812,0.999914 -0.000086,0.649863 Z"#;
-pub(super) const LEFT_UP_ARROW_ADJ_LONG_NORMALIZED_PATH: &str = r#"M -0.000086,0.799812 L 0.499914,0.599880 0.499914,0.699846 0.699846,0.699846 0.699846,0.499914 0.599880,0.499914 0.799812,-0.000086 0.999914,0.499914 0.899777,0.499914 0.899777,0.899777 0.499914,0.899777 0.499914,0.999914 -0.000086,0.799812 Z"#;
-pub(super) const LEFT_UP_ARROW_ADJ_THICK_NORMALIZED_PATH: &str = r#"M -0.000086,0.849795 L 0.249829,0.699846 0.249829,0.699846 0.699846,0.699846 0.699846,0.249829 0.699846,0.249829 0.849795,-0.000086 0.999914,0.249829 0.999914,0.249829 0.999914,0.999914 0.249829,0.999914 0.249829,0.999914 -0.000086,0.849795 Z"#;
-pub(super) fn left_up_arrow_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(25_000.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(25_000.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(25_000.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            LEFT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            45_000.0,
-            LEFT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            20_000.0,
-            50_000.0,
-            LEFT_UP_ARROW_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            40_000.0,
-            15_000.0,
-            25_000.0,
-            LEFT_UP_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a2x, a3x, _), (a1y, a2y, a3y, _)| {
-            let dx1 = (adj1 - *a1x) / 25_000.0;
-            let dx2 = (adj2 - *a2x) / 20_000.0;
-            let dx3 = (adj3 - *a3x) / 35_000.0;
-            let dy1 = (adj1 - *a1y) / 25_000.0;
-            let dy2 = (adj2 - *a2y) / 20_000.0;
-            let dy3 = (adj3 - *a3y) / 35_000.0;
-            (dx1 * dx1 + dx2 * dx2 + dx3 * dx3)
-                .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, _, path)| path)
-        .unwrap_or(LEFT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH)
-}
 pub(super) fn left_up_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(
-            "M 0.039117,0.814066 L 0.269401,0.666532 0.269401,0.740299 0.614826,0.740299 0.614826,0.159660 0.499685,0.159660 0.729968,0.012126 0.960568,0.159660 0.845110,0.159660 0.845110,0.887833 0.269401,0.887833 0.269401,0.961803 0.039117,0.814066 Z",
-            w,
-            h,
-        );
-    }
-
-    scale_normalized_path(left_up_arrow_adjust_anchor(adj), w, h)
+    let (w, h) = (extent(w), extent(h));
+    let a2 = finite(adj.get("adj2").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let max_a1 = (100_000.0 - a2).max(0.0);
+    let a1 = finite(adj.get("adj1").copied(), 25_000.0).clamp(0.0, max_a1);
+    let max_a3 = (100_000.0 - a2).max(0.0);
+    let a3 = finite(adj.get("adj3").copied(), 25_000.0).clamp(0.0, max_a3);
+    let (shaft, head, reach) = (scaled(w.min(h), a1), scaled(w.min(h), a2), scaled(h, a3));
+    format!(
+        "M0,{:.1} L{head:.1},{:.1} L{head:.1},{:.1} L{:.1},{:.1} L{:.1},{head:.1} L{:.1},{head:.1} L{:.1},0 L{w:.1},{head:.1} L{:.1},{head:.1} L{:.1},{h:.1} L{head:.1},{h:.1} L{head:.1},{:.1} Z",
+        h - head,
+        h - head * 2.0,
+        h - reach,
+        w - shaft,
+        h - reach,
+        w - shaft,
+        w - head,
+        w - shaft,
+        w - shaft,
+        h - shaft,
+        h - head
+    )
 }

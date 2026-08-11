@@ -1,280 +1,181 @@
-// Auto-split from renderer/geometry.rs (mechanical move, no logic edits).
-// Family: arrow_callouts
-
-use super::shared::scale_normalized_path;
 use std::collections::HashMap;
-// Arrow callout shapes
-pub(super) fn down_arrow_callout_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    let a1 = adj.get("adj1").copied().unwrap_or(25000.0) / 100_000.0;
-    let a2 = adj.get("adj2").copied().unwrap_or(25000.0) / 100_000.0;
-    let a3 = adj.get("adj3").copied().unwrap_or(25000.0) / 100_000.0;
-    let a4 = adj.get("adj4").copied().unwrap_or(64977.0) / 100_000.0;
-    let (cx, s, ah) = (w / 2.0, w * a1, h * a3);
-    let bh = h * a4;
-    let _ = a2;
-    format!(
-        "M0,0 L{w:.1},0 L{w:.1},{bh:.1} L{x2:.1},{bh:.1} L{x2:.1},{yh:.1} L{cx:.1},{h:.1} L{x1:.1},{yh:.1} L{x1:.1},{bh:.1} L0,{bh:.1} Z",
-        w = w,
-        bh = bh,
-        x1 = cx - s,
-        x2 = cx + s,
-        yh = h - ah,
-        cx = cx,
-        h = h
-    )
-}
-pub(super) fn left_arrow_callout_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    let a1 = adj.get("adj1").copied().unwrap_or(25000.0) / 100_000.0;
-    let a2 = adj.get("adj2").copied().unwrap_or(25000.0) / 100_000.0;
-    let a3 = adj.get("adj3").copied().unwrap_or(25000.0) / 100_000.0;
-    let a4 = adj.get("adj4").copied().unwrap_or(64977.0) / 100_000.0;
-    let (cy, s, aw) = (h / 2.0, h * a1, w * a3);
-    let bx = w * (1.0 - a4);
-    let _ = a2;
-    format!(
-        "M{bx:.1},0 L{w:.1},0 L{w:.1},{h:.1} L{bx:.1},{h:.1} L{bx:.1},{y2:.1} L{aw:.1},{y2:.1} L0,{cy:.1} L{aw:.1},{y1:.1} L{bx:.1},{y1:.1} Z",
-        bx = bx,
-        w = w,
-        h = h,
-        y1 = cy - s,
-        y2 = cy + s,
-        aw = aw,
-        cy = cy
-    )
-}
-pub(super) fn right_arrow_callout_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    let a1 = adj.get("adj1").copied().unwrap_or(25000.0) / 100_000.0;
-    let a2 = adj.get("adj2").copied().unwrap_or(25000.0) / 100_000.0;
-    let a3 = adj.get("adj3").copied().unwrap_or(25000.0) / 100_000.0;
-    let a4 = adj.get("adj4").copied().unwrap_or(64977.0) / 100_000.0;
-    let (cy, s, aw) = (h / 2.0, h * a1, w * a3);
-    let bx = w * a4;
-    let _ = a2;
-    format!(
-        "M0,0 L{bx:.1},0 L{bx:.1},{y1:.1} L{xh:.1},{y1:.1} L{w:.1},{cy:.1} L{xh:.1},{y2:.1} L{bx:.1},{y2:.1} L{bx:.1},{h:.1} L0,{h:.1} Z",
-        bx = bx,
-        y1 = cy - s,
-        y2 = cy + s,
-        xh = w - aw,
-        w = w,
-        cy = cy,
-        h = h
-    )
-}
-pub(super) fn up_arrow_callout_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    let a1 = adj.get("adj1").copied().unwrap_or(25000.0) / 100_000.0;
-    let a2 = adj.get("adj2").copied().unwrap_or(25000.0) / 100_000.0;
-    let a3 = adj.get("adj3").copied().unwrap_or(25000.0) / 100_000.0;
-    let a4 = adj.get("adj4").copied().unwrap_or(64977.0) / 100_000.0;
-    let (cx, s, ah) = (w / 2.0, w * a1, h * a3);
-    let bh = h * (1.0 - a4);
-    let _ = a2;
-    format!(
-        "M0,{bh:.1} L{x1:.1},{bh:.1} L{x1:.1},{ah:.1} L{cx:.1},0 L{x2:.1},{ah:.1} L{x2:.1},{bh:.1} L{w:.1},{bh:.1} L{w:.1},{h:.1} L0,{h:.1} Z",
-        bh = bh,
-        x1 = cx - s,
-        x2 = cx + s,
-        ah = ah,
-        cx = cx,
-        w = w,
-        h = h
-    )
-}
-pub(super) const QUAD_ARROW_CALLOUT_DEFAULT_NORMALIZED_PATH: &str = r#"M 0.976608,0.525362 L 0.824561,0.623188 L 0.812865,0.619565 L 0.812865,0.565217 L 0.754386,0.565217 L 0.754386,0.746377 L 0.602339,0.750000 L 0.602339,0.884058 L 0.695906,0.884058 L 0.695906,0.894928 L 0.520468,1.000000 L 0.485380,1.000000 L 0.309942,0.894928 L 0.309942,0.884058 L 0.403509,0.884058 L 0.403509,0.750000 L 0.251462,0.746377 L 0.251462,0.565217 L 0.192982,0.565217 L 0.192982,0.619565 L 0.175439,0.619565 L 0.000000,0.510870 L 0.000000,0.492754 L 0.175439,0.384058 L 0.192982,0.384058 L 0.192982,0.438406 L 0.251462,0.438406 L 0.251462,0.257246 L 0.403509,0.253623 L 0.403509,0.119565 L 0.309942,0.119565 L 0.309942,0.108696 L 0.485380,0.000000 L 0.520468,0.000000 L 0.695906,0.108696 L 0.695906,0.119565 L 0.602339,0.119565 L 0.602339,0.253623 L 0.754386,0.257246 L 0.754386,0.438406 L 0.812865,0.438406 L 0.812865,0.384058 L 0.824561,0.380435 L 1.000000,0.492754 L 1.000000,0.510870 Z"#;
-pub(super) const QUAD_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.149863,0.349795 0.149863,0.424769 0.424769,0.424769 0.424769,0.424769 0.424769,0.424769 0.424769,0.149863 0.349795,0.149863 0.499914,-0.000086 0.649863,0.149863 0.574889,0.149863 0.574889,0.424769 0.574889,0.424769 0.574889,0.424769 0.849795,0.424769 0.849795,0.349795 0.999914,0.499914 0.849795,0.649863 0.849795,0.574889 0.574889,0.574889 0.574889,0.574889 0.574889,0.574889 0.574889,0.849795 0.649863,0.849795 0.499914,0.999914 0.349795,0.849795 0.424769,0.849795 0.424769,0.574889 0.424769,0.574889 0.424769,0.574889 0.149863,0.574889 0.149863,0.649863 -0.000086,0.499914 Z"#;
-pub(super) const QUAD_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.149863,0.149863 0.149863,0.324803 0.324803,0.324803 0.324803,0.324803 0.324803,0.324803 0.324803,0.149863 0.149863,0.149863 0.499914,-0.000086 0.849795,0.149863 0.674855,0.149863 0.674855,0.324803 0.674855,0.324803 0.674855,0.324803 0.849795,0.324803 0.849795,0.149863 0.999914,0.499914 0.849795,0.849795 0.849795,0.674855 0.674855,0.674855 0.674855,0.674855 0.674855,0.674855 0.674855,0.849795 0.849795,0.849795 0.499914,0.999914 0.149863,0.849795 0.324803,0.849795 0.324803,0.674855 0.324803,0.674855 0.324803,0.674855 0.149863,0.674855 0.149863,0.849795 -0.000086,0.499914 Z"#;
-pub(super) const QUAD_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L -0.000086,-0.000086 -0.000086,0.399777 0.249829,0.399777 0.249829,0.249829 0.399777,0.249829 0.399777,-0.000086 -0.000086,-0.000086 0.499914,-0.000086 0.999914,-0.000086 0.599880,-0.000086 0.599880,0.249829 0.749829,0.249829 0.749829,0.399777 0.999914,0.399777 0.999914,-0.000086 0.999914,0.499914 0.999914,0.999914 0.999914,0.599880 0.749829,0.599880 0.749829,0.749829 0.599880,0.749829 0.599880,0.999914 0.999914,0.999914 0.499914,0.999914 -0.000086,0.999914 0.399777,0.999914 0.399777,0.749829 0.249829,0.749829 0.249829,0.599880 -0.000086,0.599880 -0.000086,0.999914 -0.000086,0.499914 Z"#;
-pub(super) const QUAD_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.299812,0.299812 0.299812,0.299812 0.299812,0.299812 0.299812,0.299812 0.299812,0.299812 0.299812,0.299812 0.299812,0.299812 0.499914,-0.000086 0.699846,0.299812 0.699846,0.299812 0.699846,0.299812 0.699846,0.299812 0.699846,0.299812 0.699846,0.299812 0.699846,0.299812 0.999914,0.499914 0.699846,0.699846 0.699846,0.699846 0.699846,0.699846 0.699846,0.699846 0.699846,0.699846 0.699846,0.699846 0.699846,0.699846 0.499914,0.999914 0.299812,0.699846 0.299812,0.699846 0.299812,0.699846 0.299812,0.699846 0.299812,0.699846 0.299812,0.699846 0.299812,0.699846 -0.000086,0.499914 Z"#;
-pub(super) fn quad_arrow_callout_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(18_515.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(18_515.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(18_515.0);
-    let adj4 = adj.get("adj4").copied().unwrap_or(48_123.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            25_000.0,
-            50_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a2x, a3x, a4x, _), (a1y, a2y, a3y, a4y, _)| {
-            let dx1 = (adj1 - *a1x) / 30_000.0;
-            let dx2 = (adj2 - *a2x) / 35_000.0;
-            let dx3 = (adj3 - *a3x) / 30_000.0;
-            let dx4 = (adj4 - *a4x) / 35_000.0;
-            let dy1 = (adj1 - *a1y) / 30_000.0;
-            let dy2 = (adj2 - *a2y) / 35_000.0;
-            let dy3 = (adj3 - *a3y) / 30_000.0;
-            let dy4 = (adj4 - *a4y) / 35_000.0;
-            (dx1 * dx1 + dx2 * dx2 + dx3 * dx3 + dx4 * dx4)
-                .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3 + dy4 * dy4))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, _, _, path)| path)
-        .unwrap_or(QUAD_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH)
+fn finite(value: Option<f64>, default: f64) -> f64 {
+    value.filter(|value| value.is_finite()).unwrap_or(default)
 }
-pub(super) fn quad_arrow_callout_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(QUAD_ARROW_CALLOUT_DEFAULT_NORMALIZED_PATH, w, h);
+
+fn extent(value: f64) -> f64 {
+    if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
     }
-
-    scale_normalized_path(quad_arrow_callout_adjust_anchor(adj), w, h)
 }
-pub(super) const LEFT_RIGHT_ARROW_CALLOUT_DEFAULT_NORMALIZED_PATH: &str = r#"M 0.256318,1.000000 L 0.256318,0.639535 L 0.162455,0.633721 L 0.162455,0.755814 L 0.151625,0.761628 L 0.000000,0.517442 L 0.000000,0.488372 L 0.151625,0.244186 L 0.162455,0.250000 L 0.162455,0.372093 L 0.256318,0.366279 L 0.256318,0.000000 L 0.747292,0.000000 L 0.747292,0.372093 L 0.841155,0.372093 L 0.841155,0.250000 L 0.851986,0.244186 L 1.000000,0.488372 L 1.000000,0.517442 L 0.920578,0.651163 L 0.913357,0.651163 L 0.848375,0.761628 L 0.841155,0.755814 L 0.841155,0.633721 L 0.747292,0.633721 L 0.747292,1.000000 Z"#;
-pub(super) const LEFT_RIGHT_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.149863,0.349795 0.149863,0.424769 0.424769,0.424769 0.424769,-0.000086 0.574889,-0.000086 0.574889,0.424769 0.849795,0.424769 0.849795,0.349795 0.999914,0.499914 0.849795,0.649863 0.849795,0.574889 0.574889,0.574889 0.574889,0.999914 0.424769,0.999914 0.424769,0.574889 0.149863,0.574889 0.149863,0.649863 -0.000086,0.499914 Z"#;
-pub(super) const LEFT_RIGHT_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.349795,0.149863 0.349795,0.324803 0.349795,0.324803 0.349795,-0.000086 0.649863,-0.000086 0.649863,0.324803 0.649863,0.324803 0.649863,0.149863 0.999914,0.499914 0.649863,0.849795 0.649863,0.674855 0.649863,0.674855 0.649863,0.999914 0.349795,0.999914 0.349795,0.674855 0.349795,0.674855 0.349795,0.849795 -0.000086,0.499914 Z"#;
-pub(super) const LEFT_RIGHT_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.249829,-0.000086 0.249829,0.399777 0.249829,0.399777 0.249829,-0.000086 0.749829,-0.000086 0.749829,0.399777 0.749829,0.399777 0.749829,-0.000086 0.999914,0.499914 0.749829,0.999914 0.749829,0.599880 0.749829,0.599880 0.749829,0.999914 0.249829,0.999914 0.249829,0.599880 0.249829,0.599880 0.249829,0.999914 -0.000086,0.499914 Z"#;
-pub(super) const LEFT_RIGHT_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L 0.449760,0.299812 0.449760,0.299812 0.449760,0.299812 0.449760,-0.000086 0.549897,-0.000086 0.549897,0.299812 0.549897,0.299812 0.549897,0.299812 0.999914,0.499914 0.549897,0.699846 0.549897,0.699846 0.549897,0.699846 0.549897,0.999914 0.449760,0.999914 0.449760,0.699846 0.449760,0.699846 0.449760,0.699846 -0.000086,0.499914 Z"#;
-pub(super) fn left_right_arrow_callout_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(25_000.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(25_000.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(25_000.0);
-    let adj4 = adj.get("adj4").copied().unwrap_or(48_123.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            25_000.0,
-            50_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a2x, a3x, a4x, _), (a1y, a2y, a3y, a4y, _)| {
-            let dx1 = (adj1 - *a1x) / 30_000.0;
-            let dx2 = (adj2 - *a2x) / 35_000.0;
-            let dx3 = (adj3 - *a3x) / 30_000.0;
-            let dx4 = (adj4 - *a4x) / 35_000.0;
-            let dy1 = (adj1 - *a1y) / 30_000.0;
-            let dy2 = (adj2 - *a2y) / 35_000.0;
-            let dy3 = (adj3 - *a3y) / 30_000.0;
-            let dy4 = (adj4 - *a4y) / 35_000.0;
-            (dx1 * dx1 + dx2 * dx2 + dx3 * dx3 + dx4 * dx4)
-                .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3 + dy4 * dy4))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, _, _, path)| path)
-        .unwrap_or(LEFT_RIGHT_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH)
+fn scaled(base: f64, adjustment: f64) -> f64 {
+    let value = base * (adjustment / 100_000.0);
+    if value.is_finite() { value } else { 0.0 }
 }
-pub(super) fn left_right_arrow_callout_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(LEFT_RIGHT_ARROW_CALLOUT_DEFAULT_NORMALIZED_PATH, w, h);
+
+fn horizontal(w: f64, h: f64, adj: &HashMap<String, f64>, left: bool) -> String {
+    let (w, h) = (extent(w), extent(h));
+    let ss = w.min(h);
+    let a1 = finite(adj.get("adj1").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let max_a2 = (50_000.0 - a1).max(0.0);
+    let a2 = finite(adj.get("adj2").copied(), 25_000.0).clamp(0.0, max_a2);
+    let max_a3 = if ss > 0.0 { 100_000.0 * w / ss } else { 0.0 };
+    let a3 = finite(adj.get("adj3").copied(), 25_000.0).clamp(0.0, max_a3);
+    let max_a4 = (100_000.0 - a3).max(0.0);
+    let a4 = finite(adj.get("adj4").copied(), 64_977.0).clamp(0.0, max_a4);
+    let (half, head, body, body_w) = (scaled(h, a1), scaled(h, a2), scaled(ss, a3), scaled(w, a4));
+    let cy = h / 2.0;
+    let main = if left {
+        format!(
+            "M{body_w:.1},0 L{w:.1},0 L{w:.1},{h:.1} L{body_w:.1},{h:.1} L{body_w:.1},{:.1} L{body:.1},{:.1} L0,{cy:.1} L{body:.1},{:.1} L{body_w:.1},{:.1} Z",
+            cy + half + head,
+            cy + half + head,
+            cy - half - head,
+            cy - half - head
+        )
+    } else {
+        let edge = w - body_w;
+        format!(
+            "M0,0 L{edge:.1},0 L{edge:.1},{:.1} L{:.1},{:.1} L{w:.1},{cy:.1} L{:.1},{:.1} L{edge:.1},{:.1} L{edge:.1},{h:.1} L0,{h:.1} Z",
+            cy - half - head,
+            w - body,
+            cy - half - head,
+            w - body,
+            cy + half + head,
+            cy + half + head
+        )
+    };
+    format!(
+        "{main} M{body_w:.1},{:.1} L{body_w:.1},{:.1} Z",
+        cy - half,
+        cy + half
+    )
+}
+
+fn vertical(w: f64, h: f64, adj: &HashMap<String, f64>, up: bool) -> String {
+    let (w, h) = (extent(w), extent(h));
+    let ss = w.min(h);
+    let a1 = finite(adj.get("adj1").copied(), 25_000.0).clamp(0.0, 50_000.0);
+    let max_a2 = (50_000.0 - a1).max(0.0);
+    let a2 = finite(adj.get("adj2").copied(), 25_000.0).clamp(0.0, max_a2);
+    let max_a3 = if ss > 0.0 { 100_000.0 * h / ss } else { 0.0 };
+    let a3 = finite(adj.get("adj3").copied(), 25_000.0).clamp(0.0, max_a3);
+    let max_a4 = (100_000.0 - a3).max(0.0);
+    let a4 = finite(adj.get("adj4").copied(), 64_977.0).clamp(0.0, max_a4);
+    let (half, head, body, body_h) = (scaled(w, a1), scaled(w, a2), scaled(ss, a3), scaled(h, a4));
+    let cx = w / 2.0;
+    let main = if up {
+        let edge = h - body_h;
+        format!(
+            "M0,{edge:.1} L{:.1},{edge:.1} L{:.1},{body:.1} L{cx:.1},0 L{:.1},{body:.1} L{:.1},{edge:.1} L{w:.1},{edge:.1} L{w:.1},{h:.1} L0,{h:.1} Z",
+            cx - half - head,
+            cx - half - head,
+            cx + half + head,
+            cx + half + head
+        )
+    } else {
+        format!(
+            "M0,0 L{w:.1},0 L{w:.1},{body_h:.1} L{:.1},{body_h:.1} L{:.1},{:.1} L{cx:.1},{h:.1} L{:.1},{:.1} L{:.1},{body_h:.1} L0,{body_h:.1} Z",
+            cx + half + head,
+            cx + half + head,
+            h - body,
+            cx - half - head,
+            h - body,
+            cx - half - head
+        )
+    };
+    format!(
+        "{main} M{:.1},{body_h:.1} L{:.1},{body_h:.1} Z",
+        cx - half,
+        cx + half
+    )
+}
+
+pub(super) fn down_arrow_callout_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    vertical(w, h, a, false)
+}
+pub(super) fn left_arrow_callout_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    horizontal(w, h, a, true)
+}
+pub(super) fn right_arrow_callout_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    horizontal(w, h, a, false)
+}
+pub(super) fn up_arrow_callout_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    vertical(w, h, a, true)
+}
+
+fn cross(w: f64, h: f64, adj: &HashMap<String, f64>, mode: u8) -> String {
+    let (w, h) = (extent(w), extent(h));
+    let a2 = finite(
+        adj.get("adj2").copied(),
+        if mode == 2 { 18_515.0 } else { 25_000.0 },
+    )
+    .clamp(0.0, 50_000.0);
+    let max_a1 = (50_000.0 - a2).max(0.0);
+    let a1 = finite(
+        adj.get("adj1").copied(),
+        if mode == 2 { 18_515.0 } else { 25_000.0 },
+    )
+    .clamp(0.0, max_a1);
+    let max_a3 = (100_000.0 - a2).max(0.0);
+    let a3 = finite(
+        adj.get("adj3").copied(),
+        if mode == 2 { 18_515.0 } else { 25_000.0 },
+    )
+    .clamp(0.0, max_a3);
+    let min_a4 = if mode == 2 { a1 } else { 0.0 };
+    let a4 = finite(adj.get("adj4").copied(), 48_123.0).clamp(min_a4, 100_000.0 - a3);
+    let (sx, sy, hx, hy) = (scaled(w, a1), scaled(h, a1), scaled(w, a2), scaled(h, a3));
+    let (cx, cy) = (w / 2.0, h / 2.0);
+    let body = scaled(if mode == 0 { w } else { h }, a4);
+    if mode == 0 {
+        let (left, right) = (body.min(w / 2.0), (w - body).max(w / 2.0));
+        format!(
+            "M0,{cy:.1} L{hx:.1},{top:.1} L{hx:.1},{inner_top:.1} L{left:.1},{inner_top:.1} L{left:.1},0 L{right:.1},0 L{right:.1},{inner_top:.1} L{neck:.1},{inner_top:.1} L{neck:.1},{top:.1} L{w:.1},{cy:.1} L{neck:.1},{bottom:.1} L{neck:.1},{inner_bottom:.1} L{right:.1},{inner_bottom:.1} L{right:.1},{h:.1} L{left:.1},{h:.1} L{left:.1},{inner_bottom:.1} L{hx:.1},{inner_bottom:.1} L{hx:.1},{bottom:.1} Z",
+            top = cy - hy,
+            inner_top = cy - sy,
+            neck = w - hx,
+            bottom = cy + hy,
+            inner_bottom = cy + sy
+        )
+    } else if mode == 1 {
+        let (top, bottom) = (body.min(h / 2.0), (h - body).max(h / 2.0));
+        format!(
+            "M0,{top:.1} L{left:.1},{top:.1} L{left:.1},{hy:.1} L{head_left:.1},{hy:.1} L{cx:.1},0 L{head_right:.1},{hy:.1} L{right:.1},{hy:.1} L{right:.1},{top:.1} L{w:.1},{top:.1} L{w:.1},{bottom:.1} L{right:.1},{bottom:.1} L{right:.1},{neck:.1} L{head_right:.1},{neck:.1} L{cx:.1},{h:.1} L{head_left:.1},{neck:.1} L{left:.1},{neck:.1} L{left:.1},{bottom:.1} L0,{bottom:.1} Z",
+            left = cx - sx,
+            right = cx + sx,
+            head_left = cx - hx,
+            head_right = cx + hx,
+            neck = h - hy
+        )
+    } else {
+        let (left, right, top, bottom) = (cx - sx, cx + sx, cy - sy, cy + sy);
+        let main = format!(
+            "M0,{cy:.1} L{hx:.1},{upper:.1} L{hx:.1},{top:.1} L{left:.1},{top:.1} L{left:.1},{hy:.1} L{head_left:.1},{hy:.1} L{cx:.1},0 L{head_right:.1},{hy:.1} L{right:.1},{hy:.1} L{right:.1},{top:.1} L{neck:.1},{top:.1} L{neck:.1},{upper:.1} L{w:.1},{cy:.1} L{neck:.1},{lower:.1} L{neck:.1},{bottom:.1} L{right:.1},{bottom:.1} L{right:.1},{down_neck:.1} L{head_right:.1},{down_neck:.1} L{cx:.1},{h:.1} L{head_left:.1},{down_neck:.1} L{left:.1},{down_neck:.1} L{left:.1},{bottom:.1} L{hx:.1},{bottom:.1} L{hx:.1},{lower:.1} Z",
+            upper = cy - hy,
+            lower = cy + hy,
+            head_left = cx - hx,
+            head_right = cx + hx,
+            neck = w - hx,
+            down_neck = h - hy
+        );
+        let (body_left, body_right) = (cx - body / 2.0, cx + body / 2.0);
+        format!(
+            "{main} M{body_left:.1},{top:.1} L{body_right:.1},{top:.1} L{body_right:.1},{bottom:.1} L{body_left:.1},{bottom:.1} Z"
+        )
     }
-
-    scale_normalized_path(left_right_arrow_callout_adjust_anchor(adj), w, h)
 }
-pub(super) const UP_DOWN_ARROW_CALLOUT_DEFAULT_NORMALIZED_PATH: &str = r#"M 0.340580,0.255814 L 0.344203,0.238372 L 0.492754,0.000000 L 0.510870,0.000000 L 0.663043,0.244186 L 0.663043,0.255814 L 1.000000,0.255814 L 1.000000,0.750000 L 0.663043,0.750000 L 0.663043,0.761628 L 0.510870,1.000000 L 0.492754,1.000000 L 0.344203,0.767442 L 0.340580,0.750000 L 0.000000,0.750000 L 0.000000,0.255814 Z"#;
-pub(super) const UP_DOWN_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M -0.000086,0.424769 L 0.424769,0.424769 0.424769,0.149863 0.349795,0.149863 0.499914,-0.000086 0.649863,0.149863 0.574889,0.149863 0.574889,0.424769 0.999914,0.424769 0.999914,0.574889 0.574889,0.574889 0.574889,0.849795 0.649863,0.849795 0.499914,0.999914 0.349795,0.849795 0.424769,0.849795 0.424769,0.574889 -0.000086,0.574889 -0.000086,0.424769 Z"#;
-pub(super) const UP_DOWN_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M -0.000086,0.349795 L 0.324803,0.349795 0.324803,0.349795 0.149863,0.349795 0.499914,-0.000086 0.849795,0.349795 0.674855,0.349795 0.674855,0.349795 0.999914,0.349795 0.999914,0.649863 0.674855,0.649863 0.674855,0.649863 0.849795,0.649863 0.499914,0.999914 0.149863,0.649863 0.324803,0.649863 0.324803,0.649863 -0.000086,0.649863 -0.000086,0.349795 Z"#;
-pub(super) const UP_DOWN_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH: &str = r#"M -0.000086,0.249829 L 0.399777,0.249829 0.399777,0.249829 -0.000086,0.249829 0.499914,-0.000086 0.999914,0.249829 0.599880,0.249829 0.599880,0.249829 0.999914,0.249829 0.999914,0.749829 0.599880,0.749829 0.599880,0.749829 0.999914,0.749829 0.499914,0.999914 -0.000086,0.749829 0.399777,0.749829 0.399777,0.749829 -0.000086,0.749829 -0.000086,0.249829 Z"#;
-pub(super) const UP_DOWN_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH: &str = r#"M -0.000086,0.449760 L 0.299812,0.449760 0.299812,0.449760 0.299812,0.449760 0.499914,-0.000086 0.699846,0.449760 0.699846,0.449760 0.699846,0.449760 0.999914,0.449760 0.999914,0.549897 0.699846,0.549897 0.699846,0.549897 0.699846,0.549897 0.499914,0.999914 0.299812,0.549897 0.299812,0.549897 0.299812,0.549897 -0.000086,0.549897 -0.000086,0.449760 Z"#;
-pub(super) fn up_down_arrow_callout_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(25_000.0);
-    let adj2 = adj.get("adj2").copied().unwrap_or(25_000.0);
-    let adj3 = adj.get("adj3").copied().unwrap_or(25_000.0);
-    let adj4 = adj.get("adj4").copied().unwrap_or(48_123.0);
-    let anchors = [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            25_000.0,
-            50_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ];
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a2x, a3x, a4x, _), (a1y, a2y, a3y, a4y, _)| {
-            let dx1 = (adj1 - *a1x) / 30_000.0;
-            let dx2 = (adj2 - *a2x) / 35_000.0;
-            let dx3 = (adj3 - *a3x) / 30_000.0;
-            let dx4 = (adj4 - *a4x) / 35_000.0;
-            let dy1 = (adj1 - *a1y) / 30_000.0;
-            let dy2 = (adj2 - *a2y) / 35_000.0;
-            let dy3 = (adj3 - *a3y) / 30_000.0;
-            let dy4 = (adj4 - *a4y) / 35_000.0;
-            (dx1 * dx1 + dx2 * dx2 + dx3 * dx3 + dx4 * dx4)
-                .partial_cmp(&(dy1 * dy1 + dy2 * dy2 + dy3 * dy3 + dy4 * dy4))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, _, _, path)| path)
-        .unwrap_or(UP_DOWN_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH)
+pub(super) fn quad_arrow_callout_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    cross(w, h, a, 2)
 }
-pub(super) fn up_down_arrow_callout_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(UP_DOWN_ARROW_CALLOUT_DEFAULT_NORMALIZED_PATH, w, h);
-    }
-
-    scale_normalized_path(up_down_arrow_callout_adjust_anchor(adj), w, h)
+pub(super) fn left_right_arrow_callout_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    cross(w, h, a, 0)
+}
+pub(super) fn up_down_arrow_callout_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    cross(w, h, a, 1)
 }

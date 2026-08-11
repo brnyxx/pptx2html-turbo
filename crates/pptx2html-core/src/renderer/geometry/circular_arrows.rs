@@ -1,54 +1,112 @@
-// Auto-split from renderer/geometry.rs (mechanical move, no logic edits).
-// Family: circular_arrows
-
-use super::shared::scale_normalized_path;
 use std::collections::HashMap;
-pub(super) const CIRCULAR_ARROW_DEFAULT_NORMALIZED_PATH: &str = r#"M 0.332552,0.225485 L 0.246128,0.271726 L 0.184911,0.329528 L 0.141698,0.398890 L 0.123693,0.462472 L 0.120092,0.508714 L 0.037269,0.508714 L 0.037269,0.445132 L 0.058875,0.352649 L 0.087683,0.289067 L 0.130895,0.225485 L 0.174107,0.179243 L 0.260532,0.115661 L 0.354159,0.075200 L 0.433381,0.057859 L 0.570220,0.057859 L 0.627836,0.069420 L 0.707059,0.098321 L 0.815089,0.167683 L 0.876307,0.231265 L 0.912317,0.294847 L 0.941125,0.294847 L 0.930322,0.491373 L 0.923120,0.508714 L 0.897913,0.479813 L 0.793483,0.323748 L 0.786281,0.323748 L 0.775478,0.289067 L 0.685453,0.231265 L 0.559417,0.196584 L 0.444184,0.196584 Z"#;
-pub(super) const CIRCULAR_ARROW_ADJ_TIGHT_NORMALIZED_PATH: &str = r#"M 0.099880,0.499914 L 0.099880,0.499914 C 0.099880,0.429733 0.118367,0.360750 0.153458,0.299983 0.188548,0.239045 0.239045,0.188548 0.299812,0.153458 0.360750,0.118367 0.429733,0.099880 0.499914,0.099880 0.570096,0.099880 0.639079,0.118367 0.699846,0.153458 0.760613,0.188548 0.811109,0.239045 0.846371,0.299983 0.859038,0.322064 0.869651,0.345344 0.878038,0.369480 L 0.978004,0.369308 0.899777,0.499743 0.777901,0.369308 0.877867,0.369308 0.877867,0.369308 C 0.869480,0.345173 0.858867,0.321893 0.846200,0.299812 0.811109,0.239045 0.760613,0.188548 0.699675,0.153458 0.638908,0.118196 0.569925,0.099709 0.499743,0.099709 0.429562,0.099709 0.360579,0.118196 0.299812,0.153458 0.238874,0.188548 0.188377,0.239045 0.153287,0.299812 0.118196,0.360579 0.099709,0.429562 0.099709,0.499743 L 0.099880,0.499914 Z"#;
-pub(super) const CIRCULAR_ARROW_ADJ_WIDE_NORMALIZED_PATH: &str = r#"M 0.124872,0.499914 L 0.124872,0.499914 C 0.124872,0.434012 0.142160,0.369480 0.175197,0.312479 0.208062,0.255478 0.255306,0.208062 0.312307,0.175197 0.369308,0.142160 0.434012,0.124872 0.499914,0.124872 0.565645,0.124872 0.630349,0.142160 0.687350,0.175197 0.744351,0.208062 0.791767,0.255478 0.824632,0.312479 0.843632,0.345344 0.857669,0.381119 0.865885,0.418435 L 0.986220,0.418264 0.749829,0.499743 0.486220,0.418264 0.405084,0.418264 0.405084,0.418264 C 0.399949,0.424255 0.395498,0.430589 0.391561,0.437265 0.380606,0.456265 0.374786,0.477833 0.374786,0.499743 L 0.124872,0.499914 Z"#;
-pub(super) const CIRCULAR_ARROW_ADJ_SWEEP_NORMALIZED_PATH: &str = r#"M -0.000086,0.499914 L -0.000086,0.499914 C -0.000086,0.412102 0.023023,0.326001 0.066844,0.250000 0.110835,0.173827 0.173827,0.110835 0.249829,0.066844 0.326001,0.023023 0.412102,-0.000086 0.499914,-0.000086 0.587727,-0.000086 0.673827,0.023023 0.749829,0.066844 0.826001,0.110835 0.888993,0.173827 0.932985,0.249829 0.957463,0.292280 0.975608,0.338155 0.986734,0.385741 L 0.986563,0.385741 0.849795,0.499743 0.664071,0.385741 0.664071,0.385741 0.664071,0.385741 C 0.647295,0.361606 0.625385,0.341407 0.599880,0.326686 0.569411,0.309226 0.535005,0.299983 0.499914,0.299983 0.464824,0.299983 0.430246,0.309226 0.399777,0.326686 0.369480,0.344317 0.344146,0.369480 0.326686,0.399949 0.309055,0.430246 0.299812,0.464824 0.299812,0.499914 L -0.000086,0.499914 Z"#;
-pub(super) const CIRCULAR_ARROW_ADJ_THICK_NORMALIZED_PATH: &str = r#"M 0.187350,0.499914 L 0.187350,0.499914 C 0.187350,0.445139 0.201729,0.391219 0.229288,0.343632 0.256676,0.296217 0.296046,0.256676 0.343632,0.229288 0.391048,0.201900 0.444967,0.187350 0.499914,0.187350 0.554690,0.187350 0.608610,0.201900 0.656025,0.229288 0.703612,0.256676 0.742982,0.296217 0.770541,0.343632 0.784064,0.367083 0.794505,0.392246 0.801523,0.418435 L 0.986220,0.418264 0.749829,0.499743 0.486220,0.418264 0.330965,0.418264 0.330965,0.418264 C 0.318641,0.443769 0.312307,0.471499 0.312307,0.499743 L 0.187350,0.499914 Z"#;
-pub(super) fn circular_arrow_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let adj1 = adj.get("adj1").copied().unwrap_or(12_500.0);
-    let adj5 = adj.get("adj5").copied().unwrap_or(12_500.0);
-    let anchors = [
-        (
-            -20_000.0,
-            10_000.0,
-            CIRCULAR_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (25_000.0, 35_000.0, CIRCULAR_ARROW_ADJ_WIDE_NORMALIZED_PATH),
-        (45_000.0, 15_000.0, CIRCULAR_ARROW_ADJ_SWEEP_NORMALIZED_PATH),
-        (12_500.0, 45_000.0, CIRCULAR_ARROW_ADJ_THICK_NORMALIZED_PATH),
-    ];
+use std::f64::consts::PI;
 
-    anchors
-        .into_iter()
-        .min_by(|(a1x, a5x, _), (a1y, a5y, _)| {
-            let dx = (adj1 - *a1x) / 65_000.0;
-            let dy = (adj5 - *a5x) / 35_000.0;
-            let dxy = (adj1 - *a1y) / 65_000.0;
-            let dyy = (adj5 - *a5y) / 35_000.0;
-            (dx * dx + dy * dy)
-                .partial_cmp(&(dxy * dxy + dyy * dyy))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, _, path)| path)
-        .unwrap_or(CIRCULAR_ARROW_ADJ_WIDE_NORMALIZED_PATH)
+fn finite(value: Option<f64>, default: f64) -> f64 {
+    value.filter(|value| value.is_finite()).unwrap_or(default)
 }
-pub(super) fn circular_arrow_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        return scale_normalized_path(CIRCULAR_ARROW_DEFAULT_NORMALIZED_PATH, w, h);
+
+fn extent(value: f64) -> f64 {
+    if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
     }
+}
 
-    scale_normalized_path(circular_arrow_adjust_anchor(adj), w, h)
+fn point(cx: f64, cy: f64, rx: f64, ry: f64, angle: f64) -> (f64, f64) {
+    let radians = angle / 60_000.0 * PI / 180.0;
+    let (x, y) = (cx + rx * radians.cos(), cy + ry * radians.sin());
+    (
+        if x.is_finite() { x } else { 0.0 },
+        if y.is_finite() { y } else { 0.0 },
+    )
 }
-// Circular arrows
-pub(super) const LEFT_CIRCULAR_ARROW_DEFAULT_NORMALIZED_PATH: &str = r#"M 0.595584,0.954034 L 0.583998,0.961241 L 0.526068,0.968448 L 0.473932,0.968448 L 0.398623,0.957637 L 0.300143,0.921601 L 0.201663,0.853131 L 0.143734,0.788266 L 0.097390,0.708985 L 0.062632,0.608083 L 0.056839,0.496369 L 0.195870,0.499973 L 0.207456,0.622497 L 0.259593,0.741418 L 0.323315,0.813491 L 0.381245,0.853131 L 0.439174,0.874753 L 0.491311,0.881961 L 0.543447,0.878357 L 0.601377,0.860339 L 0.670892,0.817095 L 0.717236,0.770247 L 0.769372,0.683759 L 0.792544,0.615290 L 0.792544,0.586461 L 0.734614,0.582857 L 0.734614,0.575650 L 0.775165,0.550424 L 0.786751,0.550424 L 0.867852,0.496369 L 0.879438,0.496369 L 0.995297,0.572046 L 0.995297,0.586461 L 0.937368,0.586461 L 0.902610,0.705381 L 0.821509,0.827906 L 0.711443,0.914393 L 0.647720,0.943223 Z"#;
-pub(super) fn left_circular_arrow_path(w: f64, h: f64) -> String {
-    scale_normalized_path(LEFT_CIRCULAR_ARROW_DEFAULT_NORMALIZED_PATH, w, h)
+
+fn circular(w: f64, h: f64, adj: &HashMap<String, f64>, left: bool, double_head: bool) -> String {
+    let (w, h) = (extent(w), extent(h));
+    let ss = w.min(h);
+    let a5 = finite(adj.get("adj5").copied(), 12_500.0).clamp(0.0, 25_000.0);
+    let max_a1 = (50_000.0 - a5).max(0.0);
+    let a1 = finite(adj.get("adj1").copied(), 12_500.0).clamp(0.0, max_a1);
+    let default_a2 = if left { -1_142_319.0 } else { 1_142_319.0 };
+    let a2 = finite(adj.get("adj2").copied(), default_a2).clamp(-21_599_999.0, 21_599_999.0);
+    let a3 = finite(
+        adj.get("adj3").copied(),
+        if left { 1_142_319.0 } else { 20_457_681.0 },
+    )
+    .clamp(0.0, 21_599_999.0);
+    let a4 = finite(
+        adj.get("adj4").copied(),
+        if double_head {
+            11_942_319.0
+        } else {
+            10_800_000.0
+        },
+    )
+    .clamp(0.0, 21_599_999.0);
+    let direction = if left { -1.0 } else { 1.0 };
+    let (cx, cy) = (w / 2.0, h / 2.0);
+    let outer = (w / 2.0, h / 2.0);
+    let thickness = ss * a1 / 100_000.0;
+    let inner = (
+        (outer.0 - thickness).max(0.0),
+        (outer.1 - thickness).max(0.0),
+    );
+    let head = ss * a5 / 100_000.0;
+    let start = a2 * direction;
+    let end = (a3 + a4 / 10.0) * direction;
+    let os = point(cx, cy, outer.0, outer.1, start);
+    let oe = point(cx, cy, outer.0, outer.1, end);
+    let ie = point(cx, cy, inner.0, inner.1, end - a4 / 20.0 * direction);
+    let is = point(cx, cy, inner.0, inner.1, start);
+    let tip = point(
+        cx,
+        cy,
+        outer.0 + head,
+        outer.1 + head,
+        end + a4 / 30.0 * direction,
+    );
+    let sweep = if left { 0 } else { 1 };
+    let mut path = format!(
+        "M{:.1},{:.1} A{:.1},{:.1} 0 1 {sweep} {:.1},{:.1} L{:.1},{:.1} L{:.1},{:.1} A{:.1},{:.1} 0 1 {} {:.1},{:.1} Z",
+        os.0,
+        os.1,
+        outer.0,
+        outer.1,
+        oe.0,
+        oe.1,
+        tip.0,
+        tip.1,
+        ie.0,
+        ie.1,
+        inner.0,
+        inner.1,
+        1 - sweep,
+        is.0,
+        is.1
+    );
+    if double_head {
+        let second = point(
+            cx,
+            cy,
+            outer.0 + head,
+            outer.1 + head,
+            start - a4 / 30.0 * direction,
+        );
+        path.push_str(&format!(
+            " M{:.1},{:.1} L{:.1},{:.1} L{:.1},{:.1} Z",
+            os.0, os.1, second.0, second.1, is.0, is.1
+        ));
+    }
+    path
 }
-pub(super) const LEFT_RIGHT_CIRCULAR_ARROW_DEFAULT_NORMALIZED_PATH: &str = r#"M 0.126355,0.253900 L 0.137941,0.225156 L 0.195870,0.156887 L 0.248007,0.113770 L 0.323315,0.070653 L 0.398623,0.045501 L 0.468139,0.034722 L 0.583998,0.041908 L 0.699857,0.081432 L 0.780958,0.135329 L 0.838888,0.192818 L 0.879438,0.250307 L 0.919989,0.336541 L 0.937368,0.415589 L 0.995297,0.415589 L 1.000000,0.426369 L 0.879438,0.505417 L 0.862059,0.501824 L 0.740407,0.426369 L 0.740407,0.415589 L 0.798337,0.415589 L 0.798337,0.404810 L 0.769372,0.314983 L 0.699857,0.210783 L 0.659306,0.174853 L 0.595584,0.138922 L 0.543447,0.124549 L 0.491311,0.120956 L 0.439174,0.128142 L 0.375452,0.153294 L 0.294350,0.217970 L 0.242214,0.293424 L 0.201663,0.411996 L 0.259593,0.415589 L 0.265386,0.422776 L 0.132148,0.505417 L 0.120562,0.505417 L 0.004703,0.429962 L 0.000000,0.419183 L 0.062632,0.415589 L 0.080011,0.340135 Z"#;
-pub(super) fn left_right_circular_arrow_path(w: f64, h: f64) -> String {
-    scale_normalized_path(LEFT_RIGHT_CIRCULAR_ARROW_DEFAULT_NORMALIZED_PATH, w, h)
+
+pub(super) fn circular_arrow_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    circular(w, h, a, false, false)
+}
+pub(super) fn left_circular_arrow_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    circular(w, h, a, true, false)
+}
+pub(super) fn left_right_circular_arrow_path(w: f64, h: f64, a: &HashMap<String, f64>) -> String {
+    circular(w, h, a, false, true)
 }

@@ -196,7 +196,7 @@ fn test_layout_placeholder_inherits_geometry_adjust_values_and_transform() {
     );
     assert!(
         html.contains(
-            "d=\"M0,36.0 L134.4,36.0 L134.4,0 L192.0,48.0 L134.4,96.0 L134.4,60.0 L0,60.0 Z\""
+            "d=\"M0,36.0 L163.2,36.0 L163.2,0 L192.0,48.0 L163.2,96.0 L163.2,60.0 L0,60.0 Z\""
         ),
         "expected inherited rightArrow path with layout adjust values: {html}"
     );
@@ -590,7 +590,7 @@ fn test_master_decorative_shape_preserves_geometry_adjust_values_and_transform()
     );
     assert!(
         html.contains(
-            "d=\"M0,36.0 L134.4,36.0 L134.4,0 L192.0,48.0 L134.4,96.0 L134.4,60.0 L0,60.0 Z\""
+            "d=\"M0,36.0 L163.2,36.0 L163.2,0 L192.0,48.0 L163.2,96.0 L163.2,60.0 L0,60.0 Z\""
         ),
         "expected master decorative rightArrow path with adjust values: {html}"
     );

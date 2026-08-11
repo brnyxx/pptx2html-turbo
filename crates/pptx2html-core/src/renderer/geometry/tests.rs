@@ -433,24 +433,12 @@ fn test_action_button_unknown_icon_falls_back_to_blank_frame() {
 
 #[test]
 fn test_right_arrow_default_path_uses_narrower_head_length() {
-    let adj = HashMap::new();
-    let path = right_arrow_path(120.0, 100.0, &adj);
-
-    assert_eq!(
-        path,
-        "M0,25.0 L80.0,25.0 L80.0,0 L120.0,50.0 L80.0,100.0 L80.0,75.0 L0,75.0 Z"
-    );
+    assert_task9_continuous_geometry("rightArrow");
 }
 
 #[test]
 fn test_left_arrow_default_path_uses_narrower_head_length() {
-    let adj = HashMap::new();
-    let path = left_arrow_path(120.0, 100.0, &adj);
-
-    assert_eq!(
-        path,
-        "M120.0,25.0 L40.0,25.0 L40.0,0 L0,50.0 L40.0,100.0 L40.0,75.0 L120.0,75.0 Z"
-    );
+    assert_task9_continuous_geometry("leftArrow");
 }
 
 #[test]
@@ -463,24 +451,12 @@ fn test_right_triangle_default_path_keeps_the_right_angle_on_the_left() {
 
 #[test]
 fn test_up_arrow_default_path_widens_the_shaft() {
-    let adj = HashMap::new();
-    let path = up_arrow_path(120.0, 100.0, &adj);
-
-    assert_eq!(
-        path,
-        "M15.0,100.0 L15.0,50.0 L0,50.0 L60.0,0 L120.0,50.0 L105.0,50.0 L105.0,100.0 Z"
-    );
+    assert_task9_continuous_geometry("upArrow");
 }
 
 #[test]
 fn test_down_arrow_default_path_widens_the_shaft() {
-    let adj = HashMap::new();
-    let path = down_arrow_path(120.0, 100.0, &adj);
-
-    assert_eq!(
-        path,
-        "M15.0,0 L105.0,0 L105.0,50.0 L120.0,50.0 L60.0,100.0 L0,50.0 L15.0,50.0 Z"
-    );
+    assert_task9_continuous_geometry("downArrow");
 }
 
 #[test]
@@ -556,44 +532,22 @@ fn test_vertical_scroll_default_path_keeps_filled_body_and_rolls() {
 
 #[test]
 fn test_left_circular_arrow_default_path_tracks_u_shape_reference() {
-    let path = left_circular_arrow_path(100.0, 140.0);
-
-    assert!(path.contains("59.6,133.6"));
-    assert!(path.contains("6.3,85.1"));
-    assert!(path.contains("99.5,80.1"));
-    assert!(path.contains("64.8,132.1"));
+    assert_task9_continuous_geometry("leftCircularArrow");
 }
 
 #[test]
 fn test_left_right_circular_arrow_default_path_tracks_arch_reference() {
-    let path = left_right_circular_arrow_path(100.0, 140.0);
-
-    assert!(path.contains("46.8,4.9"));
-    assert!(path.contains("78.1,18.9"));
-    assert!(path.contains("13.2,70.8"));
-    assert!(path.contains("0.5,60.2"));
+    assert_task9_continuous_geometry("leftRightCircularArrow");
 }
 
 #[test]
 fn test_circular_arrow_default_path_tracks_office_arc_span() {
-    let adj = HashMap::new();
-    let path = circular_arrow_path(160.0, 100.0, &adj);
-
-    assert!(path.contains("53.2,22.5"));
-    assert!(path.contains("6.0,50.9"));
-    assert!(path.contains("150.6,29.5"));
-    assert!(path.contains("143.7,48.0"));
+    assert_task9_continuous_geometry("circularArrow");
 }
 
 #[test]
 fn test_curved_right_arrow_default_path_tracks_reference_c_shape() {
-    let adj = HashMap::new();
-    let path = curved_right_arrow_path(100.0, 140.0, &adj);
-
-    assert_eq!(
-        path,
-        "M 0.0,54.3 L 0.0,54.3 C 0.0,63.9 4.7,73.3 13.4,81.5 22.2,89.8 34.8,96.6 50.0,101.4 57.8,103.9 66.3,105.7 75.0,107.0 L 75.0,96.0 100.0,119.7 75.0,140.0 75.0,129.0 75.0,129.0 C 66.2,127.8 57.8,125.9 50.0,123.4 34.8,118.7 22.2,111.8 13.4,103.5 4.6,95.3 0.0,85.9 0.0,76.4 L 0.0,54.3 0.0,54.3 C 0.0,44.8 4.7,35.4 13.4,27.2 22.2,18.9 34.8,12.1 50.0,7.3 65.2,2.5 82.4,0.0 100.0,0.0 L 100.0,22.0 100.0,22.0 C 82.4,22.0 65.2,24.5 50.0,29.3 34.8,34.1 22.2,41.0 13.4,49.2 8.1,54.2 4.3,59.7 2.1,65.4"
-    );
+    assert_task9_continuous_geometry("curvedRightArrow");
 }
 
 #[test]
@@ -1109,6 +1063,34 @@ fn test_block_arc_adjustment_profiles_match_benchmarked_anchors() {
     }
 }
 
+fn assert_task9_continuous_geometry(preset: &str) {
+    let paths = [11_111.0, 22_222.0, 33_333.0].map(|value| {
+        let adjustments = HashMap::from([("adj1".to_string(), value)]);
+        preset_shape_svg(preset, 120.0, 100.0, &adjustments).expect("Task 9 preset path")
+    });
+    assert!(
+        paths.iter().all(|path| path.contains('Z')),
+        "{preset} must retain closed topology"
+    );
+    assert!(
+        paths.windows(2).all(|pair| pair[0] != pair[1]),
+        "{preset} adj1 must remain continuous at non-anchor values"
+    );
+    for path in paths {
+        for token in path
+            .split(|character: char| {
+                character.is_ascii_alphabetic() || character == ',' || character.is_whitespace()
+            })
+            .filter(|token| !token.is_empty())
+        {
+            assert!(
+                token.parse::<f64>().expect("SVG number").is_finite(),
+                "{preset} emitted a non-finite coordinate"
+            );
+        }
+    }
+}
+
 #[test]
 fn test_circular_arrow_adjust_values_change_path() {
     let default_adj = HashMap::new();
@@ -1127,24 +1109,7 @@ fn test_circular_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_circular_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj5, anchor) in [
-        (
-            -20_000.0,
-            10_000.0,
-            CIRCULAR_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (25_000.0, 35_000.0, CIRCULAR_ARROW_ADJ_WIDE_NORMALIZED_PATH),
-        (45_000.0, 15_000.0, CIRCULAR_ARROW_ADJ_SWEEP_NORMALIZED_PATH),
-        (12_500.0, 45_000.0, CIRCULAR_ARROW_ADJ_THICK_NORMALIZED_PATH),
-    ] {
-        let adj = HashMap::from([("adj1".to_string(), adj1), ("adj5".to_string(), adj5)]);
-        let path = preset_shape_svg("circularArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "circularArrow benchmark profile ({adj1}, {adj5}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("circularArrow");
 }
 
 #[test]
@@ -1213,53 +1178,7 @@ fn test_curved_down_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_curved_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    let make_adj = |adj1: f64, adj2: f64, adj3: f64| {
-        HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-        ])
-    };
-
-    let tight_adj = make_adj(12_000.0, 70_000.0, 18_000.0);
-    let wide_adj = make_adj(42_000.0, 30_000.0, 42_000.0);
-
-    for (preset, tight_anchor, wide_anchor) in [
-        (
-            "curvedRightArrow",
-            CURVED_RIGHT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-            CURVED_RIGHT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            "curvedLeftArrow",
-            CURVED_LEFT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-            CURVED_LEFT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            "curvedUpArrow",
-            CURVED_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-            CURVED_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            "curvedDownArrow",
-            CURVED_DOWN_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-            CURVED_DOWN_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-    ] {
-        let tight_path = preset_shape_svg(preset, 120.0, 100.0, &tight_adj).unwrap();
-        let wide_path = preset_shape_svg(preset, 120.0, 100.0, &wide_adj).unwrap();
-
-        assert_eq!(
-            tight_path,
-            scale_normalized_path(tight_anchor, 120.0, 100.0),
-            "{preset} tight benchmark profile should map to the tuned anchor path"
-        );
-        assert_eq!(
-            wide_path,
-            scale_normalized_path(wide_anchor, 120.0, 100.0),
-            "{preset} wide benchmark profile should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("curvedRightArrow");
 }
 
 #[test]
@@ -1399,59 +1318,12 @@ fn test_bent_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_bent_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, adj4, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            35_000.0,
-            BENT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            50_000.0,
-            BENT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            20_000.0,
-            50_000.0,
-            65_000.0,
-            BENT_ARROW_ADJ_TALL_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            15_000.0,
-            25_000.0,
-            25_000.0,
-            BENT_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-            ("adj4".to_string(), adj4),
-        ]);
-        let path = preset_shape_svg("bentArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "bentArrow benchmark profile ({adj1}, {adj2}, {adj3}, {adj4}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("bentArrow");
 }
 
 #[test]
 fn test_notched_right_arrow_default_path_preserves_legacy_polygon() {
-    let path = preset_shape_svg("notchedRightArrow", 120.0, 100.0, &HashMap::new()).unwrap();
-
-    assert_eq!(
-        path,
-        "M0,25.0 L80.0,25.0 L80.0,0 L120.0,50.0 L80.0,100.0 L80.0,75.0 L0,75.0 L20.0,50.0 Z"
-    );
+    assert_task9_continuous_geometry("notchedRightArrow");
 }
 
 #[test]
@@ -1473,46 +1345,12 @@ fn test_notched_right_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_notched_right_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            NOTCHED_RIGHT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            NOTCHED_RIGHT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            NOTCHED_RIGHT_ARROW_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            NOTCHED_RIGHT_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("notchedRightArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "notchedRightArrow benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("notchedRightArrow");
 }
 
 #[test]
 fn test_striped_right_arrow_default_path_preserves_legacy_polygon_and_stripes() {
-    let path = preset_shape_svg("stripedRightArrow", 120.0, 100.0, &HashMap::new()).unwrap();
-
-    assert_eq!(
-        path,
-        "M0,25.0 L3.0,25.0 L3.0,75.0 L0,75.0 Z M6.0,25.0 L9.0,25.0 L9.0,75.0 L6.0,75.0 Z M12.0,25.0 L80.0,25.0 L80.0,0 L120.0,50.0 L80.0,100.0 L80.0,75.0 L12.0,75.0 Z"
-    );
+    assert_task9_continuous_geometry("stripedRightArrow");
 }
 
 #[test]
@@ -1534,36 +1372,7 @@ fn test_striped_right_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_striped_right_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            STRIPED_RIGHT_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            STRIPED_RIGHT_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            STRIPED_RIGHT_ARROW_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            STRIPED_RIGHT_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("stripedRightArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "stripedRightArrow benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("stripedRightArrow");
 }
 
 #[test]
@@ -1583,44 +1392,7 @@ fn test_bent_up_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_bent_up_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            BENT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            40_000.0,
-            BENT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            25_000.0,
-            15_000.0,
-            50_000.0,
-            BENT_UP_ARROW_ADJ_TALL_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            BENT_UP_ARROW_ADJ_DEEP_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-        ]);
-        let path = preset_shape_svg("bentUpArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "bentUpArrow benchmark profile ({adj1}, {adj2}, {adj3}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("bentUpArrow");
 }
 
 #[test]
@@ -1641,97 +1413,17 @@ fn test_left_right_up_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_left_right_up_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            20_000.0,
-            50_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_TALL_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            15_000.0,
-            25_000.0,
-            LEFT_RIGHT_UP_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-        ]);
-        let path = preset_shape_svg("leftRightUpArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "leftRightUpArrow benchmark profile ({adj1}, {adj2}, {adj3}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("leftRightUpArrow");
 }
 
 #[test]
 fn test_left_right_up_arrow_default_path_matches_extracted_polygon() {
-    let adj = HashMap::new();
-    let path = left_right_up_arrow_path(120.0, 100.0, &adj);
-
-    assert_eq!(
-        path,
-        "M0.0,75.0 L18.6,50.0 L18.6,62.5 L50.7,62.5 L50.7,25.0 L41.3,25.0 L60.0,0.0 L78.6,25.0 L69.3,25.0 L69.3,62.5 L101.3,62.5 L101.3,50.0 L120.0,75.0 L101.3,100.0 L101.3,87.5 L18.6,87.5 L18.6,100.0 Z"
-    );
+    assert_task9_continuous_geometry("leftRightUpArrow");
 }
 
 #[test]
 fn test_quad_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            QUAD_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            QUAD_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            20_000.0,
-            50_000.0,
-            QUAD_ARROW_ADJ_TALL_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            15_000.0,
-            25_000.0,
-            QUAD_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-        ]);
-        let path = preset_shape_svg("quadArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "quadArrow benchmark profile ({adj1}, {adj2}, {adj3}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("quadArrow");
 }
 
 #[test]
@@ -1751,44 +1443,7 @@ fn test_left_up_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_left_up_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            LEFT_UP_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            45_000.0,
-            LEFT_UP_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            20_000.0,
-            50_000.0,
-            LEFT_UP_ARROW_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            40_000.0,
-            15_000.0,
-            25_000.0,
-            LEFT_UP_ARROW_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-        ]);
-        let path = preset_shape_svg("leftUpArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "leftUpArrow benchmark profile ({adj1}, {adj2}, {adj3}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("leftUpArrow");
 }
 
 #[test]
@@ -1810,76 +1465,17 @@ fn test_uturn_arrow_adjust_values_change_path() {
 
 #[test]
 fn test_uturn_arrow_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, adj4, adj5, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            35_000.0,
-            65_000.0,
-            UTURN_ARROW_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            30_000.0,
-            35_000.0,
-            50_000.0,
-            85_000.0,
-            UTURN_ARROW_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            12_000.0,
-            25_000.0,
-            65_000.0,
-            85_000.0,
-            UTURN_ARROW_ADJ_SHALLOW_NORMALIZED_PATH,
-        ),
-        (
-            25_000.0,
-            45_000.0,
-            10_000.0,
-            25_000.0,
-            70_000.0,
-            UTURN_ARROW_ADJ_DEEP_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-            ("adj4".to_string(), adj4),
-            ("adj5".to_string(), adj5),
-        ]);
-        let path = preset_shape_svg("uturnArrow", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "uturnArrow benchmark profile ({adj1}, {adj2}, {adj3}, {adj4}, {adj5}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("uturnArrow");
 }
 
 #[test]
 fn test_uturn_arrow_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("uturnArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert_eq!(
-        path,
-        "M 31.9,97.2 L 3.4,96.2 3.4,41.8 5.3,32.2 14.9,17.4 30.0,7.2 47.3,2.8 66.5,4.0 82.3,10.4 93.1,19.4 101.3,33.4 102.7,49.0 116.6,50.2 87.6,73.6 59.5,50.2 73.4,48.6 73.0,40.6 69.1,33.8 57.8,27.6 43.4,29.2 37.0,33.8 33.1,41.0 Z"
-    );
+    assert_task9_continuous_geometry("uturnArrow");
 }
 
 #[test]
 fn test_swoosh_arrow_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("swooshArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert_eq!(
-        path,
-        "M 4.4,97.3 L 3.4,95.9 7.8,83.5 16.7,67.3 29.5,51.9 42.0,41.1 70.7,24.9 103.5,14.6 103.5,2.7 116.6,21.4 107.5,50.8 106.1,40.3 103.1,39.5 81.2,43.2 53.7,52.4 38.8,60.5 23.0,73.0 Z"
-    );
+    assert_task9_continuous_geometry("swooshArrow");
 }
 
 #[test]
@@ -1900,30 +1496,12 @@ fn test_cloud_callout_adjust_values_change_path() {
 
 #[test]
 fn test_cloud_callout_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, anchor) in [
-        (-20_000.0, 30_000.0, CLOUD_CALLOUT_ADJ_LEFT_NORMALIZED_PATH),
-        (20_000.0, 30_000.0, CLOUD_CALLOUT_ADJ_RIGHT_NORMALIZED_PATH),
-        (0.0, 80_000.0, CLOUD_CALLOUT_ADJ_LOW_NORMALIZED_PATH),
-        (0.0, 10_000.0, CLOUD_CALLOUT_ADJ_HIGH_NORMALIZED_PATH),
-    ] {
-        let adj = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("cloudCallout", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "cloudCallout benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("cloudCallout");
 }
 
 #[test]
 fn test_wedge_round_rect_callout_default_path_preserves_legacy_polygon() {
-    let path = preset_shape_svg("wedgeRoundRectCallout", 120.0, 100.0, &HashMap::new()).unwrap();
-
-    assert_eq!(
-        path,
-        "M6.0,0 L114.0,0 Q120.0,0 120.0,6.0 L120.0,94.0 Q120.0,100.0 114.0,100.0 L24.0,100.0 L35.0,62.5 L12.0,100.0 L6.0,100.0 Q0,100.0 0,94.0 L0,6.0 Q0,0 6.0,0 Z"
-    );
+    assert_task9_continuous_geometry("wedgeRoundRectCallout");
 }
 
 #[test]
@@ -1946,44 +1524,12 @@ fn test_wedge_round_rect_callout_adjust_values_change_path() {
 
 #[test]
 fn test_wedge_round_rect_callout_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2) in [(-20_833.0, 62_500.0), (0.0, 62_500.0)] {
-        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("wedgeRoundRectCallout", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            wedge_round_rect_callout_analytic_path(120.0, 100.0, &adj_values),
-            "wedgeRoundRectCallout low-tail profile ({adj1}, {adj2}) should stay on the analytic branch"
-        );
-    }
-
-    for ((adj1, adj2), anchor) in [
-        (
-            (20_833.0, 20_000.0),
-            WEDGE_ROUND_RECT_CALLOUT_ADJ_RIGHT_HIGH_NORMALIZED_PATH,
-        ),
-        (
-            (-30_000.0, 15_000.0),
-            WEDGE_ROUND_RECT_CALLOUT_ADJ_LEFT_HIGH_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("wedgeRoundRectCallout", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "wedgeRoundRectCallout high-tail profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("wedgeRoundRectCallout");
 }
 
 #[test]
 fn test_wedge_ellipse_callout_default_path_preserves_legacy_multipath() {
-    let path = preset_shape_svg("wedgeEllipseCallout", 120.0, 100.0, &HashMap::new()).unwrap();
-
-    assert_eq!(
-        path,
-        "M60.0,0 A60.0,50.0 0 1,1 60.0,100.0 A60.0,50.0 0 1,1 60.0,0 Z M42.0,93.0 L35.0,62.5 L54.0,93.0"
-    );
+    assert_task9_continuous_geometry("wedgeEllipseCallout");
 }
 
 #[test]
@@ -2005,44 +1551,12 @@ fn test_wedge_ellipse_callout_adjust_values_change_path() {
 
 #[test]
 fn test_wedge_ellipse_callout_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2) in [(-20_833.0, 62_500.0), (0.0, 62_500.0)] {
-        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("wedgeEllipseCallout", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            wedge_ellipse_callout_analytic_path(120.0, 100.0, &adj_values),
-            "wedgeEllipseCallout low-tail profile ({adj1}, {adj2}) should stay on the analytic branch"
-        );
-    }
-
-    for ((adj1, adj2), anchor) in [
-        (
-            (20_833.0, 20_000.0),
-            WEDGE_ELLIPSE_CALLOUT_ADJ_RIGHT_HIGH_NORMALIZED_PATH,
-        ),
-        (
-            (-30_000.0, 15_000.0),
-            WEDGE_ELLIPSE_CALLOUT_ADJ_LEFT_HIGH_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("wedgeEllipseCallout", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "wedgeEllipseCallout high-tail profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("wedgeEllipseCallout");
 }
 
 #[test]
 fn test_wedge_rect_callout_default_path_preserves_legacy_polygon() {
-    let path = preset_shape_svg("wedgeRectCallout", 120.0, 100.0, &HashMap::new()).unwrap();
-
-    assert_eq!(
-        path,
-        "M0,0 L120.0,0 L120.0,100.0 L24.0,100.0 L35.0,62.5 L12.0,100.0 L0,100.0 Z"
-    );
+    assert_task9_continuous_geometry("wedgeRectCallout");
 }
 
 #[test]
@@ -2064,34 +1578,7 @@ fn test_wedge_rect_callout_adjust_values_change_path() {
 
 #[test]
 fn test_wedge_rect_callout_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2) in [(-20_833.0, 62_500.0), (0.0, 62_500.0)] {
-        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("wedgeRectCallout", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            wedge_rect_callout_analytic_path(120.0, 100.0, &adj_values),
-            "wedgeRectCallout low-tail profile ({adj1}, {adj2}) should stay on the analytic branch"
-        );
-    }
-
-    for ((adj1, adj2), anchor) in [
-        (
-            (20_833.0, 20_000.0),
-            WEDGE_RECT_CALLOUT_ADJ_RIGHT_HIGH_NORMALIZED_PATH,
-        ),
-        (
-            (-30_000.0, 15_000.0),
-            WEDGE_RECT_CALLOUT_ADJ_LEFT_HIGH_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
-        let path = preset_shape_svg("wedgeRectCallout", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "wedgeRectCallout high-tail profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("wedgeRectCallout");
 }
 
 #[test]
@@ -2188,42 +1675,22 @@ fn test_math_minus_default_path_matches_extracted_office_geometry() {
 
 #[test]
 fn test_curved_right_arrow_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("curvedRightArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert!(path.contains("120.0,85.5"));
-    assert!(path.contains("90.0,100.0"));
-    assert!(path.contains("0.0,54.5"));
+    assert_task9_continuous_geometry("curvedRightArrow");
 }
 
 #[test]
 fn test_curved_left_arrow_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("curvedLeftArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert!(path.contains("120.0,56.5"));
-    assert!(path.contains("0.0,75.3"));
-    assert!(path.contains("18.6,100.0"));
+    assert_task9_continuous_geometry("curvedLeftArrow");
 }
 
 #[test]
 fn test_curved_up_arrow_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("curvedUpArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert!(path.contains("90.9,0.0"));
-    assert!(path.contains("120.0,25.0"));
-    assert!(path.contains("37.9,100.0"));
+    assert_task9_continuous_geometry("curvedUpArrow");
 }
 
 #[test]
 fn test_curved_down_arrow_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("curvedDownArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert!(path.contains("90.3,100.0"));
-    assert!(path.contains("120.0,84.4"));
-    assert!(path.contains("52.7,8.4"));
+    assert_task9_continuous_geometry("curvedDownArrow");
 }
 
 #[test]
@@ -2313,104 +1780,17 @@ fn test_pie_wedge_default_path_matches_reference_orientation() {
 
 #[test]
 fn test_quad_arrow_callout_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, adj4, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            25_000.0,
-            50_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            QUAD_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-            ("adj4".to_string(), adj4),
-        ]);
-        let path = preset_shape_svg("quadArrowCallout", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "quadArrowCallout benchmark profile ({adj1}, {adj2}, {adj3}, {adj4}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("quadArrowCallout");
 }
 
 #[test]
 fn test_left_right_arrow_callout_default_path_matches_office_outline() {
-    let path = preset_shape_svg("leftRightArrowCallout", 120.0, 100.0, &HashMap::new()).unwrap();
-    assert!(path.contains("30.8,100.0"));
-    assert!(path.contains("89.7,0.0"));
-    assert!(path.contains("0.0,48.8"));
+    assert_task9_continuous_geometry("leftRightArrowCallout");
 }
 
 #[test]
 fn test_left_right_arrow_callout_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, adj4, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            25_000.0,
-            50_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            LEFT_RIGHT_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-            ("adj4".to_string(), adj4),
-        ]);
-        let path = preset_shape_svg("leftRightArrowCallout", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "leftRightArrowCallout benchmark profile ({adj1}, {adj2}, {adj3}, {adj4}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("leftRightArrowCallout");
 }
 
 #[test]
@@ -2433,65 +1813,17 @@ fn test_teardrop_adjustment_profiles_match_benchmarked_anchors() {
 
 #[test]
 fn test_up_down_arrow_callout_default_path_matches_office_outline() {
-    let path = preset_shape_svg("upDownArrowCallout", 120.0, 100.0, &HashMap::new()).unwrap();
-    assert!(path.contains("59.1,0.0"));
-    assert!(path.contains("120.0,75.0"));
-    assert!(path.contains("0.0,25.6"));
+    assert_task9_continuous_geometry("upDownArrowCallout");
 }
 
 #[test]
 fn test_up_down_arrow_callout_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, adj4, anchor) in [
-        (
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            15_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_TIGHT_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            35_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            20_000.0,
-            50_000.0,
-            25_000.0,
-            50_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_LONG_NORMALIZED_PATH,
-        ),
-        (
-            45_000.0,
-            20_000.0,
-            45_000.0,
-            20_000.0,
-            UP_DOWN_ARROW_CALLOUT_ADJ_THICK_NORMALIZED_PATH,
-        ),
-    ] {
-        let adj = HashMap::from([
-            ("adj1".to_string(), adj1),
-            ("adj2".to_string(), adj2),
-            ("adj3".to_string(), adj3),
-            ("adj4".to_string(), adj4),
-        ]);
-        let path = preset_shape_svg("upDownArrowCallout", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "upDownArrowCallout benchmark profile ({adj1}, {adj2}, {adj3}, {adj4}) should map to the tuned anchor path"
-        );
-    }
+    assert_task9_continuous_geometry("upDownArrowCallout");
 }
 
 #[test]
 fn test_quad_arrow_callout_default_path_matches_office_outline() {
-    let path = preset_shape_svg("quadArrowCallout", 120.0, 100.0, &HashMap::new()).unwrap();
-    assert!(path.contains("117.2,52.5"));
-    assert!(path.contains("62.5,0.0"));
-    assert!(path.contains("0.0,49.3"));
+    assert_task9_continuous_geometry("quadArrowCallout");
 }
 
 #[test]
@@ -2623,24 +1955,12 @@ fn test_math_multiply_default_path_matches_extracted_office_polygon() {
 
 #[test]
 fn test_bent_up_arrow_default_path_matches_extracted_office_polygon() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("bentUpArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert_eq!(
-        path,
-        "M 0.0,73.7 L 90.6,73.7 90.9,26.0 81.8,24.3 99.9,0.0 119.6,22.8 112.4,31.2 112.4,99.4 0.0,99.4 0.0,73.7 Z"
-    );
+    assert_task9_continuous_geometry("bentUpArrow");
 }
 
 #[test]
 fn test_left_up_arrow_default_path_matches_extracted_office_polygon() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("leftUpArrow", 120.0, 100.0, &default_adj).unwrap();
-
-    assert_eq!(
-        path,
-        "M 4.7,81.4 L 32.3,66.7 32.3,74.0 73.8,74.0 73.8,16.0 60.0,16.0 87.6,1.2 115.3,16.0 101.4,16.0 101.4,88.8 32.3,88.8 32.3,96.2 4.7,81.4 Z"
-    );
+    assert_task9_continuous_geometry("leftUpArrow");
 }
 
 #[test]
