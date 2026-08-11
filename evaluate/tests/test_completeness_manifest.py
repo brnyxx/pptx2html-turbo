@@ -118,6 +118,52 @@ class CompletenessManifestTests(unittest.TestCase):
 
         self.assertIn("INVALID_FALLBACK_POLICY:presentation", errors)
 
+    def test_rejects_mutated_canonical_row_metadata(self) -> None:
+        mutations = (
+            ("official_source", "https://learn.microsoft.com/en-us/dotnet/api/"),
+            ("source_status", "unavailable"),
+            ("ooxml", {"qualified_name": "p:sld"}),
+            (
+                "fallback_policy",
+                {"kind": "arbitrary", "diagnostic_code": "ARBITRARY"},
+            ),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field):
+                manifest = _valid_manifest()
+                manifest["features"][0][field] = value
+
+                errors = validate_manifest(manifest)
+
+                self.assertIn("CANONICAL_ROW_MISMATCH:presentation", errors)
+
+    def test_rejects_exact_evidence_when_existing_files_fail_the_gate(self) -> None:
+        manifest = _valid_manifest()
+        feature = manifest["features"][0]
+        feature["current"]["visual"]["tier"] = "exact"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "capture.json").write_text("{}", encoding="utf-8")
+            (root / "fixtures").mkdir()
+            (root / "artifact.png").write_bytes(b"artifact")
+            (root / "golden").mkdir()
+            (root / "output").mkdir()
+            feature["exact_evidence"] = {
+                "oracle": "PowerPoint-native",
+                "powerpoint_version": "test",
+                "windows_version": "test",
+                "capture_metadata": "capture.json",
+                "fixture_bundle": "fixtures",
+                "artifact_paths": ["artifact.png"],
+                "gate_family": "text-layout",
+                "golden_set_dir": "golden",
+                "output_dir": "output",
+            }
+
+            errors = validate_manifest(manifest, root)
+
+        self.assertIn("EXACT_REQUIRES_POWERPOINT_EVIDENCE:presentation:visual", errors)
+
     def test_rejects_invalid_root_contract_metadata(self) -> None:
         manifest = _valid_manifest()
         manifest["schema_version"] = "3.0"

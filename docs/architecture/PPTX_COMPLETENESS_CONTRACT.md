@@ -24,6 +24,8 @@ The inventory includes the PresentationML parts exposed by Microsoft's structure
 
 The checker accepts sources only from `learn.microsoft.com` and `ecma-international.org`, rejects malformed or unapproved URLs with `UNOFFICIAL_SOURCE`, and rejects a QName or relationship type outside the known official inventory.
 
+Each stable ID is bound to a checker-owned SHA-256 digest of its `official_source`, `source_status`, `ooxml`, and complete `fallback_policy`. A changed source, availability status, QName/relationship, fallback kind, or diagnostic code fails with `CANONICAL_ROW_MISMATCH`; equivalent metadata cannot be exchanged between rows.
+
 ## Fallback diagnostic envelope
 
 Any fallback keeps the row's stable diagnostic code and, when known, the metadata `code`, `family`, `tier`, `stage`, `slide_index`, `part_name`, `relationship_id`, `relationship_type`, `qualified_name`, `bounds`, `raw_reference`, `fallback_kind`, and `reason`.
@@ -31,3 +33,5 @@ Any fallback keeps the row's stable diagnostic code and, when known, the metadat
 ## Exact-promotion gate
 
 No row or dimension may use `exact` without a complete PowerPoint-native evidence bundle: `oracle` set to `PowerPoint-native`, `powerpoint_version`, `windows_version`, `capture_metadata`, `fixture_bundle`, and nonempty `artifact_paths`. Browser and LibreOffice output are useful regression evidence but cannot satisfy this gate.
+
+Exact evidence additionally names `gate_family`, `golden_set_dir`, and `output_dir`. All paths are normalized below the repository root; capture metadata and artifacts must be nonempty files, fixture/golden/output locations must be directories, and the existing `evaluate.powerpoint_evidence` gate must return zero. Any import, path, validation, or gate failure is `EXACT_REQUIRES_POWERPOINT_EVIDENCE`.
