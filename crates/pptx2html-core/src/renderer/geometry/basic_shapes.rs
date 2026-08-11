@@ -1,7 +1,6 @@
 // Auto-split from renderer/geometry.rs (mechanical move, no logic edits).
 // Family: basic_shapes
 
-use super::shared::scale_normalized_path;
 use std::collections::HashMap;
 
 fn finite(value: Option<f64>, default: f64) -> f64 {
@@ -60,48 +59,7 @@ pub(super) fn parallelogram_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> 
         h = h
     )
 }
-pub(super) const HEXAGON_ADJ_LIGHT_NORMALIZED_PATH: &str = r#"M 0.000000,0.500000 L 0.099888,0.000000 0.899888,0.000000 1.000000,0.500000 0.899888,1.000000 0.099888,1.000000 0.000000,0.500000 Z"#;
-pub(super) const HEXAGON_ADJ_DEFAULTISH_NORMALIZED_PATH: &str = r#"M 0.000000,0.500000 L 0.249944,0.000000 0.749831,0.000000 1.000000,0.500000 0.749831,1.000000 0.249944,1.000000 0.000000,0.500000 Z"#;
-pub(super) const HEXAGON_ADJ_DEEP_NORMALIZED_PATH: &str = r#"M 0.000000,0.500000 L 0.400000,0.000000 0.600000,0.000000 1.000000,0.500000 0.600000,1.000000 0.400000,1.000000 0.000000,0.500000 Z"#;
-pub(super) const HEXAGON_ADJ_EXTREME_NORMALIZED_PATH: &str = r#"M 0.000000,0.500000 L 0.499888,0.000000 0.499888,0.000000 1.000000,0.500000 0.499888,1.000000 0.499888,1.000000 0.000000,0.500000 Z"#;
-pub(super) fn hexagon_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let value = finite(adj.get("adj").copied(), 25_000.0).clamp(0.0, 80_000.0);
-    let anchors = [
-        (10_000.0, HEXAGON_ADJ_LIGHT_NORMALIZED_PATH),
-        (25_000.0, HEXAGON_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (40_000.0, HEXAGON_ADJ_DEEP_NORMALIZED_PATH),
-        (55_000.0, HEXAGON_ADJ_EXTREME_NORMALIZED_PATH),
-    ];
-
-    anchors
-        .into_iter()
-        .min_by(|(ax, _), (ay, _)| {
-            let dx = (value - *ax) / 45_000.0;
-            let dy = (value - *ay) / 45_000.0;
-            (dx * dx)
-                .partial_cmp(&(dy * dy))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, path)| path)
-        .unwrap_or(HEXAGON_ADJ_DEFAULTISH_NORMALIZED_PATH)
-}
 pub(super) fn hexagon_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
-        let o = w * 25_000.0 / 100_000.0;
-        let cy = h / 2.0;
-        return format!(
-            "M{o:.1},0 L{x:.1},0 L{w:.1},{cy:.1} L{x:.1},{h:.1} L{o:.1},{h:.1} L0,{cy:.1} Z",
-            o = o,
-            x = w - o,
-            w = w,
-            cy = cy,
-            h = h
-        );
-    }
-    if !adj.contains_key("vf") {
-        return scale_normalized_path(hexagon_adjust_anchor(adj), w, h);
-    }
-
     let ss = w.min(h);
     let max_adj = 50_000.0 * w / ss;
     let a = finite(adj.get("adj").copied(), 25_000.0).clamp(0.0, max_adj);
@@ -121,39 +79,13 @@ pub(super) fn hexagon_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String
         y2 = y2
     )
 }
-pub(super) const TRAPEZOID_ADJ_LIGHT_NORMALIZED_PATH: &str = r#"M 0.000000,1.000000 L 0.099888,0.000000 0.899888,0.000000 1.000000,1.000000 0.000000,1.000000 Z"#;
-pub(super) const TRAPEZOID_ADJ_DEFAULTISH_NORMALIZED_PATH: &str = r#"M 0.000000,1.000000 L 0.249944,0.000000 0.749831,0.000000 1.000000,1.000000 0.000000,1.000000 Z"#;
-pub(super) const TRAPEZOID_ADJ_DEEP_NORMALIZED_PATH: &str = r#"M 0.000000,1.000000 L 0.400000,0.000000 0.600000,0.000000 1.000000,1.000000 0.000000,1.000000 Z"#;
-pub(super) const TRAPEZOID_ADJ_EXTREME_NORMALIZED_PATH: &str = r#"M 0.000000,1.000000 L 0.499888,0.000000 0.499888,0.000000 1.000000,1.000000 0.000000,1.000000 Z"#;
-pub(super) fn trapezoid_adjust_anchor(adj: &HashMap<String, f64>) -> &'static str {
-    let value = finite(adj.get("adj").copied(), 25_000.0).clamp(0.0, 80_000.0);
-    let anchors = [
-        (10_000.0, TRAPEZOID_ADJ_LIGHT_NORMALIZED_PATH),
-        (25_000.0, TRAPEZOID_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (40_000.0, TRAPEZOID_ADJ_DEEP_NORMALIZED_PATH),
-        (55_000.0, TRAPEZOID_ADJ_EXTREME_NORMALIZED_PATH),
-    ];
-
-    anchors
-        .into_iter()
-        .min_by(|(ax, _), (ay, _)| {
-            let dx = (value - *ax) / 45_000.0;
-            let dy = (value - *ay) / 45_000.0;
-            (dx * dx)
-                .partial_cmp(&(dy * dy))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|(_, path)| path)
-        .unwrap_or(TRAPEZOID_ADJ_DEFAULTISH_NORMALIZED_PATH)
-}
 pub(super) fn trapezoid_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if !adj.is_empty() {
-        return scale_normalized_path(trapezoid_adjust_anchor(adj), w, h);
-    }
-
-    let o = w * 25_000.0 / 100_000.0;
+    let ss = w.min(h);
+    let max_adj = 50_000.0 * w / ss;
+    let a = finite(adj.get("adj").copied(), 25_000.0).clamp(0.0, max_adj);
+    let o = ss * a / 100_000.0;
     format!(
-        "M{o:.1},0 L{x:.1},0 L{w:.1},{h:.1} L0,{h:.1} Z",
+        "M0,{h:.1} L{o:.1},0 L{x:.1},0 L{w:.1},{h:.1} Z",
         o = o,
         x = w - o,
         w = w,

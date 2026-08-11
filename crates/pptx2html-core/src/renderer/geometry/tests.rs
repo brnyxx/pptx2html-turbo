@@ -416,14 +416,14 @@ fn test_bevel_default_path_keeps_filled_face() {
 }
 
 #[test]
-fn test_brace_pair_default_path_keeps_center_fill_between_braces() {
-    let adj = HashMap::new();
-    let path = brace_pair_path(120.0, 100.0, &adj);
+fn test_brace_pair_default_matches_explicit_official_default() {
+    let default_path = brace_pair_path(120.0, 100.0, &HashMap::new());
+    let explicit_path =
+        brace_pair_path(120.0, 100.0, &HashMap::from([("adj".to_string(), 8_333.0)]));
 
-    assert_eq!(
-        path,
-        "M13.3,0 L106.7,0 Q120.0,0 120.0,13.3 L120.0,41.7 Q120.0,50.0 111.7,50.0 Q120.0,50.0 120.0,58.3 L120.0,86.7 Q120.0,100.0 106.7,100.0 L13.3,100.0 Q0,100.0 0,86.7 L0,58.3 Q0,50.0 8.3,50.0 Q0,50.0 0,41.7 L0,13.3 Q0,0 13.3,0 Z"
-    );
+    assert_eq!(default_path, explicit_path);
+    assert_eq!(default_path.matches('A').count(), 8);
+    assert!(default_path.ends_with('Z'));
 }
 
 #[test]
@@ -532,10 +532,18 @@ fn test_math_shapes() {
 }
 
 #[test]
-fn test_trapezoid_default_path_preserves_legacy_polygon() {
-    let path = preset_shape_svg("trapezoid", 120.0, 100.0, &HashMap::new()).unwrap();
+fn test_trapezoid_default_matches_explicit_official_default() {
+    let default_path = preset_shape_svg("trapezoid", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "trapezoid",
+        120.0,
+        100.0,
+        &HashMap::from([("adj".to_string(), 25_000.0)]),
+    )
+    .unwrap();
 
-    assert_eq!(path, "M30.0,0 L90.0,0 L120.0,100.0 L0,100.0 Z");
+    assert_eq!(default_path, explicit_path);
+    assert!(default_path.contains("L25.0,0 L95.0,0"));
 }
 
 #[test]
@@ -553,31 +561,33 @@ fn test_trapezoid_adjust_values_change_path() {
 }
 
 #[test]
-fn test_trapezoid_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (10_000.0, TRAPEZOID_ADJ_LIGHT_NORMALIZED_PATH),
-        (25_000.0, TRAPEZOID_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (40_000.0, TRAPEZOID_ADJ_DEEP_NORMALIZED_PATH),
-        (55_000.0, TRAPEZOID_ADJ_EXTREME_NORMALIZED_PATH),
+fn test_trapezoid_adjustment_profiles_follow_official_continuous_formula() {
+    for (adj, expected_top_left) in [
+        (12_345.0, "L12.3,0"),
+        (27_891.0, "L27.9,0"),
+        (43_210.0, "L43.2,0"),
     ] {
         let adj_values = HashMap::from([("adj".to_string(), adj)]);
         let path = preset_shape_svg("trapezoid", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "trapezoid benchmark profile ({adj}) should map to the tuned anchor path"
-        );
+        assert!(path.contains(expected_top_left), "adj={adj}: {path}");
+        assert!(path.starts_with("M0,100.0"));
+        assert!(path.ends_with('Z'));
     }
 }
 
 #[test]
-fn test_hexagon_default_path_preserves_legacy_polygon() {
-    let path = preset_shape_svg("hexagon", 120.0, 100.0, &HashMap::new()).unwrap();
+fn test_hexagon_default_matches_explicit_official_defaults() {
+    let default_path = preset_shape_svg("hexagon", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "hexagon",
+        120.0,
+        100.0,
+        &HashMap::from([("adj".to_string(), 25_000.0), ("vf".to_string(), 115_470.0)]),
+    )
+    .unwrap();
 
-    assert_eq!(
-        path,
-        "M30.0,0 L90.0,0 L120.0,50.0 L90.0,100.0 L30.0,100.0 L0,50.0 Z"
-    );
+    assert_eq!(default_path, explicit_path);
+    assert!(default_path.contains("L25.0,0.0 L95.0,0.0"));
 }
 
 #[test]
@@ -595,31 +605,35 @@ fn test_hexagon_adjust_values_change_path() {
 }
 
 #[test]
-fn test_hexagon_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (10_000.0, HEXAGON_ADJ_LIGHT_NORMALIZED_PATH),
-        (25_000.0, HEXAGON_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (40_000.0, HEXAGON_ADJ_DEEP_NORMALIZED_PATH),
-        (55_000.0, HEXAGON_ADJ_EXTREME_NORMALIZED_PATH),
+fn test_hexagon_adjustment_profiles_follow_official_continuous_formula() {
+    for (adj, vf, expected_top_left) in [
+        (12_345.0, 100_000.0, "L12.3,6.7"),
+        (27_891.0, 115_470.0, "L27.9,0.0"),
+        (43_210.0, 80_000.0, "L43.2,15.4"),
     ] {
-        let adj_values = HashMap::from([("adj".to_string(), adj)]);
+        let adj_values = HashMap::from([("adj".to_string(), adj), ("vf".to_string(), vf)]);
         let path = preset_shape_svg("hexagon", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "hexagon benchmark profile ({adj}) should map to the tuned anchor path"
+        assert!(
+            path.contains(expected_top_left),
+            "adj={adj}, vf={vf}: {path}"
         );
+        assert!(path.ends_with('Z'));
     }
 }
 
 #[test]
-fn test_round1_rect_default_path_preserves_legacy_outline() {
-    let path = preset_shape_svg("round1Rect", 120.0, 100.0, &HashMap::new()).unwrap();
+fn test_round1_rect_default_matches_explicit_official_default() {
+    let default_path = preset_shape_svg("round1Rect", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "round1Rect",
+        120.0,
+        100.0,
+        &HashMap::from([("adj".to_string(), 16_667.0)]),
+    )
+    .unwrap();
 
-    assert_eq!(
-        path,
-        "M0,0 L103.3,0 Q120.0,0 120.0,16.7 L120.0,100.0 L0,100.0 Z"
-    );
+    assert_eq!(default_path, explicit_path);
+    assert_eq!(default_path.matches('A').count(), 1);
 }
 
 #[test]
@@ -637,37 +651,41 @@ fn test_round1_rect_adjust_values_change_path() {
 }
 
 #[test]
-fn test_round1_rect_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (10_000.0, ROUND1_RECT_ADJ_LIGHT_NORMALIZED_PATH),
-        (16_667.0, ROUND1_RECT_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (30_000.0, ROUND1_RECT_ADJ_DEEP_NORMALIZED_PATH),
-        (45_000.0, ROUND1_RECT_ADJ_EXTREME_NORMALIZED_PATH),
+fn test_round1_rect_adjustment_profiles_follow_official_continuous_formula() {
+    for (adj, expected_radius) in [
+        (12_345.0, "A12.3,12.3"),
+        (27_891.0, "A27.9,27.9"),
+        (43_210.0, "A43.2,43.2"),
     ] {
         let adj_values = HashMap::from([("adj".to_string(), adj)]);
         let path = preset_shape_svg("round1Rect", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "round1Rect benchmark profile ({adj}) should map to the tuned anchor path"
-        );
+        assert!(path.contains(expected_radius), "adj={adj}: {path}");
+        assert_eq!(path.matches('A').count(), 1);
     }
 }
 
 #[test]
-fn test_round2_same_rect_default_path_preserves_legacy_outline() {
-    let path = preset_shape_svg("round2SameRect", 120.0, 100.0, &HashMap::new()).unwrap();
+fn test_round2_same_rect_default_matches_explicit_official_defaults() {
+    let default_path = preset_shape_svg("round2SameRect", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "round2SameRect",
+        120.0,
+        100.0,
+        &HashMap::from([("adj1".to_string(), 16_667.0), ("adj2".to_string(), 0.0)]),
+    )
+    .unwrap();
 
-    assert_eq!(
-        path,
-        "M16.7,0 L103.3,0 Q120.0,0 120.0,16.7 L120.0,100.0 L0,100.0 L0,16.7 Q0,0 16.7,0 Z"
-    );
+    assert_eq!(default_path, explicit_path);
+    assert_eq!(default_path.matches('A').count(), 4);
 }
 
 #[test]
 fn test_round2_same_rect_adjust_values_change_path() {
     let default_adj = HashMap::new();
-    let custom_adj = HashMap::from([("adj".to_string(), 30_000.0)]);
+    let custom_adj = HashMap::from([
+        ("adj1".to_string(), 30_000.0),
+        ("adj2".to_string(), 10_000.0),
+    ]);
 
     let default_path = preset_shape_svg("round2SameRect", 120.0, 100.0, &default_adj).unwrap();
     let custom_path = preset_shape_svg("round2SameRect", 120.0, 100.0, &custom_adj).unwrap();
@@ -679,37 +697,42 @@ fn test_round2_same_rect_adjust_values_change_path() {
 }
 
 #[test]
-fn test_round2_same_rect_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (10_000.0, ROUND2_SAME_RECT_ADJ_LIGHT_NORMALIZED_PATH),
-        (16_667.0, ROUND2_SAME_RECT_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (30_000.0, ROUND2_SAME_RECT_ADJ_DEEP_NORMALIZED_PATH),
-        (45_000.0, ROUND2_SAME_RECT_ADJ_EXTREME_NORMALIZED_PATH),
+fn test_round2_same_rect_adjustment_profiles_keep_keys_isolated() {
+    for (adj1, adj2, expected_top, expected_bottom) in [
+        (12_345.0, 7_654.0, "A12.3,12.3", "A7.7,7.7"),
+        (27_891.0, 19_876.0, "A27.9,27.9", "A19.9,19.9"),
+        (43_210.0, 31_234.0, "A43.2,43.2", "A31.2,31.2"),
     ] {
-        let adj_values = HashMap::from([("adj".to_string(), adj)]);
+        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("round2SameRect", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "round2SameRect benchmark profile ({adj}) should map to the tuned anchor path"
-        );
+        assert!(path.contains(expected_top), "adj1={adj1}: {path}");
+        assert!(path.contains(expected_bottom), "adj2={adj2}: {path}");
+        assert_eq!(path.matches('A').count(), 4);
     }
 }
 
 #[test]
-fn test_snip2_diag_rect_default_path_preserves_legacy_outline() {
-    let path = preset_shape_svg("snip2DiagRect", 120.0, 100.0, &HashMap::new()).unwrap();
+fn test_snip2_diag_rect_default_matches_explicit_official_defaults() {
+    let default_path = preset_shape_svg("snip2DiagRect", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "snip2DiagRect",
+        120.0,
+        100.0,
+        &HashMap::from([("adj1".to_string(), 0.0), ("adj2".to_string(), 16_667.0)]),
+    )
+    .unwrap();
 
-    assert_eq!(
-        path,
-        "M16.7,0 L103.3,0 L120.0,16.7 L120.0,83.3 L103.3,100.0 L0,100.0 Z"
-    );
+    assert_eq!(default_path, explicit_path);
+    assert!(default_path.ends_with('Z'));
 }
 
 #[test]
 fn test_snip2_diag_rect_adjust_values_change_path() {
     let default_adj = HashMap::new();
-    let custom_adj = HashMap::from([("adj".to_string(), 30_000.0)]);
+    let custom_adj = HashMap::from([
+        ("adj1".to_string(), 30_000.0),
+        ("adj2".to_string(), 10_000.0),
+    ]);
 
     let default_path = preset_shape_svg("snip2DiagRect", 120.0, 100.0, &default_adj).unwrap();
     let custom_path = preset_shape_svg("snip2DiagRect", 120.0, 100.0, &custom_adj).unwrap();
@@ -721,37 +744,45 @@ fn test_snip2_diag_rect_adjust_values_change_path() {
 }
 
 #[test]
-fn test_snip2_diag_rect_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (10_000.0, SNIP2_DIAG_RECT_ADJ_LIGHT_NORMALIZED_PATH),
-        (16_667.0, SNIP2_DIAG_RECT_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (30_000.0, SNIP2_DIAG_RECT_ADJ_DEEP_NORMALIZED_PATH),
-        (45_000.0, SNIP2_DIAG_RECT_ADJ_EXTREME_NORMALIZED_PATH),
+fn test_snip2_diag_rect_adjustment_profiles_keep_keys_isolated() {
+    for (adj1, adj2, expected_top_left, expected_bottom_left) in [
+        (12_345.0, 7_654.0, "M12.3,0", "L7.7,100.0"),
+        (27_891.0, 19_876.0, "M27.9,0", "L19.9,100.0"),
+        (43_210.0, 31_234.0, "M43.2,0", "L31.2,100.0"),
     ] {
-        let adj_values = HashMap::from([("adj".to_string(), adj)]);
+        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("snip2DiagRect", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "snip2DiagRect benchmark profile ({adj}) should map to the tuned anchor path"
-        );
+        assert!(path.starts_with(expected_top_left), "adj1={adj1}: {path}");
+        assert!(path.contains(expected_bottom_left), "adj2={adj2}: {path}");
+        assert!(path.ends_with('Z'));
     }
 }
 
 #[test]
-fn test_snip_round_rect_default_path_preserves_legacy_outline() {
-    let path = preset_shape_svg("snipRoundRect", 120.0, 100.0, &HashMap::new()).unwrap();
+fn test_snip_round_rect_default_matches_explicit_official_defaults() {
+    let default_path = preset_shape_svg("snipRoundRect", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "snipRoundRect",
+        120.0,
+        100.0,
+        &HashMap::from([
+            ("adj1".to_string(), 16_667.0),
+            ("adj2".to_string(), 16_667.0),
+        ]),
+    )
+    .unwrap();
 
-    assert_eq!(
-        path,
-        "M16.7,0 L103.3,0 L120.0,16.7 L120.0,83.3 Q120.0,100.0 103.3,100.0 L16.7,100.0 Q0,100.0 0,83.3 L0,16.7 Q0,0 16.7,0 Z"
-    );
+    assert_eq!(default_path, explicit_path);
+    assert_eq!(default_path.matches('A').count(), 1);
 }
 
 #[test]
 fn test_snip_round_rect_adjust_values_change_path() {
     let default_adj = HashMap::new();
-    let custom_adj = HashMap::from([("adj".to_string(), 30_000.0)]);
+    let custom_adj = HashMap::from([
+        ("adj1".to_string(), 30_000.0),
+        ("adj2".to_string(), 10_000.0),
+    ]);
 
     let default_path = preset_shape_svg("snipRoundRect", 120.0, 100.0, &default_adj).unwrap();
     let custom_path = preset_shape_svg("snipRoundRect", 120.0, 100.0, &custom_adj).unwrap();
@@ -763,20 +794,17 @@ fn test_snip_round_rect_adjust_values_change_path() {
 }
 
 #[test]
-fn test_snip_round_rect_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (10_000.0, SNIP_ROUND_RECT_ADJ_LIGHT_NORMALIZED_PATH),
-        (16_667.0, SNIP_ROUND_RECT_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (30_000.0, SNIP_ROUND_RECT_ADJ_DEEP_NORMALIZED_PATH),
-        (45_000.0, SNIP_ROUND_RECT_ADJ_EXTREME_NORMALIZED_PATH),
+fn test_snip_round_rect_adjustment_profiles_keep_keys_isolated() {
+    for (adj1, adj2, expected_radius, expected_snip) in [
+        (12_345.0, 7_654.0, "A12.3,12.3", "L112.3,0"),
+        (27_891.0, 19_876.0, "A27.9,27.9", "L100.1,0"),
+        (43_210.0, 31_234.0, "A43.2,43.2", "L88.8,0"),
     ] {
-        let adj_values = HashMap::from([("adj".to_string(), adj)]);
+        let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("snipRoundRect", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "snipRoundRect benchmark profile ({adj}) should map to the tuned anchor path"
-        );
+        assert!(path.contains(expected_radius), "adj1={adj1}: {path}");
+        assert!(path.contains(expected_snip), "adj2={adj2}: {path}");
+        assert_eq!(path.matches('A').count(), 1);
     }
 }
 
@@ -2519,13 +2547,19 @@ fn test_left_brace_default_path_matches_extracted_office_outline() {
 }
 
 #[test]
-fn test_bracket_pair_default_path_matches_extracted_office_outline() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("bracketPair", 120.0, 100.0, &default_adj).unwrap();
+fn test_bracket_pair_default_matches_explicit_official_default() {
+    let default_path = preset_shape_svg("bracketPair", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "bracketPair",
+        120.0,
+        100.0,
+        &HashMap::from([("adj".to_string(), 16_667.0)]),
+    )
+    .unwrap();
 
-    assert!(path.contains("M 3.0,17.3"));
-    assert!(path.contains("105.2,1.9"));
-    assert!(path.contains("14.8,94.0"));
+    assert_eq!(default_path, explicit_path);
+    assert_eq!(default_path.matches('A').count(), 4);
+    assert!(default_path.ends_with('Z'));
 }
 
 #[test]
@@ -2543,20 +2577,16 @@ fn test_bracket_pair_adjust_values_change_path() {
 }
 
 #[test]
-fn test_bracket_pair_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (5_000.0, DOUBLE_BRACKET_ADJ_TIGHT_NORMALIZED_PATH),
-        (16_667.0, DOUBLE_BRACKET_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (30_000.0, DOUBLE_BRACKET_ADJ_WIDE_NORMALIZED_PATH),
-        (45_000.0, DOUBLE_BRACKET_ADJ_DEEP_NORMALIZED_PATH),
+fn test_bracket_pair_adjustment_profiles_follow_official_continuous_formula() {
+    for (adj, expected_radius) in [
+        (12_345.0, "A12.3,12.3"),
+        (27_891.0, "A27.9,27.9"),
+        (43_210.0, "A43.2,43.2"),
     ] {
         let adj_values = HashMap::from([("adj".to_string(), adj)]);
         let path = preset_shape_svg("bracketPair", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "bracketPair benchmark profile ({adj}) should map to the tuned anchor path"
-        );
+        assert!(path.contains(expected_radius), "adj={adj}: {path}");
+        assert_eq!(path.matches('A').count(), 4);
     }
 }
 
@@ -2575,31 +2605,35 @@ fn test_brace_pair_adjust_values_change_path() {
 }
 
 #[test]
-fn test_brace_pair_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (5_000.0, DOUBLE_BRACE_ADJ_TIGHT_NORMALIZED_PATH),
-        (8_333.0, DOUBLE_BRACE_ADJ_DEFAULTISH_NORMALIZED_PATH),
-        (20_000.0, DOUBLE_BRACE_ADJ_WIDE_NORMALIZED_PATH),
-        (40_000.0, DOUBLE_BRACE_ADJ_DEEP_NORMALIZED_PATH),
+fn test_brace_pair_adjustment_profiles_follow_official_continuous_formula() {
+    for (adj, expected_radius) in [
+        (7_654.0, "A7.7,7.7"),
+        (12_345.0, "A12.3,12.3"),
+        (23_456.0, "A23.5,23.5"),
     ] {
         let adj_values = HashMap::from([("adj".to_string(), adj)]);
         let path = preset_shape_svg("bracePair", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "bracePair benchmark profile ({adj}) should map to the tuned anchor path"
-        );
+        assert!(path.contains(expected_radius), "adj={adj}: {path}");
+        assert_eq!(path.matches('A').count(), 8);
     }
 }
 
 #[test]
-fn test_half_frame_default_path_preserves_legacy_polygon() {
-    let path = preset_shape_svg("halfFrame", 120.0, 100.0, &HashMap::new()).unwrap();
+fn test_half_frame_default_matches_explicit_official_defaults() {
+    let default_path = preset_shape_svg("halfFrame", 120.0, 100.0, &HashMap::new()).unwrap();
+    let explicit_path = preset_shape_svg(
+        "halfFrame",
+        120.0,
+        100.0,
+        &HashMap::from([
+            ("adj1".to_string(), 33_333.0),
+            ("adj2".to_string(), 33_333.0),
+        ]),
+    )
+    .unwrap();
 
-    assert_eq!(
-        path,
-        "M0,0 L120.0,0 L120.0,33.3 L40.0,33.3 L40.0,100.0 L0,100.0 Z"
-    );
+    assert_eq!(default_path, explicit_path);
+    assert!(default_path.ends_with('Z'));
 }
 
 #[test]
@@ -2620,26 +2654,30 @@ fn test_half_frame_adjust_values_change_path() {
 }
 
 #[test]
-fn test_half_frame_adjustment_profiles_match_benchmarked_anchors() {
-    for ((adj1, adj2), anchor) in [
-        ((15_000.0, 15_000.0), HALF_FRAME_ADJ_TIGHT_NORMALIZED_PATH),
+fn test_half_frame_adjustment_profiles_follow_official_coupled_formula() {
+    for (adj1, adj2, expected_landmarks) in [
         (
-            (15_000.0, 50_000.0),
-            HALF_FRAME_ADJ_WIDE_TOP_NORMALIZED_PATH,
+            20_000.0,
+            40_000.0,
+            ["L96.0,20.0", "L40.0,20.0", "L40.0,66.7"],
         ),
         (
-            (50_000.0, 15_000.0),
-            HALF_FRAME_ADJ_TALL_TOP_NORMALIZED_PATH,
+            30_000.0,
+            20_000.0,
+            ["L84.0,30.0", "L20.0,30.0", "L20.0,83.3"],
         ),
-        ((50_000.0, 50_000.0), HALF_FRAME_ADJ_OPEN_NORMALIZED_PATH),
+        (
+            40_000.0,
+            30_000.0,
+            ["L72.0,40.0", "L30.0,40.0", "L30.0,75.0"],
+        ),
     ] {
         let adj_values = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("halfFrame", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "halfFrame benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
+        for landmark in expected_landmarks {
+            assert!(path.contains(landmark), "adj1={adj1}, adj2={adj2}: {path}");
+        }
+        assert!(path.ends_with('Z'));
     }
 }
 

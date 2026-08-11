@@ -302,14 +302,25 @@ const fn case(
 }
 
 fn render_path(preset: &str, adjustment: Option<(&str, f64)>) -> String {
-    let adjustment_xml = adjustment.map_or_else(String::new, |(key, value)| {
-        format!(r#"<a:gd name="{key}" fmla="val {value}"/>"#)
-    });
+    let adjustments = adjustment.map_or_else(Vec::new, |value| vec![value]);
+    render_path_with(preset, &adjustments, 1_524_000, 952_500)
+}
+
+fn render_path_with(
+    preset: &str,
+    adjustments: &[(&str, f64)],
+    width_emu: i64,
+    height_emu: i64,
+) -> String {
+    let adjustment_xml = adjustments
+        .iter()
+        .map(|(key, value)| format!(r#"<a:gd name="{key}" fmla="val {value}"/>"#))
+        .collect::<String>();
     let slide = format!(
         r#"<p:sp>
   <p:nvSpPr><p:cNvPr id="2" name="Adjusted shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
-    <a:xfrm><a:off x="0" y="0"/><a:ext cx="1524000" cy="952500"/></a:xfrm>
+    <a:xfrm><a:off x="0" y="0"/><a:ext cx="{width_emu}" cy="{height_emu}"/></a:xfrm>
     <a:prstGeom prst="{preset}"><a:avLst>{adjustment_xml}</a:avLst></a:prstGeom>
     <a:solidFill><a:srgbClr val="336699"/></a:solidFill>
   </p:spPr>
@@ -322,6 +333,22 @@ fn render_path(preset: &str, adjustment: Option<(&str, f64)>) -> String {
         .map(|offset| path_start + offset)
         .expect("SVG path terminator");
     html[path_start..path_end].to_string()
+}
+
+fn path_numbers(path: &str) -> Vec<f64> {
+    path.split(|character: char| {
+        character.is_ascii_alphabetic() || character == ',' || character.is_whitespace()
+    })
+    .filter(|token| !token.is_empty())
+    .map(|token| token.parse::<f64>().expect("SVG numeric token"))
+    .collect()
+}
+
+fn assert_approx(actual: f64, expected: f64) {
+    assert!(
+        (actual - expected).abs() <= 0.11,
+        "expected {expected}, got {actual}"
+    );
 }
 
 fn assert_finite_path(path: &str, case: AdjustmentCase, value: f64) {
@@ -471,5 +498,215 @@ fn hostile_and_out_of_contract_values_never_emit_non_finite_svg() {
             assert_eq!(below, lower, "{} {} lower clamp", case.preset, case.key);
             assert_eq!(above, upper, "{} {} upper clamp", case.preset, case.key);
         }
+    }
+}
+
+#[test]
+fn explicit_official_defaults_equal_absent_defaults() {
+    for &case in CASES {
+        let absent = render_path(case.preset, None);
+        let explicit = render_path(case.preset, Some((case.key, case.default)));
+        assert_eq!(
+            absent, explicit,
+            "{}.{} official default",
+            case.preset, case.key
+        );
+    }
+}
+
+#[test]
+fn official_axes_are_continuous_at_three_non_anchor_values() {
+    let axes = [
+        ("triangle", "adj", [31_111.0, 33_333.0, 35_555.0]),
+        ("pentagon", "hf", [97_111.0, 99_333.0, 101_555.0]),
+        ("pentagon", "vf", [97_111.0, 99_333.0, 101_555.0]),
+        ("hexagon", "adj", [11_111.0, 12_222.0, 13_333.0]),
+        ("hexagon", "vf", [101_111.0, 103_333.0, 105_555.0]),
+        ("trapezoid", "adj", [11_111.0, 12_222.0, 13_333.0]),
+        ("round1Rect", "adj", [11_111.0, 12_222.0, 13_333.0]),
+        ("bracePair", "adj", [9_111.0, 10_222.0, 11_333.0]),
+        ("bracketPair", "adj", [11_111.0, 12_222.0, 13_333.0]),
+        ("halfFrame", "adj1", [21_111.0, 22_222.0, 23_333.0]),
+        ("halfFrame", "adj2", [21_111.0, 22_222.0, 23_333.0]),
+        ("snip2SameRect", "adj1", [11_111.0, 12_222.0, 13_333.0]),
+        ("snip2SameRect", "adj2", [11_111.0, 12_222.0, 13_333.0]),
+        ("snip2DiagRect", "adj1", [11_111.0, 12_222.0, 13_333.0]),
+        ("snip2DiagRect", "adj2", [11_111.0, 12_222.0, 13_333.0]),
+        ("snipRoundRect", "adj1", [11_111.0, 12_222.0, 13_333.0]),
+        ("snipRoundRect", "adj2", [11_111.0, 12_222.0, 13_333.0]),
+        ("round2SameRect", "adj1", [11_111.0, 12_222.0, 13_333.0]),
+        ("round2SameRect", "adj2", [11_111.0, 12_222.0, 13_333.0]),
+        ("round2DiagRect", "adj1", [11_111.0, 12_222.0, 13_333.0]),
+        ("round2DiagRect", "adj2", [11_111.0, 12_222.0, 13_333.0]),
+    ];
+    let collapsed = axes
+        .iter()
+        .filter_map(|(preset, key, values)| {
+            let paths = values.map(|value| render_path(preset, Some((key, value))));
+            ((paths[0] == paths[1]) || (paths[1] == paths[2])).then_some(format!("{preset}.{key}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        collapsed.is_empty(),
+        "quantized axes: {}",
+        collapsed.join(", ")
+    );
+}
+
+#[test]
+fn multi_key_order_and_unknown_legacy_key_do_not_override_official_values() {
+    for preset in [
+        "snip2DiagRect",
+        "snipRoundRect",
+        "round2SameRect",
+        "round2DiagRect",
+    ] {
+        let forward = render_path_with(
+            preset,
+            &[("adj1", 12_345.0), ("adj2", 32_109.0)],
+            1_524_000,
+            952_500,
+        );
+        let reversed = render_path_with(
+            preset,
+            &[("adj2", 32_109.0), ("adj1", 12_345.0)],
+            1_524_000,
+            952_500,
+        );
+        let with_unknown = render_path_with(
+            preset,
+            &[("adj", 45_000.0), ("adj1", 12_345.0), ("adj2", 32_109.0)],
+            1_524_000,
+            952_500,
+        );
+        assert_eq!(forward, reversed, "{preset} key order");
+        assert_eq!(forward, with_unknown, "{preset} legacy override");
+    }
+
+    let forward = render_path_with(
+        "halfFrame",
+        &[("adj1", 22_345.0), ("adj2", 42_109.0)],
+        1_524_000,
+        952_500,
+    );
+    let reversed = render_path_with(
+        "halfFrame",
+        &[("adj2", 42_109.0), ("adj1", 22_345.0)],
+        1_524_000,
+        952_500,
+    );
+    assert_eq!(forward, reversed, "halfFrame key order");
+}
+
+#[test]
+fn official_landmarks_match_ecma_derived_coordinates() {
+    let triangle = path_numbers(&render_path("triangle", Some(("adj", 37_500.0))));
+    assert_eq!(triangle, [0.0, 100.0, 60.0, 0.0, 160.0, 100.0]);
+
+    let hexagon = path_numbers(&render_path_with(
+        "hexagon",
+        &[("adj", 33_333.0), ("vf", 100_000.0)],
+        1_524_000,
+        952_500,
+    ));
+    for (actual, expected) in hexagon.iter().zip([
+        0.0, 50.0, 33.3, 6.7, 126.7, 6.7, 160.0, 50.0, 126.7, 93.3, 33.3, 93.3,
+    ]) {
+        assert_approx(*actual, expected);
+    }
+
+    let snip = path_numbers(&render_path_with(
+        "snip2DiagRect",
+        &[("adj1", 20_000.0), ("adj2", 30_000.0)],
+        1_524_000,
+        952_500,
+    ));
+    assert_eq!(
+        snip,
+        [
+            20.0, 0.0, 130.0, 0.0, 160.0, 30.0, 160.0, 80.0, 140.0, 100.0, 30.0, 100.0, 0.0, 70.0,
+            0.0, 20.0
+        ]
+    );
+
+    let half_frame = path_numbers(&render_path_with(
+        "halfFrame",
+        &[("adj1", 20_000.0), ("adj2", 40_000.0)],
+        1_524_000,
+        952_500,
+    ));
+    assert_eq!(
+        half_frame,
+        [
+            0.0, 0.0, 160.0, 0.0, 128.0, 20.0, 40.0, 20.0, 40.0, 75.0, 0.0, 100.0
+        ]
+    );
+}
+
+#[test]
+fn official_paths_keep_closed_topology_and_expected_arc_counts() {
+    for (preset, adjustments, arc_count) in [
+        ("round1Rect", vec![("adj", 23_456.0)], 1),
+        (
+            "round2SameRect",
+            vec![("adj1", 12_345.0), ("adj2", 23_456.0)],
+            4,
+        ),
+        (
+            "round2DiagRect",
+            vec![("adj1", 12_345.0), ("adj2", 23_456.0)],
+            4,
+        ),
+        (
+            "snipRoundRect",
+            vec![("adj1", 12_345.0), ("adj2", 23_456.0)],
+            1,
+        ),
+        ("bracePair", vec![("adj", 12_345.0)], 8),
+        ("bracketPair", vec![("adj", 23_456.0)], 4),
+    ] {
+        let path = render_path_with(preset, &adjustments, 1_524_000, 952_500);
+        assert_eq!(
+            path.chars().filter(|command| *command == 'M').count(),
+            1,
+            "{preset}"
+        );
+        assert_eq!(
+            path.chars().filter(|command| *command == 'A').count(),
+            arc_count,
+            "{preset}"
+        );
+        assert_eq!(
+            path.chars().filter(|command| *command == 'Z').count(),
+            1,
+            "{preset}"
+        );
+        assert!(path.trim_end().ends_with('Z'), "{preset} closedness");
+    }
+}
+
+#[test]
+fn safe_official_values_remain_inside_square_view_box() {
+    for (preset, adjustments) in [
+        ("triangle", vec![("adj", 37_500.0)]),
+        ("pentagon", vec![("hf", 100_000.0), ("vf", 100_000.0)]),
+        ("hexagon", vec![("adj", 33_333.0), ("vf", 100_000.0)]),
+        (
+            "snip2DiagRect",
+            vec![("adj1", 20_000.0), ("adj2", 30_000.0)],
+        ),
+        (
+            "round2SameRect",
+            vec![("adj1", 20_000.0), ("adj2", 30_000.0)],
+        ),
+        ("halfFrame", vec![("adj1", 20_000.0), ("adj2", 40_000.0)]),
+    ] {
+        let path = render_path_with(preset, &adjustments, 952_500, 952_500);
+        assert!(
+            path_numbers(&path)
+                .into_iter()
+                .all(|value| (0.0..=100.0).contains(&value)),
+            "{preset} escaped square viewBox: {path}"
+        );
     }
 }
