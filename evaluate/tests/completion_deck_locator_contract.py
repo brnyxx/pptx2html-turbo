@@ -34,10 +34,12 @@ def _l(token: str, part: str = S, negative: AbsenceRule | None = None) -> Locato
 
 ABSENT_REL: Final = AbsenceRule(AbsenceKind.TOKEN_ABSENT, SR, "rIdMissing")
 ABSENT_TABLE_STYLE: Final = AbsenceRule(
-    AbsenceKind.TOKEN_ABSENT, "ppt/_rels/presentation.xml.rels", "tableStyles"
+    AbsenceKind.TOKEN_ABSENT,
+    "ppt/tableStyles.xml",
+    "{22222222-2222-2222-2222-222222222222}",
 )
 ABSENT_AUTHOR: Final = AbsenceRule(
-    AbsenceKind.TOKEN_ABSENT, "ppt/authors/author1.xml", 'authorId="404"'
+    AbsenceKind.TOKEN_ABSENT, "ppt/commentAuthors.xml", 'id="404"'
 )
 
 
@@ -52,7 +54,10 @@ LOCATORS: Final = {
     "pattern-fill-unknown": _l('<a:pattFill prst="unknownFuturePattern">'),
     "picture-bullet-embedded": _l('<a:blip r:embed="rIdImage"/>'),
     "picture-bullet-missing": _l("<a:buBlip><a:blip/></a:buBlip>", negative=ABSENT_REL),
-    "table-style-regions": _l("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"),
+    "table-style-regions": _l(
+        '<a:tblStyle styleId="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"',
+        "ppt/tableStyles.xml",
+    ),
     "table-style-missing": _l(
         "{22222222-2222-2222-2222-222222222222}", negative=ABSENT_TABLE_STYLE
     ),
@@ -82,8 +87,8 @@ LOCATORS: Final = {
     "chart-preview-fallback": _l(
         '<Relationship Id="rIdPreviewImage"', "ppt/charts/_rels/chart2.xml.rels"
     ),
-    "chart-placeholder": _l("<c:stockChart/>", "ppt/charts/chart3.xml"),
-    "fallback-smartart": _l("<a:relIds "),
+    "chart-placeholder": _l("<c:stockChart>", "ppt/charts/chart3.xml"),
+    "fallback-smartart": _l("<dgm:relIds "),
     "fallback-ole": _l('<p:oleObj r:id="rIdOle"'),
     "fallback-math": _l(
         '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'

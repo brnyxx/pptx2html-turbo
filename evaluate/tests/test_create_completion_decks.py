@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from evaluate.tests.completion_deck_feature_contract import (
     assert_feature_contract,
 )
 from evaluate.tests.completion_deck_graph_contract import assert_package_graph
+from evaluate.tests.completion_deck_fixture_contract import assert_fixture_root
 from evaluate.tests.completion_deck_locator_contract import assert_manifest_locators
 from evaluate.tests.completion_deck_test_support import (
     CANONICAL_MANIFEST,
@@ -200,6 +202,23 @@ class CompletionDeckTests(unittest.TestCase):
                         name for name in archive.namelist() if name.endswith(".png")
                     ):
                         assert_png(self, archive.read(part))
+
+
+class FixtureRootTests(unittest.TestCase):
+    def test_supplied_fixture_root(self) -> None:
+        root = os.environ.get("PPTX_COMPLETION_FIXTURE_ROOT")
+        self.assertIsNotNone(root)
+        assert_fixture_root(self, Path(root))
+
+
+def load_tests(
+    loader: unittest.TestLoader,
+    tests: unittest.TestSuite,
+    pattern: str | None,
+) -> unittest.TestSuite:
+    if "PPTX_COMPLETION_FIXTURE_ROOT" not in os.environ:
+        return loader.loadTestsFromTestCase(CompletionDeckTests)
+    return loader.loadTestsFromTestCase(FixtureRootTests)
 
 
 def _mutate_adjustment(

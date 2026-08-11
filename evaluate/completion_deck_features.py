@@ -23,6 +23,8 @@ class FeatureSpec:
     part: str
     token: str
     negative: NegativeSpec | None = None
+    schema_expectation: str = "positive"
+    expected_diagnostic: str | None = None
 
 
 S = "ppt/slides/slide1.xml"
@@ -36,20 +38,31 @@ def _f(
     token: str,
     part: str = S,
     negative: NegativeSpec | None = None,
+    schema_expectation: str = "positive",
+    expected_diagnostic: str | None = None,
 ) -> FeatureSpec:
-    return FeatureSpec(task, deck, feature_id, part, token, negative)
+    return FeatureSpec(
+        task,
+        deck,
+        feature_id,
+        part,
+        token,
+        negative,
+        schema_expectation,
+        expected_diagnostic,
+    )
 
 
 ABSENT_REL = NegativeSpec(NegativeKind.TOKEN_ABSENT, SR, "rIdMissing")
 ABSENT_TABLE_STYLE = NegativeSpec(
     NegativeKind.TOKEN_ABSENT,
-    "ppt/_rels/presentation.xml.rels",
-    "tableStyles",
+    "ppt/tableStyles.xml",
+    "{22222222-2222-2222-2222-222222222222}",
 )
 ABSENT_AUTHOR = NegativeSpec(
     NegativeKind.TOKEN_ABSENT,
-    "ppt/authors/author1.xml",
-    'authorId="404"',
+    "ppt/commentAuthors.xml",
+    'id="404"',
 )
 
 
@@ -69,6 +82,8 @@ FEATURES = (
         "patterns",
         "pattern-fill-unknown",
         '<a:pattFill prst="unknownFuturePattern">',
+        schema_expectation="negative",
+        expected_diagnostic="PPTX_COMPLETENESS_FALLBACK",
     ),
     _f(
         13, "picture-bullets", "picture-bullet-embedded", '<a:blip r:embed="rIdImage"/>'
@@ -84,7 +99,8 @@ FEATURES = (
         14,
         "table-styles",
         "table-style-regions",
-        "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
+        '<a:tblStyle styleId="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"',
+        "ppt/tableStyles.xml",
     ),
     _f(
         14,
@@ -168,8 +184,8 @@ FEATURES = (
         '<Relationship Id="rIdPreviewImage"',
         "ppt/charts/_rels/chart2.xml.rels",
     ),
-    _f(20, "charts", "chart-placeholder", "<c:stockChart/>", "ppt/charts/chart3.xml"),
-    _f(21, "fallback-domains", "fallback-smartart", "<a:relIds "),
+    _f(20, "charts", "chart-placeholder", "<c:stockChart>", "ppt/charts/chart3.xml"),
+    _f(21, "fallback-domains", "fallback-smartart", "<dgm:relIds "),
     _f(21, "fallback-domains", "fallback-ole", '<p:oleObj r:id="rIdOle"'),
     _f(
         21,

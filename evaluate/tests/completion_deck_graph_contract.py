@@ -6,6 +6,7 @@ import zipfile
 from typing import Final
 from xml.etree import ElementTree
 
+from evaluate.tests.completion_deck_common_rel_contract import COMMON_RELS
 from evaluate.tests.completion_deck_feature_contract import NS, REL, RULES, SR
 
 SPECIFIC_RELS: Final = {
@@ -26,9 +27,44 @@ SPECIFIC_RELS: Final = {
         ),
         (
             "ppt/_rels/presentation.xml.rels",
-            "rIdAuthors",
+            "rIdModernAuthors",
             "http://schemas.microsoft.com/office/2018/10/relationships/authors",
             "authors/author1.xml",
+            None,
+        ),
+        (
+            "ppt/_rels/presentation.xml.rels",
+            "rIdClassicAuthors",
+            REL + "commentAuthors",
+            "commentAuthors.xml",
+            None,
+        ),
+        (
+            "ppt/_rels/presentation.xml.rels",
+            "rIdNotesMaster",
+            REL + "notesMaster",
+            "notesMasters/notesMaster1.xml",
+            None,
+        ),
+        (
+            "ppt/notesSlides/_rels/notesSlide1.xml.rels",
+            "rIdSlide",
+            REL + "slide",
+            "../slides/slide1.xml",
+            None,
+        ),
+        (
+            "ppt/notesSlides/_rels/notesSlide1.xml.rels",
+            "rIdNotesMaster",
+            REL + "notesMaster",
+            "../notesMasters/notesMaster1.xml",
+            None,
+        ),
+        (
+            "ppt/notesMasters/_rels/notesMaster1.xml.rels",
+            "rIdTheme",
+            REL + "theme",
+            "../theme/notesTheme1.xml",
             None,
         ),
     ),
@@ -57,8 +93,38 @@ SPECIFIC_RELS: Final = {
         ),
     ),
     "fallback-domains": (
-        (SR, "rIdDiagram", REL + "diagramData", "../diagrams/data1.xml", None),
+        (SR, "rIdDiagramData", REL + "diagramData", "../diagrams/data1.xml", None),
+        (
+            SR,
+            "rIdDiagramLayout",
+            REL + "diagramLayout",
+            "../diagrams/layout1.xml",
+            None,
+        ),
+        (
+            SR,
+            "rIdDiagramStyle",
+            REL + "diagramQuickStyle",
+            "../diagrams/quickStyle1.xml",
+            None,
+        ),
+        (
+            SR,
+            "rIdDiagramColors",
+            REL + "diagramColors",
+            "../diagrams/colors1.xml",
+            None,
+        ),
         (SR, "rIdOle", REL + "oleObject", "../embeddings/inert.bin", None),
+    ),
+    "table-styles": (
+        (
+            "ppt/_rels/presentation.xml.rels",
+            "rIdTableStyles",
+            REL + "tableStyles",
+            "tableStyles.xml",
+            None,
+        ),
     ),
 }
 
@@ -118,45 +184,7 @@ def assert_package_graph(
 def _assert_relationship_expectations(
     case: unittest.TestCase, archive: zipfile.ZipFile, deck: str
 ) -> None:
-    common = (
-        ("_rels/.rels", "rId1", REL + "officeDocument", "ppt/presentation.xml", None),
-        (
-            "ppt/_rels/presentation.xml.rels",
-            "rIdMaster",
-            REL + "slideMaster",
-            "slideMasters/slideMaster1.xml",
-            None,
-        ),
-        (
-            "ppt/_rels/presentation.xml.rels",
-            "rIdPresProps",
-            REL + "presProps",
-            "presProps.xml",
-            None,
-        ),
-        (
-            "ppt/slideMasters/_rels/slideMaster1.xml.rels",
-            "rIdLayout",
-            REL + "slideLayout",
-            "../slideLayouts/slideLayout1.xml",
-            None,
-        ),
-        (
-            "ppt/slideMasters/_rels/slideMaster1.xml.rels",
-            "rIdTheme",
-            REL + "theme",
-            "../theme/theme1.xml",
-            None,
-        ),
-        (
-            "ppt/slideLayouts/_rels/slideLayout1.xml.rels",
-            "rIdMaster",
-            REL + "slideMaster",
-            "../slideMasters/slideMaster1.xml",
-            None,
-        ),
-    )
-    expected = (*common, *SPECIFIC_RELS.get(deck, ()))
+    expected = (*COMMON_RELS, *SPECIFIC_RELS.get(deck, ()))
     for part, rid, kind, target, mode in expected:
         root = ElementTree.fromstring(archive.read(part))
         relation = root.find(f"pr:Relationship[@Id='{rid}']", NS)

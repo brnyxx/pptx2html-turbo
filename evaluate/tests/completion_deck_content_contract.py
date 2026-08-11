@@ -14,10 +14,16 @@ EXACT_TYPES: Final = {
     "ppt/theme/theme1.xml": "application/vnd.openxmlformats-officedocument.theme+xml",
     "ppt/tableStyles.xml": PRESENTATION + "tableStyles+xml",
     "ppt/notesSlides/notesSlide1.xml": PRESENTATION + "notesSlide+xml",
+    "ppt/notesMasters/notesMaster1.xml": PRESENTATION + "notesMaster+xml",
+    "ppt/theme/notesTheme1.xml": "application/vnd.openxmlformats-officedocument.theme+xml",
     "ppt/comments/comment1.xml": PRESENTATION + "comments+xml",
+    "ppt/commentAuthors.xml": PRESENTATION + "commentAuthors+xml",
     "ppt/comments/modernComment1.xml": "application/vnd.ms-powerpoint.comments+xml",
     "ppt/authors/author1.xml": "application/vnd.ms-powerpoint.authors+xml",
     "ppt/diagrams/data1.xml": DRAWING + "diagramData+xml",
+    "ppt/diagrams/layout1.xml": DRAWING + "diagramLayout+xml",
+    "ppt/diagrams/quickStyle1.xml": DRAWING + "diagramStyle+xml",
+    "ppt/diagrams/colors1.xml": DRAWING + "diagramColors+xml",
     "ppt/embeddings/inert.bin": "application/vnd.openxmlformats-officedocument.oleObject",
 }
 

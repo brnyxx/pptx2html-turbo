@@ -92,8 +92,9 @@ RULES: Final = (
     _r(
         "table-style-regions",
         "table-styles",
-        ".//a:tblPr/a:tableStyleId",
-        text="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
+        ".//a:tblStyle",
+        ("styleId", "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"),
+        part="ppt/tableStyles.xml",
     ),
     _r(
         "table-style-missing",
@@ -238,9 +239,9 @@ def _assert_picture_bullet_absence(
 
 def _assert_negative_absences(case: unittest.TestCase, root: Path) -> None:
     with zipfile.ZipFile(root / "table-styles.pptx") as archive:
-        case.assertNotIn("ppt/tableStyles.xml", archive.namelist())
         case.assertNotIn(
-            b"tableStyles", archive.read("ppt/_rels/presentation.xml.rels")
+            b"{22222222-2222-2222-2222-222222222222}",
+            archive.read("ppt/tableStyles.xml"),
         )
     with zipfile.ZipFile(root / "notes-comments.pptx") as archive:
-        case.assertNotIn(b'authorId="404"', archive.read("ppt/authors/author1.xml"))
+        case.assertNotIn(b'id="404"', archive.read("ppt/commentAuthors.xml"))

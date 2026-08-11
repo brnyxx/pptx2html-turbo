@@ -27,8 +27,8 @@ class CompletionDeckAtomicTests(unittest.TestCase):
             sentinel = nonempty / "sentinel.txt"
             sentinel.write_text("keep", encoding="utf-8")
             for output, code in (
-                (file_output, "OUTPUT_DIR_NOT_DIRECTORY"),
-                (nonempty, "OUTPUT_DIR_NOT_EMPTY"),
+                (file_output, "OUTPUT_DIR_EXISTS"),
+                (nonempty, "OUTPUT_DIR_EXISTS"),
             ):
                 result = run_generator(output)
                 self.assertEqual(result.returncode, 2)
@@ -43,7 +43,7 @@ class CompletionDeckAtomicTests(unittest.TestCase):
             ).hexdigest()
             source_output = run_generator(CANONICAL_MANIFEST.parent)
             self.assertEqual(source_output.returncode, 2)
-            self.assertIn("OUTPUT_DIR_NOT_EMPTY", source_output.stderr)
+            self.assertIn("OUTPUT_DIR_EXISTS", source_output.stderr)
             self.assertEqual(
                 hashlib.sha256(CANONICAL_MANIFEST.read_bytes()).hexdigest(),
                 canonical_digest,
@@ -59,39 +59,35 @@ class CompletionDeckAtomicTests(unittest.TestCase):
             empty = root / "empty"
             empty.mkdir()
             result = run_generator(empty)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("OUTPUT_DIR_EXISTS", result.stderr)
+            self.assertFalse(any(empty.iterdir()))
+            absent = root / "absent"
+            result = run_generator(absent)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(len(tuple(empty.iterdir())), 11)
+            self.assertEqual(len(tuple(absent.iterdir())), 11)
 
     def test_mid_write_failure_never_publishes_partial_output(self) -> None:
         original_write = Path.write_bytes
 
-        for initially_exists in (False, True):
-            with self.subTest(initially_exists=initially_exists):
-                with tempfile.TemporaryDirectory() as tmp:
-                    output = Path(tmp) / "out"
-                    if initially_exists:
-                        output.mkdir()
-                    writes = 0
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "out"
+            writes = 0
 
-                    def fail_second_write(path: Path, payload: bytes) -> int:
-                        nonlocal writes
-                        writes += 1
-                        if writes == 2:
-                            raise OSError("injected write failure")
-                        return original_write(path, payload)
+            def fail_second_write(path: Path, payload: bytes) -> int:
+                nonlocal writes
+                writes += 1
+                if writes == 2:
+                    raise OSError("injected write failure")
+                return original_write(path, payload)
 
-                    with mock.patch.object(Path, "write_bytes", fail_second_write):
-                        with self.assertRaisesRegex(
-                            ContractError, "OUTPUT_WRITE_ERROR"
-                        ):
-                            create_completion_decks.generate(output, CANONICAL_MANIFEST)
-                    self.assertTrue(not output.exists() or not any(output.iterdir()))
-                    self.assertFalse(
-                        any(
-                            path.name.startswith(".out.stage-")
-                            for path in Path(tmp).iterdir()
-                        )
-                    )
+            with mock.patch.object(Path, "write_bytes", fail_second_write):
+                with self.assertRaisesRegex(ContractError, "OUTPUT_WRITE_ERROR"):
+                    create_completion_decks.generate(output, CANONICAL_MANIFEST)
+            self.assertFalse(output.exists())
+            self.assertFalse(
+                any(path.name.startswith(".out.stage-") for path in Path(tmp).iterdir())
+            )
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "out"

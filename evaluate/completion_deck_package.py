@@ -9,6 +9,11 @@ import zlib
 from dataclasses import dataclass
 from typing import Final, TypeAlias
 
+if __package__:
+    from .completion_deck_common import theme_xml
+else:
+    from completion_deck_common import theme_xml
+
 
 Relationship: TypeAlias = tuple[str, str, str, str | None]
 Part: TypeAlias = tuple[str, bytes]
@@ -168,7 +173,7 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
         "ppt/_rels/presentation.xml.rels": relationships_xml(presentation_rels),
         "ppt/presProps.xml": f'<?xml version="1.0"?><p:presentationPr {NS}/>'.encode(),
         "ppt/slideMasters/slideMaster1.xml": (
-            f'<?xml version="1.0"?><p:sldMaster {NS}><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld><p:clrMap accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" bg1="lt1" bg2="lt2" folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/><p:sldLayoutIdLst><p:sldLayoutId id="1" r:id="rIdLayout"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>'
+            f'<?xml version="1.0"?><p:sldMaster {NS}><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld><p:clrMap accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" bg1="lt1" bg2="lt2" folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483648" r:id="rIdLayout"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>'
         ).encode(),
         "ppt/slideMasters/_rels/slideMaster1.xml.rels": relationships_xml(
             (
@@ -194,7 +199,7 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
                 ),
             )
         ),
-        "ppt/theme/theme1.xml": b'<?xml version="1.0"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Completion"><a:themeElements><a:clrScheme name="Completion"><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F497D"/></a:dk2><a:lt2><a:srgbClr val="EEECE1"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="Completion"><a:majorFont><a:latin typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="Completion"><a:fillStyleLst/><a:lnStyleLst/><a:effectStyleLst/><a:bgFillStyleLst/></a:fmtScheme></a:themeElements></a:theme>',
+        "ppt/theme/theme1.xml": theme_xml(),
         **dict(deck.parts),
     }
     for index, (body, tail) in enumerate(deck.slides, 1):
