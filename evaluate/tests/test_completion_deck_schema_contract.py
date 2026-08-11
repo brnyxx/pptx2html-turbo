@@ -129,7 +129,7 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                 archive.read("ppt/tableStyles.xml").decode(),
             )
 
-    def test_missing_table_style_fixture_preserves_unavailable_style_id(self) -> None:
+    def test_missing_table_style_fixture_preserves_id_and_flags(self) -> None:
         with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
             slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
             missing = next(
@@ -139,6 +139,10 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                 == "missing style"
             )
             properties = missing.find(".//a:tblPr", NS)
+            self.assertEqual(
+                {name: properties.get(name) for name in ("firstCol", "bandCol")},
+                {"firstCol": "1", "bandCol": "1"},
+            )
             style_id = properties.find("a:tableStyleId", NS)
             self.assertIsNotNone(
                 style_id,

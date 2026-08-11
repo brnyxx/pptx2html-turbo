@@ -59,7 +59,8 @@ LOCATORS: Final = {
         "ppt/tableStyles.xml",
     ),
     "table-style-missing": _l(
-        "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", negative=ABSENT_TABLE_STYLE
+        '<a:tblPr firstCol="1" bandCol="1"><a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}',
+        negative=ABSENT_TABLE_STYLE,
     ),
     "action-external": _l('<Relationship Id="rIdExternal"', SR),
     "action-internal": _l(

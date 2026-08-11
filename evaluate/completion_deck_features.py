@@ -111,7 +111,7 @@ FEATURES = (
         14,
         "table-styles",
         "table-style-missing",
-        "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
+        '<a:tblPr firstCol="1" bandCol="1"><a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}',
         negative=ABSENT_TABLE_STYLE,
     ),
     _f(15, "actions", "action-external", '<Relationship Id="rIdExternal"', SR),
