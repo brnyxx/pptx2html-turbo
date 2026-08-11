@@ -29,15 +29,17 @@ pub(super) fn parse_definitions_from(
     source: &str,
 ) -> Result<HashMap<String, PresetDefinition>, String> {
     let mut reader = Reader::from_str(source);
-    reader.config_mut().trim_text(true);
     let mut definitions = HashMap::new();
     let mut stack = Vec::new();
     let mut preset: Option<(String, PresetDefinition)> = None;
     let mut path: Option<PathDefinition> = None;
     let mut command: Option<(String, Vec<PointDefinition>)> = None;
-    let mut declaration_seen = false;
+    let mut first_event = true;
     loop {
-        match reader.read_event().map_err(|error| error.to_string())? {
+        let event = reader.read_event().map_err(|error| error.to_string())?;
+        let declaration_allowed = first_event;
+        first_event = false;
+        match event {
             Event::Start(element) => {
                 let tag = local_name(&element);
                 handle_start(
@@ -78,7 +80,7 @@ pub(super) fn parse_definitions_from(
                 }
             }
             Event::Comment(_) => {}
-            Event::Decl(_) if stack.is_empty() && !declaration_seen => declaration_seen = true,
+            Event::Decl(_) if declaration_allowed => {}
             Event::Decl(_) => return Err("unexpected official XML declaration".to_owned()),
             Event::CData(_) => return Err("unexpected official XML CDATA".to_owned()),
             Event::PI(_) => {

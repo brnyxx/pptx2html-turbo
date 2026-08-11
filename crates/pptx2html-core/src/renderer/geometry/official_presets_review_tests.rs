@@ -13,6 +13,10 @@ fn assert_invalid(render: OfficialPresetRender) {
     );
 }
 
+fn assert_rendered(render: OfficialPresetRender) {
+    assert!(matches!(render, OfficialPresetRender::Rendered(_)));
+}
+
 fn render_source(source: &str) -> OfficialPresetRender {
     route_with_xml("rightArrow", 160.0, 100.0, &HashMap::new(), source)
 }
@@ -55,4 +59,43 @@ fn xml_doctype_is_invalid() {
         1,
     );
     assert_invalid(render_source(&malformed));
+}
+
+#[test]
+fn xml_declaration_after_whitespace_text_is_invalid() {
+    let malformed = format!(" \n{}", source_xml());
+    assert_invalid(render_source(&malformed));
+}
+
+#[test]
+fn xml_declaration_after_comment_is_invalid() {
+    let malformed = format!("<!--before declaration-->{}", source_xml());
+    assert_invalid(render_source(&malformed));
+}
+
+#[test]
+fn repeated_xml_declaration_is_invalid() {
+    let malformed = source_xml().replacen("?>", "?><?xml version=\"1.0\" encoding=\"utf-8\"?>", 1);
+    assert_invalid(render_source(&malformed));
+}
+
+#[test]
+fn exactly_leading_xml_declaration_is_rendered() {
+    assert_rendered(render_source(source_xml()));
+}
+
+#[test]
+fn source_without_xml_declaration_is_rendered() {
+    let source = source_xml().replacen("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n", "", 1);
+    assert_rendered(render_source(&source));
+}
+
+#[test]
+fn normal_whitespace_and_comments_elsewhere_are_rendered() {
+    let source = source_xml().replacen(
+        "<rightArrow>",
+        "\n  <!--permitted body comment-->\n  <rightArrow>",
+        1,
+    );
+    assert_rendered(render_source(&source));
 }
