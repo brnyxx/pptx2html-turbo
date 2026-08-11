@@ -3,9 +3,15 @@
 
 use super::shared::scale_normalized_path;
 use std::collections::HashMap;
+
+fn finite(value: Option<f64>, default: f64) -> f64 {
+    value.filter(|value| value.is_finite()).unwrap_or(default)
+}
+
 // Scrolls
 pub(super) fn horizontal_scroll_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    let r = w.min(h) * adj.get("adj").copied().unwrap_or(12500.0) / 100_000.0;
+    let a = finite(adj.get("adj").copied(), 12_500.0).clamp(0.0, 25_000.0);
+    let r = w.min(h) * a / 100_000.0;
     let r2 = r / 2.0;
     let (x, y1, y2) = (w - r, h - r, h - r2);
     format!(
@@ -19,7 +25,8 @@ pub(super) fn horizontal_scroll_path(w: f64, h: f64, adj: &HashMap<String, f64>)
     )
 }
 pub(super) fn vertical_scroll_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    let r = w.min(h) * adj.get("adj").copied().unwrap_or(12500.0) / 100_000.0;
+    let a = finite(adj.get("adj").copied(), 12_500.0).clamp(0.0, 25_000.0);
+    let r = w.min(h) * a / 100_000.0;
     let body_left = r * 0.8;
     let body_top = r * 1.2;
     let body_right = w - r * 0.4;
