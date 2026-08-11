@@ -124,7 +124,7 @@ pub(super) fn math_divide_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> St
     )
 }
 pub(super) fn plus_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
+    if !adj.contains_key("adj") {
         return scale_normalized_path(
             "M 0.352280,0.110805 L 0.647720,0.110805 0.647720,0.408107 0.899713,0.408107 0.899713,0.591893 0.647720,0.591893 0.647720,0.889195 0.352280,0.889195 0.352280,0.591893 0.100287,0.591893 0.100287,0.408107 0.352280,0.408107 0.352280,0.110805 Z",
             w,
@@ -132,7 +132,17 @@ pub(super) fn plus_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
         );
     }
 
-    let a = adj.get("adj").copied().unwrap_or(25000.0);
+    let a = adj.get("adj").copied().unwrap_or(25_000.0);
+    plus_numeric_path(w, h, a)
+}
+
+pub(super) fn math_plus_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
+    let a = adj.get("adj1").copied().unwrap_or(23_520.0);
+    plus_numeric_path(w, h, a)
+}
+
+fn plus_numeric_path(w: f64, h: f64, adjustment: f64) -> String {
+    let a = adjustment;
     let ax = w * a / 100_000.0;
     let ay = h * a / 100_000.0;
     let (x1, y1) = (w - ax, h - ay);
@@ -141,7 +151,7 @@ pub(super) fn plus_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
     )
 }
 pub(super) fn preset_plus_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
-    if adj.is_empty() {
+    if !adj.contains_key("adj") {
         return scale_normalized_path(
             "M 0.733333,1.002075 L 0.254167,0.997925 0.239583,0.979253 0.239583,0.771784 0.229167,0.761411 0.033333,0.761411 -0.002083,0.738589 -0.002083,0.261411 0.008333,0.238589 0.239583,0.232365 0.239583,0.024896 0.250000,-0.002075 0.741667,-0.002075 0.756250,0.020747 0.760417,0.232365 0.983333,0.238589 0.997917,0.257261 1.002083,0.734440 0.991667,0.753112 0.962500,0.761411 0.766667,0.761411 0.756250,0.780083 0.756250,0.983402 Z",
             w,

@@ -1534,7 +1534,7 @@ fn test_custgeom_guide_dependency_chain_resolves_in_order() {
 }
 
 #[test]
-fn test_custgeom_mul_div_zero_denominator_returns_zero() {
+fn test_custgeom_mul_div_zero_denominator_returns_fallback() {
     let slide = r#"
     <p:sp>
       <p:nvSpPr><p:cNvPr id="2" name="GuideDivZero"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
@@ -1559,22 +1559,27 @@ fn test_custgeom_mul_div_zero_denominator_returns_zero() {
     let pres = parse_pptx(&pptx);
     let shape = &pres.slides[0].shapes[0];
 
-    match &shape.shape_type {
-        ShapeType::CustomGeom(geom) => match &geom.paths[0].commands[1] {
-            PathCommand::ArcTo { wr, hr, .. } => {
-                assert!(
-                    wr.abs() < 0.01,
-                    "expected 0 radius for divide-by-zero policy, got {wr}"
-                );
-                assert!(
-                    hr.abs() < 0.01,
-                    "expected 0 radius for divide-by-zero policy, got {hr}"
-                );
-            }
-            other => panic!("Expected ArcTo, got {:?}", other),
-        },
-        other => panic!("Expected CustomGeom, got {:?}", other),
-    }
+    let ShapeType::Unsupported(data) = &shape.shape_type else {
+        panic!(
+            "Expected unsupported custom geometry, got {:?}",
+            shape.shape_type
+        )
+    };
+    assert!(matches!(data.element_type, UnresolvedType::CustomGeometry));
+    assert_eq!(data.raw_xml.as_deref(), Some("*/ 10800 2 z"));
+
+    let result = pptx2html_core::convert_bytes_with_metadata(&pptx).expect("fallback conversion");
+    let diagnostic = result
+        .diagnostics()
+        .iter()
+        .find(|item| item.code == "DRAWINGML_CUSTOM_GEOMETRY_FALLBACK")
+        .expect("custom geometry fallback diagnostic");
+    assert!(matches!(diagnostic.support_tier, SupportTier::Fallback));
+    assert!(matches!(
+        diagnostic.fallback_kind,
+        FallbackKind::CustomGeometryPlaceholder
+    ));
+    assert_eq!(diagnostic.raw_reference.as_deref(), Some("*/ 10800 2 z"));
 }
 
 #[test]

@@ -80,10 +80,14 @@ pub(super) fn route(
     height: f64,
     adjustments: &HashMap<String, f64>,
 ) -> OfficialPresetRender {
-    if !OFFICIAL_NAMES.contains(&name) {
+    let definitions = if OFFICIAL_NAMES.contains(&name) {
+        definitions()
+    } else if super::official_remaining_presets::contains(name) {
+        super::official_remaining_presets::definitions()
+    } else {
         return OfficialPresetRender::NotOfficial;
-    }
-    match definitions().and_then(|definitions| {
+    };
+    match definitions.and_then(|definitions| {
         render_from_definitions(definitions, name, width, height, adjustments)
     }) {
         Ok(svg) => OfficialPresetRender::Rendered(svg),
@@ -167,9 +171,9 @@ pub(super) fn route_with_xml(
     if !OFFICIAL_NAMES.contains(&name) {
         return OfficialPresetRender::NotOfficial;
     }
-    match super::official_presets_xml::parse_definitions_from(xml).and_then(|definitions| {
-        render_from_definitions(&definitions, name, width, height, adjustments)
-    }) {
+    match super::official_presets_xml::parse_definitions_with_count(xml, 55).and_then(
+        |definitions| render_from_definitions(&definitions, name, width, height, adjustments),
+    ) {
         Ok(svg) => OfficialPresetRender::Rendered(svg),
         Err(_) => OfficialPresetRender::Invalid(invalid_fallback(width, height)),
     }

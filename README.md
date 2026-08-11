@@ -11,7 +11,7 @@ Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bind
 - High-fidelity layout preservation using absolute positioning
 - Theme color resolution with 12 color modifiers (tint, shade, lumMod, etc.)
 - Slide master / layout inheritance chain with placeholder matching
-- 187 preset shape SVG rendering with broad adjust value support and expanded custom-geometry guide/formula handling
+- 187 preset shape SVG rendering with broad adjust value support; known custom guide formulas render directly, while unknown, non-finite, or unresolved formulas preserve their exact raw formula and emit `DRAWINGML_CUSTOM_GEOMETRY_FALLBACK` instead of substituting zero or a default
 - SVG stroke dash styles (solid, dash, dot, dashDot, etc.)
 - Line ending markers (arrow, triangle, stealth, diamond, oval)
 - Table, group shape, and connector support
@@ -196,6 +196,8 @@ See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element
 | Unsupported | SmartArt, OLE, Math — structured placeholders with metadata sideband (raw XML, type, position) |
 | LLM Enhance | Post-processing layer: SmartArt→HTML/CSS, OMML→MathML, DrawingML→CSS via LLM (pptx2html-enhance) |
 
+DrawingML preset names beginning with `math`, such as `mathPlus`, are geometric shapes only and do not imply OMML equation support.
+
 ## Architecture
 
 ### Pipeline
@@ -211,7 +213,7 @@ PPTX → pptx2html-turbo (Rust) → HTML + Metadata
                                               └── DrawingML effects → CSS (shadow, glow, blur)
 ```
 
-The Rust core converts PPTX to HTML with high fidelity. Elements it cannot fully render (SmartArt, Math, OLE, and custom geometry) are emitted as structured placeholders with an ordered diagnostic sideband containing a safe source reference. Package-level unsupported parts and relationships are reported even when they do not produce a visible shape; relationship diagnostics identify only the source part and relationship ID, never the target. The optional Python `pptx2html-enhance` package uses placeholder metadata to transform supported fallback types into semantic HTML.
+The Rust core converts PPTX to HTML with high fidelity. Elements it cannot fully render (SmartArt, Math, OLE, and custom geometry) are emitted as structured placeholders with an ordered diagnostic sideband containing a safe source reference; custom-geometry formula fallbacks preserve the exact raw formula. Package-level unsupported parts and relationships are reported even when they do not produce a visible shape; relationship diagnostics identify only the source part and relationship ID, never the target. The optional Python `pptx2html-enhance` package uses placeholder metadata to transform supported fallback types into semantic HTML.
 
 Rust consumers that construct `ConversionResult` should use `ConversionResult::new(html, slide_count)` and then populate any required metadata fields. The Task 11 `diagnostics` field necessarily makes legacy external struct literals source-incompatible, while the existing `unresolved_elements` field and its returned projection remain unchanged. `ConversionResult::diagnostics()` provides a stable ordered slice accessor.
 

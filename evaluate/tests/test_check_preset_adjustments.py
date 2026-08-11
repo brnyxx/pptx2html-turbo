@@ -136,7 +136,7 @@ class CheckPresetAdjustmentsTests(unittest.TestCase):
         self.assertEqual(report["unclassified_presets"], 0)
         self.assertEqual(report["unknown_consumed_keys"], 0)
         self.assertGreater(report["non_official_consumed_keys_preserved"], 0)
-        self.assertGreater(report["manifest_keys_never_consumed"], 0)
+        self.assertEqual(report["manifest_keys_never_consumed"], 0)
 
     def test_manifest_includes_official_up_arrow_supplement(self) -> None:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))

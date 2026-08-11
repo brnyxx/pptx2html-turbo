@@ -3,6 +3,7 @@
 
 mod action_parser;
 mod chart_parser;
+mod custom_guide;
 mod embedded_parser;
 mod fill_parser;
 mod graphic_frame_parser;

@@ -28,6 +28,30 @@ use super::{needs_evenodd_fill, preset_shape_multi_svg, preset_shape_svg};
 use crate::model::PathFill;
 use std::collections::HashMap;
 
+fn assert_official_path(path: &str, moves: usize, minimum_arcs: usize) {
+    assert_eq!(
+        path.matches('M').count(),
+        moves,
+        "official subpath count: {path}"
+    );
+    assert!(
+        path.matches('A').count() >= minimum_arcs,
+        "official arc topology: {path}"
+    );
+    assert!(path.contains('Z'), "official closed topology: {path}");
+    for token in path
+        .split(|character: char| {
+            character.is_ascii_alphabetic() || character == ',' || character.is_whitespace()
+        })
+        .filter(|token| !token.is_empty())
+    {
+        assert!(
+            token.parse::<f64>().expect("SVG number").is_finite(),
+            "{path}"
+        );
+    }
+}
+
 #[test]
 fn test_preset_shape_svg_returns_none_for_unknown() {
     let adj = HashMap::new();
@@ -897,20 +921,19 @@ fn test_pie_adjust_values_change_path() {
 
 #[test]
 fn test_pie_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, anchor) in [
-        (3_000_000.0, 12_000_000.0, PIE_ADJ_SMALL_NORMALIZED_PATH),
-        (5_400_000.0, 16_200_000.0, PIE_ADJ_HALF_NORMALIZED_PATH),
-        (0.0, 18_000_000.0, PIE_ADJ_WIDE_NORMALIZED_PATH),
-        (9_000_000.0, 11_000_000.0, PIE_ADJ_SLIVER_NORMALIZED_PATH),
-    ] {
+    let profiles = [
+        (3_000_000.0, 12_000_000.0),
+        (5_400_000.0, 16_200_000.0),
+        (0.0, 18_000_000.0),
+        (9_000_000.0, 11_000_000.0),
+    ]
+    .map(|(adj1, adj2)| {
         let adj = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("pie", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "pie benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+        assert_official_path(&path, 1, 1);
+        path
+    });
+    assert!(profiles.windows(2).all(|pair| pair[0] != pair[1]));
 }
 
 #[test]
@@ -931,20 +954,19 @@ fn test_arc_adjust_values_change_path() {
 
 #[test]
 fn test_arc_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, anchor) in [
-        (3_000_000.0, 12_000_000.0, ARC_ADJ_SMALL_NORMALIZED_PATH),
-        (5_400_000.0, 16_200_000.0, ARC_ADJ_HALF_NORMALIZED_PATH),
-        (0.0, 18_000_000.0, ARC_ADJ_WIDE_NORMALIZED_PATH),
-        (9_000_000.0, 11_000_000.0, ARC_ADJ_SLIVER_NORMALIZED_PATH),
-    ] {
+    let profiles = [
+        (3_000_000.0, 12_000_000.0),
+        (5_400_000.0, 16_200_000.0),
+        (0.0, 18_000_000.0),
+        (9_000_000.0, 11_000_000.0),
+    ]
+    .map(|(adj1, adj2)| {
         let adj = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("arc", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "arc benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+        assert_official_path(&path, 2, 2);
+        path
+    });
+    assert!(profiles.windows(2).all(|pair| pair[0] != pair[1]));
 }
 
 #[test]
@@ -966,29 +988,12 @@ fn test_block_arc_adjust_values_change_path() {
 
 #[test]
 fn test_block_arc_default_path_matches_upper_band_silhouette() {
-    let default_adj = HashMap::new();
-    let path = preset_shape_svg("blockArc", 120.0, 100.0, &default_adj).unwrap();
+    let path = preset_shape_svg("blockArc", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    let ys: Vec<f64> = path
-        .split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
-        .filter(|token| !token.is_empty())
-        .skip(1)
-        .step_by(2)
-        .map(|token| token.parse::<f64>().unwrap())
-        .collect();
-
-    assert!(
-        path.contains('C'),
-        "blockArc default should preserve the extracted curved band outline"
-    );
-    assert!(
-        ys.iter().copied().fold(f64::NEG_INFINITY, f64::max) <= 50.1,
-        "blockArc default should stay in the upper half of its box: {path}"
-    );
-    assert!(
-        ys.iter().copied().fold(f64::INFINITY, f64::min) <= 0.1,
-        "blockArc default should still reach the top edge: {path}"
-    );
+    assert_official_path(&path, 1, 2);
+    assert!(path.starts_with("M0.00,50.00 A60.00,50.00"));
+    assert!(path.contains("L95.00,50.00 A35.00,25.00"), "{path}");
+    assert!(path.ends_with("25.00,50.00 Z"));
 }
 
 #[test]
@@ -1023,44 +1028,23 @@ fn test_funnel_default_path_matches_extracted_body_curve() {
 
 #[test]
 fn test_block_arc_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, adj3, anchor) in [
-        (
-            12_000.0,
-            8_500_000.0,
-            17_000_000.0,
-            BLOCK_ARC_ADJ_NARROW_NORMALIZED_PATH,
-        ),
-        (
-            35_000.0,
-            3_000_000.0,
-            13_000_000.0,
-            BLOCK_ARC_ADJ_WIDE_NORMALIZED_PATH,
-        ),
-        (
-            50_000.0,
-            0.0,
-            21_600_000.0,
-            BLOCK_ARC_ADJ_RING_NORMALIZED_PATH,
-        ),
-        (
-            25_000.0,
-            6_000_000.0,
-            18_000_000.0,
-            BLOCK_ARC_ADJ_OFFSET_NORMALIZED_PATH,
-        ),
-    ] {
+    let profiles = [
+        (12_000.0, 8_500_000.0, 17_000_000.0),
+        (35_000.0, 3_000_000.0, 13_000_000.0),
+        (50_000.0, 0.0, 21_600_000.0),
+        (25_000.0, 6_000_000.0, 18_000_000.0),
+    ]
+    .map(|(adj1, adj2, adj3)| {
         let adj = HashMap::from([
             ("adj1".to_string(), adj1),
             ("adj2".to_string(), adj2),
             ("adj3".to_string(), adj3),
         ]);
         let path = preset_shape_svg("blockArc", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "blockArc benchmark profile ({adj1}, {adj2}, {adj3}) should map to the tuned anchor path"
-        );
-    }
+        assert_official_path(&path, 1, 1);
+        path
+    });
+    assert!(profiles.windows(2).all(|pair| pair[0] != pair[1]));
 }
 
 fn assert_task9_continuous_geometry(preset: &str) {
@@ -1232,20 +1216,20 @@ fn test_wave_adjust_values_change_path() {
 
 #[test]
 fn test_wave_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, anchor) in [
-        (10_000.0, 0.0, WAVE_ADJ_LIGHT_NORMALIZED_PATH),
-        (12_500.0, 40_000.0, WAVE_ADJ_SHIFT_NORMALIZED_PATH),
-        (30_000.0, 0.0, WAVE_ADJ_DEEP_NORMALIZED_PATH),
-        (30_000.0, 40_000.0, WAVE_ADJ_DEEP_SHIFT_NORMALIZED_PATH),
-    ] {
+    let profiles = [
+        (10_000.0, 0.0),
+        (12_500.0, 40_000.0),
+        (30_000.0, 0.0),
+        (30_000.0, 40_000.0),
+    ]
+    .map(|(adj1, adj2)| {
         let adj = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("wave", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "wave benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+        assert_official_path(&path, 1, 0);
+        assert_eq!(path.matches('C').count(), 2);
+        path
+    });
+    assert!(profiles.windows(2).all(|pair| pair[0] != pair[1]));
 }
 
 #[test]
@@ -1265,24 +1249,20 @@ fn test_double_wave_adjust_values_change_path() {
 
 #[test]
 fn test_double_wave_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj1, adj2, anchor) in [
-        (10_000.0, 0.0, DOUBLE_WAVE_ADJ_LIGHT_NORMALIZED_PATH),
-        (12_500.0, 40_000.0, DOUBLE_WAVE_ADJ_SHIFT_NORMALIZED_PATH),
-        (30_000.0, 0.0, DOUBLE_WAVE_ADJ_DEEP_NORMALIZED_PATH),
-        (
-            30_000.0,
-            40_000.0,
-            DOUBLE_WAVE_ADJ_DEEP_SHIFT_NORMALIZED_PATH,
-        ),
-    ] {
+    let profiles = [
+        (10_000.0, 0.0),
+        (12_500.0, 40_000.0),
+        (30_000.0, 0.0),
+        (30_000.0, 40_000.0),
+    ]
+    .map(|(adj1, adj2)| {
         let adj = HashMap::from([("adj1".to_string(), adj1), ("adj2".to_string(), adj2)]);
         let path = preset_shape_svg("doubleWave", 120.0, 100.0, &adj).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "doubleWave benchmark profile ({adj1}, {adj2}) should map to the tuned anchor path"
-        );
-    }
+        assert_official_path(&path, 1, 0);
+        assert_eq!(path.matches('C').count(), 4);
+        path
+    });
+    assert!(profiles.windows(2).all(|pair| pair[0] != pair[1]));
 }
 
 #[test]
@@ -1585,14 +1565,14 @@ fn test_wedge_rect_callout_adjustment_profiles_match_benchmarked_anchors() {
 fn test_math_not_equal_adjust_values_change_path() {
     let default_adj = HashMap::new();
     let mut custom_adj = HashMap::new();
-    custom_adj.insert("adj2".to_string(), 9600000.0);
+    custom_adj.insert("adj2".to_string(), 4_200_000.0);
 
     let default_path = preset_shape_svg("mathNotEqual", 120.0, 100.0, &default_adj).unwrap();
     let custom_path = preset_shape_svg("mathNotEqual", 120.0, 100.0, &custom_adj).unwrap();
 
     assert_ne!(
         default_path, custom_path,
-        "mathNotEqual adj2 should change the path"
+        "mathNotEqual's valid lower angle boundary should change the path"
     );
 }
 
@@ -1603,7 +1583,7 @@ fn test_math_not_equal_default_path_matches_extracted_office_polygon() {
 
     assert_eq!(
         path,
-        "M 54.0,99.2 L 33.0,91.3 L 32.1,88.3 L 34.7,80.2 L 5.7,80.2 L 1.4,78.8 L 1.7,54.5 L 44.9,54.5 L 47.5,46.4 L 1.7,45.0 L 0.9,21.8 L 2.3,20.4 L 57.4,20.4 L 65.4,0.8 L 87.9,8.4 L 84.7,20.4 L 118.3,20.4 L 118.3,45.0 L 77.3,45.5 L 74.2,47.5 L 71.9,54.2 L 118.3,54.5 L 119.1,78.2 L 115.5,80.2 L 63.7,80.2 L 61.1,82.7 L 56.0,97.8 L 54.0,99.2 Z"
+        "M15.91,20.60 L58.19,20.60 L65.68,0.00 L87.79,8.04 L83.22,20.60 L104.09,20.60 L104.09,44.12 L74.65,44.12 L70.37,55.88 L104.09,55.88 L104.09,79.40 L61.81,79.40 L54.32,100.00 L32.21,91.96 L36.78,79.40 L15.91,79.40 L15.91,55.88 L45.35,55.88 L49.63,44.12 L15.91,44.12 Z"
     );
 }
 
@@ -1613,9 +1593,9 @@ fn test_math_divide_default_path_matches_extracted_office_geometry() {
     let path = preset_shape_svg("mathDivide", 120.0, 100.0, &default_adj).unwrap();
 
     assert_eq!(path.matches('M').count(), 3);
-    assert!(path.contains("59.2,11.2"));
-    assert!(path.contains("104.9,37.9"));
-    assert!(path.contains("15.6,37.9"));
+    assert_eq!(path.matches('A').count(), 4);
+    assert!(path.contains("M60.00,11.79 A11.76,11.76"));
+    assert!(path.contains("M15.91,38.24 L104.09,38.24"));
 }
 
 #[test]
@@ -1625,7 +1605,7 @@ fn test_math_equal_default_path_matches_extracted_office_geometry() {
 
     assert_eq!(
         path,
-        "M 13.5,19.7 L 106.0,19.7 106.0,49.1 13.5,49.1 13.5,19.7 Z M 13.5,54.9 L 106.0,54.9 106.0,84.4 13.5,84.4 13.5,54.9 Z"
+        "M15.91,20.60 L104.09,20.60 L104.09,44.12 L15.91,44.12 Z M15.91,55.88 L104.09,55.88 L104.09,79.40 L15.91,79.40 Z"
     );
 }
 
@@ -1636,7 +1616,7 @@ fn test_math_plus_default_path_matches_extracted_office_geometry() {
 
     assert_eq!(
         path,
-        "M 42.3,11.1 L 77.7,11.1 77.7,40.8 108.0,40.8 108.0,59.2 77.7,59.2 77.7,88.9 42.3,88.9 42.3,59.2 12.0,59.2 12.0,40.8 42.3,40.8 42.3,11.1 Z"
+        "M15.91,38.24 L48.24,38.24 L48.24,13.26 L71.76,13.26 L71.76,38.24 L104.09,38.24 L104.09,61.76 L71.76,61.76 L71.76,86.75 L48.24,86.75 L48.24,61.76 L15.91,61.76 Z"
     );
 }
 
@@ -1647,7 +1627,7 @@ fn test_plus_default_path_matches_benchmark_cross_outline() {
 
     assert_eq!(
         path,
-        "M 88.0,100.2 L 30.5,99.8 28.7,97.9 28.7,77.2 27.5,76.1 4.0,76.1 -0.2,73.9 -0.2,26.1 1.0,23.9 28.7,23.2 28.7,2.5 30.0,-0.2 89.0,-0.2 90.8,2.1 91.3,23.2 118.0,23.9 119.8,25.7 120.2,73.4 119.0,75.3 115.5,76.1 92.0,76.1 90.8,78.0 90.8,98.3 Z"
+        "M0.00,25.00 L25.00,25.00 L25.00,0.00 L95.00,0.00 L95.00,25.00 L120.00,25.00 L120.00,75.00 L95.00,75.00 L95.00,100.00 L25.00,100.00 L25.00,75.00 L0.00,75.00 Z"
     );
 }
 
@@ -1669,7 +1649,7 @@ fn test_math_minus_default_path_matches_extracted_office_geometry() {
 
     assert_eq!(
         path,
-        "M 12.0,36.3 L 108.0,36.3 108.0,63.7 12.0,63.7 12.0,36.3 Z"
+        "M15.91,38.24 L104.09,38.24 L104.09,61.76 L15.91,61.76 Z"
     );
 }
 
@@ -1697,26 +1677,19 @@ fn test_curved_down_arrow_default_path_matches_extracted_office_outline() {
 fn test_gear6_default_path_matches_extracted_office_outline() {
     let path = preset_shape_svg("gear6", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("60.0,0.0"));
-    assert!(path.contains("115.3,27.5"));
-    assert!(path.contains("60.0,100.0"));
-    assert!(
-        !path.contains(" A"),
-        "gear6 default silhouette should not cut a center hole"
-    );
+    assert_official_path(&path, 1, 6);
+    assert!(path.starts_with("M91.92,25.33 L106.06,19.22"), "{path}");
+    assert!(path.contains("L52.01,98.84"), "{path}");
+    assert!(path.contains("L67.99,1.16"), "{path}");
 }
 
 #[test]
 fn test_gear9_default_path_matches_extracted_office_outline() {
     let path = preset_shape_svg("gear9", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("60.0,0.0"));
-    assert!(path.contains("120.0,44.7"));
-    assert!(path.contains("82.8,96.4"));
-    assert!(
-        !path.contains(" A"),
-        "gear9 default silhouette should not cut a center hole"
-    );
+    assert_official_path(&path, 1, 9);
+    assert!(path.starts_with("M86.23,15.94 L93.26,8.62"), "{path}");
+    assert!(path.contains("L54.49,0.43 L65.51,0.43"));
 }
 
 #[test]
@@ -1733,29 +1706,27 @@ fn test_plaque_tabs_default_path_uses_small_quarter_tabs() {
 fn test_arc_default_path_matches_quarter_sector_reference() {
     let path = preset_shape_svg("arc", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("79.7,2.3"));
-    assert!(path.contains("120.0,43.0"));
-    assert!(path.contains("60.2,50.6"));
-    assert!(path.contains("60.2,0.0"));
+    assert_official_path(&path, 2, 2);
+    assert!(path.starts_with("M60.00,0.00 A60.00,50.00"));
+    assert!(path.contains("120.00,50.00 L60.00,50.00 Z"));
 }
 
 #[test]
 fn test_no_smoking_default_path_carves_inner_ring_hole() {
     let path = preset_shape_svg("noSmoking", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.matches('M').count() >= 3);
-    assert!(path.contains("60.0,18.8"));
-    assert!(path.contains("24.2,8.0"));
-    assert!(path.contains("95.8,92.0"));
+    assert_official_path(&path, 3, 6);
+    assert!(path.starts_with("M0.00,50.00 A60.00,50.00"));
+    assert!(path.contains("M95.02,66.52 A41.25,31.25"), "{path}");
 }
 
 #[test]
 fn test_chord_default_path_matches_office_outline() {
     let path = preset_shape_svg("chord", 120.0, 100.0, &HashMap::new()).unwrap();
-    assert!(path.contains("14.5,16.8"));
-    assert!(path.contains("61.3,0.0"));
-    assert!(path.contains("101.8,81.0"));
-    assert!(path.contains("0.0,59.5"));
+    assert_official_path(&path, 1, 2);
+    assert!(path.starts_with("M98.41,88.41 A60.00,50.00"), "{path}");
+    assert!(path.contains("0.55,72.19"));
+    assert!(path.ends_with("55.98,3.06 Z"));
 }
 
 #[test]
@@ -1763,9 +1734,9 @@ fn test_can_default_uses_filled_top_ellipse_without_evenodd_hole() {
     let path = preset_shape_svg("can", 120.0, 100.0, &HashMap::new()).unwrap();
 
     assert!(!needs_evenodd_fill("can"));
-    assert!(path.matches('M').count() >= 2);
-    assert!(path.contains("M0,25.0"));
-    assert!(path.contains("120.0,25.0 A60.0,25.0 0 0,0 0,25.0 Z"));
+    assert_official_path(&path, 3, 6);
+    assert!(path.starts_with("M0.00,12.50 A60.00,12.50"));
+    assert!(path.contains("M0.00,12.50 A60.00,12.50 0 0,1 120.00,12.50"));
 }
 
 #[test]
@@ -1774,7 +1745,7 @@ fn test_pie_wedge_default_path_matches_reference_orientation() {
 
     assert_eq!(
         path,
-        "M0,100.0 L120.0,100.0 L120.0,0 A120.0,100.0 0 0,0 0,100.0 Z"
+        "M0.00,100.00 A120.00,100.00 0 0,1 120.00,-0.00 L120.00,100.00 Z"
     );
 }
 
@@ -1795,20 +1766,14 @@ fn test_left_right_arrow_callout_adjustment_profiles_match_benchmarked_anchors()
 
 #[test]
 fn test_teardrop_adjustment_profiles_match_benchmarked_anchors() {
-    for (adj, anchor) in [
-        (20_000.0, TEARDROP_ADJ_LIGHT_NORMALIZED_PATH),
-        (50_000.0, TEARDROP_ADJ_DEFAULT_NORMALIZED_PATH),
-        (80_000.0, TEARDROP_ADJ_DEEP_NORMALIZED_PATH),
-        (100_000.0, TEARDROP_ADJ_SHARP_NORMALIZED_PATH),
-    ] {
+    let profiles = [20_000.0, 50_000.0, 80_000.0, 100_000.0].map(|adj| {
         let adj_values = HashMap::from([("adj".to_string(), adj)]);
         let path = preset_shape_svg("teardrop", 120.0, 100.0, &adj_values).unwrap();
-        assert_eq!(
-            path,
-            scale_normalized_path(anchor, 120.0, 100.0),
-            "teardrop benchmark profile ({adj}) should map to the tuned anchor path"
-        );
-    }
+        assert_official_path(&path, 1, 2);
+        assert_eq!(path.matches('Q').count(), 2);
+        path
+    });
+    assert!(profiles.windows(2).all(|pair| pair[0] != pair[1]));
 }
 
 #[test]
@@ -1830,69 +1795,84 @@ fn test_quad_arrow_callout_default_path_matches_office_outline() {
 fn test_math_divide_default_path_uses_circular_dots() {
     let path = preset_shape_svg("mathDivide", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("59.2,11.2"));
-    assert!(path.contains("104.9,37.9"));
-    assert!(path.contains("15.6,37.9"));
-    assert!(path.contains("61.3,88.8"));
+    assert_official_path(&path, 3, 4);
+    assert!(path.contains("M60.00,88.21 A11.76,11.76"));
+    assert!(path.contains("L104.09,61.76 L15.91,61.76 Z"));
 }
 
 #[test]
 fn test_left_right_ribbon_default_path_matches_office_outline() {
     let path = preset_shape_svg("leftRightRibbon", 120.0, 100.0, &HashMap::new()).unwrap();
-    assert!(path.contains("16.6,54.7"));
-    assert!(path.contains("56.9,0.0"));
-    assert!(path.contains("120.0,57.8"));
-    assert!(path.contains("63.1,100.0"));
+    let multi = preset_shape_multi_svg("leftRightRibbon", 120.0, 100.0, &HashMap::new())
+        .expect("official ribbon multipath");
+    assert!(path.matches('M').count() >= 3);
+    assert!(path.matches('A').count() >= 8);
+    assert!(path.starts_with("M0.00,41.67 L50.00,0.00"), "{path}");
+    assert!(path.contains("L120.00,58.33 L70.00,100.00"));
+    assert_eq!(multi.paths.len(), 3);
+    assert!(matches!(multi.paths[0].fill, PathFill::Norm));
+    assert!(matches!(multi.paths[1].fill, PathFill::DarkenLess));
+    assert!(matches!(multi.paths[2].fill, PathFill::None));
+    assert!(multi.paths[2].stroke);
 }
 
 #[test]
 fn test_star5_default_path_matches_extracted_reference_outline() {
     let path = preset_shape_svg("star5", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("M 96.8,99.2"));
-    assert!(path.contains("L 59.6,0.8"));
-    assert!(path.contains("L 118.3,37.4"));
-    assert!(path.contains("L 83.9,62.9"));
+    assert_official_path(&path, 1, 0);
+    assert!(
+        path.starts_with("M0.00,38.20 L45.84,38.20 L60.00,0.00"),
+        "{path}"
+    );
+    assert!(path.contains("L97.08,100.00 L60.00,76.39 L22.92,100.00"));
 }
 
 #[test]
 fn test_irregular_seal1_default_path_matches_extracted_reference_outline() {
     let path = preset_shape_svg("irregularSeal1", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("M 47.9,99.2"));
-    assert!(path.contains("L 80.6,0.8"));
-    assert!(path.contains("L 116.8,38.2"));
-    assert!(path.contains("L 1.1,66.9"));
+    assert_official_path(&path, 1, 0);
+    assert!(path.starts_with("M60.00,26.85 L80.68,0.00"));
+    assert!(
+        path.contains("L117.21,37.67 L97.82,48.50 L120.00,61.53"),
+        "{path}"
+    );
+    assert!(path.ends_with("46.40,10.62 Z"));
 }
 
 #[test]
 fn test_moon_default_path_matches_extracted_reference_outline() {
     let path = preset_shape_svg("moon", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("M 112.4,99.4"));
-    assert!(path.contains("L 0.8,53.9"));
-    assert!(path.contains("L 118.5,0.6"));
-    assert!(path.contains("L 118.5,99.0"));
+    assert_official_path(&path, 1, 2);
+    assert!(path.starts_with("M120.00,100.00 A120.00,50.00"));
+    assert!(
+        path.contains("A150.00,62.50 0 0,0 120.00,60.71 Z"),
+        "{path}"
+    );
 }
 
 #[test]
 fn test_irregular_seal2_default_path_matches_extracted_reference_outline() {
     let path = preset_shape_svg("irregularSeal2", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("M 28.6,96.9"));
-    assert!(path.contains("L 80.2,3.8"));
-    assert!(path.contains("L 116.2,31.5"));
-    assert!(path.contains("L 48.1,89.3"));
+    assert_official_path(&path, 1, 0);
+    assert!(path.starts_with("M63.68,20.10 L82.17,0.00"), "{path}");
+    assert!(path.contains("L120.00,30.76 L94.36,43.53"));
+    assert!(path.ends_with("54.01,8.74 Z"));
 }
 
 #[test]
 fn test_cloud_default_path_matches_extracted_reference_outline() {
     let path = preset_shape_svg("cloud", 120.0, 100.0, &HashMap::new()).unwrap();
 
-    assert!(path.contains("M 63.5,99.8"));
-    assert!(path.contains("L 25.1,10.3"));
-    assert!(path.contains("L 119.0,45.7"));
-    assert!(path.contains("L 77.8,87.0"));
+    assert_eq!(path.matches('M').count(), 12);
+    assert_eq!(path.matches('A').count(), 22, "{path}");
+    assert!(path.starts_with("M10.83,33.26 A18.76,21.27"));
+    assert!(!path.contains('L'));
+    assert!(path.contains("M116.11,35.54 A14.81,16.84"));
+    assert!(path.contains('Z'));
 }
 
 #[test]
@@ -1947,10 +1927,13 @@ fn test_math_multiply_default_path_matches_extracted_office_polygon() {
     let default_adj = HashMap::new();
     let path = preset_shape_svg("mathMultiply", 120.0, 100.0, &default_adj).unwrap();
 
-    assert!(path.contains("36.2,82.8"));
-    assert!(path.contains("18.6,68.5"));
-    assert!(path.contains("101.9,31.9"));
-    assert!(path.contains("60.5,67.7"));
+    assert_official_path(&path, 1, 0);
+    assert!(
+        path.starts_with("M21.29,33.05 L36.35,14.98 L60.00,34.69"),
+        "{path}"
+    );
+    assert!(path.contains("L98.71,66.95 L83.65,85.02"));
+    assert!(path.ends_with("41.63,50.00 Z"));
 }
 
 #[test]

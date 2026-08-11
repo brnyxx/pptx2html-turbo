@@ -9,13 +9,13 @@ use pptx2html_core::model::{
     Alignment, AutoFit, Border, BorderStyle, Bullet, ChartData, ChartDataLabelPosition,
     ChartDataLabelSettings, ChartGrouping, ChartOfPieType, ChartSeries, ChartSpec, ChartSplitType,
     ChartType, ClrMapOverride, Color, ColorKind, CompoundLine, ConnectionRef, ConnectionSite,
-    CropRect, CustomGeometry, DashStyle, Emu, Fill, FmtScheme, GeomRect, GeometryPath,
-    GradientFill, GradientStop, GradientType, GroupData, ImageFill, LineAlignment, LineCap,
-    LineEnd, LineEndSize, LineEndType, LineJoin, ListStyle, ParagraphDefaults, PathFill,
+    CropRect, CustomGeometry, DashStyle, Emu, FallbackKind, Fill, FmtScheme, GeomRect,
+    GeometryPath, GradientFill, GradientStop, GradientType, GroupData, ImageFill, LineAlignment,
+    LineCap, LineEnd, LineEndSize, LineEndType, LineJoin, ListStyle, ParagraphDefaults, PathFill,
     PictureData, PlaceholderInfo, PlaceholderType, Presentation, RunDefaults, Shape, ShapeStyleRef,
     ShapeType, Size, Slide, SlideLayout, SlideMaster, SolidFill, SpacingValue, StrikethroughType,
-    StyleRef, TableCell, TableData, TableRow, TextBody, TextCapitalization, TextMargins,
-    TextParagraph, TextRun, TextStyle, UnderlineType, VerticalAlign,
+    StyleRef, SupportTier, TableCell, TableData, TableRow, TextBody, TextCapitalization,
+    TextMargins, TextParagraph, TextRun, TextStyle, UnderlineType, UnresolvedType, VerticalAlign,
 };
 use pptx2html_core::parser::PptxParser;
 use pptx2html_core::parser::master_parser;
@@ -1052,6 +1052,7 @@ fn renders_anchor_geometry_and_fill_fallbacks_through_public_renderer() {
                 y: 75_000.0,
                 angle: 0.0,
             }],
+            guides: Vec::new(),
         }),
         position: pptx2html_core::model::Position {
             x: Emu(x),
@@ -1202,6 +1203,7 @@ fn renders_renderer_none_label_marker_and_group_skip_paths_through_public_render
             }),
             adjust_handles: Vec::new(),
             connection_sites: Vec::new(),
+            guides: Vec::new(),
         }),
         text_body: Some(TextBody {
             paragraphs: vec![TextParagraph {
@@ -4791,12 +4793,28 @@ fn parses_custom_geometry_invalid_formula_matrix_through_public_parser() {
         .iter()
         .find(|shape| shape.name == "Formula Matrix")
         .expect("formula matrix shape");
-    let custom_geom = match &shape.shape_type {
-        ShapeType::CustomGeom(geom) => geom,
-        other => panic!("expected custom geometry, got {other:?}"),
+    let unsupported = match &shape.shape_type {
+        ShapeType::Unsupported(data) => data,
+        other => panic!("expected unsupported custom geometry, got {other:?}"),
     };
-    assert_eq!(custom_geom.paths.len(), 1);
-    assert!(matches!(custom_geom.paths[0].fill, PathFill::None));
+    assert!(matches!(
+        unsupported.element_type,
+        UnresolvedType::CustomGeometry
+    ));
+    assert_eq!(unsupported.raw_xml.as_deref(), Some("mystery 1 2 3"));
+
+    let result = render_with_metadata(&pptx).expect("invalid formula fallback conversion");
+    let diagnostic = result
+        .diagnostics()
+        .iter()
+        .find(|item| item.code == "DRAWINGML_CUSTOM_GEOMETRY_FALLBACK")
+        .expect("custom geometry fallback diagnostic");
+    assert!(matches!(diagnostic.support_tier, SupportTier::Fallback));
+    assert!(matches!(
+        diagnostic.fallback_kind,
+        FallbackKind::CustomGeometryPlaceholder
+    ));
+    assert_eq!(diagnostic.raw_reference.as_deref(), Some("mystery 1 2 3"));
 }
 
 #[test]
@@ -4841,15 +4859,31 @@ fn parses_formula_short_arity_and_default_line_end_sizes_through_public_parser()
     let presentation = parse_pptx(&pptx);
     let shapes = &presentation.slides[0].shapes;
 
-    let custom_geom = shapes
+    let unsupported = shapes
         .iter()
         .find_map(|shape| match &shape.shape_type {
-            ShapeType::CustomGeom(geom) => Some(geom),
+            ShapeType::Unsupported(data) => Some(data),
             _ => None,
         })
-        .expect("custom geometry");
-    assert_eq!(custom_geom.paths.len(), 1);
-    assert!(matches!(custom_geom.paths[0].fill, PathFill::None));
+        .expect("unsupported custom geometry");
+    assert!(matches!(
+        unsupported.element_type,
+        UnresolvedType::CustomGeometry
+    ));
+    assert_eq!(unsupported.raw_xml.as_deref(), Some("+/ 1 2"));
+
+    let result = render_with_metadata(&pptx).expect("short formula fallback conversion");
+    let diagnostic = result
+        .diagnostics()
+        .iter()
+        .find(|item| item.code == "DRAWINGML_CUSTOM_GEOMETRY_FALLBACK")
+        .expect("short formula fallback diagnostic");
+    assert!(matches!(diagnostic.support_tier, SupportTier::Fallback));
+    assert!(matches!(
+        diagnostic.fallback_kind,
+        FallbackKind::CustomGeometryPlaceholder
+    ));
+    assert_eq!(diagnostic.raw_reference.as_deref(), Some("+/ 1 2"));
 
     let connector = shapes
         .iter()

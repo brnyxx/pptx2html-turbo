@@ -70,12 +70,29 @@ pub(super) fn double_wave_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> St
     scale_normalized_path(double_wave_adjust_anchor(adj), w, h)
 }
 pub(super) fn regular_polygon_path(w: f64, h: f64, sides: u32) -> String {
+    scaled_polygon_path(w, h, sides, 1.0, 1.0)
+}
+
+pub(super) fn heptagon_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
+    let horizontal = adj.get("hf").copied().unwrap_or(102_572.0) / 100_000.0;
+    let vertical = adj.get("vf").copied().unwrap_or(105_210.0) / 100_000.0;
+    scaled_polygon_path(w, h, 7, horizontal, vertical)
+}
+
+pub(super) fn decagon_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
+    let vertical = adj.get("vf").copied().unwrap_or(105_146.0) / 100_000.0;
+    scaled_polygon_path(w, h, 10, 1.0, vertical)
+}
+
+fn scaled_polygon_path(w: f64, h: f64, sides: u32, horizontal: f64, vertical: f64) -> String {
     let (cx, cy) = (w / 2.0, h / 2.0);
+    let radius_x = cx * horizontal;
+    let radius_y = cy * vertical;
     let st = -std::f64::consts::FRAC_PI_2;
     let mut pts: Vec<(f64, f64)> = Vec::with_capacity(sides as usize);
     for i in 0..sides {
         let a = st + 2.0 * std::f64::consts::PI * (i as f64) / (sides as f64);
-        pts.push((cx + cx * a.cos(), cy + cy * a.sin()));
+        pts.push((cx + radius_x * a.cos(), cy + radius_y * a.sin()));
     }
     let mut p = format!("M{:.1},{:.1}", pts[0].0, pts[0].1);
     for &(x, y) in &pts[1..] {

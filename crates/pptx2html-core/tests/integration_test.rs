@@ -4343,12 +4343,16 @@ fn test_preset_shape_star4_uses_office_default_body_width() {
     let pptx = fixtures::MinimalPptx::new(slide).build();
     let html = render_html(&pptx);
     assert!(html.contains("shape-svg"));
-    assert!(
-        html.contains(
-            "M52.5,0 L61.9,43.0 L105.0,52.5 L61.9,61.9 L52.5,105.0 L43.0,61.9 L0,52.5 L43.0,43.0 Z"
-        ),
-        "star4 should keep the fuller Office default body width: {html}"
+    let start = html.find("<path d=\"").expect("star4 path") + 9;
+    let path = &html[start..start + html[start..].find('"').expect("star4 path end")];
+    assert_eq!(
+        path,
+        "M0.00,52.49 L43.21,43.21 L52.49,0.00 L61.77,43.21 L104.99,52.49 L61.77,61.77 L52.49,104.99 L43.21,61.77 Z"
     );
+    assert_eq!(path.matches('L').count(), 7);
+    assert!(path.ends_with('Z'));
+    assert!(!path.contains("NaN") && !path.contains("Infinity"));
+    assert!(path.contains("0.00,52.49") && path.contains("104.99,52.49"));
 }
 
 #[test]
@@ -4367,12 +4371,16 @@ fn test_preset_shape_star5() {
     let html = render_html(&pptx);
     assert!(html.contains("shape-svg"));
     assert!(html.contains("#FFD700"));
-    assert!(
-        html.contains(
-            "M 84.7,104.1 L 80.2,102.3 L 54.3,82.3 L 51.0,82.3 L 25.9,101.7 L 20.3,104.1 L 31.6,66.1 L 0.6,40.1 L 39.9,39.2 L 52.1,0.9 L 53.4,1.8 L 65.1,39.2 L 103.5,39.2 L 104.4,40.1 L 103.5,42.2 L 73.4,66.1 L 84.7,104.1 Z"
-        ),
-        "star5 should keep the fuller Office default body width: {html}"
+    let start = html.find("<path d=\"").expect("star5 path") + 9;
+    let path = &html[start..start + html[start..].find('"').expect("star5 path end")];
+    assert_eq!(
+        path,
+        "M0.00,40.10 L40.10,40.10 L52.49,0.00 L64.89,40.10 L104.99,40.10 L72.54,64.89 L84.94,104.99 L52.49,80.20 L20.05,104.99 L32.44,64.89 Z"
     );
+    assert_eq!(path.matches('L').count(), 9);
+    assert!(path.ends_with('Z'));
+    assert!(!path.contains("NaN") && !path.contains("Infinity"));
+    assert!(path.contains("0.00,40.10") && path.contains("104.99,40.10"));
 }
 
 #[test]

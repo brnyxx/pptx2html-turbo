@@ -44,6 +44,29 @@ pub struct CustomGeometry {
     pub text_rect: Option<GeomRect>,
     pub adjust_handles: Vec<AdjustHandle>,
     pub connection_sites: Vec<ConnectionSite>,
+    pub guides: Vec<CustomGuide>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomGuide {
+    pub name: String,
+    pub raw_formula: String,
+    pub evaluation: Result<f64, GuideFormulaError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GuideFormulaError {
+    Empty,
+    UnknownOperator(String),
+    InvalidArity {
+        operator: String,
+        expected: usize,
+        actual: usize,
+    },
+    UnresolvedToken(String),
+    NonFiniteToken(String),
+    NonFiniteResult,
+    DivisionByZero,
 }
 
 #[derive(Debug, Clone)]

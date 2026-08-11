@@ -8,6 +8,7 @@ use zip::ZipArchive;
 use super::action_parser;
 #[cfg(test)]
 use super::action_parser::hyperlink_rel_id;
+use super::custom_guide;
 #[cfg(test)]
 use super::fill_parser::assign_background_color_target;
 pub(crate) use super::fill_parser::parse_line_end;
@@ -92,6 +93,7 @@ pub fn parse_slide<R: Read + Seek>(
     let mut cust_geom_pts: Vec<(f64, f64)> = Vec::new();
     let mut in_cust_geom_cmd: Option<String> = None;
     let mut cust_geom_guides: HashMap<String, f64> = HashMap::new();
+    let mut cust_geom_guide_entries: Vec<CustomGuide> = Vec::new();
     let mut cust_geom_text_rect: Option<GeomRect> = None;
     let mut cust_geom_handles: Vec<AdjustHandle> = Vec::new();
     let mut cust_geom_connection_sites: Vec<ConnectionSite> = Vec::new();
@@ -219,6 +221,7 @@ pub fn parse_slide<R: Read + Seek>(
                         in_cust_geom = true;
                         cust_geom_paths.clear();
                         cust_geom_guides.clear();
+                        cust_geom_guide_entries.clear();
                         cust_geom_text_rect = None;
                         cust_geom_handles.clear();
                         cust_geom_connection_sites.clear();
@@ -518,11 +521,26 @@ pub fn parse_slide<R: Read + Seek>(
                             xml_utils::attr_str(e, "name"),
                             xml_utils::attr_str(e, "fmla"),
                         ) {
-                            let val = parse_guide_formula_value(&fmla, &cust_geom_guides);
                             if in_cust_geom {
-                                cust_geom_guides.insert(name, val);
-                            } else if let Some(sb) = current_shape.as_mut() {
-                                sb.adjust_values.insert(name, val);
+                                let evaluation =
+                                    parse_guide_formula_value(&fmla, &cust_geom_guides);
+                                if let Ok(value) = &evaluation {
+                                    cust_geom_guides.insert(name.clone(), *value);
+                                } else if let Some(shape) = current_shape.as_mut() {
+                                    shape.unsupported_content = Some("Custom Geometry".to_owned());
+                                    shape.unresolved_type =
+                                        Some(slide::UnresolvedType::CustomGeometry);
+                                    shape.raw_xml_capture = Some(fmla.clone());
+                                }
+                                cust_geom_guide_entries.push(CustomGuide {
+                                    name,
+                                    raw_formula: fmla,
+                                    evaluation,
+                                });
+                            } else if let Some(sb) = current_shape.as_mut()
+                                && let Ok(value) = parse_guide_formula_value(&fmla, &HashMap::new())
+                            {
+                                sb.adjust_values.insert(name, value);
                             }
                         }
                     }
@@ -827,6 +845,7 @@ pub fn parse_slide<R: Read + Seek>(
                                 text_rect: cust_geom_text_rect.take(),
                                 adjust_handles: std::mem::take(&mut cust_geom_handles),
                                 connection_sites: std::mem::take(&mut cust_geom_connection_sites),
+                                guides: std::mem::take(&mut cust_geom_guide_entries),
                             });
                         }
                         cust_geom_guides.clear();
@@ -909,91 +928,11 @@ fn depth_contains(depth: &[String], tag: &str) -> bool {
     depth.iter().any(|d| d == tag)
 }
 
-pub(crate) fn parse_guide_formula_value(fmla: &str, guides: &HashMap<String, f64>) -> f64 {
-    let tokens: Vec<&str> = fmla.split_whitespace().collect();
-    if tokens.is_empty() {
-        return 0.0;
-    }
-
-    let resolve = |token: &str| resolve_custom_geom_value(token, guides);
-
-    match tokens.as_slice() {
-        ["val", value, ..] => resolve(value),
-        ["+-", x, y, z, ..] => resolve(x) + resolve(y) - resolve(z),
-        ["*/", x, y, z, ..] => {
-            let numerator = resolve(x) * resolve(y);
-            let denominator = resolve(z);
-            if denominator.abs() < f64::EPSILON {
-                0.0
-            } else {
-                numerator / denominator
-            }
-        }
-        ["+/", x, y, z, ..] => {
-            let numerator = resolve(x) + resolve(y);
-            let denominator = resolve(z);
-            if denominator.abs() < f64::EPSILON {
-                0.0
-            } else {
-                numerator / denominator
-            }
-        }
-        ["pin", low, value, high, ..] => resolve(value).max(resolve(low)).min(resolve(high)),
-        ["min", x, y, ..] => resolve(x).min(resolve(y)),
-        ["max", x, y, ..] => resolve(x).max(resolve(y)),
-        ["?:", condition, when_true, when_false, ..] => {
-            if resolve(condition).abs() >= f64::EPSILON {
-                resolve(when_true)
-            } else {
-                resolve(when_false)
-            }
-        }
-        ["abs", value, ..] => resolve(value).abs(),
-        ["sqrt", value, ..] => resolve(value).max(0.0).sqrt(),
-        ["mod", x, y, z, ..] => {
-            let x = resolve(x);
-            let y = resolve(y);
-            let z = resolve(z);
-            (x * x + y * y + z * z).sqrt()
-        }
-        ["sin", scale, angle, ..] => {
-            let scale = resolve(scale);
-            let angle = ooxml_angle_to_radians(resolve(angle));
-            scale * angle.sin()
-        }
-        ["cos", scale, angle, ..] => {
-            let scale = resolve(scale);
-            let angle = ooxml_angle_to_radians(resolve(angle));
-            scale * angle.cos()
-        }
-        ["cat2", scale, y, z, ..] => {
-            let scale = resolve(scale);
-            let y = resolve(y);
-            let z = resolve(z);
-            scale * z.atan2(y).cos()
-        }
-        ["sat2", scale, y, z, ..] => {
-            let scale = resolve(scale);
-            let y = resolve(y);
-            let z = resolve(z);
-            scale * z.atan2(y).sin()
-        }
-        ["at2", x, y, ..] => {
-            let x = resolve(x);
-            let y = resolve(y);
-            y.atan2(x).to_degrees() * 60_000.0
-        }
-        ["tan", scale, angle, ..] => {
-            let scale = resolve(scale);
-            let angle = ooxml_angle_to_radians(resolve(angle));
-            scale * angle.tan()
-        }
-        _ => 0.0,
-    }
-}
-
-fn ooxml_angle_to_radians(angle: f64) -> f64 {
-    (angle / 60_000.0).to_radians()
+pub(crate) fn parse_guide_formula_value(
+    fmla: &str,
+    guides: &HashMap<String, f64>,
+) -> Result<f64, GuideFormulaError> {
+    custom_guide::evaluate(fmla, guides)
 }
 
 fn resolve_custom_geom_value(raw: &str, guides: &HashMap<String, f64>) -> f64 {
@@ -1500,42 +1439,32 @@ mod tests {
             ("y".to_string(), 4.0),
             ("z".to_string(), 12.0),
         ]);
-        assert_eq!(parse_guide_formula_value("val x", &guides), 3.0);
-        assert_eq!(parse_guide_formula_value("+- 5 4 3", &guides), 6.0);
-        assert_eq!(parse_guide_formula_value("*/ 6 4 3", &guides), 8.0);
-        assert_eq!(parse_guide_formula_value("+/ 6 4 2", &guides), 5.0);
-        assert_eq!(parse_guide_formula_value("pin 1 5 3", &guides), 3.0);
-        assert_eq!(parse_guide_formula_value("min 7 3", &guides), 3.0);
-        assert_eq!(parse_guide_formula_value("max 7 3", &guides), 7.0);
-        assert_eq!(parse_guide_formula_value("?: 1 8 9", &guides), 8.0);
-        assert_eq!(parse_guide_formula_value("?: 0 8 9", &guides), 9.0);
-        assert_eq!(parse_guide_formula_value("abs -7", &guides), 7.0);
-        assert_eq!(parse_guide_formula_value("sqrt 16", &guides), 4.0);
-        assert!((parse_guide_formula_value("mod x y z", &guides) - 13.0).abs() < 1e-6);
-        assert!((parse_guide_formula_value("sin 10 5400000", &guides) - 10.0).abs() < 1e-6);
-        assert!((parse_guide_formula_value("cos 10 0", &guides) - 10.0).abs() < 1e-6);
+        let evaluate_formula =
+            |formula| parse_guide_formula_value(formula, &guides).expect("known formula");
+        assert_eq!(evaluate_formula("val x"), 3.0);
+        assert_eq!(evaluate_formula("+- 5 4 3"), 6.0);
+        assert_eq!(evaluate_formula("*/ 6 4 3"), 8.0);
+        assert_eq!(evaluate_formula("+/ 6 4 2"), 5.0);
+        assert_eq!(evaluate_formula("pin 1 5 3"), 3.0);
+        assert_eq!(evaluate_formula("min 7 3"), 3.0);
+        assert_eq!(evaluate_formula("max 7 3"), 7.0);
+        assert_eq!(evaluate_formula("?: 1 8 9"), 8.0);
+        assert_eq!(evaluate_formula("?: 0 8 9"), 9.0);
+        assert_eq!(evaluate_formula("abs -7"), 7.0);
+        assert_eq!(evaluate_formula("sqrt 16"), 4.0);
+        assert!((evaluate_formula("mod x y z") - 13.0).abs() < 1e-6);
+        assert!((evaluate_formula("sin 10 5400000") - 10.0).abs() < 1e-6);
+        assert!((evaluate_formula("cos 10 0") - 10.0).abs() < 1e-6);
+        assert!((evaluate_formula("cat2 10 y z") - 10.0 * (12.0f64.atan2(4.0)).cos()).abs() < 1e-6);
+        assert!((evaluate_formula("sat2 10 y z") - 10.0 * (12.0f64.atan2(4.0)).sin()).abs() < 1e-6);
         assert!(
-            (parse_guide_formula_value("cat2 10 y z", &guides) - 10.0 * (12.0f64.atan2(4.0)).cos())
-                .abs()
-                < 1e-6
+            (evaluate_formula("at2 x y") - 4.0f64.atan2(3.0).to_degrees() * 60_000.0).abs() < 1e-6
         );
-        assert!(
-            (parse_guide_formula_value("sat2 10 y z", &guides) - 10.0 * (12.0f64.atan2(4.0)).sin())
-                .abs()
-                < 1e-6
-        );
-        assert!(
-            (parse_guide_formula_value("at2 x y", &guides)
-                - 4.0f64.atan2(3.0).to_degrees() * 60_000.0)
-                .abs()
-                < 1e-6
-        );
-        assert!((parse_guide_formula_value("tan 10 2700000", &guides) - 10.0).abs() < 1e-6);
-        assert_eq!(parse_guide_formula_value("unknown", &guides), 0.0);
+        assert!((evaluate_formula("tan 10 2700000") - 10.0).abs() < 1e-6);
+        assert!(parse_guide_formula_value("unknown", &guides).is_err());
         assert_eq!(resolve_custom_geom_value("42", &guides), 42.0);
         assert_eq!(resolve_custom_geom_value("x", &guides), 3.0);
         assert_eq!(resolve_custom_geom_value("missing", &guides), 0.0);
-        assert!((ooxml_angle_to_radians(5_400_000.0) - std::f64::consts::FRAC_PI_2).abs() < 1e-6);
 
         let mut shape = Some(ShapeBuilder::default());
         parse_body_pr(
@@ -1597,24 +1526,31 @@ mod tests {
     #[test]
     fn shape_helper_fallbacks_cover_invalid_attributes_and_defaults() {
         let guides = HashMap::from([("x".to_string(), 3.0)]);
-        assert_eq!(parse_guide_formula_value("", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("val", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("+- 1 2", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("*/ 6 4 0", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("+/ 6 4 0", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("pin 1 2", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("min 1", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("max 1", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("?: 1 2", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("abs", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("sqrt -9", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("mod 1 2", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("sin 10", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("cos 10", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("cat2 10 y", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("sat2 10 y", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("at2 10", &guides), 0.0);
-        assert_eq!(parse_guide_formula_value("tan 10", &guides), 0.0);
+        for formula in [
+            "",
+            "val",
+            "+- 1 2",
+            "*/ 6 4 0",
+            "+/ 6 4 0",
+            "pin 1 2",
+            "min 1",
+            "max 1",
+            "?: 1 2",
+            "abs",
+            "mod 1 2",
+            "sin 10",
+            "cos 10",
+            "cat2 10 y",
+            "sat2 10 y",
+            "at2 10",
+            "tan 10",
+        ] {
+            assert!(
+                parse_guide_formula_value(formula, &guides).is_err(),
+                "{formula}"
+            );
+        }
+        assert_eq!(parse_guide_formula_value("sqrt -9", &guides), Ok(0.0));
 
         let auto_fit = parse_shape_auto_fit(
             "normAutofit",
@@ -2782,6 +2718,7 @@ mod tests {
                 text_rect: None,
                 adjust_handles: Vec::new(),
                 connection_sites: Vec::new(),
+                guides: Vec::new(),
             }),
             ..Default::default()
         }
@@ -2793,6 +2730,7 @@ mod tests {
                 text_rect: None,
                 adjust_handles: Vec::new(),
                 connection_sites: Vec::new(),
+                guides: Vec::new(),
             }))
         );
 

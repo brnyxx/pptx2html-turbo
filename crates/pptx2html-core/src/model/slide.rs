@@ -140,6 +140,7 @@ mod tests {
                 text_rect: None,
                 adjust_handles: Vec::new(),
                 connection_sites: Vec::new(),
+                guides: Vec::new(),
             }),
             ShapeType::Unsupported(UnsupportedData {
                 label: "SmartArt".to_string(),

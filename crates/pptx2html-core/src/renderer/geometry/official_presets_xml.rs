@@ -22,11 +22,12 @@ pub(super) struct GuideDefinition {
 }
 
 pub(super) fn parse_definitions() -> Result<HashMap<String, PresetDefinition>, String> {
-    parse_definitions_from(XML)
+    parse_definitions_with_count(XML, 55)
 }
 
-pub(super) fn parse_definitions_from(
+pub(super) fn parse_definitions_with_count(
     source: &str,
+    expected_count: usize,
 ) -> Result<HashMap<String, PresetDefinition>, String> {
     let mut reader = Reader::from_str(source);
     let mut definitions = HashMap::new();
@@ -90,9 +91,9 @@ pub(super) fn parse_definitions_from(
             Event::Eof => break,
         }
     }
-    if definitions.len() != 55 {
+    if definitions.len() != expected_count {
         return Err(format!(
-            "expected 55 official arrow presets, got {}",
+            "expected {expected_count} official presets, got {}",
             definitions.len()
         ));
     }

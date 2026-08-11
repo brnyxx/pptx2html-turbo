@@ -30,7 +30,10 @@ pub(super) fn star5_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
 
     let ratio = adj.get("adj").copied().unwrap_or(25000.0) / 100_000.0;
     let (cx, cy) = (w / 2.0, h / 2.0);
-    let (ro_x, ro_y) = (cx, cy);
+    let (ro_x, ro_y) = (
+        cx * adj.get("hf").copied().unwrap_or(105_146.0) / 100_000.0,
+        cy * adj.get("vf").copied().unwrap_or(110_557.0) / 100_000.0,
+    );
     let (ri_x, ri_y) = (cx * ratio * 2.0, cy * ratio * 2.0);
     let n = 5;
     let t = n * 2;
@@ -55,7 +58,10 @@ pub(super) fn star5_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
 pub(super) fn star6_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
     let ratio = adj.get("adj").copied().unwrap_or(28868.0) / 100_000.0;
     let (cx, cy) = (w / 2.0, h / 2.0);
-    let (ro_x, ro_y) = (cx, cy);
+    let (ro_x, ro_y) = (
+        cx * adj.get("hf").copied().unwrap_or(115_470.0) / 100_000.0,
+        cy,
+    );
     let (ri_x, ri_y) = (cx * ratio * 2.0, cy * ratio * 2.0);
     let n = 6;
     let t = n * 2;
@@ -85,9 +91,34 @@ pub(super) fn star_n_path(
     default_adj: f64,
 ) -> String {
     let ratio = adj.get("adj").copied().unwrap_or(default_adj) / 100_000.0;
+    star_n_scaled_path(w, h, n, ratio, 1.0, 1.0)
+}
+
+pub(super) fn star7_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
+    let ratio = adj.get("adj").copied().unwrap_or(34_601.0) / 100_000.0;
+    let horizontal = adj.get("hf").copied().unwrap_or(102_572.0) / 100_000.0;
+    let vertical = adj.get("vf").copied().unwrap_or(105_210.0) / 100_000.0;
+    star_n_scaled_path(w, h, 7, ratio, horizontal, vertical)
+}
+
+pub(super) fn star10_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
+    let ratio = adj.get("adj").copied().unwrap_or(42_533.0) / 100_000.0;
+    let horizontal = adj.get("hf").copied().unwrap_or(105_146.0) / 100_000.0;
+    star_n_scaled_path(w, h, 10, ratio, horizontal, 1.0)
+}
+
+fn star_n_scaled_path(
+    w: f64,
+    h: f64,
+    n: u32,
+    ratio: f64,
+    horizontal: f64,
+    vertical: f64,
+) -> String {
     let (cx, cy) = (w / 2.0, h / 2.0);
-    let (ro, ri) = (cx, cx * ratio * 2.0);
-    let (ryo, ryi) = (cy, cy * ratio * 2.0);
+    let ro = cx * horizontal;
+    let ryo = cy * vertical;
+    let (ri, ryi) = (ro * ratio * 2.0, ryo * ratio * 2.0);
     let t = n * 2;
     let st = -std::f64::consts::FRAC_PI_2;
     let mut pts: Vec<(f64, f64)> = Vec::with_capacity(t as usize);

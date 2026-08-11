@@ -29,6 +29,7 @@ mod official_presets_path;
 mod official_presets_review_tests;
 mod official_presets_schema;
 mod official_presets_xml;
+mod official_remaining_presets;
 mod rects;
 mod scrolls_tabs;
 mod shared;
@@ -208,9 +209,9 @@ pub fn preset_shape_svg(
         "star4" => Some(stars::star4_path(w, h, adjust_values)),
         "star5" => Some(stars::star5_path(w, h, adjust_values)),
         "star6" => Some(stars::star6_path(w, h, adjust_values)),
-        "star7" => Some(stars::star_n_path(w, h, 7, adjust_values, 34601.0)),
+        "star7" => Some(stars::star7_path(w, h, adjust_values)),
         "star8" => Some(stars::star_n_path(w, h, 8, adjust_values, 34601.0)),
-        "star10" => Some(stars::star_n_path(w, h, 10, adjust_values, 42533.0)),
+        "star10" => Some(stars::star10_path(w, h, adjust_values)),
         "star12" => Some(stars::star_n_path(w, h, 12, adjust_values, 37500.0)),
         "star16" => Some(stars::star_n_path(w, h, 16, adjust_values, 37500.0)),
         "star24" => Some(stars::star_n_path(w, h, 24, adjust_values, 37500.0)),
@@ -225,7 +226,7 @@ pub fn preset_shape_svg(
         // Other
         "heart" => Some(misc::heart_path(w, h)),
         "plus" => Some(math::preset_plus_path(w, h, adjust_values)),
-        "mathPlus" => Some(math::plus_path(w, h, adjust_values)),
+        "mathPlus" => Some(math::math_plus_path(w, h, adjust_values)),
         "mathMinus" => Some(math::math_minus_path(w, h, adjust_values)),
         "lightningBolt" => Some(misc::lightning_bolt_path(w, h)),
         "cloud" => Some(misc::cloud_path(w, h)),
@@ -241,18 +242,18 @@ pub fn preset_shape_svg(
         "moon" => Some(misc::moon_path(w, h, adjust_values)),
         "sun" => Some(misc::sun_path(w, h, adjust_values)),
         "bevel" => Some(misc::bevel_path(w, h, adjust_values)),
-        "gear6" => Some(misc::gear_path(w, h, 6)),
-        "gear9" => Some(misc::gear_path(w, h, 9)),
+        "gear6" => Some(misc::gear_path(w, h, 6, adjust_values)),
+        "gear9" => Some(misc::gear_path(w, h, 9, adjust_values)),
         "pie" => Some(arcs::pie_path(w, h, adjust_values)),
         "pieWedge" => Some(arcs::pie_wedge_path(w, h)),
         "arc" => Some(arcs::arc_path(w, h, adjust_values)),
         "wave" => Some(waves_polys::wave_path(w, h, adjust_values)),
         "doubleWave" => Some(waves_polys::double_wave_path(w, h, adjust_values)),
-        "decagon" => Some(waves_polys::regular_polygon_path(w, h, 10)),
+        "decagon" => Some(waves_polys::decagon_path(w, h, adjust_values)),
         "dodecagon" => Some(waves_polys::regular_polygon_path(w, h, 12)),
         "funnel" => Some(waves_polys::funnel_path(w, h)),
         "teardrop" => Some(waves_polys::teardrop_path(w, h, adjust_values)),
-        "heptagon" => Some(waves_polys::regular_polygon_path(w, h, 7)),
+        "heptagon" => Some(waves_polys::heptagon_path(w, h, adjust_values)),
         // Arrow callouts
         "downArrowCallout" => Some(arrow_callouts::down_arrow_callout_path(w, h, adjust_values)),
         "leftArrowCallout" => Some(arrow_callouts::left_arrow_callout_path(w, h, adjust_values)),

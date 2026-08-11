@@ -806,8 +806,8 @@ fn store_layout_adjust_value(
     if let (Some(name), Some(fmla)) = (
         xml_utils::attr_str(e, "name"),
         xml_utils::attr_str(e, "fmla"),
-    ) {
-        let value = parse_guide_formula_value(&fmla, &HashMap::new());
+    ) && let Ok(value) = parse_guide_formula_value(&fmla, &HashMap::new())
+    {
         shape.adjust_values.insert(name, value);
     }
 }
