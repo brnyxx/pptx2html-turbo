@@ -69,6 +69,7 @@ fn test_basic_adjusted_presets_are_finite_for_degenerate_and_extreme_extents() {
         ("nonIsoscelesTrapezoid", &["adj1", "adj2"]),
     ];
     let dimensions = [
+        (100.0, 100.0),
         (0.0, 100.0),
         (100.0, 0.0),
         (0.0, 0.0),
@@ -76,7 +77,14 @@ fn test_basic_adjusted_presets_are_finite_for_degenerate_and_extreme_extents() {
         (100.0, f64::MAX),
         (f64::MAX, f64::MAX),
     ];
-    let hostile_adjustments = [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+    let hostile_adjustments = [
+        -1.0,
+        f64::MAX,
+        -f64::MAX,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
 
     for &(preset, keys) in cases {
         for &key in keys {
@@ -101,6 +109,45 @@ fn test_basic_adjusted_presets_are_finite_for_degenerate_and_extreme_extents() {
                 }
             }
         }
+    }
+
+    let fallback_cases = [
+        (
+            "pentagon",
+            HashMap::from([("hf".to_string(), f64::MAX)]),
+            f64::MAX,
+            100.0,
+        ),
+        (
+            "pentagon",
+            HashMap::from([("vf".to_string(), f64::MAX)]),
+            100.0,
+            f64::MAX,
+        ),
+        (
+            "pentagon",
+            HashMap::from([("vf".to_string(), -f64::MAX)]),
+            100.0,
+            f64::MAX,
+        ),
+        (
+            "hexagon",
+            HashMap::from([("vf".to_string(), f64::MAX)]),
+            100.0,
+            f64::MAX,
+        ),
+        (
+            "hexagon",
+            HashMap::from([("vf".to_string(), -f64::MAX)]),
+            100.0,
+            f64::MAX,
+        ),
+    ];
+    for (preset, adjustments, w, h) in fallback_cases {
+        let path = preset_shape_svg(preset, w, h, &adjustments).expect("extreme path");
+        let view_box_boundary =
+            preset_shape_svg("rect", w, h, &HashMap::new()).expect("viewBox boundary path");
+        assert_eq!(path, view_box_boundary, "{preset} finite fallback");
     }
 }
 
