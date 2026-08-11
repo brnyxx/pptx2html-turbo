@@ -37,8 +37,12 @@ impl GuideEnvironment {
         Self { values }
     }
 
-    pub(super) fn insert(&mut self, name: &str, value: f64) {
-        self.values.insert(name.to_owned(), finite(value));
+    pub(super) fn insert(&mut self, name: &str, value: f64) -> Result<(), String> {
+        if !value.is_finite() {
+            return Err(format!("non-finite guide value: {name}"));
+        }
+        self.values.insert(name.to_owned(), value);
+        Ok(())
     }
 
     pub(super) fn resolve(&self, token: &str) -> Result<f64, String> {
@@ -95,7 +99,11 @@ impl GuideEnvironment {
             ["tan", scale, angle] => self.resolve(scale)? * radians(self.resolve(angle)?).tan(),
             _ => return Err(format!("unsupported guide formula: {formula}")),
         };
-        Ok(finite(value))
+        if value.is_finite() {
+            Ok(value)
+        } else {
+            Err(format!("non-finite guide formula result: {formula}"))
+        }
     }
 }
 
@@ -105,10 +113,6 @@ fn extent(value: f64) -> f64 {
     } else {
         0.0
     }
-}
-
-fn finite(value: f64) -> f64 {
-    if value.is_finite() { value } else { 0.0 }
 }
 
 fn divide(numerator: f64, denominator: f64) -> f64 {
@@ -130,9 +134,9 @@ mod tests {
     #[test]
     fn official_operator_matrix_matches_drawingml_semantics() {
         let mut environment = GuideEnvironment::new(160.0, 100.0);
-        environment.insert("x", 3.0);
-        environment.insert("y", 4.0);
-        environment.insert("z", 12.0);
+        environment.insert("x", 3.0).expect("finite guide");
+        environment.insert("y", 4.0).expect("finite guide");
+        environment.insert("z", 12.0).expect("finite guide");
         let cases = [
             ("val x", 3.0),
             ("+- 5 4 3", 6.0),
@@ -162,5 +166,11 @@ mod tests {
         assert!(environment.evaluate("unsupported x").is_err());
         assert!(environment.evaluate("+- 8 3 2 999").is_err());
         assert!(environment.evaluate("val 1 2").is_err());
+        assert!(environment.insert("infinite", f64::INFINITY).is_err());
+        assert!(environment.insert("nan", f64::NAN).is_err());
+        environment
+            .insert("huge", f64::MAX)
+            .expect("finite guide is accepted");
+        assert!(environment.evaluate("*/ w huge 100000").is_err());
     }
 }

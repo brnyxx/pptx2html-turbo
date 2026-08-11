@@ -112,11 +112,11 @@ fn render_from_definitions(
             .copied()
             .filter(|value| value.is_finite())
             .unwrap_or(default);
-        environment.insert(&adjustment.name, value);
+        environment.insert(&adjustment.name, value)?;
     }
     for guide in &definition.guides {
         let value = environment.evaluate(&guide.formula)?;
-        environment.insert(&guide.name, value);
+        environment.insert(&guide.name, value)?;
     }
     let paths = definition
         .paths
@@ -157,7 +157,7 @@ fn definitions() -> Result<&'static HashMap<String, PresetDefinition>, String> {
 }
 
 #[cfg(test)]
-fn route_with_xml(
+pub(super) fn route_with_xml(
     name: &str,
     width: f64,
     height: f64,

@@ -35,6 +35,7 @@ pub(super) fn parse_definitions_from(
     let mut preset: Option<(String, PresetDefinition)> = None;
     let mut path: Option<PathDefinition> = None;
     let mut command: Option<(String, Vec<PointDefinition>)> = None;
+    let mut declaration_seen = false;
     loop {
         match reader.read_event().map_err(|error| error.to_string())? {
             Event::Start(element) => {
@@ -70,8 +71,21 @@ pub(super) fn parse_definitions_from(
                     return Err(format!("mismatched XML end: {actual}/{tag}"));
                 }
             }
+            Event::Text(text) => {
+                let text = text.unescape().map_err(|error| error.to_string())?;
+                if !text.trim().is_empty() {
+                    return Err("unexpected official XML text".to_owned());
+                }
+            }
+            Event::Comment(_) => {}
+            Event::Decl(_) if stack.is_empty() && !declaration_seen => declaration_seen = true,
+            Event::Decl(_) => return Err("unexpected official XML declaration".to_owned()),
+            Event::CData(_) => return Err("unexpected official XML CDATA".to_owned()),
+            Event::PI(_) => {
+                return Err("unexpected official XML processing instruction".to_owned());
+            }
+            Event::DocType(_) => return Err("unexpected official XML doctype".to_owned()),
             Event::Eof => break,
-            _ => {}
         }
     }
     if definitions.len() != 55 {

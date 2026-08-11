@@ -25,6 +25,8 @@ mod misc;
 mod official_presets;
 mod official_presets_formula;
 mod official_presets_path;
+#[cfg(test)]
+mod official_presets_review_tests;
 mod official_presets_schema;
 mod official_presets_xml;
 mod rects;
