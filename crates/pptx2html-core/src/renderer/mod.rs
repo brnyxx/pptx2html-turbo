@@ -829,7 +829,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
 
         // Table
         if let ShapeType::Table(ref table) = shape.shape_type {
-            Self::render_table(table, ctx, html);
+            Self::render_table(table, shape.id, ctx, html);
             html.push_str("</div>\n");
             return;
         }
@@ -2427,7 +2427,7 @@ mod tests {
             style: None,
         };
         let mut html = String::new();
-        HtmlRenderer::render_table(&table, &ctx, &mut html);
+        HtmlRenderer::render_table(&table, 0, &ctx, &mut html);
         assert!(html.contains("<table"));
         assert!(html.contains("colspan=\"2\""));
         assert!(html.contains("rowspan=\"3\""));

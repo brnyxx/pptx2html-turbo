@@ -81,7 +81,11 @@ pub fn wrong_style_namespace_package() -> Vec<u8> {
 }
 
 pub fn unsupported_primitive_package() -> Vec<u8> {
-    let unsupported = styles().replacen("<a:wholeTbl>", "<a:wholeTbl><a:gradFill/>", 1);
+    let unsupported = styles().replacen(
+        "<a:wholeTbl><a:tcStyle>",
+        "<a:wholeTbl><a:tcStyle><a:fill><a:gradFill/></a:fill>",
+        1,
+    );
     package_with_styles(
         document(&table(CUSTOM_STYLE, "1", "1", false)),
         &unsupported,

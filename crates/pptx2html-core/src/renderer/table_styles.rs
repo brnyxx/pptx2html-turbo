@@ -1,10 +1,11 @@
 use crate::model::{
-    Border, Fill, TableCell, TableCellStyle, TableData, TableStyleRegion, TableTextStyle,
+    Border, Fill, StyleRef, TableCell, TableCellStyle, TableData, TableStyleRegion, TableTextStyle,
 };
 
 #[derive(Default)]
 pub(super) struct ResolvedTableCellStyle {
     pub(super) fill: Option<Fill>,
+    pub(super) fill_ref: Option<StyleRef>,
     pub(super) left: Option<Border>,
     pub(super) right: Option<Border>,
     pub(super) top: Option<Border>,
@@ -105,6 +106,10 @@ fn apply_region(
 ) {
     if let Some(fill) = &source.fill {
         target.fill = Some(fill.clone());
+        target.fill_ref = None;
+    } else if let Some(fill_ref) = &source.fill_ref {
+        target.fill = None;
+        target.fill_ref = Some(fill_ref.clone());
     }
     if let Some(border) = &source.left {
         target.left = Some(border.clone());
@@ -155,6 +160,7 @@ fn apply_region(
 fn explicit_style(cell: &TableCell, mut style: ResolvedTableCellStyle) -> ResolvedTableCellStyle {
     if !matches!(cell.fill, Fill::None) {
         style.fill = Some(cell.fill.clone());
+        style.fill_ref = None;
     }
     if cell.explicit_borders & 1 != 0 {
         style.left = Some(cell.border_left.clone());

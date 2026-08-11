@@ -13,7 +13,9 @@ All notable changes to this project will be documented in this file.
 ### Rendering / Public API
 - Resolve package-defined DrawingML table styles in Office region precedence order, including theme-aware fills, text, outer/inside borders, explicit-cell overrides, and logical merged-cell coordinates
 - Preserve unavailable built-in and invalid table style IDs plus all six flags in `TABLE_STYLE_DEFINITION_UNAVAILABLE` diagnostics without synthesizing Office appearances
-- Add `TableData::style`, `TableCell::h_merge`, and `TableCell::explicit_borders`; external struct literals require a next-semver-major source migration while the manifest version remains unchanged
+- Add `TableData::style`, `TableCell::h_merge`, `TableCell::explicit_borders`, `TableCellStyle::fill_ref`, and `TableStyle::table_background_ref`; external struct literals require a next-semver-major source migration while the manifest version remains unchanged
+- Reject unsafe/external table-style relationships and invalid table-style XML with stable diagnostics, and preserve per-table diagnostic identity from `cNvPr`
+- Preserve table-style `fillRef` index/color/modifiers; resolve parsed theme fills and diagnose unavailable non-solid theme fills without inventing a solid replacement (`[교차검증 필요]` for exact non-solid resolution)
 
 ### Fixtures / Documentation
 - Expand the completion table deck to a region matrix with explicit fill/noFill overrides and a horizontal merge row

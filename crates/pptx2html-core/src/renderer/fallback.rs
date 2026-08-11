@@ -130,14 +130,21 @@ pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) 
     diagnostics.dedup_by(|left, right| diagnostic_key(left) == diagnostic_key(right));
 }
 
-fn diagnostic_key(
-    diagnostic: &ConversionDiagnostic,
-) -> (Option<&str>, Option<usize>, Option<&str>, Option<&str>) {
+type DiagnosticKey<'a> = (
+    Option<&'a str>,
+    Option<usize>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+);
+
+fn diagnostic_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
     (
         diagnostic.location.part_name.as_deref(),
         diagnostic.location.slide_index,
         diagnostic.location.qualified_element_name.as_deref(),
         diagnostic.location.relationship_id.as_deref(),
+        diagnostic.raw_reference.as_deref(),
     )
 }
 

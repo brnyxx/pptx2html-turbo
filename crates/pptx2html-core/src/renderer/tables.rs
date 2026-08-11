@@ -7,7 +7,12 @@ use super::{
 use super::{table_style_diagnostics, table_styles};
 
 impl HtmlRenderer {
-    pub(super) fn render_table(table: &TableData, ctx: &RenderCtx<'_>, html: &mut String) {
+    pub(super) fn render_table(
+        table: &TableData,
+        table_id: u32,
+        ctx: &RenderCtx<'_>,
+        html: &mut String,
+    ) {
         let total_width: f64 = table.col_widths.iter().sum();
         html.push_str("<table");
         if let Some(reference) = &table.style {
@@ -21,7 +26,7 @@ impl HtmlRenderer {
                 " data-table-style-source=\"{}\"",
                 reference.source_kind.as_str()
             );
-            table_style_diagnostics::emit(reference, table, ctx);
+            table_style_diagnostics::emit(reference, table, table_id, ctx);
         }
         let mut table_css =
             String::from("width:100%; height:100%; border-collapse:collapse; table-layout:fixed");
@@ -37,6 +42,14 @@ impl HtmlRenderer {
             } else {
                 Self::fill_to_css_buf(fill, ctx, &mut table_css);
             }
+        } else if let Some(fill_ref) = table
+            .style
+            .as_ref()
+            .and_then(|reference| reference.definition.as_ref())
+            .and_then(|definition| definition.table_background_ref.as_ref())
+            && let Some(fill) = resolve_fill_ref(fill_ref, ctx)
+        {
+            Self::fill_to_css_buf(&fill, ctx, &mut table_css);
         }
         let _ = writeln!(html, " style=\"{table_css}\">\n<colgroup>");
         for w in &table.col_widths {
@@ -72,6 +85,10 @@ impl HtmlRenderer {
                     } else {
                         Self::fill_to_css_buf(fill, ctx, &mut td_style);
                     }
+                } else if let Some(fill_ref) = &resolved.fill_ref
+                    && let Some(fill) = resolve_fill_ref(fill_ref, ctx)
+                {
+                    Self::fill_to_css_buf(&fill, ctx, &mut td_style);
                 }
                 if let Some(true) = resolved.text.bold {
                     push_sep(&mut td_style);
@@ -157,6 +174,19 @@ impl HtmlRenderer {
         }
         html.push_str("</table>\n");
     }
+}
+
+fn resolve_fill_ref(
+    fill_ref: &crate::model::StyleRef,
+    ctx: &RenderCtx<'_>,
+) -> Option<crate::model::Fill> {
+    let theme = ctx.pres.primary_theme()?;
+    crate::resolver::style_ref::resolve_fill_ref(
+        fill_ref,
+        &theme.fmt_scheme,
+        &theme.color_scheme,
+        ctx.clr_map.unwrap_or(&ctx.pres.clr_map),
+    )
 }
 
 fn push_border(

@@ -9,6 +9,7 @@ use zip::ZipArchive;
 use super::slide_parser::ShapeBuilder;
 use super::{
     embedded_parser, media_parser, notes_comments_parser, picture_bullet_diagnostics,
+    table_style_package_diagnostics,
     timing_parser, xml_utils,
 };
 use crate::error::PptxResult;
@@ -20,6 +21,8 @@ use crate::model::{
 pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<ConversionDiagnostic>> {
     let mut archive = ZipArchive::new(Cursor::new(data))?;
     let mut diagnostics = Vec::new();
+    let table_styles_part =
+        table_style_package_diagnostics::collect_diagnostics(&mut archive, &mut diagnostics)?;
     let mut names = (0..archive.len())
         .filter_map(|index| {
             archive
@@ -40,6 +43,9 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
                 &name,
                 &mut diagnostics,
             )?;
+            continue;
+        }
+        if table_styles_part.as_deref() == Some(name.as_str()) {
             continue;
         }
         if name.starts_with("ppt/") && name.ends_with(".xml") {

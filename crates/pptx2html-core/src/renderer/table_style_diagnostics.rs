@@ -4,7 +4,12 @@ use super::{
 };
 use crate::model::{TableStyleIssue, TableStyleReference};
 
-pub(super) fn emit(reference: &TableStyleReference, table: &TableData, ctx: &RenderCtx<'_>) {
+pub(super) fn emit(
+    reference: &TableStyleReference,
+    table: &TableData,
+    table_id: u32,
+    ctx: &RenderCtx<'_>,
+) {
     let slide_index = ctx.collector.borrow().current_slide_index;
     if reference.definition.is_none() {
         push(
@@ -18,7 +23,7 @@ pub(super) fn emit(reference: &TableStyleReference, table: &TableData, ctx: &Ren
                 ..Default::default()
             },
             format!(
-                "style_id={};source_kind={};firstRow={};lastRow={};firstCol={};lastCol={};bandRow={};bandCol={}",
+                "table_id={table_id};style_id={};source_kind={};firstRow={};lastRow={};firstCol={};lastCol={};bandRow={};bandCol={}",
                 reference.id,
                 reference.source_kind.as_str(),
                 u8::from(table.first_row),
@@ -43,9 +48,45 @@ pub(super) fn emit(reference: &TableStyleReference, table: &TableData, ctx: &Ren
                     qualified_element_name: Some(format!("a:{primitive}")),
                     ..Default::default()
                 },
-                format!("style_id={};primitive={primitive}", reference.id),
+                format!(
+                    "table_id={table_id};style_id={};primitive={primitive}",
+                    reference.id
+                ),
                 "Table style primitive was preserved but not rendered",
             );
+        }
+        for fill_ref in definition.table_background_ref.iter().chain(
+            definition
+                .regions
+                .iter()
+                .filter_map(|(_, style)| style.fill_ref.as_ref()),
+        ) {
+            let resolved = ctx.pres.primary_theme().and_then(|theme| {
+                crate::resolver::style_ref::resolve_fill_ref(
+                    fill_ref,
+                    &theme.fmt_scheme,
+                    &theme.color_scheme,
+                    ctx.clr_map.unwrap_or(&ctx.pres.clr_map),
+                )
+            });
+            if resolved.is_none() {
+                push(
+                    ctx,
+                    "TABLE_STYLE_PRIMITIVE_UNSUPPORTED",
+                    CapabilityStage::Resolved,
+                    DiagnosticLocation {
+                        slide_index: Some(slide_index),
+                        part_name: Some("ppt/tableStyles.xml".to_owned()),
+                        qualified_element_name: Some("a:fillRef".to_owned()),
+                        ..Default::default()
+                    },
+                    format!(
+                        "table_id={table_id};style_id={};fill_ref_idx={};color={:?};modifiers={:?}",
+                        reference.id, fill_ref.idx, fill_ref.color.kind, fill_ref.color.modifiers,
+                    ),
+                    "Table style fillRef could not be resolved from the parsed theme format scheme; no fill was invented",
+                );
+            }
         }
     }
     for issue in &reference.issues {
@@ -58,7 +99,7 @@ pub(super) fn emit(reference: &TableStyleReference, table: &TableData, ctx: &Ren
                     qualified_element_name: Some("a:tblStyle".to_owned()),
                     ..Default::default()
                 },
-                format!("style_id={}", reference.id),
+                format!("table_id={table_id};style_id={}", reference.id),
                 "Duplicate table style ID; the first package definition was used",
             ),
             TableStyleIssue::InvalidBoolean { name, value } => (
@@ -69,7 +110,7 @@ pub(super) fn emit(reference: &TableStyleReference, table: &TableData, ctx: &Ren
                     qualified_element_name: Some("a:tblPr".to_owned()),
                     ..Default::default()
                 },
-                format!("{name}={value}"),
+                format!("table_id={table_id};{name}={value}"),
                 "Invalid table style option boolean; false fallback was used",
             ),
         };

@@ -3,7 +3,7 @@ use quick_xml::events::BytesStart;
 use super::fill_parser::parse_color;
 use super::xml_utils;
 use crate::model::{
-    Border, Color, ColorModifier, Emu, Fill, SolidFill, TableCellStyle, TableTextStyle,
+    Border, Color, ColorModifier, Emu, Fill, SolidFill, StyleRef, TableCellStyle, TableTextStyle,
 };
 
 pub(super) fn handle_start(
@@ -12,6 +12,7 @@ pub(super) fn handle_start(
     style: &mut TableCellStyle,
     border_side: &mut Option<String>,
     in_fill: &mut bool,
+    in_fill_ref: &mut bool,
     in_text_style: &mut bool,
 ) {
     if parse_color(local, element).is_some() {
@@ -21,6 +22,7 @@ pub(super) fn handle_start(
             style,
             border_side.as_deref(),
             *in_fill,
+            *in_fill_ref,
             *in_text_style,
         );
         return;
@@ -34,7 +36,16 @@ pub(super) fn handle_start(
                 ..Default::default()
             };
         }
-        "fill" | "fillRef" => *in_fill = true,
+        "fill" => *in_fill = true,
+        "fillRef" => {
+            *in_fill_ref = true;
+            style.fill_ref = Some(StyleRef {
+                idx: xml_utils::attr_str(element, "idx")
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(0),
+                color: Color::none(),
+            });
+        }
         "left" | "right" | "top" | "bottom" | "insideH" | "insideV" => {
             *border_side = Some(local.to_owned());
             set_border(
@@ -69,6 +80,7 @@ pub(super) fn handle_empty(
     style: &mut TableCellStyle,
     border_side: Option<&str>,
     in_fill: bool,
+    in_fill_ref: bool,
     in_text_style: bool,
 ) {
     if local == "fontRef" && in_text_style {
@@ -77,7 +89,9 @@ pub(super) fn handle_empty(
     }
     let modifier_value = xml_utils::attr_str(element, "val").and_then(|value| value.parse().ok());
     if let Some(modifier) = ColorModifier::from_ooxml(local, modifier_value) {
-        if let Some(color) = active_color_mut(style, border_side, in_fill, in_text_style) {
+        if let Some(color) =
+            active_color_mut(style, border_side, in_fill, in_fill_ref, in_text_style)
+        {
             color.modifiers.push(modifier);
         }
         return;
@@ -97,6 +111,15 @@ pub(super) fn handle_empty(
         }
         return;
     }
+    if local == "fillRef" {
+        style.fill_ref = Some(StyleRef {
+            idx: xml_utils::attr_str(element, "idx")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(0),
+            color: Color::none(),
+        });
+        return;
+    }
     let Some(color) = parse_color(local, element) else {
         return;
     };
@@ -104,6 +127,10 @@ pub(super) fn handle_empty(
         if let Some(border) = border_mut(style, side) {
             border.color = color;
             border.no_fill = false;
+        }
+    } else if in_fill_ref {
+        if let Some(fill_ref) = style.fill_ref.as_mut() {
+            fill_ref.color = color;
         }
     } else if in_fill {
         style.fill = Some(Fill::Solid(SolidFill { color }));
@@ -116,10 +143,14 @@ fn active_color_mut<'a>(
     style: &'a mut TableCellStyle,
     border_side: Option<&str>,
     in_fill: bool,
+    in_fill_ref: bool,
     in_text_style: bool,
 ) -> Option<&'a mut Color> {
     if let Some(side) = border_side {
         return border_mut(style, side).map(|border| &mut border.color);
+    }
+    if in_fill_ref {
+        return style.fill_ref.as_mut().map(|fill_ref| &mut fill_ref.color);
     }
     if in_fill {
         return match style.fill.as_mut() {

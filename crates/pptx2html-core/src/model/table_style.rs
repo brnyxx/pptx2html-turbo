@@ -1,4 +1,4 @@
-use super::{Border, Color, Fill};
+use super::{Border, Color, Fill, StyleRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableStyleSourceKind {
@@ -84,6 +84,7 @@ pub struct TableTextStyle {
 #[derive(Debug, Clone, Default)]
 pub struct TableCellStyle {
     pub fill: Option<Fill>,
+    pub fill_ref: Option<StyleRef>,
     pub left: Option<Border>,
     pub right: Option<Border>,
     pub top: Option<Border>,
@@ -99,6 +100,7 @@ pub struct TableStyle {
     pub name: Option<String>,
     pub regions: Vec<(TableStyleRegion, TableCellStyle)>,
     pub table_background: Option<Fill>,
+    pub table_background_ref: Option<StyleRef>,
     pub unsupported_primitives: Vec<String>,
 }
 

@@ -1,6 +1,6 @@
 mod table_style_support;
 
-use pptx2html_core::{convert_bytes_with_metadata, parser::PptxParser};
+use pptx2html_core::{convert_bytes_with_metadata, model::ShapeType, parser::PptxParser};
 use table_style_support::{
     BUILT_IN_STYLE, INVALID_STYLE, OTHER_BUILT_IN_STYLE, cdata_id_package, corner_gate_package,
     duplicate_style_package, empty_id_package, invalid_bool_package, invalid_package,
@@ -12,10 +12,9 @@ use table_style_support::{
 fn parses_style_id_flags_and_office_region_precedence() {
     let bytes = package();
     let presentation = PptxParser::parse_bytes(&bytes).expect("table style fixture parses");
-    let table = presentation.slides[0].shapes[0]
-        .shape_type
-        .as_table()
-        .expect("first shape is a table");
+    let ShapeType::Table(table) = &presentation.slides[0].shapes[0].shape_type else {
+        panic!("first shape is a table");
+    };
 
     assert_eq!(
         table.style.as_ref().map(|style| style.id.as_str()),
@@ -24,10 +23,9 @@ fn parses_style_id_flags_and_office_region_precedence() {
     assert!(table.first_row && table.last_row && table.first_col && table.last_col);
     assert!(table.band_row && table.band_col);
     assert_eq!(presentation.slides[0].shapes.len(), 2);
-    let unavailable = presentation.slides[0].shapes[1]
-        .shape_type
-        .as_table()
-        .expect("second shape is a table");
+    let ShapeType::Table(unavailable) = &presentation.slides[0].shapes[1].shape_type else {
+        panic!("second shape is a table");
+    };
     assert_eq!(
         unavailable
             .style
@@ -126,10 +124,9 @@ fn every_official_built_in_id_uses_the_built_in_source_kind() {
 #[test]
 fn empty_table_style_id_is_preserved_without_inventing_a_style() {
     let presentation = PptxParser::parse_bytes(&empty_id_package()).expect("empty id parses");
-    let table = presentation.slides[0].shapes[0]
-        .shape_type
-        .as_table()
-        .expect("shape is table");
+    let ShapeType::Table(table) = &presentation.slides[0].shapes[0].shape_type else {
+        panic!("shape is table");
+    };
     assert_eq!(
         table.style.as_ref().map(|style| style.id.as_str()),
         Some("")
@@ -183,10 +180,9 @@ fn adjacent_spoof_namespace_remains_an_unsupported_element_diagnostic() {
 #[test]
 fn cdata_style_id_and_supported_table_primitives_reach_public_html() {
     let cdata = PptxParser::parse_bytes(&cdata_id_package()).expect("CDATA style ID parses");
-    let table = cdata.slides[0].shapes[0]
-        .shape_type
-        .as_table()
-        .expect("table");
+    let ShapeType::Table(table) = &cdata.slides[0].shapes[0].shape_type else {
+        panic!("table");
+    };
     assert_eq!(
         table.style.as_ref().map(|style| style.id.as_str()),
         Some("{11111111-1111-1111-1111-111111111111}")
@@ -209,8 +205,8 @@ fn wrong_namespace_style_definition_is_never_applied() {
         .expect("wrong namespace converts");
     assert!(!result.html.contains("background-color: #0D0D0D"));
     assert!(result.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "OOXML_ELEMENT_UNSUPPORTED"
-            && diagnostic.location.qualified_element_name.as_deref() == Some("x:tblStyle")
+        diagnostic.code == "TABLE_STYLE_XML_INVALID"
+            && diagnostic.location.part_name.as_deref() == Some("ppt/tableStyles.xml")
     }));
 }
 
@@ -250,18 +246,7 @@ fn invalid_table_boolean_falls_back_false_and_emits_typed_diagnostic() {
         .iter()
         .find(|diagnostic| diagnostic.code == "TABLE_STYLE_INVALID_BOOLEAN")
         .expect("invalid boolean diagnostic");
-    assert_eq!(diagnostic.raw_reference.as_deref(), Some("firstRow=maybe"));
-}
-
-trait ShapeTypeTableExt {
-    fn as_table(&self) -> Option<&pptx2html_core::model::TableData>;
-}
-
-impl ShapeTypeTableExt for pptx2html_core::model::ShapeType {
-    fn as_table(&self) -> Option<&pptx2html_core::model::TableData> {
-        match self {
-            Self::Table(table) => Some(table),
-            _ => None,
-        }
-    }
+    let raw = diagnostic.raw_reference.as_deref().unwrap_or_default();
+    assert!(raw.contains("table_id=2"));
+    assert!(raw.contains("firstRow=maybe"));
 }

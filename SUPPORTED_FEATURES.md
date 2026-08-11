@@ -158,7 +158,8 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Row heights | `<a:tr h="...">` | Supported |
 | Column span | `gridSpan` | Supported |
 | Row span | `rowSpan` + `vMerge` | Supported |
-| Table styles | `<a:tblStyle>` | Unparsed |
+| Table styles | `<a:tblStyle>` | Partial - package definitions, official region order, strict namespace/context diagnostics |
+| Table-style fill reference | `<a:fillRef>` | Partial - index/color/modifiers preserved; parsed theme fills resolve; unavailable non-solid fills emit `TABLE_STYLE_PRIMITIVE_UNSUPPORTED` without a replacement (`[교차검증 필요]`) |
 
 ## Images
 

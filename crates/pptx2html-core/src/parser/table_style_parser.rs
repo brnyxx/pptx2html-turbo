@@ -8,6 +8,7 @@ use crate::error::{PptxError, PptxResult};
 use crate::model::{TableCellStyle, TableStyle, TableStyleRegion};
 
 pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
+    super::table_style_xml::validate(xml)?;
     let mut reader = NsReader::from_str(xml);
     let mut buffer = Vec::new();
     let mut styles = Vec::new();
@@ -16,6 +17,7 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
     let mut cell_style = TableCellStyle::default();
     let mut border_side: Option<String> = None;
     let mut in_fill = false;
+    let mut in_fill_ref = false;
     let mut in_text_style = false;
 
     loop {
@@ -45,6 +47,7 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
                         &mut cell_style,
                         &mut border_side,
                         &mut in_fill,
+                        &mut in_fill_ref,
                         &mut in_text_style,
                     );
                 }
@@ -62,6 +65,7 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
                     &mut cell_style,
                     border_side.as_deref(),
                     in_fill,
+                    in_fill_ref,
                     in_text_style,
                 );
             }
@@ -71,6 +75,7 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
                 if local == "tblBg" {
                     if let Some(style) = style.as_mut() {
                         style.table_background = cell_style.fill.take();
+                        style.table_background_ref = cell_style.fill_ref.take();
                     }
                 } else if let Some(parsed) = TableStyleRegion::from_ooxml(local) {
                     if region == Some(parsed)
@@ -88,7 +93,8 @@ pub(crate) fn parse_table_styles(xml: &str) -> PptxResult<Vec<TableStyle>> {
                                 styles.push(completed);
                             }
                         }
-                        "fill" | "fillRef" => in_fill = false,
+                        "fill" => in_fill = false,
+                        "fillRef" => in_fill_ref = false,
                         "tcTxStyle" => in_text_style = false,
                         "left" | "right" | "top" | "bottom" | "insideH" | "insideV" => {
                             border_side = None;

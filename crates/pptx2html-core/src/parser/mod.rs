@@ -20,8 +20,10 @@ pub mod relationships;
 mod slide_parser;
 mod table_parser;
 mod table_style_builtins;
+mod table_style_package_diagnostics;
 mod table_style_parser;
 mod table_style_values;
+mod table_style_xml;
 mod text_parser;
 mod theme_parser;
 mod timing_parser;
@@ -42,9 +44,6 @@ use crate::error::{PptxError, PptxResult};
 use crate::model::{
     Emu, ListStyle, Presentation, Shape, ShapeType, Size, TableStyle, TableStyleSourceKind,
 };
-
-const TABLE_STYLES_RELATIONSHIP_TYPE: &str =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
 
 #[derive(Debug, Clone)]
 struct SlideRef {
@@ -103,16 +102,23 @@ impl PptxParser {
         let pres_relationships = relationships::parse_relationship_records(&rels_xml)?;
         let pres_rels = relationships::target_map(&pres_relationships);
 
-        let table_styles = pres_relationships
-            .iter()
-            .filter(|relationship| relationship.relationship_type == TABLE_STYLES_RELATIONSHIP_TYPE)
-            .map(|relationship| relationship.target.clone())
-            .min()
-            .map(|target| normalize_ppt_path(&target))
-            .and_then(|path| Self::read_entry(&mut archive, &path).ok())
-            .map(|xml| table_style_parser::parse_table_styles(&xml))
-            .transpose()?
-            .unwrap_or_default();
+        let table_styles = match table_style_package_diagnostics::select(&pres_relationships).target
+        {
+            Some(path) => match Self::read_entry(&mut archive, &path) {
+                Ok(xml) => match table_style_parser::parse_table_styles(&xml) {
+                    Ok(styles) => styles,
+                    Err(_) => {
+                        warn!("Table styles part was rejected");
+                        Vec::new()
+                    }
+                },
+                Err(_) => {
+                    warn!("Table styles part is unavailable");
+                    Vec::new()
+                }
+            },
+            None => Vec::new(),
+        };
 
         // 3. Parse themes
         let theme_paths = collect_targets_by_type(&pres_relationships, "theme");

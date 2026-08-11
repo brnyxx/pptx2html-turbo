@@ -140,6 +140,8 @@ pub(crate) fn finish_frame<R: Read + Seek>(
     let shape = shape.take()?;
     let table = table.take()?;
     Some(Shape {
+        id: shape.id,
+        name: shape.name,
         position: shape.position,
         size: shape.size,
         shape_type: ShapeType::Table(table.build()),

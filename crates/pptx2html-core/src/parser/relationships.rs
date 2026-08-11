@@ -6,6 +6,31 @@ use quick_xml::events::Event;
 use super::xml_utils;
 use crate::error::PptxResult;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TargetError {
+    Empty,
+    Absolute,
+    Backslash,
+    UriScheme,
+    EncodedPath,
+    DotSegment,
+    EmptySegment,
+}
+
+impl TargetError {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Empty => "empty",
+            Self::Absolute => "absolute",
+            Self::Backslash => "backslash",
+            Self::UriScheme => "uri_scheme",
+            Self::EncodedPath => "encoded_path",
+            Self::DotSegment => "dot_segment",
+            Self::EmptySegment => "empty_segment",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Relationship {
     pub id: String,
@@ -53,7 +78,7 @@ pub fn parse_relationship_records(xml: &str) -> PptxResult<Vec<Relationship>> {
                         _ => {}
                     }
                 }
-                if !id.is_empty() && !target.is_empty() {
+                if !id.is_empty() {
                     relationships.push(Relationship {
                         id,
                         relationship_type,
@@ -71,6 +96,42 @@ pub fn parse_relationship_records(xml: &str) -> PptxResult<Vec<Relationship>> {
     Ok(relationships)
 }
 
+pub(crate) fn resolve_internal_target(
+    owner_part: &str,
+    target: &str,
+) -> Result<String, TargetError> {
+    if target.is_empty() {
+        return Err(TargetError::Empty);
+    }
+    if target.starts_with('/') {
+        return Err(TargetError::Absolute);
+    }
+    if target.contains('\\') {
+        return Err(TargetError::Backslash);
+    }
+    if target.contains('%') {
+        return Err(TargetError::EncodedPath);
+    }
+    if target.contains(':') {
+        return Err(TargetError::UriScheme);
+    }
+
+    let mut path = owner_part
+        .rsplit_once('/')
+        .map(|(parent, _)| parent.split('/').collect::<Vec<_>>())
+        .unwrap_or_default();
+    for segment in target.split('/') {
+        if segment.is_empty() {
+            return Err(TargetError::EmptySegment);
+        }
+        if matches!(segment, "." | "..") {
+            return Err(TargetError::DotSegment);
+        }
+        path.push(segment);
+    }
+    Ok(path.join("/"))
+}
+
 /// Parse .rels file into {rId → target_path} map
 pub fn parse_relationships(xml: &str) -> PptxResult<HashMap<String, String>> {
     Ok(target_map(&parse_relationship_records(xml)?))
@@ -82,4 +143,33 @@ pub fn target_map(relationships: &[Relationship]) -> HashMap<String, String> {
         .cloned()
         .map(|relationship| (relationship.id, relationship.target))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal_target_is_resolved_relative_to_owner() {
+        assert_eq!(
+            resolve_internal_target("ppt/presentation.xml", "tableStyles.xml"),
+            Ok("ppt/tableStyles.xml".to_owned())
+        );
+    }
+
+    #[test]
+    fn unsafe_targets_are_rejected() {
+        for target in [
+            "",
+            "/ppt/tableStyles.xml",
+            "../tableStyles.xml",
+            "./tableStyles.xml",
+            "tables//styles.xml",
+            "tables\\styles.xml",
+            "https://example.test/styles.xml",
+            "%2e%2e/tableStyles.xml",
+        ] {
+            assert!(resolve_internal_target("ppt/presentation.xml", target).is_err());
+        }
+    }
 }

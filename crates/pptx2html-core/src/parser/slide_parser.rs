@@ -1008,8 +1008,8 @@ fn parse_connector_ref(
 
 #[derive(Default)]
 pub(crate) struct ShapeBuilder {
-    id: u32,
-    name: String,
+    pub(crate) id: u32,
+    pub(crate) name: String,
     pub(crate) position: Position,
     pub(crate) size: Size,
     rotation: f64,
