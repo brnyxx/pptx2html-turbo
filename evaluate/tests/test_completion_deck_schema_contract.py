@@ -115,21 +115,21 @@ class CompletionDeckSchemaTests(unittest.TestCase):
             self.assertIn("ppt/charts/_rels/chart2.xml.rels", archive.namelist())
             self.assertNotIn("ppt/charts/_rels/chart3.xml.rels", archive.namelist())
 
-    def test_table_style_part_contains_positive_and_excludes_unknown(self) -> None:
+    def test_table_style_part_contains_positive_and_excludes_unavailable(self) -> None:
         with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
             styles = ElementTree.fromstring(archive.read("ppt/tableStyles.xml"))
             custom = styles.find("a:tblStyle", NS)
             self.assertEqual(
-                custom.get("styleId"), "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"
+                custom.get("styleId"), "{11111111-1111-1111-1111-111111111111}"
             )
             for region in ("wholeTbl", "band1H", "firstRow", "lastCol", "nwCell"):
                 self.assertIsNotNone(custom.find(f"a:{region}", NS))
             self.assertNotIn(
-                "{22222222-2222-2222-2222-222222222222}",
+                "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
                 archive.read("ppt/tableStyles.xml").decode(),
             )
 
-    def test_missing_table_style_fixture_omits_invalid_style_reference(self) -> None:
+    def test_missing_table_style_fixture_preserves_unavailable_style_id(self) -> None:
         with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
             slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
             missing = next(
@@ -139,9 +139,14 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                 == "missing style"
             )
             properties = missing.find(".//a:tblPr", NS)
-            self.assertIsNone(
-                properties.find("a:tableStyleId", NS),
-                "missing-style fallback fixture must not reference an unknown GUID",
+            style_id = properties.find("a:tableStyleId", NS)
+            self.assertIsNotNone(
+                style_id,
+                "missing-definition fallback must preserve the referenced style ID",
+            )
+            self.assertEqual(
+                style_id.text,
+                "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
             )
 
     def test_fallback_domains_close_diagram_ole_and_mc(self) -> None:

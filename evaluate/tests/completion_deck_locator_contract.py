@@ -35,8 +35,8 @@ def _l(token: str, part: str = S, negative: AbsenceRule | None = None) -> Locato
 ABSENT_REL: Final = AbsenceRule(AbsenceKind.TOKEN_ABSENT, SR, "rIdMissing")
 ABSENT_TABLE_STYLE: Final = AbsenceRule(
     AbsenceKind.TOKEN_ABSENT,
-    S,
-    "{22222222-2222-2222-2222-222222222222}",
+    "ppt/tableStyles.xml",
+    "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
 )
 ABSENT_AUTHOR: Final = AbsenceRule(
     AbsenceKind.TOKEN_ABSENT, "ppt/commentAuthors.xml", 'id="404"'
@@ -55,11 +55,11 @@ LOCATORS: Final = {
     "picture-bullet-embedded": _l('<a:blip r:embed="rIdImage"/>'),
     "picture-bullet-missing": _l("<a:buBlip><a:blip/></a:buBlip>", negative=ABSENT_REL),
     "table-style-regions": _l(
-        '<a:tblStyle styleId="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"',
+        '<a:tblStyle styleId="{11111111-1111-1111-1111-111111111111}"',
         "ppt/tableStyles.xml",
     ),
     "table-style-missing": _l(
-        '<p:cNvPr id="3" name="missing style"/>', negative=ABSENT_TABLE_STYLE
+        "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", negative=ABSENT_TABLE_STYLE
     ),
     "action-external": _l('<Relationship Id="rIdExternal"', SR),
     "action-internal": _l(

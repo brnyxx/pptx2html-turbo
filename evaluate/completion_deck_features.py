@@ -61,8 +61,8 @@ def _f(
 ABSENT_REL = NegativeSpec(NegativeKind.TOKEN_ABSENT, SR, "rIdMissing")
 ABSENT_TABLE_STYLE = NegativeSpec(
     NegativeKind.TOKEN_ABSENT,
-    S,
-    "{22222222-2222-2222-2222-222222222222}",
+    "ppt/tableStyles.xml",
+    "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
 )
 ABSENT_AUTHOR = NegativeSpec(
     NegativeKind.TOKEN_ABSENT,
@@ -104,14 +104,14 @@ FEATURES = (
         14,
         "table-styles",
         "table-style-regions",
-        '<a:tblStyle styleId="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"',
+        '<a:tblStyle styleId="{11111111-1111-1111-1111-111111111111}"',
         "ppt/tableStyles.xml",
     ),
     _f(
         14,
         "table-styles",
         "table-style-missing",
-        '<p:cNvPr id="3" name="missing style"/>',
+        "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
         negative=ABSENT_TABLE_STYLE,
     ),
     _f(15, "actions", "action-external", '<Relationship Id="rIdExternal"', SR),
