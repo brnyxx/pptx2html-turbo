@@ -101,7 +101,7 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Solid fill (theme) | `<a:solidFill><a:schemeClr>` | Supported |
 | Gradient fill | `<a:gradFill>` | Supported |
 | Image fill | `<a:blipFill>` | Supported |
-| Pattern fill | `<a:pattFill>` | Unparsed |
+| Pattern fill | `<a:pattFill>` | Supported for all 54 presets with approximate repeated SVG tiles; unknown or unresolved patterns preserve raw semantics in `DRAWINGML_PATTERN_UNSUPPORTED` diagnostics |
 | No fill | `<a:noFill>` | Supported |
 | Fill style reference | `<a:fillRef>` | Supported |
 

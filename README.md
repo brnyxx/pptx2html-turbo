@@ -187,7 +187,7 @@ See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element
 | Shapes | 187 preset shapes with broad adjust value coverage + custom geometry SVG rendering, guide formulas, and text rectangles |
 | Text | Bold, italic, underline, strikethrough, super/subscript, vertical text, highlights, shadows, letter spacing, default 18pt fallback |
 | Colors | RGB, theme, system, preset with 12 modifiers (tint, shade, lumMod, satMod, etc.) |
-| Fills | Solid, gradient, image, noFill; style references (fillRef/lnRef) |
+| Fills | Solid, gradient, image, noFill, and all 54 DrawingML pattern presets with approximate repeated SVG tiles; style references (fillRef/lnRef). Unknown or unresolved patterns emit `DRAWINGML_PATTERN_UNSUPPORTED` without an invented solid color. |
 | Tables | Cell fill, borders, column/row spans, vertical merge |
 | Images | Base64 embedding, deterministic external assets under `images/slide-N/`, cropping, MIME auto-detection |
 | Layout | Master/layout inheritance, ClrMap overrides, placeholder matching, TxStyles, and bodyPr property carry-over (wrap, margins, vertical anchor, vertical text, autofit) |
