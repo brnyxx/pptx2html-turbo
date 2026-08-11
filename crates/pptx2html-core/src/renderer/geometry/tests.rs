@@ -35,6 +35,76 @@ fn test_preset_shape_svg_returns_none_for_unknown() {
 }
 
 #[test]
+fn test_basic_adjusted_presets_are_finite_for_degenerate_and_extreme_extents() {
+    let cases: &[(&str, &[&str])] = &[
+        ("roundRect", &["adj"]),
+        ("triangle", &["adj"]),
+        ("parallelogram", &["adj"]),
+        ("trapezoid", &["adj"]),
+        ("pentagon", &["hf", "vf"]),
+        ("hexagon", &["adj", "vf"]),
+        ("octagon", &["adj"]),
+        ("snip1Rect", &["adj"]),
+        ("snip2SameRect", &["adj1", "adj2"]),
+        ("snip2DiagRect", &["adj1", "adj2"]),
+        ("snipRoundRect", &["adj1", "adj2"]),
+        ("round1Rect", &["adj"]),
+        ("round2SameRect", &["adj1", "adj2"]),
+        ("round2DiagRect", &["adj1", "adj2"]),
+        ("foldedCorner", &["adj"]),
+        ("diagStripe", &["adj"]),
+        ("corner", &["adj1", "adj2"]),
+        ("plaque", &["adj"]),
+        ("bracePair", &["adj"]),
+        ("bracketPair", &["adj"]),
+        ("halfFrame", &["adj1", "adj2"]),
+        ("leftBrace", &["adj1", "adj2"]),
+        ("rightBrace", &["adj1", "adj2"]),
+        ("leftBracket", &["adj"]),
+        ("rightBracket", &["adj"]),
+        ("horizontalScroll", &["adj"]),
+        ("verticalScroll", &["adj"]),
+        ("ellipseRibbon", &["adj1", "adj2", "adj3"]),
+        ("ellipseRibbon2", &["adj1", "adj2", "adj3"]),
+        ("nonIsoscelesTrapezoid", &["adj1", "adj2"]),
+    ];
+    let dimensions = [
+        (0.0, 100.0),
+        (100.0, 0.0),
+        (0.0, 0.0),
+        (f64::MAX, 100.0),
+        (100.0, f64::MAX),
+        (f64::MAX, f64::MAX),
+    ];
+    let hostile_adjustments = [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+    for &(preset, keys) in cases {
+        for &key in keys {
+            for &value in &hostile_adjustments {
+                let adjustments = HashMap::from([(key.to_string(), value)]);
+                for &(w, h) in &dimensions {
+                    let path =
+                        std::panic::catch_unwind(|| preset_shape_svg(preset, w, h, &adjustments))
+                            .unwrap_or_else(|_| panic!("{preset}.{key} panicked at {w}x{h}"))
+                            .unwrap_or_else(|| panic!("{preset}.{key} missing at {w}x{h}"));
+                    let repeated = preset_shape_svg(preset, w, h, &adjustments)
+                        .expect("deterministic repeat path");
+                    assert_eq!(path, repeated, "{preset}.{key} at {w}x{h}");
+                    assert!(path.starts_with('M'), "{preset}.{key}: {path}");
+                    if w == 0.0 || h == 0.0 {
+                        assert!(path.ends_with('Z'), "{preset}.{key}: {path}");
+                    }
+                    assert!(
+                        !path.contains("NaN") && !path.to_ascii_lowercase().contains("inf"),
+                        "{preset}.{key} at {w}x{h}: {path}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn test_total_supported_shapes_at_least_187() {
     let adj = HashMap::new();
     let all = [

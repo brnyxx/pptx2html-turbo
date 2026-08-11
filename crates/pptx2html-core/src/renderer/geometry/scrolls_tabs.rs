@@ -8,10 +8,14 @@ fn finite(value: Option<f64>, default: f64) -> f64 {
     value.filter(|value| value.is_finite()).unwrap_or(default)
 }
 
+fn scaled(value: f64, guide: f64) -> f64 {
+    value * (guide / 100_000.0)
+}
+
 // Scrolls
 pub(super) fn horizontal_scroll_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
     let a = finite(adj.get("adj").copied(), 12_500.0).clamp(0.0, 25_000.0);
-    let r = w.min(h) * a / 100_000.0;
+    let r = scaled(w.min(h), a);
     let r2 = r / 2.0;
     let (x, y1, y2) = (w - r, h - r, h - r2);
     format!(
@@ -26,7 +30,7 @@ pub(super) fn horizontal_scroll_path(w: f64, h: f64, adj: &HashMap<String, f64>)
 }
 pub(super) fn vertical_scroll_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> String {
     let a = finite(adj.get("adj").copied(), 12_500.0).clamp(0.0, 25_000.0);
-    let r = w.min(h) * a / 100_000.0;
+    let r = scaled(w.min(h), a);
     let body_left = r * 0.8;
     let body_top = r * 1.2;
     let body_right = w - r * 0.4;
