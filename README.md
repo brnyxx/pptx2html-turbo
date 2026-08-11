@@ -191,7 +191,7 @@ See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element
 | Tables | Cell fill, borders, column/row spans, vertical merge |
 | Images | Base64 embedding, deterministic external assets under `images/slide-N/`, cropping, MIME auto-detection |
 | Layout | Master/layout inheritance, ClrMap overrides, placeholder matching, TxStyles, and bodyPr property carry-over (wrap, margins, vertical anchor, vertical text, autofit) |
-| Bullets | Character and auto-numbered bullets with font, size, color |
+| Bullets | Character and auto-numbered bullets plus embedded picture bullets in slide paragraphs, slide-owned list styles, and table cells; unavailable images render a visible marker with diagnostics |
 | Charts | Direct clustered, stacked, and percent-stacked bar/column rendering with gap/overlap and first-pass data labels, simple line/standard area/scatter rendering with point labels and explicit marker handling, simple single-series radar rendering, axis titles, and single-series pie/doughnut plus flat-rendered single-series pie3D and area3D rendering, with chart-part preview-image fallback when available and placeholder fallback for unsupported chart families and complex variants |
 | Unsupported | SmartArt, OLE, Math — structured placeholders with metadata sideband (raw XML, type, position) |
 | LLM Enhance | Post-processing layer: SmartArt→HTML/CSS, OMML→MathML, DrawingML→CSS via LLM (pptx2html-enhance) |

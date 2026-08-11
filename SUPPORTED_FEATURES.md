@@ -88,10 +88,11 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Character bullet | `<a:buChar char="...">` | Supported |
 | Auto-numbered bullet | `<a:buAutoNum type="...">` | Supported |
 | Bullet font | `<a:buFont typeface="...">` | Supported |
-| Bullet size | `<a:buSzPct>` / `<a:buSzPts>` | Supported |
+| Bullet size | `<a:buSzPct>` / `<a:buSzPts>` / `<a:buSzTx>` | Supported |
 | Bullet color | `<a:buClr>` | Supported |
 | No bullet | `<a:buNone>` | Supported |
-| Picture bullet | `<a:buBlip>` | Unparsed |
+| Picture bullet (slide paragraph, table cell, slide-owned `lstStyle`) | `<a:buBlip><a:blip r:embed="...">` | Supported for PNG/JPEG/GIF/WebP; deterministic marker + `PICTURE_BULLET_IMAGE_MISSING` otherwise |
+| Picture bullet (master `txStyles`, master/layout shape style, `defaultTextStyle`) | `<a:buBlip>` in inherited owner part | Fallback with `PICTURE_BULLET_INHERITANCE_UNSUPPORTED`; paragraph text is preserved |
 
 ## Fills
 
