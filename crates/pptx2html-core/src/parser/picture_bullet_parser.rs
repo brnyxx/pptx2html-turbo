@@ -1,0 +1,216 @@
+use std::collections::HashMap;
+use std::io::{Read, Seek};
+
+use quick_xml::Reader;
+use quick_xml::events::Event;
+use zip::ZipArchive;
+
+use super::graphic_frame_parser::{read_archive_bytes, resolve_relationship_path};
+use super::relationships::{Relationship, TargetMode};
+use super::xml_utils;
+use crate::model::{
+    Bullet, ListStyle, PictureBullet, PictureBulletFailure, PictureBulletImage,
+    PictureBulletRelationshipMode, PictureBulletTargetMode, Shape, ShapeType, Slide, TextBody,
+};
+
+const IMAGE_RELATIONSHIP_SUFFIX: &str = "/image";
+
+#[derive(Default)]
+pub(crate) struct ContentTypes {
+    defaults: HashMap<String, String>,
+    overrides: HashMap<String, String>,
+}
+
+impl ContentTypes {
+    pub(crate) fn parse(xml: &str) -> Self {
+        let mut reader = Reader::from_str(xml);
+        let mut content_types = Self::default();
+        loop {
+            match reader.read_event() {
+                Ok(Event::Empty(element)) | Ok(Event::Start(element)) => {
+                    match xml_utils::local_name(element.name().as_ref()) {
+                        "Default" => {
+                            if let (Some(extension), Some(content_type)) = (
+                                xml_utils::attr_str(&element, "Extension"),
+                                xml_utils::attr_str(&element, "ContentType"),
+                            ) {
+                                content_types
+                                    .defaults
+                                    .insert(extension.to_ascii_lowercase(), content_type);
+                            }
+                        }
+                        "Override" => {
+                            if let (Some(part_name), Some(content_type)) = (
+                                xml_utils::attr_str(&element, "PartName"),
+                                xml_utils::attr_str(&element, "ContentType"),
+                            ) {
+                                content_types.overrides.insert(
+                                    part_name.trim_start_matches('/').to_owned(),
+                                    content_type,
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(Event::Eof) | Err(_) => break,
+                _ => {}
+            }
+        }
+        content_types
+    }
+
+    fn for_part(&self, part_name: &str) -> Option<&str> {
+        self.overrides
+            .get(part_name)
+            .map(String::as_str)
+            .or_else(|| {
+                let extension = part_name.rsplit_once('.')?.1.to_ascii_lowercase();
+                self.defaults.get(&extension).map(String::as_str)
+            })
+    }
+}
+
+pub(crate) fn resolve_slide<R: Read + Seek>(
+    slide: &mut Slide,
+    relationships: &[Relationship],
+    content_types: &ContentTypes,
+    archive: &mut ZipArchive<R>,
+) {
+    for shape in &mut slide.shapes {
+        resolve_shape(shape, relationships, content_types, archive);
+    }
+}
+
+fn resolve_shape<R: Read + Seek>(
+    shape: &mut Shape,
+    relationships: &[Relationship],
+    content_types: &ContentTypes,
+    archive: &mut ZipArchive<R>,
+) {
+    if let Some(text_body) = shape.text_body.as_mut() {
+        resolve_text_body(text_body, relationships, content_types, archive);
+    }
+    if let ShapeType::Group(children, _) = &mut shape.shape_type {
+        for child in children {
+            resolve_shape(child, relationships, content_types, archive);
+        }
+    }
+    if let ShapeType::Table(table) = &mut shape.shape_type {
+        for cell in table.rows.iter_mut().flat_map(|row| &mut row.cells) {
+            if let Some(text_body) = cell.text_body.as_mut() {
+                resolve_text_body(text_body, relationships, content_types, archive);
+            }
+        }
+    }
+}
+
+fn resolve_text_body<R: Read + Seek>(
+    text_body: &mut TextBody,
+    relationships: &[Relationship],
+    content_types: &ContentTypes,
+    archive: &mut ZipArchive<R>,
+) {
+    for paragraph in &mut text_body.paragraphs {
+        if let Some(Bullet::Picture(picture)) = paragraph.bullet.as_mut() {
+            resolve_picture(picture, relationships, content_types, archive);
+        }
+    }
+    if let Some(list_style) = text_body.list_style.as_mut() {
+        resolve_list_style(list_style, relationships, content_types, archive);
+    }
+}
+
+fn resolve_list_style<R: Read + Seek>(
+    list_style: &mut ListStyle,
+    relationships: &[Relationship],
+    content_types: &ContentTypes,
+    archive: &mut ZipArchive<R>,
+) {
+    for defaults in list_style.levels.iter_mut().flatten() {
+        if let Some(Bullet::Picture(picture)) = defaults.bullet.as_mut() {
+            resolve_picture(picture, relationships, content_types, archive);
+        }
+    }
+}
+
+fn resolve_picture<R: Read + Seek>(
+    picture: &mut PictureBullet,
+    relationships: &[Relationship],
+    content_types: &ContentTypes,
+    archive: &mut ZipArchive<R>,
+) {
+    let Some(relationship) = relationships
+        .iter()
+        .find(|relationship| relationship.id == picture.relationship_id)
+    else {
+        return;
+    };
+    picture.relationship_type = Some(relationship.relationship_type.clone());
+    picture.target_mode = Some(target_mode(&relationship.target_mode));
+    if !relationship
+        .relationship_type
+        .ends_with(IMAGE_RELATIONSHIP_SUFFIX)
+    {
+        picture.failure = Some(PictureBulletFailure::WrongRelationshipKind);
+        return;
+    }
+    if !mode_matches(picture.relationship_mode, &relationship.target_mode) {
+        picture.failure = Some(PictureBulletFailure::WrongTargetMode);
+        return;
+    }
+    if picture.relationship_mode == Some(PictureBulletRelationshipMode::Link) {
+        picture.failure = Some(PictureBulletFailure::LinkedExternal);
+        return;
+    }
+    let path = resolve_relationship_path("ppt/slides", &relationship.target);
+    let Some(content_type) = content_types.for_part(&path) else {
+        picture.failure = Some(PictureBulletFailure::MissingContentType);
+        return;
+    };
+    if !supported_mime(content_type) {
+        picture.failure = Some(PictureBulletFailure::UnsupportedContentType);
+        return;
+    }
+    let Ok(data) = read_archive_bytes(archive, &path) else {
+        picture.failure = Some(PictureBulletFailure::MissingPart);
+        return;
+    };
+    if data.is_empty() {
+        picture.failure = Some(PictureBulletFailure::EmptyImage);
+        return;
+    }
+    picture.image = Some(PictureBulletImage {
+        data,
+        content_type: content_type.to_owned(),
+    });
+    picture.failure = None;
+}
+
+fn target_mode(mode: &TargetMode) -> PictureBulletTargetMode {
+    match mode {
+        TargetMode::Internal => PictureBulletTargetMode::Internal,
+        TargetMode::External => PictureBulletTargetMode::External,
+        TargetMode::Other(value) => PictureBulletTargetMode::Other(value.clone()),
+    }
+}
+
+fn mode_matches(mode: Option<PictureBulletRelationshipMode>, target_mode: &TargetMode) -> bool {
+    matches!(
+        (mode, target_mode),
+        (
+            Some(PictureBulletRelationshipMode::Embed),
+            TargetMode::Internal
+        ) | (
+            Some(PictureBulletRelationshipMode::Link),
+            TargetMode::External
+        )
+    )
+}
+
+fn supported_mime(mime: &str) -> bool {
+    matches!(
+        mime,
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+    )
+}

@@ -231,8 +231,13 @@ def _assert_picture_bullet_absence(
     case: unittest.TestCase, archive: zipfile.ZipFile, slide: ElementTree.Element
 ) -> None:
     blips = slide.findall(".//a:buBlip/a:blip", NS)
-    case.assertEqual(len(blips), 2)
-    case.assertIsNone(blips[1].get(f"{{{NS['r']}}}embed"))
+    missing = [
+        blip
+        for blip in blips
+        if blip.get(f"{{{NS['r']}}}embed") is None
+        and blip.get(f"{{{NS['r']}}}link") is None
+    ]
+    case.assertEqual(len(missing), 1)
     rels = archive.read(SR)
     case.assertNotIn(b"rIdMissing", rels)
 

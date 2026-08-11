@@ -24,6 +24,12 @@ if __package__:
         wav_bytes,
     )
     from .completion_deck_patterns import pattern_backgrounds, pattern_slides
+    from .completion_deck_picture_bullets import (
+        PICTURE_BULLETS,
+        content_types as picture_bullet_content_types,
+        parts as picture_bullet_parts,
+        relationships as picture_bullet_relationships,
+    )
     from .completion_deck_tables import (
         TABLES,
         content_types as table_content_types,
@@ -51,6 +57,12 @@ else:
         wav_bytes,
     )
     from completion_deck_patterns import pattern_backgrounds, pattern_slides
+    from completion_deck_picture_bullets import (
+        PICTURE_BULLETS,
+        content_types as picture_bullet_content_types,
+        parts as picture_bullet_parts,
+        relationships as picture_bullet_relationships,
+    )
     from completion_deck_tables import (
         TABLES,
         content_types as table_content_types,
@@ -88,8 +100,9 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
         Deck(
             "picture-bullets",
             ((PICTURE_BULLETS, ""),),
-            (("rIdImage", REL + "image", "../media/bullet.png", None),),
-            parts=(("ppt/media/bullet.png", image),),
+            picture_bullet_relationships(),
+            parts=picture_bullet_parts(image),
+            types=picture_bullet_content_types(),
         ),
         Deck(
             "table-styles",

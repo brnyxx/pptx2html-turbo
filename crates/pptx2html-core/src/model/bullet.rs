@@ -5,7 +5,72 @@ use super::color::Color;
 pub enum Bullet {
     Char(BulletChar),
     AutoNum(BulletAutoNum),
+    Picture(PictureBullet),
     None,
+}
+
+#[derive(Debug, Clone)]
+pub struct PictureBullet {
+    pub relationship_id: String,
+    pub relationship_mode: Option<PictureBulletRelationshipMode>,
+    pub relationship_type: Option<String>,
+    pub target_mode: Option<PictureBulletTargetMode>,
+    pub image: Option<PictureBulletImage>,
+    pub failure: Option<PictureBulletFailure>,
+    pub size: Option<BulletSize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PictureBulletRelationshipMode {
+    Embed,
+    Link,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PictureBulletTargetMode {
+    Internal,
+    External,
+    Other(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PictureBulletFailure {
+    MissingRelationship,
+    WrongRelationshipKind,
+    WrongTargetMode,
+    LinkedExternal,
+    MissingContentType,
+    UnsupportedContentType,
+    MissingPart,
+    EmptyImage,
+}
+
+impl PictureBulletFailure {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MissingRelationship => "missing relationship",
+            Self::WrongRelationshipKind => "wrong relationship kind",
+            Self::WrongTargetMode => "wrong relationship target mode",
+            Self::LinkedExternal => "external linked image is not fetched",
+            Self::MissingContentType => "missing package content type",
+            Self::UnsupportedContentType => "unsupported browser image content type",
+            Self::MissingPart => "missing package image part",
+            Self::EmptyImage => "empty package image part",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PictureBulletImage {
+    pub data: Vec<u8>,
+    pub content_type: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BulletSize {
+    Text,
+    Percentage(f64),
+    Points(f64),
 }
 
 /// Character bullet with optional font/size/color

@@ -13,6 +13,8 @@ pub mod master_parser;
 mod media_parser;
 mod notes_comments_parser;
 mod pattern_fill_parser;
+mod picture_bullet_diagnostics;
+mod picture_bullet_parser;
 mod preserved_parser;
 pub mod relationships;
 mod slide_parser;
@@ -56,6 +58,10 @@ impl PptxParser {
     pub fn parse_bytes(data: &[u8]) -> PptxResult<Presentation> {
         let cursor = Cursor::new(data);
         let mut archive = ZipArchive::new(cursor)?;
+
+        let content_types = Self::read_entry(&mut archive, "[Content_Types].xml")
+            .map(|xml| picture_bullet_parser::ContentTypes::parse(&xml))
+            .unwrap_or_default();
 
         // Detect password-protected PPTX (EncryptedPackage OLE stream)
         let is_encrypted = (0..archive.len()).any(|i| {
@@ -220,6 +226,12 @@ impl PptxParser {
 
                     let mut slide =
                         slide_parser::parse_slide(&slide_xml, &slide_rels, &mut archive)?;
+                    picture_bullet_parser::resolve_slide(
+                        &mut slide,
+                        &slide_relationships,
+                        &content_types,
+                        &mut archive,
+                    );
                     slide.hidden = slide_ref.hidden;
 
                     // Find which layout this slide references

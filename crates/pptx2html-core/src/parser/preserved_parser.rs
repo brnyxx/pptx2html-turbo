@@ -7,7 +7,10 @@ use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
 use super::slide_parser::ShapeBuilder;
-use super::{embedded_parser, media_parser, notes_comments_parser, timing_parser, xml_utils};
+use super::{
+    embedded_parser, media_parser, notes_comments_parser, picture_bullet_diagnostics,
+    timing_parser, xml_utils,
+};
 use crate::error::PptxResult;
 use crate::model::slide::{UnresolvedType, UnsupportedData};
 use crate::model::{
@@ -53,6 +56,7 @@ fn collect_xml_diagnostics(
 ) -> PptxResult<()> {
     let xml = read_text_entry(archive, name)?;
     timing_parser::collect_diagnostics(name, &xml, diagnostics);
+    picture_bullet_diagnostics::collect(archive, name, &xml, diagnostics)?;
     let mut reader = NsReader::from_str(&xml);
     let mut buffer = Vec::new();
     loop {
@@ -317,6 +321,13 @@ fn known_drawingml_element(local_name: &str) -> bool {
             | "defRPr"
             | "endParaRPr"
             | "buChar"
+            | "buAutoNum"
+            | "buNone"
+            | "buBlip"
+            | "buFont"
+            | "buSzPct"
+            | "buSzPts"
+            | "buSzTx"
             | "lnSpc"
             | "spcBef"
             | "spcAft"

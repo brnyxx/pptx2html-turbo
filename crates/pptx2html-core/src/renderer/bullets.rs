@@ -519,6 +519,19 @@ impl HtmlRenderer {
                         escape_html(&label)
                     );
                 }
+                Bullet::Picture(picture) => {
+                    for counter in auto_num_counters.iter_mut().skip(level) {
+                        *counter = 0;
+                    }
+                    super::picture_bullets::render(
+                        picture,
+                        para,
+                        inherited,
+                        render.font_scale,
+                        ctx,
+                        html,
+                    );
+                }
                 Bullet::None => {
                     // Reset counters when bullet is explicitly suppressed
                     for counter in auto_num_counters.iter_mut().skip(level) {

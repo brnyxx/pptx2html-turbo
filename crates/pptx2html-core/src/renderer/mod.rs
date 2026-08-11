@@ -12,6 +12,7 @@ mod geometry;
 mod media;
 mod pattern_tiles;
 mod patterns;
+mod picture_bullets;
 pub mod provenance;
 mod tables;
 pub mod text_metrics;

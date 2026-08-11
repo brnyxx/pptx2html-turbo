@@ -55,6 +55,8 @@ def _expected(name: str) -> str:
         return DRAWING + "chart+xml"
     if name.endswith(".png"):
         return "image/png"
+    if name.endswith(".svg"):
+        return "image/svg+xml"
     if name.endswith(".wav"):
         return "audio/wav"
     if name.endswith(".bin"):

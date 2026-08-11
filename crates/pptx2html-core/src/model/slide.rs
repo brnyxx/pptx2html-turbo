@@ -3,7 +3,10 @@ use super::fill::Fill;
 use super::geometry::CustomGeometry;
 use super::hierarchy::ClrMapOverride;
 
-pub use super::bullet::{Bullet, BulletAutoNum, BulletChar};
+pub use super::bullet::{
+    Bullet, BulletAutoNum, BulletChar, BulletSize, PictureBullet, PictureBulletFailure,
+    PictureBulletImage, PictureBulletRelationshipMode, PictureBulletTargetMode,
+};
 pub use super::chart::{
     ChartBubbleSizeRepresents, ChartData, ChartDataLabelPosition, ChartDataLabelSettings,
     ChartGrouping, ChartMarkerSpec, ChartOfPieType, ChartRadarStyle, ChartScatterStyle,

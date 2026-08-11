@@ -24,9 +24,21 @@ pub(crate) struct TextSaxState {
     pub(crate) paragraph_defaults: Option<ParagraphDefaults>,
     pub(crate) run_defaults: Option<RunDefaults>,
     pub(crate) in_bullet_color: bool,
+    pub(crate) in_picture_bullet: bool,
+    list_picture_size: Option<BulletSize>,
 }
 
 impl TextSaxState {
+    fn assign_picture_bullet(&mut self, element: &BytesStart<'_>) {
+        if self.in_list_style {
+            if let Some(defaults) = self.paragraph_defaults.as_mut() {
+                defaults.bullet = picture_bullet(element, self.list_picture_size.take());
+            }
+        } else {
+            parse_picture_bullet(element, &mut self.paragraph);
+        }
+    }
+
     pub(crate) fn handle_text(&mut self, text: &str) -> bool {
         if !self.in_text {
             return false;
@@ -110,6 +122,13 @@ impl TextSaxState {
             "spcBef" if self.paragraph.is_some() => self.in_space_before = true,
             "spcAft" if self.paragraph.is_some() => self.in_space_after = true,
             "buClr" if self.paragraph.is_some() => self.in_bullet_color = true,
+            "buBlip"
+                if self.paragraph.is_some()
+                    || (self.in_list_style && self.paragraph_defaults.is_some()) =>
+            {
+                self.in_picture_bullet = true
+            }
+            "blip" if self.in_picture_bullet => self.assign_picture_bullet(element),
             "r" if self.paragraph.is_some() => start_run(&mut self.run),
             "rPr" if self.run.is_some() => {
                 self.in_run_properties = true;
@@ -191,8 +210,15 @@ impl TextSaxState {
                 }
             }
             "buFont" => parse_bullet_font(element, &mut self.paragraph),
-            "buSzPct" | "buSzPts" => parse_bullet_size(local, element, &mut self.paragraph),
+            "buSzPct" | "buSzPts" | "buSzTx" => {
+                if self.in_list_style {
+                    self.list_picture_size = parse_picture_bullet_size(local, element);
+                } else {
+                    parse_bullet_size(local, element, &mut self.paragraph);
+                }
+            }
             "buNone" | "buChar" | "buAutoNum" => parse_bullet(local, element, &mut self.paragraph),
+            "blip" if self.in_picture_bullet => self.assign_picture_bullet(element),
             _ => return false,
         }
         true
@@ -236,6 +262,7 @@ impl TextSaxState {
                 self.level = None;
             }
             "buClr" if self.in_bullet_color => self.in_bullet_color = false,
+            "buBlip" if self.in_picture_bullet => self.in_picture_bullet = false,
             "r" if self.paragraph.is_some() => finish_run(&mut self.run, &mut self.paragraph),
             "p" if shape.is_some() => finish_paragraph(&mut self.paragraph, shape),
             _ => return false,
@@ -283,6 +310,7 @@ pub(crate) struct ParagraphBuilder {
     pub(crate) space_after: Option<SpacingValue>,
     pub(crate) bu_font: Option<String>,
     pub(crate) bu_size_pct: Option<f64>,
+    pub(crate) bu_picture_size: Option<BulletSize>,
     pub(crate) bu_color: Option<Color>,
     pub(crate) def_rpr_font_size: Option<f64>,
     pub(crate) def_rpr_letter_spacing: Option<f64>,
@@ -448,16 +476,71 @@ pub(crate) fn parse_bullet_size(
     let Some(paragraph) = paragraph.as_mut() else {
         return;
     };
-    let Some(value) =
-        xml_utils::attr_str(element, "val").and_then(|value| value.parse::<f64>().ok())
+    paragraph.bu_picture_size = parse_picture_bullet_size(local, element);
+    if local == "buSzTx" {
+        paragraph.bu_size_pct = Some(1.0);
+        return;
+    }
+    let Some(value) = xml_utils::attr_str(element, "val")
+        .and_then(|value| value.parse::<f64>().ok())
+        .filter(|value| value.is_finite())
     else {
         return;
     };
     paragraph.bu_size_pct = match local {
-        "buSzPct" => Some(value / 100_000.0),
-        "buSzPts" => Some(-(value / 100.0)),
+        "buSzPct" if (25_000.0..=400_000.0).contains(&value) => Some(value / 100_000.0),
+        "buSzPts" if value > 0.0 => Some(-(value / 100.0)),
         _ => paragraph.bu_size_pct,
     };
+}
+
+pub(crate) fn parse_picture_bullet(
+    element: &BytesStart<'_>,
+    paragraph: &mut Option<ParagraphBuilder>,
+) {
+    let Some(paragraph) = paragraph.as_mut() else {
+        return;
+    };
+    paragraph.bullet = picture_bullet(element, paragraph.bu_picture_size.take());
+}
+
+fn picture_bullet(element: &BytesStart<'_>, size: Option<BulletSize>) -> Option<Bullet> {
+    let reference = xml_utils::attr_str(element, "embed")
+        .map(|id| (id, Some(PictureBulletRelationshipMode::Embed)))
+        .or_else(|| {
+            xml_utils::attr_str(element, "link")
+                .map(|id| (id, Some(PictureBulletRelationshipMode::Link)))
+        });
+    let (relationship_id, relationship_mode) = reference.unwrap_or_else(|| (String::new(), None));
+    Some(Bullet::Picture(PictureBullet {
+        relationship_id,
+        relationship_mode,
+        relationship_type: None,
+        target_mode: None,
+        image: None,
+        failure: Some(PictureBulletFailure::MissingRelationship),
+        size,
+    }))
+}
+
+fn parse_picture_bullet_size(local: &str, element: &BytesStart<'_>) -> Option<BulletSize> {
+    if local == "buSzTx" {
+        return Some(BulletSize::Text);
+    }
+    let Some(value) = xml_utils::attr_str(element, "val")
+        .and_then(|value| value.parse::<f64>().ok())
+        .filter(|value| value.is_finite())
+    else {
+        return Some(BulletSize::Text);
+    };
+    match local {
+        "buSzPct" if (25_000.0..=400_000.0).contains(&value) => {
+            Some(BulletSize::Percentage(value / 100_000.0))
+        }
+        "buSzPts" if value > 0.0 => Some(BulletSize::Points(value / 100.0)),
+        "buSzPct" | "buSzPts" => Some(BulletSize::Text),
+        _ => None,
+    }
 }
 
 pub(crate) fn parse_bullet(

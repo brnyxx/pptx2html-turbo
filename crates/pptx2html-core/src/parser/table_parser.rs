@@ -4,7 +4,7 @@ use super::text_parser::{
     ParagraphBuilder, RunBuilder, append_text as append_run_text,
     apply_paragraph_default_run_properties, assign_spacing_paragraph, assign_typeface_to_paragraph,
     assign_typeface_to_run, parse_bullet, parse_bullet_font, parse_bullet_size,
-    parse_paragraph_properties, parse_run_properties, parse_spacing,
+    parse_paragraph_properties, parse_picture_bullet, parse_run_properties, parse_spacing,
     start_paragraph as start_text_paragraph, start_run as start_text_run,
 };
 use super::xml_utils;
@@ -26,6 +26,7 @@ pub(crate) struct TableSaxState {
     pub(crate) in_text: bool,
     pub(crate) in_run_properties: bool,
     pub(crate) in_bullet_color: bool,
+    pub(crate) in_picture_bullet: bool,
     pub(crate) in_default_run_properties: bool,
     pub(crate) in_line_spacing: bool,
     pub(crate) in_space_before: bool,
@@ -76,6 +77,8 @@ impl TableSaxState {
             "spcBef" if self.in_cell && self.paragraph.is_some() => self.in_space_before = true,
             "spcAft" if self.in_cell && self.paragraph.is_some() => self.in_space_after = true,
             "buClr" if self.in_cell && self.paragraph.is_some() => self.in_bullet_color = true,
+            "buBlip" if self.in_cell && self.paragraph.is_some() => self.in_picture_bullet = true,
+            "blip" if self.in_picture_bullet => parse_picture_bullet(element, &mut self.paragraph),
             "r" if self.in_cell && self.paragraph.is_some() => start_run(&mut self.run),
             "rPr" if self.in_cell && self.run.is_some() => {
                 self.in_run_properties = true;
@@ -105,6 +108,7 @@ impl TableSaxState {
             }
             "p" if self.in_cell => finish_paragraph(&mut self.paragraph, &mut self.paragraphs),
             "buClr" if self.in_bullet_color => self.in_bullet_color = false,
+            "buBlip" if self.in_picture_bullet => self.in_picture_bullet = false,
             "lnL" | "lnR" | "lnT" | "lnB" if self.in_properties => self.border_side = None,
             "tcPr" => self.in_properties = false,
             "tc" => {
@@ -169,12 +173,13 @@ impl TableSaxState {
                 }
             }
             "buFont" if self.in_cell => parse_bullet_font(element, &mut self.paragraph),
-            "buSzPct" | "buSzPts" if self.in_cell => {
+            "buSzPct" | "buSzPts" | "buSzTx" if self.in_cell => {
                 parse_bullet_size(local, element, &mut self.paragraph)
             }
             "buNone" | "buChar" | "buAutoNum" if self.in_cell => {
                 parse_bullet(local, element, &mut self.paragraph)
             }
+            "blip" if self.in_picture_bullet => parse_picture_bullet(element, &mut self.paragraph),
             _ => return false,
         }
         true
