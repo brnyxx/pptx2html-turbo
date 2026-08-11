@@ -11,10 +11,11 @@ use super::action_parser::hyperlink_rel_id;
 #[cfg(test)]
 use super::fill_parser::assign_background_color_target;
 pub(crate) use super::fill_parser::parse_line_end;
-use super::fill_parser::{ColorTargets, FillSaxState, assign_style_ref_no_color, ensure_style_ref};
+use super::fill_parser::{ColorTargets, FillEndTargets, FillSaxState};
 #[cfg(test)]
 use super::fill_parser::{
-    assign_color, assign_style_ref_color, dispatch_color as dispatch_parsed_color,
+    assign_color, assign_style_ref_color, assign_style_ref_no_color,
+    dispatch_color as dispatch_parsed_color, ensure_style_ref,
 };
 use super::graphic_frame_parser::{
     GraphicFrameEnd, GraphicFrameSaxState, finish_frame, mime_from_extension,
@@ -68,12 +69,6 @@ pub fn parse_slide<R: Read + Seek>(
     let mut in_sp_pr = false;
     let mut in_nv_pr = false;
 
-    // Shape style reference (<p:style>) state
-    let mut in_p_style = false;
-    let mut p_style_builder: Option<ShapeStyleRef> = None;
-    let mut p_style_current_ref: Option<String> = None;
-    let mut p_style_idx: Option<String> = None;
-
     // Table parsing state
     let mut graphic_frame = GraphicFrameSaxState::default();
     let mut preserved = PreservedSaxState::default();
@@ -103,17 +98,6 @@ pub fn parse_slide<R: Read + Seek>(
     let mut current_xy_handle: Option<XYAdjustHandle> = None;
     let mut current_polar_handle: Option<PolarAdjustHandle> = None;
     let mut current_connection_site: Option<ConnectionSite> = None;
-
-    // Background fill state
-    let mut in_bg_pr = false;
-    let mut in_bg_blip_fill = false;
-    let mut bg_blip_rel_id: Option<String> = None;
-    let mut bg_solid_color: Option<Color> = None;
-    let mut in_bg_grad_fill = false;
-    let mut bg_grad_stops: Vec<GradientStop> = Vec::new();
-    let mut bg_grad_angle: f64 = 0.0;
-    let mut bg_grad_type = GradientType::Linear;
-    let mut bg_gs_pos: f64 = 0.0;
 
     loop {
         match reader.read_event() {
@@ -174,10 +158,6 @@ pub fn parse_slide<R: Read + Seek>(
                     "grpSpPr" if !grp_stack.is_empty() => {
                         in_grp_sp_pr = true;
                     }
-                    // ── Background properties ──
-                    "bgPr" => {
-                        in_bg_pr = true;
-                    }
                     // ── Regular shape handling ──
                     // Shape start
                     "sp" | "pic" | "cxnSp" => {
@@ -205,22 +185,6 @@ pub fn parse_slide<R: Read + Seek>(
                             e,
                         );
                     }
-                    // Shape style reference (<p:style>)
-                    "style" if current_shape.is_some() && !in_sp_pr => {
-                        in_p_style = true;
-                        p_style_builder = Some(ShapeStyleRef::default());
-                    }
-                    // Style ref children (lnRef, fillRef, effectRef, fontRef)
-                    "lnRef" | "fillRef" | "effectRef" | "fontRef" if in_p_style => {
-                        p_style_current_ref = Some(local.clone());
-                        p_style_idx = xml_utils::attr_str(e, "idx");
-                    }
-                    // Gradient path type (Start variant — has fillToRect child)
-                    "path" if in_bg_grad_fill => {
-                        if let Some(val) = xml_utils::attr_str(e, "path") {
-                            bg_grad_type = GradientType::from_path_attr(&val);
-                        }
-                    }
                     // ── Adjust values (<a:avLst>) ──
                     "avLst" if in_sp_pr && current_shape.is_some() => {
                         in_av_lst = true;
@@ -228,33 +192,13 @@ pub fn parse_slide<R: Read + Seek>(
                     "gdLst" if in_cust_geom => {
                         in_av_lst = true;
                     }
-                    // ── Background gradFill ──
-                    "gradFill" if in_bg_pr => {
-                        in_bg_grad_fill = true;
-                        bg_grad_stops.clear();
-                        bg_grad_angle = 0.0;
-                        bg_grad_type = GradientType::Linear;
-                    }
-                    // ── Background gradient stop ──
-                    "gs" if in_bg_grad_fill => {
-                        bg_gs_pos = xml_utils::attr_str(e, "pos")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .map(|v| v / 100_000.0)
-                            .unwrap_or(0.0);
-                    }
-                    // ── Background blipFill ──
-                    "blipFill" if in_bg_pr => {
-                        in_bg_blip_fill = true;
-                    }
                     // Image reference (Start variant — blip with child elements)
                     "blip" => {
                         for attr in e.attributes().flatten() {
                             let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
                             if key.ends_with("embed") {
                                 let rel_id = String::from_utf8_lossy(&attr.value).to_string();
-                                if in_bg_blip_fill {
-                                    bg_blip_rel_id = Some(rel_id);
-                                } else if let Some(sb) = current_shape.as_mut() {
+                                if let Some(sb) = current_shape.as_mut() {
                                     sb.image_rel_id = Some(rel_id);
                                 }
                             }
@@ -454,16 +398,6 @@ pub fn parse_slide<R: Read + Seek>(
                             shape: &mut current_shape,
                             text: &mut text,
                             table: &mut table,
-                            in_style: in_p_style,
-                            style_kind: p_style_current_ref.as_deref(),
-                            style_index: p_style_idx.as_deref(),
-                            style: &mut p_style_builder,
-                            in_background: in_bg_pr,
-                            in_background_image: in_bg_blip_fill,
-                            in_background_gradient: in_bg_grad_fill,
-                            background_stop_position: bg_gs_pos,
-                            background_stops: &mut bg_grad_stops,
-                            background_solid_color: &mut bg_solid_color,
                         },
                     );
                     continue;
@@ -559,26 +493,6 @@ pub fn parse_slide<R: Read + Seek>(
                             sb.preset_geometry = Some(prst);
                         }
                     }
-                    // Gradient direction (linear)
-                    "lin" if in_bg_grad_fill => {
-                        if let Some(ang) = xml_utils::attr_str(e, "ang") {
-                            bg_grad_angle = ang.parse::<f64>().unwrap_or(0.0) / 60_000.0;
-                        }
-                        bg_grad_type = GradientType::Linear;
-                    }
-                    // Gradient path type (radial/rectangular/shape)
-                    "path" if in_bg_grad_fill => {
-                        if let Some(val) = xml_utils::attr_str(e, "path") {
-                            bg_grad_type = GradientType::from_path_attr(&val);
-                        }
-                    }
-                    // Style ref elements (Empty variant -- self-closing with color child)
-                    "lnRef" | "fillRef" | "effectRef" | "fontRef" if in_p_style => {
-                        // Self-closing style ref with no child color
-                        if let Some(idx_val) = xml_utils::attr_str(e, "idx") {
-                            assign_style_ref_no_color(&local, &idx_val, &mut p_style_builder);
-                        }
-                    }
                     // Placeholder
                     "ph" if in_nv_pr && current_shape.is_some() => {
                         current_shape
@@ -592,9 +506,7 @@ pub fn parse_slide<R: Read + Seek>(
                             let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
                             if key.ends_with("embed") {
                                 let rel_id = String::from_utf8_lossy(&attr.value).to_string();
-                                if in_bg_blip_fill {
-                                    bg_blip_rel_id = Some(rel_id);
-                                } else if let Some(sb) = current_shape.as_mut() {
+                                if let Some(sb) = current_shape.as_mut() {
                                     sb.image_rel_id = Some(rel_id);
                                 }
                             }
@@ -772,7 +684,17 @@ pub fn parse_slide<R: Read + Seek>(
                 if text.handle_end(&local, &mut current_shape, &mut fill.current_color) {
                     continue;
                 }
-                if fill.handle_end(&local, &mut current_shape, &mut text, &mut table) {
+                if fill.handle_end(
+                    &local,
+                    FillEndTargets {
+                        shape: &mut current_shape,
+                        text: &mut text,
+                        table: &mut table,
+                        slide: &mut slide,
+                        relationships: rels,
+                        archive,
+                    },
+                ) {
                     continue;
                 }
                 if let Some(color) = fill.take_completed_color(&local) {
@@ -784,16 +706,6 @@ pub fn parse_slide<R: Read + Seek>(
                             shape: &mut current_shape,
                             text: &mut text,
                             table: &mut table,
-                            in_style: in_p_style,
-                            style_kind: p_style_current_ref.as_deref(),
-                            style_index: p_style_idx.as_deref(),
-                            style: &mut p_style_builder,
-                            in_background: in_bg_pr,
-                            in_background_image: in_bg_blip_fill,
-                            in_background_gradient: in_bg_grad_fill,
-                            background_stop_position: bg_gs_pos,
-                            background_stops: &mut bg_grad_stops,
-                            background_solid_color: &mut bg_solid_color,
                         },
                     );
                     continue;
@@ -923,64 +835,6 @@ pub fn parse_slide<R: Read + Seek>(
 
                     // ── New state end events ──
                     "avLst" | "gdLst" => in_av_lst = false,
-                    "blipFill" if in_bg_blip_fill => {
-                        in_bg_blip_fill = false;
-                    }
-                    "bgPr" => {
-                        in_bg_pr = false;
-                        // Load background image if blipFill was present
-                        if let Some(rel_id) = bg_blip_rel_id.take() {
-                            if let Some(target) = rels.get(&rel_id) {
-                                let path = resolve_rel_path("ppt/slides", target);
-                                if let Ok(mut entry) = archive.by_name(&path) {
-                                    let mut buf = Vec::new();
-                                    let _ = entry.read_to_end(&mut buf);
-                                    if !buf.is_empty() {
-                                        let content_type = mime_from_extension(&path);
-                                        slide.background = Some(Fill::Image(ImageFill {
-                                            rel_id,
-                                            data: buf,
-                                            content_type,
-                                        }));
-                                    }
-                                }
-                            }
-                        } else if let Some(color) = bg_solid_color.take() {
-                            // Background solid fill
-                            slide.background = Some(Fill::Solid(SolidFill { color }));
-                        } else if !bg_grad_stops.is_empty() {
-                            // Background gradient fill
-                            slide.background = Some(Fill::Gradient(GradientFill {
-                                gradient_type: std::mem::take(&mut bg_grad_type),
-                                stops: std::mem::take(&mut bg_grad_stops),
-                                angle: bg_grad_angle,
-                            }));
-                        }
-                    }
-                    // End of style ref children
-                    "lnRef" | "fillRef" | "effectRef" | "fontRef"
-                        if in_p_style && p_style_current_ref.is_some() =>
-                    {
-                        // If no child color was found, still record the idx
-                        if let Some(idx_val) = p_style_idx.take() {
-                            // Only create if builder doesn't already have this ref set
-                            // (it's already set if a color child was processed)
-                            ensure_style_ref(&local, &idx_val, &mut p_style_builder);
-                        }
-                        p_style_current_ref = None;
-                    }
-                    // End of <p:style>
-                    "style" if in_p_style => {
-                        in_p_style = false;
-                        if let Some(sb) = current_shape.as_mut() {
-                            sb.style_ref = p_style_builder.take();
-                        }
-                    }
-                    // End of background gradient fill
-                    "gradFill" if in_bg_grad_fill => {
-                        in_bg_grad_fill = false;
-                        // bg_grad_stops will be consumed when bgPr ends
-                    }
                     // End of non-visual properties
                     "nvPr" => {
                         in_nv_pr = false;
@@ -1243,7 +1097,7 @@ pub(crate) struct ShapeBuilder {
     crop: Option<CropRect>,
     // Placeholder and style reference (parsed as None for now)
     placeholder: Option<PlaceholderInfo>,
-    style_ref: Option<ShapeStyleRef>,
+    pub(crate) style_ref: Option<ShapeStyleRef>,
     // Chart detection
     pub(crate) is_chart: bool,
     pub(crate) chart_rel_id: Option<String>,

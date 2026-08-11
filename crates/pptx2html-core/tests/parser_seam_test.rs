@@ -22,6 +22,12 @@ fn multi_feature_fixture() -> Vec<u8> {
     <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="336699"/></a:solidFill>
     <a:effectLst><a:outerShdw blurRad="12700" dist="25400" dir="5400000"><a:srgbClr val="112233"/></a:outerShdw></a:effectLst>
   </p:spPr>
+  <p:style>
+    <a:lnRef idx="2"><a:srgbClr val="111111"/></a:lnRef>
+    <a:fillRef idx="3"><a:srgbClr val="222222"/></a:fillRef>
+    <a:effectRef idx="4"><a:srgbClr val="333333"/></a:effectRef>
+    <a:fontRef idx="minor"><a:srgbClr val="444444"/></a:fontRef>
+  </p:style>
   <p:txBody><a:bodyPr/><a:p><a:pPr><a:buChar char="-"/></a:pPr><a:r>
     <a:rPr b="1"><a:hlinkClick r:id="rIdExternal"/></a:rPr><a:t>Linked bullet</a:t>
   </a:r></a:p></p:txBody>
@@ -48,7 +54,18 @@ fn multi_feature_fixture() -> Vec<u8> {
   <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram"><a:extLst/></a:graphicData></a:graphic>
 </p:graphicFrame>"#,
     )
-    .build();
+    .build()
+    .replacen(
+        "<p:cSld><p:spTree>",
+        r#"<p:cSld><p:bg><p:bgPr>
+    <a:gradFill><a:gsLst>
+      <a:gs pos="0"><a:srgbClr val="102030"/></a:gs>
+      <a:gs pos="100000"><a:srgbClr val="A0B0C0"/></a:gs>
+    </a:gsLst><a:lin ang="5400000"/>
+    </a:gradFill>
+  </p:bgPr></p:bg><p:spTree>"#,
+        1,
+    );
     let package = PackageBuilder::new(slide)
         .with_slide_relationship(Relationship::external(
             "rIdExternal",
@@ -104,6 +121,53 @@ fn fill_and_effect_model_preserve_values_across_parser_seam() {
     assert_eq!(shadow.color.to_css().as_deref(), Some("#112233"));
     assert_eq!(shadow.blur_radius, 1.0);
     assert_eq!(shadow.distance, 2.0);
+}
+
+#[test]
+fn background_and_style_refs_preserve_values_across_parser_seam() {
+    // Given
+    let bytes = multi_feature_fixture();
+
+    // When
+    let presentation = PptxParser::parse_bytes(&bytes).expect("multi-feature fixture parses");
+
+    // Then
+    let Fill::Gradient(background) = presentation.slides[0]
+        .background
+        .as_ref()
+        .expect("slide background is preserved")
+    else {
+        panic!("slide background remains a gradient");
+    };
+    assert_eq!(background.angle, 90.0);
+    assert_eq!(background.stops.len(), 2);
+    assert_eq!(background.stops[0].position, 0.0);
+    assert_eq!(
+        background.stops[0].color.to_css().as_deref(),
+        Some("#102030")
+    );
+    assert_eq!(background.stops[1].position, 1.0);
+    assert_eq!(
+        background.stops[1].color.to_css().as_deref(),
+        Some("#A0B0C0")
+    );
+
+    let style = presentation.slides[0].shapes[0]
+        .style_ref
+        .as_ref()
+        .expect("shape style refs are preserved");
+    let line = style.ln_ref.as_ref().expect("line style ref");
+    assert_eq!(line.idx, 2);
+    assert_eq!(line.color.to_css().as_deref(), Some("#111111"));
+    let fill = style.fill_ref.as_ref().expect("fill style ref");
+    assert_eq!(fill.idx, 3);
+    assert_eq!(fill.color.to_css().as_deref(), Some("#222222"));
+    let effect = style.effect_ref.as_ref().expect("effect style ref");
+    assert_eq!(effect.idx, 4);
+    assert_eq!(effect.color.to_css().as_deref(), Some("#333333"));
+    let font = style.font_ref.as_ref().expect("font style ref");
+    assert_eq!(font.idx, "minor");
+    assert_eq!(font.color.to_css().as_deref(), Some("#444444"));
 }
 
 #[test]

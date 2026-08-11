@@ -1,5 +1,10 @@
-use quick_xml::events::BytesStart;
+use std::collections::HashMap;
+use std::io::{Read, Seek};
 
+use quick_xml::events::BytesStart;
+use zip::ZipArchive;
+
+use super::graphic_frame_parser::{mime_from_extension, resolve_relationship_path};
 use super::slide_parser::ShapeBuilder;
 #[cfg(test)]
 use super::table_parser::TableCellBuilder;
@@ -34,6 +39,19 @@ pub(crate) struct FillSaxState {
     pub(crate) shape_glow_radius: f64,
     pub(crate) shape_glow_alpha: f64,
     pub(crate) shape_effect_color: Option<Color>,
+    in_style: bool,
+    style_builder: Option<ShapeStyleRef>,
+    style_current_ref: Option<String>,
+    style_index: Option<String>,
+    in_background: bool,
+    in_background_image: bool,
+    background_image_rel_id: Option<String>,
+    background_solid_color: Option<Color>,
+    in_background_gradient: bool,
+    background_gradient_stops: Vec<GradientStop>,
+    background_gradient_angle: f64,
+    background_gradient_type: GradientType,
+    background_stop_position: f64,
 }
 
 pub(crate) struct ColorTargets<'a> {
@@ -42,16 +60,15 @@ pub(crate) struct ColorTargets<'a> {
     pub(crate) shape: &'a mut Option<ShapeBuilder>,
     pub(crate) text: &'a mut TextSaxState,
     pub(crate) table: &'a mut TableSaxState,
-    pub(crate) in_style: bool,
-    pub(crate) style_kind: Option<&'a str>,
-    pub(crate) style_index: Option<&'a str>,
-    pub(crate) style: &'a mut Option<ShapeStyleRef>,
-    pub(crate) in_background: bool,
-    pub(crate) in_background_image: bool,
-    pub(crate) in_background_gradient: bool,
-    pub(crate) background_stop_position: f64,
-    pub(crate) background_stops: &'a mut Vec<GradientStop>,
-    pub(crate) background_solid_color: &'a mut Option<Color>,
+}
+
+pub(crate) struct FillEndTargets<'a, R: Read + Seek> {
+    pub(crate) shape: &'a mut Option<ShapeBuilder>,
+    pub(crate) text: &'a mut TextSaxState,
+    pub(crate) table: &'a mut TableSaxState,
+    pub(crate) slide: &'a mut Slide,
+    pub(crate) relationships: &'a HashMap<String, String>,
+    pub(crate) archive: &'a mut ZipArchive<R>,
 }
 
 impl Default for FillSaxState {
@@ -80,6 +97,19 @@ impl Default for FillSaxState {
             shape_glow_radius: 0.0,
             shape_glow_alpha: 1.0,
             shape_effect_color: None,
+            in_style: false,
+            style_builder: None,
+            style_current_ref: None,
+            style_index: None,
+            in_background: false,
+            in_background_image: false,
+            background_image_rel_id: None,
+            background_solid_color: None,
+            in_background_gradient: false,
+            background_gradient_stops: Vec::new(),
+            background_gradient_angle: 0.0,
+            background_gradient_type: GradientType::Linear,
+            background_stop_position: 0.0,
         }
     }
 }
@@ -121,21 +151,21 @@ impl FillSaxState {
             if let Some(paragraph) = targets.text.paragraph.as_mut() {
                 paragraph.bu_color = Some(color);
             }
-        } else if targets.in_style && targets.style_kind.is_some() {
+        } else if self.in_style && self.style_current_ref.is_some() {
             assign_style_ref_color(
-                targets.style_kind.unwrap_or(""),
-                targets.style_index.unwrap_or("0"),
+                self.style_current_ref.as_deref().unwrap_or(""),
+                self.style_index.as_deref().unwrap_or("0"),
                 color,
-                targets.style,
+                &mut self.style_builder,
             );
-        } else if targets.in_background && !targets.in_background_image {
+        } else if self.in_background && !self.in_background_image {
             assign_background_color_target(
                 color,
                 targets.depth,
-                targets.in_background_gradient,
-                targets.background_stop_position,
-                targets.background_stops,
-                targets.background_solid_color,
+                self.in_background_gradient,
+                self.background_stop_position,
+                &mut self.background_gradient_stops,
+                &mut self.background_solid_color,
             );
         } else {
             assign_color(
@@ -176,6 +206,25 @@ impl FillSaxState {
         shape: &mut Option<ShapeBuilder>,
     ) -> bool {
         match local {
+            "lin" if self.in_background_gradient => {
+                self.background_gradient_angle = xml_utils::attr_str(element, "ang")
+                    .and_then(|value| value.parse::<f64>().ok())
+                    .map(|value| value / 60_000.0)
+                    .unwrap_or(0.0);
+                self.background_gradient_type = GradientType::Linear;
+            }
+            "path" if self.in_background_gradient => {
+                if let Some(value) = xml_utils::attr_str(element, "path") {
+                    self.background_gradient_type = GradientType::from_path_attr(&value);
+                }
+            }
+            "lnRef" | "fillRef" | "effectRef" | "fontRef" if self.in_style => {
+                let index = xml_utils::attr_str(element, "idx").unwrap_or_default();
+                assign_style_ref_no_color(local, &index, &mut self.style_builder);
+            }
+            "blip" if self.in_background_image => {
+                self.background_image_rel_id = relationship_embed_id(element);
+            }
             "noFill" if self.in_line => {
                 if let Some(shape) = shape.as_mut() {
                     shape.border_style = BorderStyle::None;
@@ -284,6 +333,43 @@ impl FillSaxState {
         table: &TableSaxState,
     ) -> bool {
         match local {
+            "bgPr" => self.in_background = true,
+            "style" if shape.is_some() && !in_shape_properties => {
+                self.in_style = true;
+                self.style_builder = Some(ShapeStyleRef::default());
+            }
+            "lnRef" | "fillRef" | "effectRef" | "fontRef" if self.in_style => {
+                self.style_current_ref = Some(local.to_owned());
+                self.style_index = xml_utils::attr_str(element, "idx");
+            }
+            "gradFill" if self.in_background => {
+                self.in_background_gradient = true;
+                self.background_gradient_stops.clear();
+                self.background_gradient_angle = 0.0;
+                self.background_gradient_type = GradientType::Linear;
+            }
+            "gs" if self.in_background_gradient => {
+                self.background_stop_position = xml_utils::attr_str(element, "pos")
+                    .and_then(|value| value.parse::<f64>().ok())
+                    .map(|value| value / 100_000.0)
+                    .unwrap_or(0.0);
+            }
+            "lin" if self.in_background_gradient => {
+                self.background_gradient_angle = xml_utils::attr_str(element, "ang")
+                    .and_then(|value| value.parse::<f64>().ok())
+                    .map(|value| value / 60_000.0)
+                    .unwrap_or(0.0);
+                self.background_gradient_type = GradientType::Linear;
+            }
+            "path" if self.in_background_gradient => {
+                if let Some(value) = xml_utils::attr_str(element, "path") {
+                    self.background_gradient_type = GradientType::from_path_attr(&value);
+                }
+            }
+            "blipFill" if self.in_background => self.in_background_image = true,
+            "blip" if self.in_background_image => {
+                self.background_image_rel_id = relationship_embed_id(element);
+            }
             "ln" if in_shape_properties => {
                 self.in_line = true;
                 let shape = shape.as_mut().expect("shape builder for line");
@@ -375,14 +461,34 @@ impl FillSaxState {
         true
     }
 
-    pub(crate) fn handle_end(
+    pub(crate) fn handle_end<R: Read + Seek>(
         &mut self,
         local: &str,
-        shape: &mut Option<ShapeBuilder>,
-        text: &mut TextSaxState,
-        table: &mut TableSaxState,
+        targets: FillEndTargets<'_, R>,
     ) -> bool {
         match local {
+            "blipFill" if self.in_background_image => self.in_background_image = false,
+            "bgPr" if self.in_background => {
+                self.in_background = false;
+                self.finish_background(targets.slide, targets.relationships, targets.archive);
+            }
+            "lnRef" | "fillRef" | "effectRef" | "fontRef"
+                if self.in_style && self.style_current_ref.is_some() =>
+            {
+                if let Some(index) = self.style_index.take() {
+                    ensure_style_ref(local, &index, &mut self.style_builder);
+                }
+                self.style_current_ref = None;
+            }
+            "style" if self.in_style => {
+                self.in_style = false;
+                if let Some(shape) = targets.shape.as_mut() {
+                    shape.style_ref = self.style_builder.take();
+                }
+            }
+            "gradFill" if self.in_background_gradient => {
+                self.in_background_gradient = false;
+            }
             "effectLst" if self.in_text_effect_list => self.in_text_effect_list = false,
             "effectLst" if self.in_shape_effect_list => self.in_shape_effect_list = false,
             "outerShdw" if self.in_text_outer_shadow => {
@@ -394,12 +500,12 @@ impl FillSaxState {
                         dist: self.text_shadow_distance,
                         dir: self.text_shadow_direction,
                     };
-                    if table.in_run_properties {
-                        if let Some(run) = table.run.as_mut() {
+                    if targets.table.in_run_properties {
+                        if let Some(run) = targets.table.run.as_mut() {
                             run.shadow = Some(shadow);
                         }
-                    } else if text.in_run_properties
-                        && let Some(run) = text.run.as_mut()
+                    } else if targets.text.in_run_properties
+                        && let Some(run) = targets.text.run.as_mut()
                     {
                         run.shadow = Some(shadow);
                     }
@@ -408,7 +514,7 @@ impl FillSaxState {
             "outerShdw" if self.in_shape_outer_shadow => {
                 self.in_shape_outer_shadow = false;
                 finish_outer_shadow(
-                    shape,
+                    targets.shape,
                     &mut self.shape_effect_color,
                     self.shape_shadow_blur,
                     self.shape_shadow_distance,
@@ -419,7 +525,7 @@ impl FillSaxState {
             "glow" if self.in_shape_glow => {
                 self.in_shape_glow = false;
                 finish_glow(
-                    shape,
+                    targets.shape,
                     &mut self.shape_effect_color,
                     self.shape_glow_radius,
                     self.shape_glow_alpha,
@@ -428,12 +534,12 @@ impl FillSaxState {
             "highlight" if self.in_highlight => {
                 self.in_highlight = false;
                 if let Some(color) = self.current_color.take() {
-                    if table.in_run_properties {
-                        if let Some(run) = table.run.as_mut() {
+                    if targets.table.in_run_properties {
+                        if let Some(run) = targets.table.run.as_mut() {
                             run.highlight = Some(color);
                         }
-                    } else if text.in_run_properties
-                        && let Some(run) = text.run.as_mut()
+                    } else if targets.text.in_run_properties
+                        && let Some(run) = targets.text.run.as_mut()
                     {
                         run.highlight = Some(color);
                     }
@@ -441,7 +547,7 @@ impl FillSaxState {
             }
             "gradFill" if self.in_gradient => {
                 self.in_gradient = false;
-                if let Some(shape) = shape.as_mut() {
+                if let Some(shape) = targets.shape.as_mut() {
                     shape.fill = Fill::Gradient(GradientFill {
                         gradient_type: std::mem::take(&mut self.gradient_type),
                         stops: std::mem::take(&mut self.gradient_stops),
@@ -454,6 +560,48 @@ impl FillSaxState {
         }
         true
     }
+
+    fn finish_background<R: Read + Seek>(
+        &mut self,
+        slide: &mut Slide,
+        relationships: &HashMap<String, String>,
+        archive: &mut ZipArchive<R>,
+    ) {
+        if let Some(rel_id) = self.background_image_rel_id.take() {
+            let Some(target) = relationships.get(&rel_id) else {
+                return;
+            };
+            let path = resolve_relationship_path("ppt/slides", target);
+            let Ok(mut entry) = archive.by_name(&path) else {
+                return;
+            };
+            let mut data = Vec::new();
+            let _ = entry.read_to_end(&mut data);
+            if !data.is_empty() {
+                slide.background = Some(Fill::Image(ImageFill {
+                    rel_id,
+                    data,
+                    content_type: mime_from_extension(&path),
+                }));
+            }
+        } else if let Some(color) = self.background_solid_color.take() {
+            slide.background = Some(Fill::Solid(SolidFill { color }));
+        } else if !self.background_gradient_stops.is_empty() {
+            slide.background = Some(Fill::Gradient(GradientFill {
+                gradient_type: std::mem::take(&mut self.background_gradient_type),
+                stops: std::mem::take(&mut self.background_gradient_stops),
+                angle: self.background_gradient_angle,
+            }));
+        }
+    }
+}
+
+fn relationship_embed_id(element: &BytesStart<'_>) -> Option<String> {
+    element.attributes().flatten().find_map(|attribute| {
+        let key = std::str::from_utf8(attribute.key.as_ref()).unwrap_or("");
+        key.ends_with("embed")
+            .then(|| String::from_utf8_lossy(&attribute.value).to_string())
+    })
 }
 
 fn parse_color(local: &str, element: &BytesStart<'_>) -> Option<Color> {
