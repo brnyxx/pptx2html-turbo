@@ -1,5 +1,8 @@
 use super::color::Color;
 
+pub(crate) const TEXT_FONT_SIZE_MIN_HUNDREDTHS_POINT: f64 = 100.0;
+pub(crate) const TEXT_FONT_SIZE_MAX_HUNDREDTHS_POINT: f64 = 400_000.0;
+
 /// Bullet
 #[derive(Debug, Clone)]
 pub enum Bullet {

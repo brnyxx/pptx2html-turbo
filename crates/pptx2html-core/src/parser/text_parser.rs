@@ -3,6 +3,9 @@ use quick_xml::events::BytesStart;
 use super::master_parser::{is_lvl_ppr, parse_def_rpr_attrs, parse_lvl_index, parse_lvl_ppr_attrs};
 use super::slide_parser::ShapeBuilder;
 use super::xml_utils;
+use crate::model::bullet::{
+    TEXT_FONT_SIZE_MAX_HUNDREDTHS_POINT, TEXT_FONT_SIZE_MIN_HUNDREDTHS_POINT,
+};
 use crate::model::*;
 
 #[derive(Default)]
@@ -540,7 +543,12 @@ pub(crate) fn parse_picture_bullet_size(
         "buSzPct" if (25_000.0..=400_000.0).contains(&value) => {
             Some(BulletSize::Percentage(value / 100_000.0))
         }
-        "buSzPts" if value > 0.0 => Some(BulletSize::Points(value / 100.0)),
+        "buSzPts"
+            if (TEXT_FONT_SIZE_MIN_HUNDREDTHS_POINT..=TEXT_FONT_SIZE_MAX_HUNDREDTHS_POINT)
+                .contains(&value) =>
+        {
+            Some(BulletSize::Points(value / 100.0))
+        }
         "buSzPct" | "buSzPts" => Some(BulletSize::Text),
         _ => None,
     }

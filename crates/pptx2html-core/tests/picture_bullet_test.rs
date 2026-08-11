@@ -77,6 +77,8 @@ fn replace_package_entry(package: &[u8], entry_name: &str, replacement: &[u8]) -
 mod assets;
 #[path = "picture_bullet/inheritance.rs"]
 mod inheritance;
+#[path = "picture_bullet/point_boundaries.rs"]
+mod point_boundaries;
 #[path = "picture_bullet/safety.rs"]
 mod safety;
 #[path = "picture_bullet/sizing.rs"]

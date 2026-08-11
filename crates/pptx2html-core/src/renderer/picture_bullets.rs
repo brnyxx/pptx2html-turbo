@@ -2,13 +2,18 @@ use std::fmt::Write;
 
 use base64::Engine;
 
+use crate::model::bullet::{
+    TEXT_FONT_SIZE_MAX_HUNDREDTHS_POINT, TEXT_FONT_SIZE_MIN_HUNDREDTHS_POINT,
+};
+
 use super::{
     BulletSize, CapabilityStage, ConversionDiagnostic, DEFAULT_FONT_SIZE_PT, DiagnosticLocation,
     FallbackKind, FeatureFamily, ParagraphDefaults, PictureBullet, RenderCtx, SupportTier,
     TextParagraph,
 };
 
-const MAX_TEXT_SIZE_PT: f64 = 4_000.0;
+const MIN_TEXT_SIZE_PT: f64 = TEXT_FONT_SIZE_MIN_HUNDREDTHS_POINT / 100.0;
+const MAX_TEXT_SIZE_PT: f64 = TEXT_FONT_SIZE_MAX_HUNDREDTHS_POINT / 100.0;
 const MAX_PICTURE_BULLET_SIZE_PT: f64 = MAX_TEXT_SIZE_PT * 4.0;
 
 pub(super) fn render(
@@ -27,11 +32,8 @@ pub(super) fn render(
         return;
     };
 
-    let text_size = valid_size(
-        surrounding_text_size(paragraph, inherited),
-        MAX_TEXT_SIZE_PT,
-    )
-    .unwrap_or(DEFAULT_FONT_SIZE_PT);
+    let text_size = valid_text_size(surrounding_text_size(paragraph, inherited))
+        .unwrap_or(DEFAULT_FONT_SIZE_PT);
     let scale = font_scale
         .filter(|value| value.is_finite() && (0.0..=1.0).contains(value))
         .unwrap_or(1.0);
@@ -41,7 +43,7 @@ pub(super) fn render(
         BulletSize::Percentage(factor) if factor.is_finite() && (0.25..=4.0).contains(&factor) => {
             scaled_text_size * factor
         }
-        BulletSize::Points(points) => points,
+        BulletSize::Points(points) => valid_text_size(points).unwrap_or(scaled_text_size),
         BulletSize::Percentage(_) => scaled_text_size,
     };
     let size = valid_size(requested_size, MAX_PICTURE_BULLET_SIZE_PT).unwrap_or(scaled_text_size);
@@ -59,6 +61,10 @@ pub(super) fn render(
 
 fn valid_size(value: f64, maximum: f64) -> Option<f64> {
     (value.is_finite() && value > 0.0 && value <= maximum).then_some(value)
+}
+
+fn valid_text_size(value: f64) -> Option<f64> {
+    (value.is_finite() && (MIN_TEXT_SIZE_PT..=MAX_TEXT_SIZE_PT).contains(&value)).then_some(value)
 }
 
 fn surrounding_text_size(paragraph: &TextParagraph, inherited: Option<&ParagraphDefaults>) -> f64 {
