@@ -8,6 +8,11 @@ class NegativeKind(StrEnum):
     TOKEN_ABSENT = "token_absent"
 
 
+class SchemaExpectation(StrEnum):
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+
+
 @dataclass(frozen=True, slots=True)
 class NegativeSpec:
     kind: NegativeKind
@@ -23,7 +28,7 @@ class FeatureSpec:
     part: str
     token: str
     negative: NegativeSpec | None = None
-    schema_expectation: str = "positive"
+    schema_expectation: SchemaExpectation = SchemaExpectation.POSITIVE
     expected_diagnostic: str | None = None
 
 
@@ -38,7 +43,7 @@ def _f(
     token: str,
     part: str = S,
     negative: NegativeSpec | None = None,
-    schema_expectation: str = "positive",
+    schema_expectation: SchemaExpectation = SchemaExpectation.POSITIVE,
     expected_diagnostic: str | None = None,
 ) -> FeatureSpec:
     return FeatureSpec(
@@ -82,7 +87,7 @@ FEATURES = (
         "patterns",
         "pattern-fill-unknown",
         '<a:pattFill prst="unknownFuturePattern">',
-        schema_expectation="negative",
+        schema_expectation=SchemaExpectation.NEGATIVE,
         expected_diagnostic="PPTX_COMPLETENESS_FALLBACK",
     ),
     _f(

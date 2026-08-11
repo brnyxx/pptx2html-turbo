@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from xml.sax.saxutils import quoteattr
+
 if __package__:
     from .completion_deck_package import REL, ContentType, Part, Relationship
 else:
@@ -31,7 +33,8 @@ def content_types() -> tuple[ContentType, ...]:
 
 
 def _region(name: str, color: str) -> str:
-    return f'<a:{name}><a:tcTxStyle><a:fontRef idx="minor"><a:schemeClr val="{color}"/></a:fontRef><a:schemeClr val="tx1"/></a:tcTxStyle><a:tcStyle><a:tcBdr/><a:fill><a:solidFill><a:schemeClr val="{color}"/></a:solidFill></a:fill></a:tcStyle></a:{name}>'
+    encoded = quoteattr(color)
+    return f'<a:{name}><a:tcTxStyle><a:fontRef idx="minor"><a:schemeClr val={encoded}/></a:fontRef><a:schemeClr val="tx1"/></a:tcTxStyle><a:tcStyle><a:tcBdr/><a:fill><a:solidFill><a:schemeClr val={encoded}/></a:solidFill></a:fill></a:tcStyle></a:{name}>'
 
 
 def _styles() -> bytes:
@@ -51,4 +54,5 @@ def _styles() -> bytes:
         ("nwCell", "accent1"),
     )
     regions = "".join(_region(name, color) for name, color in ordered)
-    return f'<?xml version="1.0"?><a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{CUSTOM_STYLE}"><a:tblStyle styleId="{CUSTOM_STYLE}" styleName="Completion Regions">{regions}</a:tblStyle></a:tblStyleLst>'.encode()
+    style = quoteattr(CUSTOM_STYLE)
+    return f'<?xml version="1.0"?><a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def={style}><a:tblStyle styleId={style} styleName="Completion Regions">{regions}</a:tblStyle></a:tblStyleLst>'.encode()

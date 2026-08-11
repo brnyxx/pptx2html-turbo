@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import binascii
 import io
-import json
 import struct
 import zipfile
 import zlib
 from dataclasses import dataclass
 from typing import Final, TypeAlias
+from xml.sax.saxutils import quoteattr
 
 if __package__:
     from .completion_deck_common import theme_xml
@@ -42,8 +42,9 @@ class Deck:
 
 def relationships_xml(rows: tuple[Relationship, ...]) -> bytes:
     body = "".join(
-        f'<Relationship Id="{rid}" Type="{kind}" Target="{target}"'
-        f"{f' TargetMode={json.dumps(mode)}' if mode else ''}/>"
+        f"<Relationship Id={quoteattr(rid)} Type={quoteattr(kind)} "
+        f"Target={quoteattr(target)}"
+        f"{f' TargetMode={quoteattr(mode)}' if mode is not None else ''}/>"
         for rid, kind, target, mode in rows
     )
     return (
@@ -134,7 +135,7 @@ def _content_types(deck: Deck) -> bytes:
         for i in range(1, len(deck.slides) + 1)
     )
     overrides = "".join(
-        f'<Override PartName="{name}" ContentType="{kind}"/>'
+        f"<Override PartName={quoteattr(name)} ContentType={quoteattr(kind)}/>"
         for name, kind in (*common, *deck.types, *slides)
     )
     return (
@@ -150,7 +151,7 @@ def _content_types(deck: Deck) -> bytes:
 
 def _package_parts(deck: Deck) -> dict[str, bytes]:
     slide_ids = "".join(
-        f'<p:sldId id="{255 + i}" r:id="rIdSlide{i}"/>'
+        f"<p:sldId id={quoteattr(str(255 + i))} r:id={quoteattr(f'rIdSlide{i}')}/>"
         for i in range(1, len(deck.slides) + 1)
     )
     presentation_rels: tuple[Relationship, ...] = (

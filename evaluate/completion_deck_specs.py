@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Final
+from xml.sax.saxutils import quoteattr
 
 if __package__:
     from .completion_deck_charts import parts as chart_parts
@@ -64,7 +65,7 @@ MEDIA: Final = '<p:pic><p:nvPicPr><p:cNvPr id="2" name="audio"><a:hlinkClick act
 TIMING_SHAPES: Final = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="animated"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/></p:sp>'
 TIMING_TAIL: Final = '<p:transition spd="slow"><p:{transition}/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" nodeType="tmRoot"><p:childTnLst><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="2" dur="500"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animEffect><p:animMotion origin="layout" path="M 0 0 L 1 1"><p:cBhvr><p:cTn id="3" dur="1000"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animMotion></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
 CHARTS: Final = "".join(
-    f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="{i}" name="{name}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id="{rid}"/></a:graphicData></a:graphic></p:graphicFrame>'
+    f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id={quoteattr(str(i))} name={quoteattr(name)}/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id={quoteattr(rid)}/></a:graphicData></a:graphic></p:graphicFrame>'
     for i, name, rid in (
         (2, "direct", "rIdChartDirect"),
         (3, "preview", "rIdChartPreview"),

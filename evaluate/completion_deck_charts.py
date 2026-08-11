@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from xml.sax.saxutils import quoteattr
+
 if __package__:
     from .completion_deck_package import REL, Part, relationships_xml
 else:
@@ -32,23 +34,24 @@ def parts(image: bytes) -> tuple[Part, ...]:
 
 
 def _space(plot: str) -> bytes:
-    return f'<?xml version="1.0"?><c:chartSpace xmlns:c="{C}"><c:chart><c:plotArea><c:layout/>{plot}</c:plotArea><c:plotVisOnly val="1"/></c:chart></c:chartSpace>'.encode()
+    return f'<?xml version="1.0"?><c:chartSpace xmlns:c={quoteattr(C)}><c:chart><c:plotArea><c:layout/>{plot}</c:plotArea><c:plotVisOnly val="1"/></c:chart></c:chartSpace>'.encode()
 
 
 def _series(index: int) -> str:
-    return f'<c:ser><c:idx val="{index}"/><c:order val="{index}"/></c:ser>'
+    value = quoteattr(str(index))
+    return f"<c:ser><c:idx val={value}/><c:order val={value}/></c:ser>"
 
 
 def _cat_axis(axis: int, crossing: int) -> str:
-    return f'<c:catAx><c:axId val="{axis}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:tickLblPos val="nextTo"/><c:crossAx val="{crossing}"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx>'
+    return f'<c:catAx><c:axId val={quoteattr(str(axis))}/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:tickLblPos val="nextTo"/><c:crossAx val={quoteattr(str(crossing))}/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx>'
 
 
 def _value_axis(axis: int, crossing: int) -> str:
-    return f'<c:valAx><c:axId val="{axis}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:numFmt formatCode="General" sourceLinked="1"/><c:tickLblPos val="nextTo"/><c:crossAx val="{crossing}"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>'
+    return f'<c:valAx><c:axId val={quoteattr(str(axis))}/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:numFmt formatCode="General" sourceLinked="1"/><c:tickLblPos val="nextTo"/><c:crossAx val={quoteattr(str(crossing))}/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>'
 
 
 def _series_axis(axis: int, crossing: int) -> str:
-    return f'<c:serAx><c:axId val="{axis}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:tickLblPos val="nextTo"/><c:crossAx val="{crossing}"/><c:crosses val="autoZero"/></c:serAx>'
+    return f'<c:serAx><c:axId val={quoteattr(str(axis))}/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:tickLblPos val="nextTo"/><c:crossAx val={quoteattr(str(crossing))}/><c:crosses val="autoZero"/></c:serAx>'
 
 
 def _direct_bar() -> bytes:

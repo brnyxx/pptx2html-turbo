@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from xml.sax.saxutils import quoteattr
+
 if __package__:
     from .completion_deck_package import REL, ContentType, Part, Relationship
 else:
@@ -57,18 +59,18 @@ def content_types() -> tuple[ContentType, ...]:
 
 
 def _data() -> bytes:
-    return f'<?xml version="1.0"?><dgm:dataModel xmlns:dgm="{DGM}" xmlns:a="{A}"><dgm:ptLst><dgm:pt modelId="0" type="doc"/></dgm:ptLst><dgm:cxnLst/></dgm:dataModel>'.encode()
+    return f'<?xml version="1.0"?><dgm:dataModel xmlns:dgm={quoteattr(DGM)} xmlns:a={quoteattr(A)}><dgm:ptLst><dgm:pt modelId="0" type="doc"/></dgm:ptLst><dgm:cxnLst/></dgm:dataModel>'.encode()
 
 
 def _layout() -> bytes:
-    return f'<?xml version="1.0"?><dgm:layoutDef xmlns:dgm="{DGM}" xmlns:a="{A}" uniqueId="urn:pptx2html:layout" minVer="12.0"><dgm:title val="Completion"/><dgm:desc val="Completion"/><dgm:catLst/><dgm:layoutNode name="root"/></dgm:layoutDef>'.encode()
+    return f'<?xml version="1.0"?><dgm:layoutDef xmlns:dgm={quoteattr(DGM)} xmlns:a={quoteattr(A)} uniqueId="urn:pptx2html:layout" minVer="12.0"><dgm:title val="Completion"/><dgm:desc val="Completion"/><dgm:catLst/><dgm:layoutNode name="root"/></dgm:layoutDef>'.encode()
 
 
 def _style() -> bytes:
     refs = '<a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="tx1"/></a:fontRef>'
-    return f'<?xml version="1.0"?><dgm:styleDef xmlns:dgm="{DGM}" xmlns:a="{A}" uniqueId="urn:pptx2html:style" minVer="12.0"><dgm:title val="Completion"/><dgm:desc val="Completion"/><dgm:catLst/><dgm:styleLbl name="node"><dgm:style>{refs}</dgm:style></dgm:styleLbl></dgm:styleDef>'.encode()
+    return f'<?xml version="1.0"?><dgm:styleDef xmlns:dgm={quoteattr(DGM)} xmlns:a={quoteattr(A)} uniqueId="urn:pptx2html:style" minVer="12.0"><dgm:title val="Completion"/><dgm:desc val="Completion"/><dgm:catLst/><dgm:styleLbl name="node"><dgm:style>{refs}</dgm:style></dgm:styleLbl></dgm:styleDef>'.encode()
 
 
 def _colors() -> bytes:
     colors = '<dgm:fillClrLst><a:schemeClr val="accent1"/></dgm:fillClrLst><dgm:linClrLst><a:schemeClr val="accent1"/></dgm:linClrLst><dgm:effectClrLst><a:schemeClr val="accent1"/></dgm:effectClrLst><dgm:txLinClrLst><a:schemeClr val="tx1"/></dgm:txLinClrLst><dgm:txFillClrLst><a:schemeClr val="tx1"/></dgm:txFillClrLst><dgm:txEffectClrLst><a:schemeClr val="tx1"/></dgm:txEffectClrLst>'
-    return f'<?xml version="1.0"?><dgm:colorsDef xmlns:dgm="{DGM}" xmlns:a="{A}" uniqueId="urn:pptx2html:colors" minVer="12.0"><dgm:title val="Completion"/><dgm:desc val="Completion"/><dgm:catLst/><dgm:styleLbl name="node">{colors}</dgm:styleLbl></dgm:colorsDef>'.encode()
+    return f'<?xml version="1.0"?><dgm:colorsDef xmlns:dgm={quoteattr(DGM)} xmlns:a={quoteattr(A)} uniqueId="urn:pptx2html:colors" minVer="12.0"><dgm:title val="Completion"/><dgm:desc val="Completion"/><dgm:catLst/><dgm:styleLbl name="node">{colors}</dgm:styleLbl></dgm:colorsDef>'.encode()

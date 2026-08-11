@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Final, Protocol
 
 if __package__:
+    from .completion_deck_features import SchemaExpectation
     from .completion_deck_manifest import ContractError
 else:
+    from completion_deck_features import SchemaExpectation
     from completion_deck_manifest import ContractError
 
 
@@ -16,8 +18,7 @@ class FeatureLike(Protocol):
     feature_id: str
     part: str
     token: str
-    negative: object
-    schema_expectation: str
+    schema_expectation: SchemaExpectation
     expected_diagnostic: str | None
 
 
@@ -57,6 +58,9 @@ SCENARIO_CANONICAL: Final = {
     "fallback-alternate-content": "alternate-content",
     "fallback-unknown-extension": "extensions",
 }
+SCHEMA_NEGATIVES: Final = {
+    "pattern-fill-unknown": "PPTX_COMPLETENESS_FALLBACK",
+}
 
 
 def validate_features(features: tuple[FeatureLike, ...], canonical_path: Path) -> None:
@@ -70,6 +74,25 @@ def validate_features(features: tuple[FeatureLike, ...], canonical_path: Path) -
         raise ContractError(
             f"COMPLETION_SCENARIO_MISMATCH missing={','.join(missing)} extra={','.join(extra)}"
         )
+    for feature in features:
+        try:
+            expectation = SchemaExpectation(feature.schema_expectation)
+        except ValueError as error:
+            raise ContractError(
+                "COMPLETION_SCHEMA_EXPECTATION_INVALID "
+                f"id={feature.feature_id} value={feature.schema_expectation}"
+            ) from error
+        expected = (
+            (SchemaExpectation.NEGATIVE, SCHEMA_NEGATIVES[feature.feature_id])
+            if feature.feature_id in SCHEMA_NEGATIVES
+            else (SchemaExpectation.POSITIVE, None)
+        )
+        if (expectation, feature.expected_diagnostic) != expected:
+            raise ContractError(
+                "COMPLETION_SCHEMA_CONTRACT "
+                f"id={feature.feature_id} expectation={expectation} "
+                f"diagnostic={feature.expected_diagnostic}"
+            )
     try:
         payload = json.loads(canonical_path.read_text(encoding="utf-8"))
         rows = payload["features"]
