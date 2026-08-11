@@ -1,13 +1,21 @@
 //! Data model representing PPTX document structure
 //! Based on ECMA-376 Part 1 (PresentationML)
 
+pub mod bullet;
 pub mod capabilities;
+pub mod chart;
 pub mod color;
+pub mod effects;
+pub mod fill;
 mod geometry;
 pub mod hierarchy;
 pub mod presentation;
+pub mod preserved;
+pub mod shape;
 pub mod slide;
 mod style;
+pub mod table;
+pub mod text;
 
 pub use capabilities::{
     CapabilityMatrix, CapabilityStage, FeatureCapability, FeatureFamily, SupportTier,

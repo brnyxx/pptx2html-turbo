@@ -3,6 +3,18 @@ mod fixtures;
 use std::fs;
 
 use fixtures::MinimalPptx;
+use pptx2html_core::model::bullet::BulletChar as FeatureBulletChar;
+use pptx2html_core::model::chart::ChartSpec as FeatureChartSpec;
+use pptx2html_core::model::effects::ShapeEffects as FeatureShapeEffects;
+use pptx2html_core::model::fill::Fill as FeatureFill;
+use pptx2html_core::model::preserved::UnresolvedType as FeatureUnresolvedType;
+use pptx2html_core::model::shape::Shape as FeatureShape;
+use pptx2html_core::model::slide::{Shape as SlideModuleShape, TextBody as SlideModuleTextBody};
+use pptx2html_core::model::table::TableCell as FeatureTableCell;
+use pptx2html_core::model::text::TextBody as FeatureTextBody;
+use pptx2html_core::model::{
+    AutoFit, ChartSpec, Fill, Shape, ShapeEffects, TableCell, TextBody, TextMargins, VerticalAlign,
+};
 use pptx2html_core::{
     ConversionOptions, convert_bytes, convert_bytes_with_metadata, convert_bytes_with_options,
     convert_file, convert_file_with_metadata, convert_file_with_options, get_info,
@@ -126,4 +138,56 @@ fn should_include_slide_honors_hidden_indices_and_ranges() {
         ..Default::default()
     };
     assert_eq!(scaled_opts.effective_scale(), 2.0);
+}
+
+#[test]
+fn public_model_paths_and_defaults_remain_compatible() {
+    let root_shape = Shape::default();
+    let slide_shape = SlideModuleShape::default();
+    let root_body = TextBody::default();
+    let slide_body = SlideModuleTextBody::default();
+    let root_fill = Fill::default();
+    let root_effects = ShapeEffects::default();
+    let cell = TableCell::default();
+    let margins = TextMargins::default();
+    let chart = ChartSpec::default();
+    let feature_shape = FeatureShape::default();
+    let feature_body = FeatureTextBody::default();
+    let feature_cell = FeatureTableCell::default();
+    let feature_chart = FeatureChartSpec::default();
+    let feature_fill = FeatureFill::default();
+    let feature_effects = FeatureShapeEffects::default();
+    let feature_bullet = FeatureBulletChar {
+        char: "-".to_string(),
+        font: None,
+        size_pct: None,
+        color: None,
+    };
+    let unresolved = FeatureUnresolvedType::SmartArt;
+
+    let _: FeatureShape = root_shape.clone();
+    let _: FeatureShape = slide_shape.clone();
+    let _: FeatureTextBody = root_body.clone();
+    let _: FeatureTextBody = slide_body.clone();
+
+    assert_eq!(root_shape.id, slide_shape.id);
+    assert!(root_body.paragraphs.is_empty());
+    assert!(slide_body.paragraphs.is_empty());
+    assert!(matches!(root_fill, Fill::None));
+    assert!(root_effects.outer_shadow.is_none());
+    assert_eq!(cell.margin_left, 7.2);
+    assert_eq!(cell.margin_top, 3.6);
+    assert_eq!(margins.left, 7.2);
+    assert_eq!(margins.top, 3.6);
+    assert!(matches!(cell.vertical_align, VerticalAlign::Top));
+    assert!(matches!(root_body.auto_fit, AutoFit::None));
+    assert!(chart.series.is_empty());
+    assert_eq!(feature_shape.id, root_shape.id);
+    assert!(feature_body.paragraphs.is_empty());
+    assert_eq!(feature_cell.margin_left, cell.margin_left);
+    assert!(feature_chart.series.is_empty());
+    assert!(matches!(feature_fill, FeatureFill::None));
+    assert!(feature_effects.outer_shadow.is_none());
+    assert_eq!(feature_bullet.char, "-");
+    assert_eq!(unresolved, FeatureUnresolvedType::SmartArt);
 }
