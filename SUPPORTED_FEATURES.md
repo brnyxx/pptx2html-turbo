@@ -1,5 +1,13 @@
 # Supported PPTX Features
 
+## DrawingML tables
+
+- Parses `ppt/tableStyles.xml`, `a:tableStyleId`, the six table flags, whole/row/column/corner regions, `tblBg`, theme-aware fill/text styles, outer borders, and `insideH`/`insideV` borders.
+- Applies regions in the Microsoft Office order and lets explicit cell fill, `noFill`, and side-border presence override style regions.
+- Uses logical grid coordinates across `gridSpan`, `hMerge`, and `vMerge` cells.
+- Preserves unavailable built-in and invalid IDs without inventing an appearance and emits `TABLE_STYLE_DEFINITION_UNAVAILABLE` with ID/source kind/six flags.
+- `[교차검증 필요]` The cited Office application-order note does not define whether band numbering restarts after first/last rows; the converter currently uses one-based odd/even physical grid coordinates before later first/last-region overrides.
+
 Status legend: `exact` / `approximate` / `fallback` / `unparsed`
 
 This file is the detailed ECMA-376 element inventory. The authoritative support contract now lives in `docs/architecture/CAPABILITY_MATRIX.md`.

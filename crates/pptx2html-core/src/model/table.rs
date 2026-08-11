@@ -1,5 +1,6 @@
 use super::fill::Fill;
 use super::style::Border;
+use super::table_style::TableStyleReference;
 use super::text::{TextBody, VerticalAlign};
 
 /// Table data
@@ -13,6 +14,7 @@ pub struct TableData {
     pub last_row: bool,
     pub first_col: bool,
     pub last_col: bool,
+    pub style: Option<TableStyleReference>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -32,6 +34,8 @@ pub struct TableCell {
     pub col_span: u32,
     pub row_span: u32,
     pub v_merge: bool,
+    pub h_merge: bool,
+    pub explicit_borders: u8,
     pub margin_left: f64,   // in pt
     pub margin_right: f64,  // in pt
     pub margin_top: f64,    // in pt
@@ -51,6 +55,8 @@ impl Default for TableCell {
             col_span: 0,
             row_span: 0,
             v_merge: false,
+            h_merge: false,
+            explicit_borders: 0,
             margin_left: 7.2,   // OOXML default 91440 EMU
             margin_right: 7.2,  // OOXML default 91440 EMU
             margin_top: 3.6,    // OOXML default 45720 EMU

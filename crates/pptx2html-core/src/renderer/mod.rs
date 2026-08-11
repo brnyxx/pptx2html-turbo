@@ -14,6 +14,8 @@ mod pattern_tiles;
 mod patterns;
 mod picture_bullets;
 pub mod provenance;
+mod table_style_diagnostics;
+mod table_styles;
 mod tables;
 pub mod text_metrics;
 
@@ -2406,6 +2408,8 @@ mod tests {
                     col_span: 2,
                     row_span: 3,
                     v_merge: false,
+                    h_merge: false,
+                    explicit_borders: 15,
                     margin_left: 7.2,
                     margin_right: 7.2,
                     margin_top: 3.6,
@@ -2420,6 +2424,7 @@ mod tests {
             last_row: false,
             first_col: true,
             last_col: false,
+            style: None,
         };
         let mut html = String::new();
         HtmlRenderer::render_table(&table, &ctx, &mut html);

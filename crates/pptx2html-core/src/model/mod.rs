@@ -19,6 +19,7 @@ pub mod shape;
 pub mod slide;
 mod style;
 pub mod table;
+pub mod table_style;
 pub mod text;
 pub mod timing;
 
@@ -53,4 +54,8 @@ pub use style::{
     GradientFill, GradientStop, GradientType, ImageFill, LineAlignment, LineCap, LineEnd,
     LineEndSize, LineEndType, LineJoin, OuterShadow, PatternFill, ShapeEffects, SolidFill,
     StrikethroughType, TextCapitalization, TextShadow, TextStyle, UnderlineType,
+};
+pub use table_style::{
+    TableCellStyle, TableStyle, TableStyleIssue, TableStyleReference, TableStyleRegion,
+    TableStyleSourceKind, TableTextStyle,
 };

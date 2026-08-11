@@ -10,6 +10,15 @@ All notable changes to this project will be documented in this file.
 - Rust consumers with exhaustive `Bullet` matches must add a `Bullet::Picture` arm.
 - Publish this public enum change only in the next semver-major release; package manifests remain unchanged on the current release line.
 
+### Rendering / Public API
+- Resolve package-defined DrawingML table styles in Office region precedence order, including theme-aware fills, text, outer/inside borders, explicit-cell overrides, and logical merged-cell coordinates
+- Preserve unavailable built-in and invalid table style IDs plus all six flags in `TABLE_STYLE_DEFINITION_UNAVAILABLE` diagnostics without synthesizing Office appearances
+- Add `TableData::style`, `TableCell::h_merge`, and `TableCell::explicit_borders`; external struct literals require a next-semver-major source migration while the manifest version remains unchanged
+
+### Fixtures / Documentation
+- Expand the completion table deck to a region matrix with explicit fill/noFill overrides and a horizontal merge row
+- Mark the header/footer-relative band origin as `[교차검증 필요]` because the Office application-order note does not define that offset
+
 ## [1.1.0] - 2026-04-14
 
 ### Rendering / Public API

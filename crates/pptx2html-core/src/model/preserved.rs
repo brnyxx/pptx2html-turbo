@@ -53,6 +53,7 @@ pub enum FallbackKind {
     PreservedPart,
     IgnoredRelationship,
     UnknownElement,
+    TableStyleDefinitionUnavailable,
 }
 
 impl FallbackKind {
@@ -65,6 +66,7 @@ impl FallbackKind {
             Self::PreservedPart => "preserved-part",
             Self::IgnoredRelationship => "ignored-relationship",
             Self::UnknownElement => "unknown-element",
+            Self::TableStyleDefinitionUnavailable => "table-style-definition-unavailable",
         }
     }
 }

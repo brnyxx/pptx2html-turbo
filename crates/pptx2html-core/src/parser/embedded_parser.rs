@@ -108,6 +108,7 @@ pub(crate) fn known_relationship_type(value: &str) -> bool {
             | "diagramStyle"
             | "diagramColors"
             | "extended-properties"
+            | "tableStyles"
     )
 }
 

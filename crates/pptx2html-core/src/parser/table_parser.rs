@@ -37,6 +37,7 @@ pub(crate) struct TableSaxState {
     pub(crate) in_line_spacing: bool,
     pub(crate) in_space_before: bool,
     pub(crate) in_space_after: bool,
+    pub(crate) in_style_id: bool,
 }
 
 impl TableSaxState {
@@ -49,7 +50,21 @@ impl TableSaxState {
         match local {
             "tbl" if in_graphic_frame => start_table(&mut self.in_table, &mut self.builder),
             "tblPr" if self.in_table => parse_table_properties(element, &mut self.builder),
+            "tableStyleId" if self.in_table => {
+                self.in_style_id = true;
+            }
             "gridCol" if self.in_table => parse_column(element, &mut self.builder),
+            "noFill" if self.in_properties => {
+                if let Some(cell) = self.cell.as_mut() {
+                    if let Some(side) = self.border_side.as_deref() {
+                        if let Some(border) = border_mut(cell, side) {
+                            border.no_fill = true;
+                        }
+                    } else {
+                        cell.fill = Fill::NoFill;
+                    }
+                }
+            }
             "tr" if self.in_table => start_row(element, &mut self.in_row, &mut self.row),
             "tc" if self.in_row => {
                 self.list_style = None;
@@ -151,6 +166,7 @@ impl TableSaxState {
                 self.in_row = false;
             }
             "tbl" => self.in_table = false,
+            "tableStyleId" if self.in_style_id => self.in_style_id = false,
             "lnSpc" if self.in_line_spacing => self.in_line_spacing = false,
             "spcBef" if self.in_space_before => self.in_space_before = false,
             "spcAft" if self.in_space_after => self.in_space_after = false,
@@ -162,6 +178,22 @@ impl TableSaxState {
     pub(crate) fn handle_empty(&mut self, local: &str, element: &BytesStart<'_>) -> bool {
         match local {
             "gridCol" if self.in_table => parse_column(element, &mut self.builder),
+            "noFill" if self.in_properties => {
+                if let Some(cell) = self.cell.as_mut() {
+                    if let Some(side) = self.border_side.as_deref() {
+                        if let Some(border) = border_mut(cell, side) {
+                            border.no_fill = true;
+                        }
+                    } else {
+                        cell.fill = Fill::NoFill;
+                    }
+                }
+            }
+            "tableStyleId" if self.in_table => {
+                if let Some(builder) = self.builder.as_mut() {
+                    builder.style_id = Some(String::new());
+                }
+            }
             "pPr" if self.in_cell && self.paragraph.is_some() => {
                 parse_paragraph_properties(element, &mut self.paragraph)
             }
@@ -241,6 +273,12 @@ impl TableSaxState {
     }
 
     pub(crate) fn handle_text(&mut self, text: &str) -> bool {
+        if self.in_style_id {
+            if let Some(builder) = self.builder.as_mut() {
+                builder.style_id.get_or_insert_default().push_str(text);
+            }
+            return true;
+        }
         if !self.in_text {
             return false;
         }
@@ -259,7 +297,6 @@ pub(crate) fn parse_table_properties(element: &BytesStart<'_>, builder: &mut Opt
     let Some(builder) = builder.as_mut() else {
         return;
     };
-    let parse_bool = |value: &str| value == "1" || value == "true";
     for (name, target) in [
         ("bandRow", &mut builder.band_row),
         ("bandCol", &mut builder.band_col),
@@ -269,7 +306,14 @@ pub(crate) fn parse_table_properties(element: &BytesStart<'_>, builder: &mut Opt
         ("lastCol", &mut builder.last_col),
     ] {
         if let Some(value) = xml_utils::attr_str(element, name) {
-            *target = parse_bool(&value);
+            match value.as_str() {
+                "1" | "true" => *target = true,
+                "0" | "false" => *target = false,
+                _ => builder.style_issues.push(TableStyleIssue::InvalidBoolean {
+                    name: name.to_owned(),
+                    value,
+                }),
+            }
         }
     }
 }
@@ -313,6 +357,8 @@ pub(crate) fn start_cell(
         .unwrap_or(1);
     let v_merge =
         xml_utils::attr_str(element, "vMerge").is_some_and(|value| value == "1" || value == "true");
+    let h_merge =
+        xml_utils::attr_str(element, "hMerge").is_some_and(|value| value == "1" || value == "true");
     *cell = Some(TableCellBuilder {
         text_body: None,
         fill: Fill::None,
@@ -323,6 +369,8 @@ pub(crate) fn start_cell(
         col_span,
         row_span,
         v_merge,
+        h_merge,
+        explicit_borders: 0,
         margin_left: 7.2,
         margin_right: 7.2,
         margin_top: 3.6,
@@ -371,12 +419,19 @@ pub(crate) fn start_border(
     cell: &mut Option<TableCellBuilder>,
 ) {
     *border_side = Some(side.to_owned());
+    if let Some(border) = cell.as_mut().and_then(|cell| border_mut(cell, side)) {
+        border.no_fill = true;
+        if let Some(cell) = cell.as_mut() {
+            cell.explicit_borders |= border_bit(side);
+        }
+    }
     let Some(width) = xml_utils::attr_str(element, "w") else {
         return;
     };
     let width = Emu::parse_emu(&width).to_pt();
     if let Some(border) = cell.as_mut().and_then(|cell| border_mut(cell, side)) {
         border.width = width;
+        border.no_fill = false;
     }
 }
 
@@ -420,6 +475,16 @@ fn border_mut<'a>(cell: &'a mut TableCellBuilder, side: &str) -> Option<&'a mut 
         "lnT" => Some(&mut cell.border_top),
         "lnB" => Some(&mut cell.border_bottom),
         _ => None,
+    }
+}
+
+fn border_bit(side: &str) -> u8 {
+    match side {
+        "lnL" => 1,
+        "lnR" => 2,
+        "lnT" => 4,
+        "lnB" => 8,
+        _ => 0,
     }
 }
 
@@ -478,6 +543,8 @@ pub(crate) struct TableBuilder {
     pub(crate) last_row: bool,
     pub(crate) first_col: bool,
     pub(crate) last_col: bool,
+    pub(crate) style_id: Option<String>,
+    pub(crate) style_issues: Vec<TableStyleIssue>,
 }
 
 impl TableBuilder {
@@ -491,6 +558,12 @@ impl TableBuilder {
             last_row: self.last_row,
             first_col: self.first_col,
             last_col: self.last_col,
+            style: self.style_id.map(|id| TableStyleReference {
+                id,
+                source_kind: TableStyleSourceKind::Invalid,
+                definition: None,
+                issues: self.style_issues,
+            }),
         }
     }
 }
@@ -520,6 +593,8 @@ pub(crate) struct TableCellBuilder {
     pub(crate) col_span: u32,
     pub(crate) row_span: u32,
     pub(crate) v_merge: bool,
+    pub(crate) h_merge: bool,
+    pub(crate) explicit_borders: u8,
     pub(crate) margin_left: f64,
     pub(crate) margin_right: f64,
     pub(crate) margin_top: f64,
@@ -540,6 +615,8 @@ impl Default for TableCellBuilder {
             col_span: cell.col_span,
             row_span: cell.row_span,
             v_merge: cell.v_merge,
+            h_merge: cell.h_merge,
+            explicit_borders: cell.explicit_borders,
             margin_left: cell.margin_left,
             margin_right: cell.margin_right,
             margin_top: cell.margin_top,
@@ -561,6 +638,8 @@ impl TableCellBuilder {
             col_span: self.col_span,
             row_span: self.row_span,
             v_merge: self.v_merge,
+            h_merge: self.h_merge,
+            explicit_borders: self.explicit_borders,
             margin_left: self.margin_left,
             margin_right: self.margin_right,
             margin_top: self.margin_top,

@@ -119,7 +119,9 @@ fn tables_keep_structure_and_cell_style_contract() {
     let html = render_shapes(vec![sized_shape(ShapeType::Table(table))]);
 
     assert!(html.contains("<col style=\"width:66.7%\"/>"));
-    assert!(html.contains("<td colspan=\"2\" style=\"background-color: #DDEEFF"));
+    assert!(html.contains("data-table-cell=\"r0c0\""));
+    assert!(html.contains("colspan=\"2\""));
+    assert!(html.contains("background-color: #DDEEFF"));
     assert!(html.contains(">Cell contract</span>"));
 }
 

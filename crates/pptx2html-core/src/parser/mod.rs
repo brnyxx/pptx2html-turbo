@@ -19,6 +19,9 @@ mod preserved_parser;
 pub mod relationships;
 mod slide_parser;
 mod table_parser;
+mod table_style_builtins;
+mod table_style_parser;
+mod table_style_values;
 mod text_parser;
 mod theme_parser;
 mod timing_parser;
@@ -36,7 +39,12 @@ use quick_xml::events::Event;
 use zip::ZipArchive;
 
 use crate::error::{PptxError, PptxResult};
-use crate::model::{Emu, ListStyle, Presentation, Size};
+use crate::model::{
+    Emu, ListStyle, Presentation, Shape, ShapeType, Size, TableStyle, TableStyleSourceKind,
+};
+
+const TABLE_STYLES_RELATIONSHIP_TYPE: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
 
 #[derive(Debug, Clone)]
 struct SlideRef {
@@ -94,6 +102,17 @@ impl PptxParser {
         let rels_xml = Self::read_entry(&mut archive, "ppt/_rels/presentation.xml.rels")?;
         let pres_relationships = relationships::parse_relationship_records(&rels_xml)?;
         let pres_rels = relationships::target_map(&pres_relationships);
+
+        let table_styles = pres_relationships
+            .iter()
+            .filter(|relationship| relationship.relationship_type == TABLE_STYLES_RELATIONSHIP_TYPE)
+            .map(|relationship| relationship.target.clone())
+            .min()
+            .map(|target| normalize_ppt_path(&target))
+            .and_then(|path| Self::read_entry(&mut archive, &path).ok())
+            .map(|xml| table_style_parser::parse_table_styles(&xml))
+            .transpose()?
+            .unwrap_or_default();
 
         // 3. Parse themes
         let theme_paths = collect_targets_by_type(&pres_relationships, "theme");
@@ -232,6 +251,7 @@ impl PptxParser {
                         &content_types,
                         &mut archive,
                     );
+                    resolve_table_style_references(&mut slide.shapes, &table_styles);
                     slide.hidden = slide_ref.hidden;
 
                     // Find which layout this slide references
@@ -579,6 +599,44 @@ impl PptxParser {
                 Err(_) => return None,
                 _ => {}
             }
+        }
+    }
+}
+
+fn resolve_table_style_references(shapes: &mut [Shape], styles: &[TableStyle]) {
+    for shape in shapes {
+        match &mut shape.shape_type {
+            ShapeType::Table(table) => {
+                if let Some(reference) = table.style.as_mut() {
+                    let mut matching = styles.iter().filter(|style| style.id == reference.id);
+                    if let Some(definition) = matching.next() {
+                        reference.source_kind = TableStyleSourceKind::Package;
+                        reference.definition = Some(definition.clone());
+                        if matching.next().is_some() {
+                            reference
+                                .issues
+                                .push(crate::model::TableStyleIssue::DuplicateId);
+                        }
+                    } else if table_style_builtins::contains(&reference.id) {
+                        reference.source_kind = TableStyleSourceKind::BuiltIn;
+                    } else {
+                        reference.source_kind = TableStyleSourceKind::Invalid;
+                    }
+                }
+            }
+            ShapeType::Group(children, _) => resolve_table_style_references(children, styles),
+            ShapeType::Rectangle
+            | ShapeType::RoundedRectangle
+            | ShapeType::Ellipse
+            | ShapeType::Triangle
+            | ShapeType::Arrow
+            | ShapeType::Line
+            | ShapeType::TextBox
+            | ShapeType::Picture(_)
+            | ShapeType::Chart(_)
+            | ShapeType::Custom(_)
+            | ShapeType::CustomGeom(_)
+            | ShapeType::Unsupported(_) => {}
         }
     }
 }

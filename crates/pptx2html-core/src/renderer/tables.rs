@@ -1,14 +1,44 @@
 use std::fmt::Write;
 
 use super::bullets::{ParagraphRenderContext, TextStyleCtx};
-use super::{HtmlRenderer, RenderCtx, TableData, VerticalAlign, dash_style_to_css, push_sep};
+use super::{
+    HtmlRenderer, RenderCtx, TableData, VerticalAlign, dash_style_to_css, escape_html, push_sep,
+};
+use super::{table_style_diagnostics, table_styles};
 
 impl HtmlRenderer {
     pub(super) fn render_table(table: &TableData, ctx: &RenderCtx<'_>, html: &mut String) {
         let total_width: f64 = table.col_widths.iter().sum();
-        html.push_str(
-            "<table style=\"width:100%; height:100%; border-collapse:collapse; table-layout:fixed;\">\n<colgroup>\n",
-        );
+        html.push_str("<table");
+        if let Some(reference) = &table.style {
+            let _ = write!(
+                html,
+                " data-table-style-id=\"{}\"",
+                escape_html(&reference.id)
+            );
+            let _ = write!(
+                html,
+                " data-table-style-source=\"{}\"",
+                reference.source_kind.as_str()
+            );
+            table_style_diagnostics::emit(reference, table, ctx);
+        }
+        let mut table_css =
+            String::from("width:100%; height:100%; border-collapse:collapse; table-layout:fixed");
+        if let Some(fill) = table
+            .style
+            .as_ref()
+            .and_then(|reference| reference.definition.as_ref())
+            .and_then(|definition| definition.table_background.as_ref())
+        {
+            if matches!(fill, crate::model::Fill::NoFill) {
+                push_sep(&mut table_css);
+                table_css.push_str("background-color: transparent");
+            } else {
+                Self::fill_to_css_buf(fill, ctx, &mut table_css);
+            }
+        }
+        let _ = writeln!(html, " style=\"{table_css}\">\n<colgroup>");
         for w in &table.col_widths {
             let pct = if total_width > 0.0 {
                 w / total_width * 100.0
@@ -19,127 +49,62 @@ impl HtmlRenderer {
         }
         html.push_str("</colgroup>\n");
 
-        let row_count = table.rows.len();
         for (row_idx, row) in table.rows.iter().enumerate() {
-            let mut tr_style = format!("height:{:.1}px", row.height);
-
-            // Band row: alternate row shading (odd data rows get subtle background)
-            if table.band_row {
-                // When first_row is set, banding starts from the second row (index 1)
-                let band_idx = if table.first_row {
-                    row_idx.wrapping_sub(1)
-                } else {
-                    row_idx
-                };
-                if (row_idx != 0 || !table.first_row) && band_idx % 2 == 1 {
-                    tr_style.push_str("; background-color: rgba(0,0,0,0.04)");
-                }
-            }
-
-            // First row emphasis
-            if table.first_row && row_idx == 0 {
-                tr_style.push_str("; font-weight: bold; border-bottom: 2px solid rgba(0,0,0,0.2)");
-            }
-
-            // Last row emphasis
-            if table.last_row && row_idx == row_count - 1 {
-                tr_style.push_str("; font-weight: bold; border-top: 2px solid rgba(0,0,0,0.2)");
-            }
+            let tr_style = format!("height:{:.1}px", row.height);
 
             let _ = writeln!(html, "<tr style=\"{tr_style}\">");
-            let col_count = row.cells.len();
-            for (col_idx, cell) in row.cells.iter().enumerate() {
-                // Skip cells that are continuation of a vertical merge
+            let mut logical_col = 0usize;
+            for cell in &row.cells {
+                let span = usize::try_from(cell.col_span.max(1)).unwrap_or(1);
+                if cell.h_merge {
+                    continue;
+                }
                 if cell.v_merge {
+                    logical_col = logical_col.saturating_add(span);
                     continue;
                 }
 
                 let mut td_style = String::with_capacity(128);
-
-                // Band column: alternate column shading
-                if table.band_col {
-                    let band_col_idx = if table.first_col {
-                        col_idx.wrapping_sub(1)
+                let resolved = table_styles::resolve(table, cell, row_idx, logical_col, span);
+                if let Some(fill) = &resolved.fill {
+                    if matches!(fill, crate::model::Fill::NoFill) {
+                        td_style.push_str("background-color: transparent");
                     } else {
-                        col_idx
-                    };
-                    if (col_idx != 0 || !table.first_col) && band_col_idx % 2 == 1 {
-                        td_style.push_str("background-color: rgba(0,0,0,0.04)");
+                        Self::fill_to_css_buf(fill, ctx, &mut td_style);
                     }
                 }
-
-                // First column emphasis
-                if table.first_col && col_idx == 0 {
-                    if !td_style.is_empty() {
-                        td_style.push_str("; ");
-                    }
+                if let Some(true) = resolved.text.bold {
+                    push_sep(&mut td_style);
                     td_style.push_str("font-weight: bold");
                 }
-
-                // Last column emphasis
-                if table.last_col && col_idx == col_count - 1 {
-                    if !td_style.is_empty() {
-                        td_style.push_str("; ");
-                    }
-                    td_style.push_str("font-weight: bold");
+                if let Some(true) = resolved.text.italic {
+                    push_sep(&mut td_style);
+                    td_style.push_str("font-style: italic");
                 }
-
-                // Cell fill
-                Self::fill_to_css_buf(&cell.fill, ctx, &mut td_style);
+                if let Some(color) = resolved
+                    .text
+                    .color
+                    .as_ref()
+                    .and_then(|color| ctx.color_to_css(color))
+                {
+                    push_sep(&mut td_style);
+                    let _ = write!(td_style, "color: {color}");
+                }
+                if let Some(font) = &resolved.text.font_family {
+                    let resolved_font = ctx
+                        .pres
+                        .primary_theme()
+                        .and_then(|theme| theme.font_scheme.resolve_typeface(font))
+                        .unwrap_or(font);
+                    push_sep(&mut td_style);
+                    let _ = write!(td_style, "font-family: '{}'", escape_html(resolved_font));
+                }
 
                 // Cell borders
-                if cell.border_left.width > 0.0 {
-                    let color = ctx
-                        .color_to_css(&cell.border_left.color)
-                        .unwrap_or_else(|| "#000".to_string());
-                    push_sep(&mut td_style);
-                    let _ = write!(
-                        td_style,
-                        "border-left: {:.1}pt {} {}",
-                        cell.border_left.width,
-                        dash_style_to_css(&cell.border_left.dash_style),
-                        color
-                    );
-                }
-                if cell.border_right.width > 0.0 {
-                    let color = ctx
-                        .color_to_css(&cell.border_right.color)
-                        .unwrap_or_else(|| "#000".to_string());
-                    push_sep(&mut td_style);
-                    let _ = write!(
-                        td_style,
-                        "border-right: {:.1}pt {} {}",
-                        cell.border_right.width,
-                        dash_style_to_css(&cell.border_right.dash_style),
-                        color
-                    );
-                }
-                if cell.border_top.width > 0.0 {
-                    let color = ctx
-                        .color_to_css(&cell.border_top.color)
-                        .unwrap_or_else(|| "#000".to_string());
-                    push_sep(&mut td_style);
-                    let _ = write!(
-                        td_style,
-                        "border-top: {:.1}pt {} {}",
-                        cell.border_top.width,
-                        dash_style_to_css(&cell.border_top.dash_style),
-                        color
-                    );
-                }
-                if cell.border_bottom.width > 0.0 {
-                    let color = ctx
-                        .color_to_css(&cell.border_bottom.color)
-                        .unwrap_or_else(|| "#000".to_string());
-                    push_sep(&mut td_style);
-                    let _ = write!(
-                        td_style,
-                        "border-bottom: {:.1}pt {} {}",
-                        cell.border_bottom.width,
-                        dash_style_to_css(&cell.border_bottom.dash_style),
-                        color
-                    );
-                }
+                push_border(&mut td_style, "left", resolved.left.as_ref(), ctx);
+                push_border(&mut td_style, "right", resolved.right.as_ref(), ctx);
+                push_border(&mut td_style, "top", resolved.top.as_ref(), ctx);
+                push_border(&mut td_style, "bottom", resolved.bottom.as_ref(), ctx);
 
                 // Cell margins and vertical alignment
                 let va = match cell.vertical_align {
@@ -155,6 +120,10 @@ impl HtmlRenderer {
                 );
 
                 let _ = write!(html, "<td");
+                let _ = write!(html, " data-table-cell=\"r{row_idx}c{logical_col}\"");
+                if let Some(region) = resolved.last_region {
+                    let _ = write!(html, " data-table-style-region=\"{}\"", region.as_ooxml());
+                }
                 if cell.col_span > 1 {
                     let _ = write!(html, " colspan=\"{}\"", cell.col_span);
                 }
@@ -182,9 +151,31 @@ impl HtmlRenderer {
                     }
                 }
                 html.push_str("</td>\n");
+                logical_col = logical_col.saturating_add(span);
             }
             html.push_str("</tr>\n");
         }
         html.push_str("</table>\n");
     }
+}
+
+fn push_border(
+    style: &mut String,
+    side: &str,
+    border: Option<&crate::model::Border>,
+    ctx: &RenderCtx<'_>,
+) {
+    let Some(border) = border.filter(|border| !border.no_fill && border.width > 0.0) else {
+        return;
+    };
+    let color = ctx
+        .color_to_css(&border.color)
+        .unwrap_or_else(|| "#000".to_owned());
+    push_sep(style);
+    let _ = write!(
+        style,
+        "border-{side}: {:.1}pt {} {color}",
+        border.width,
+        dash_style_to_css(&border.dash_style)
+    );
 }

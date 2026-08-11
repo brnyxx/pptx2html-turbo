@@ -188,7 +188,7 @@ See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element
 | Text | Bold, italic, underline, strikethrough, super/subscript, vertical text, highlights, shadows, letter spacing, default 18pt fallback |
 | Colors | RGB, theme, system, preset with 12 modifiers (tint, shade, lumMod, satMod, etc.) |
 | Fills | Solid, gradient, image, noFill, and all 54 DrawingML pattern presets with approximate repeated SVG tiles; style references (fillRef/lnRef). Unknown or unresolved patterns emit `DRAWINGML_PATTERN_UNSUPPORTED` without an invented solid color. |
-| Tables | Cell fill, borders, column/row spans, vertical merge |
+| Tables | Package-defined DrawingML table styles, official region precedence, theme-aware cell fill/text/borders, column/row spans, and horizontal/vertical merge |
 | Images | Base64 embedding, deterministic external assets under `images/slide-N/`, cropping, MIME auto-detection |
 | Layout | Master/layout inheritance, ClrMap overrides, placeholder matching, TxStyles, and bodyPr property carry-over (wrap, margins, vertical anchor, vertical text, autofit) |
 | Bullets | Character and auto-numbered bullets plus embedded picture bullets in slide paragraphs, slide-owned list styles, and table cells; unavailable images render a visible marker with diagnostics |
@@ -220,6 +220,8 @@ PPTX → pptx2html-turbo (Rust) → HTML + Metadata
 The Rust core converts PPTX to HTML with high fidelity. Elements it cannot fully render (SmartArt, Math, OLE, and custom geometry) are emitted as structured placeholders with an ordered diagnostic sideband containing a safe source reference; custom-geometry formula fallbacks preserve the exact raw formula. Package-level unsupported parts and relationships are reported even when they do not produce a visible shape; relationship diagnostics identify only the source part and relationship ID, never the target. The optional Python `pptx2html-enhance` package uses placeholder metadata to transform supported fallback types into semantic HTML.
 
 Rust consumers that construct `ConversionResult` should use `ConversionResult::new(html, slide_count)` and then populate any required metadata fields. The Task 11 `diagnostics` field necessarily makes legacy external struct literals source-incompatible, while the existing `unresolved_elements` field and its returned projection remain unchanged. `ConversionResult::diagnostics()` provides a stable ordered slice accessor.
+
+The table-style model adds fields to the public `TableData` and `TableCell` structs. External Rust code using struct literals is therefore source-incompatible and must migrate in the next semver-major line by using `..Default::default()` or the new fields explicitly; this task does not change the crate version. Package-defined styles follow the documented Office region order. A valid Office built-in whose converter definition is unavailable, or an invalid ID, preserves its ID and six flags and emits `TABLE_STYLE_DEFINITION_UNAVAILABLE` without inventing an appearance. Row/column band origin around header/footer rows remains `[교차검증 필요]` because the cited Office application-order note does not define that offset.
 
 ### Project Layout
 

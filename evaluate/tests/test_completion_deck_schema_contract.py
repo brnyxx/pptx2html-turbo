@@ -153,6 +153,25 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                 "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
             )
 
+    def test_table_style_fixture_has_region_override_and_merge_matrix(self) -> None:
+        with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
+            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            present = next(
+                frame
+                for frame in slide.findall(".//p:graphicFrame", NS)
+                if frame.find("p:nvGraphicFramePr/p:cNvPr", NS).get("name")
+                == "present style"
+            )
+            rows = present.findall(".//a:tr", NS)
+            self.assertEqual(len(rows), 5)
+            self.assertEqual(len(rows[0].findall("a:tc", NS)), 4)
+            explicit = rows[1].findall("a:tc", NS)
+            self.assertIsNotNone(explicit[1].find("a:tcPr/a:solidFill", NS))
+            self.assertIsNotNone(explicit[2].find("a:tcPr/a:noFill", NS))
+            merged = rows[-1].findall("a:tc", NS)
+            self.assertEqual(merged[0].get("gridSpan"), "2")
+            self.assertEqual(merged[1].get("hMerge"), "1")
+
     def test_fallback_domains_close_diagram_ole_and_mc(self) -> None:
         with zipfile.ZipFile(self.root / "fallback-domains.pptx") as archive:
             slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))

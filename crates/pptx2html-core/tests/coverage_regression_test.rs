@@ -1459,7 +1459,7 @@ fn renders_last_renderer_fallback_edges_through_public_renderer() {
     });
 
     let html = HtmlRenderer::render(&presentation).expect("last renderer edges should render");
-    assert!(html.contains("background-color: rgba(0,0,0,0.04)"));
+    assert!(!html.contains("background-color: rgba(0,0,0,0.04)"));
     assert!(html.contains("data:image/png;base64"));
     assert!(html.contains("shape-svg"));
 }

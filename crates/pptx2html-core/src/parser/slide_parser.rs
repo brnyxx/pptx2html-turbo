@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::name::ResolveResult;
+use quick_xml::reader::NsReader;
 use zip::ZipArchive;
 
 use super::action_parser;
@@ -59,7 +60,7 @@ pub fn parse_slide<R: Read + Seek>(
     rels: &HashMap<String, String>,
     archive: &mut ZipArchive<R>,
 ) -> PptxResult<Slide> {
-    let mut reader = Reader::from_str(xml);
+    let mut reader = NsReader::from_str(xml);
     let mut slide = Slide::default();
     let mut depth: Vec<String> = Vec::new();
 
@@ -105,6 +106,12 @@ pub fn parse_slide<R: Read + Seek>(
         match reader.read_event() {
             Ok(Event::Start(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
+                let drawingml = matches!(
+                    reader.resolve_element(e.name()).0,
+                    ResolveResult::Bound(namespace)
+                        if namespace.as_ref()
+                            == b"http://schemas.openxmlformats.org/drawingml/2006/main"
+                );
                 depth.push(local.clone());
 
                 if local == "cNvPr" && current_shape.is_some() {
@@ -124,7 +131,9 @@ pub fn parse_slide<R: Read + Seek>(
                 if graphic_frame.handle_start(&local, e, &mut current_shape, &mut preserved) {
                     continue;
                 }
-                if table.handle_start(&local, e, graphic_frame.in_frame()) {
+                if (local != "tableStyleId" || drawingml)
+                    && table.handle_start(&local, e, graphic_frame.in_frame())
+                {
                     continue;
                 }
                 if text.handle_start(&local, e, &mut current_shape, table.in_cell) {
@@ -360,6 +369,12 @@ pub fn parse_slide<R: Read + Seek>(
             }
             Ok(Event::Empty(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
+                let drawingml = matches!(
+                    reader.resolve_element(e.name()).0,
+                    ResolveResult::Bound(namespace)
+                        if namespace.as_ref()
+                            == b"http://schemas.openxmlformats.org/drawingml/2006/main"
+                );
 
                 if local == "cNvPr" && current_shape.is_some() {
                     parse_shape_identity(e, &mut current_shape);
@@ -378,7 +393,7 @@ pub fn parse_slide<R: Read + Seek>(
                 if graphic_frame.handle_start(&local, e, &mut current_shape, &mut preserved) {
                     continue;
                 }
-                if table.handle_empty(&local, e) {
+                if (local != "tableStyleId" || drawingml) && table.handle_empty(&local, e) {
                     continue;
                 }
                 if text.handle_empty(&local, e, &mut current_shape, table.in_cell) {
@@ -683,6 +698,13 @@ pub fn parse_slide<R: Read + Seek>(
             }
             Ok(Event::Text(ref e)) => {
                 let value = e.unescape().unwrap_or_default();
+                preserved.capture_text(&value);
+                if !table.handle_text(&value) {
+                    text.handle_text(&value);
+                }
+            }
+            Ok(Event::CData(ref e)) => {
+                let value = String::from_utf8_lossy(e.as_ref());
                 preserved.capture_text(&value);
                 if !table.handle_text(&value) {
                     text.handle_text(&value);
@@ -4014,6 +4036,8 @@ mod tests {
             col_span: 0,
             row_span: 0,
             v_merge: false,
+            h_merge: false,
+            explicit_borders: 0,
             margin_left: 7.2,
             margin_right: 7.2,
             margin_top: 3.6,

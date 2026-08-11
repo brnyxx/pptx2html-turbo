@@ -642,7 +642,7 @@ fn relationship_embed_id(element: &BytesStart<'_>) -> Option<String> {
     })
 }
 
-fn parse_color(local: &str, element: &BytesStart<'_>) -> Option<Color> {
+pub(crate) fn parse_color(local: &str, element: &BytesStart<'_>) -> Option<Color> {
     match local {
         "srgbClr" => xml_utils::attr_str(element, "val").map(Color::rgb),
         "schemeClr" => xml_utils::attr_str(element, "val").map(Color::theme),
