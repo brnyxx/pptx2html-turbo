@@ -97,13 +97,19 @@ let html = convert_file_with_options(Path::new("presentation.pptx"), &opts)?;
 let info = get_info(Path::new("presentation.pptx"))?;
 println!("Slides: {}, Size: {}x{}", info.slide_count, info.width_px, info.height_px);
 
-// Conversion with metadata (SmartArt/OLE/Math sideband)
+// Conversion with ordered preservation diagnostics and the legacy unresolved sideband
 let result = pptx2html_core::convert_file_with_metadata(Path::new("presentation.pptx"))?;
 println!("HTML length: {}", result.html.len());
+let diagnostic_codes = result.diagnostics.iter().map(|item| item.code.as_str()).collect::<Vec<_>>();
 for elem in &result.unresolved_elements {
     println!("Unresolved: {:?} at slide {}", elem.element_type, elem.slide_index);
 }
 ```
+
+Every generated HTML document also embeds the same ordered diagnostics as a JSON array in
+`<script type="application/json" id="pptx2html-diagnostics">`. The script contains `[]` when
+conversion requires no fallback. `unresolved_elements` remains available as the compatibility
+projection for placeholder-based SmartArt, OLE, Math, and custom-geometry handling.
 
 ### Python
 
@@ -205,7 +211,7 @@ PPTX → pptx2html-turbo (Rust) → HTML + Metadata
                                               └── DrawingML effects → CSS (shadow, glow, blur)
 ```
 
-The Rust core converts PPTX to HTML with high fidelity. Elements it cannot fully render (SmartArt, Math, OLE) are emitted as structured placeholders with a metadata sideband containing the original XML. The optional Python `pptx2html-enhance` package uses LLM providers to transform these placeholders into semantic HTML.
+The Rust core converts PPTX to HTML with high fidelity. Elements it cannot fully render (SmartArt, Math, OLE, and custom geometry) are emitted as structured placeholders with an ordered diagnostic sideband containing a safe source reference. Package-level unsupported parts and relationships are reported even when they do not produce a visible shape. The optional Python `pptx2html-enhance` package uses placeholder metadata to transform supported fallback types into semantic HTML.
 
 ### Project Layout
 
