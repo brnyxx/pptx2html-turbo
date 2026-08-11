@@ -1,4 +1,232 @@
+use quick_xml::events::BytesStart;
+
+use super::text_parser::{
+    ParagraphBuilder, RunBuilder, append_text as append_run_text,
+    start_paragraph as start_text_paragraph, start_run as start_text_run,
+};
+use super::xml_utils;
 use crate::model::*;
+
+pub(crate) fn start_table(in_table: &mut bool, builder: &mut Option<TableBuilder>) {
+    *in_table = true;
+    *builder = Some(TableBuilder::default());
+}
+
+pub(crate) fn parse_table_properties(element: &BytesStart<'_>, builder: &mut Option<TableBuilder>) {
+    let Some(builder) = builder.as_mut() else {
+        return;
+    };
+    let parse_bool = |value: &str| value == "1" || value == "true";
+    for (name, target) in [
+        ("bandRow", &mut builder.band_row),
+        ("bandCol", &mut builder.band_col),
+        ("firstRow", &mut builder.first_row),
+        ("lastRow", &mut builder.last_row),
+        ("firstCol", &mut builder.first_col),
+        ("lastCol", &mut builder.last_col),
+    ] {
+        if let Some(value) = xml_utils::attr_str(element, name) {
+            *target = parse_bool(&value);
+        }
+    }
+}
+
+pub(crate) fn parse_column(element: &BytesStart<'_>, builder: &mut Option<TableBuilder>) {
+    if let Some(builder) = builder.as_mut() {
+        let width = xml_utils::attr_str(element, "w")
+            .map(|value| Emu::parse_emu(&value).to_px())
+            .unwrap_or(0.0);
+        builder.col_widths.push(width);
+    }
+}
+
+pub(crate) fn start_row(
+    element: &BytesStart<'_>,
+    in_row: &mut bool,
+    row: &mut Option<TableRowBuilder>,
+) {
+    *in_row = true;
+    let height = xml_utils::attr_str(element, "h")
+        .map(|value| Emu::parse_emu(&value).to_px())
+        .unwrap_or(0.0);
+    *row = Some(TableRowBuilder {
+        height,
+        cells: Vec::new(),
+    });
+}
+
+pub(crate) fn start_cell(
+    element: &BytesStart<'_>,
+    in_cell: &mut bool,
+    cell: &mut Option<TableCellBuilder>,
+    paragraphs: &mut Vec<TextParagraph>,
+) {
+    *in_cell = true;
+    let col_span = xml_utils::attr_str(element, "gridSpan")
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(1);
+    let row_span = xml_utils::attr_str(element, "rowSpan")
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(1);
+    let v_merge =
+        xml_utils::attr_str(element, "vMerge").is_some_and(|value| value == "1" || value == "true");
+    *cell = Some(TableCellBuilder {
+        text_body: None,
+        fill: Fill::None,
+        border_left: Border::default(),
+        border_right: Border::default(),
+        border_top: Border::default(),
+        border_bottom: Border::default(),
+        col_span,
+        row_span,
+        v_merge,
+        margin_left: 7.2,
+        margin_right: 7.2,
+        margin_top: 3.6,
+        margin_bottom: 3.6,
+        vertical_align: VerticalAlign::Top,
+    });
+    paragraphs.clear();
+}
+
+pub(crate) fn start_paragraph(paragraph: &mut Option<ParagraphBuilder>) {
+    start_text_paragraph(paragraph);
+}
+
+pub(crate) fn start_run(run: &mut Option<RunBuilder>) {
+    start_text_run(run);
+}
+
+pub(crate) fn append_text(run: &mut Option<RunBuilder>, text: &str) {
+    append_run_text(run, text);
+}
+
+pub(crate) fn parse_cell_properties(
+    element: &BytesStart<'_>,
+    in_properties: &mut bool,
+    cell: &mut Option<TableCellBuilder>,
+) {
+    *in_properties = true;
+    let Some(cell) = cell.as_mut() else {
+        return;
+    };
+    for (name, target) in [
+        ("marL", &mut cell.margin_left),
+        ("marR", &mut cell.margin_right),
+        ("marT", &mut cell.margin_top),
+        ("marB", &mut cell.margin_bottom),
+    ] {
+        if let Some(value) = xml_utils::attr_str(element, name) {
+            *target = Emu::parse_emu(&value).to_pt();
+        }
+    }
+    if let Some(anchor) = xml_utils::attr_str(element, "anchor") {
+        cell.vertical_align = VerticalAlign::from_ooxml(&anchor);
+    }
+}
+
+pub(crate) fn start_border(
+    side: &str,
+    element: &BytesStart<'_>,
+    border_side: &mut Option<String>,
+    cell: &mut Option<TableCellBuilder>,
+) {
+    *border_side = Some(side.to_owned());
+    let Some(width) = xml_utils::attr_str(element, "w") else {
+        return;
+    };
+    let width = Emu::parse_emu(&width).to_pt();
+    if let Some(border) = cell.as_mut().and_then(|cell| border_mut(cell, side)) {
+        border.width = width;
+    }
+}
+
+pub(crate) fn parse_border_dash(
+    element: &BytesStart<'_>,
+    side: Option<&str>,
+    cell: &mut Option<TableCellBuilder>,
+) {
+    let Some(value) = xml_utils::attr_str(element, "val") else {
+        return;
+    };
+    let Some(side) = side else {
+        return;
+    };
+    let Some(border) = cell.as_mut().and_then(|cell| border_mut(cell, side)) else {
+        return;
+    };
+    border.style = match value.as_str() {
+        "solid" => BorderStyle::Solid,
+        "dash" | "lgDash" | "sysDash" => BorderStyle::Dashed,
+        "dot" | "sysDot" | "lgDashDot" | "lgDashDotDot" => BorderStyle::Dotted,
+        _ => BorderStyle::Solid,
+    };
+    border.dash_style = match value.as_str() {
+        "dash" => DashStyle::Dash,
+        "dot" => DashStyle::Dot,
+        "dashDot" => DashStyle::DashDot,
+        "lgDash" => DashStyle::LongDash,
+        "lgDashDot" => DashStyle::LongDashDot,
+        "lgDashDotDot" => DashStyle::LongDashDotDot,
+        "sysDash" => DashStyle::SystemDash,
+        "sysDot" => DashStyle::SystemDot,
+        _ => DashStyle::Solid,
+    };
+}
+
+fn border_mut<'a>(cell: &'a mut TableCellBuilder, side: &str) -> Option<&'a mut Border> {
+    match side {
+        "lnL" => Some(&mut cell.border_left),
+        "lnR" => Some(&mut cell.border_right),
+        "lnT" => Some(&mut cell.border_top),
+        "lnB" => Some(&mut cell.border_bottom),
+        _ => None,
+    }
+}
+
+pub(crate) fn finish_run(run: &mut Option<RunBuilder>, paragraph: &mut Option<ParagraphBuilder>) {
+    if let Some(run) = run.take()
+        && let Some(paragraph) = paragraph.as_mut()
+    {
+        paragraph.runs.push(run.build());
+    }
+}
+
+pub(crate) fn finish_paragraph(
+    paragraph: &mut Option<ParagraphBuilder>,
+    paragraphs: &mut Vec<TextParagraph>,
+) {
+    if let Some(paragraph) = paragraph.take() {
+        paragraphs.push(paragraph.build());
+    }
+}
+
+pub(crate) fn finish_cell(
+    cell: &mut Option<TableCellBuilder>,
+    paragraphs: &mut Vec<TextParagraph>,
+    row: &mut Option<TableRowBuilder>,
+) {
+    if let Some(mut cell) = cell.take() {
+        if !paragraphs.is_empty() {
+            cell.text_body = Some(TextBody {
+                paragraphs: std::mem::take(paragraphs),
+                list_style: None,
+                ..Default::default()
+            });
+        }
+        if let Some(row) = row.as_mut() {
+            row.cells.push(cell.build());
+        }
+    }
+}
+
+pub(crate) fn finish_row(row: &mut Option<TableRowBuilder>, builder: &mut Option<TableBuilder>) {
+    if let Some(row) = row.take()
+        && let Some(builder) = builder.as_mut()
+    {
+        builder.rows.push(row.build());
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct TableBuilder {

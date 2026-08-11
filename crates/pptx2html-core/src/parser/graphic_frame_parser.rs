@@ -1,8 +1,120 @@
+use std::collections::HashMap;
 use std::io::{Read, Seek};
 
+use quick_xml::events::BytesStart;
 use zip::ZipArchive;
 
+use super::chart_parser;
+use super::preserved_parser::classify_unsupported_graphic;
+use super::relationships;
+use super::slide_parser::ShapeBuilder;
+use super::table_parser::TableBuilder;
+use super::xml_utils;
 use crate::error::{PptxError, PptxResult};
+use crate::model::{Shape, ShapeType};
+
+pub(crate) fn start_frame(shape: &mut Option<ShapeBuilder>) {
+    *shape = Some(ShapeBuilder::default());
+}
+
+pub(crate) fn classify_data(uri: &str, shape: &mut Option<ShapeBuilder>) -> bool {
+    let Some(shape) = shape.as_mut() else {
+        return false;
+    };
+    if uri.contains("chart") {
+        shape.is_chart = true;
+        return true;
+    }
+    if let Some(unsupported) = classify_unsupported_graphic(uri) {
+        shape.unsupported_content = Some(unsupported.label.to_owned());
+        shape.unresolved_type = Some(unsupported.element_type);
+        return true;
+    }
+    false
+}
+
+pub(crate) fn assign_chart_relationship(
+    element: &BytesStart<'_>,
+    shape: &mut Option<ShapeBuilder>,
+) {
+    if let Some(shape) = shape.as_mut()
+        && let Some(rel_id) = xml_utils::attr_str(element, "id")
+    {
+        shape.chart_rel_id = Some(rel_id);
+    }
+}
+
+pub(crate) fn finish_frame<R: Read + Seek>(
+    is_chart: bool,
+    shape: &mut Option<ShapeBuilder>,
+    table: &mut Option<TableBuilder>,
+    rels: &HashMap<String, String>,
+    archive: &mut ZipArchive<R>,
+) -> Option<Shape> {
+    if is_chart {
+        let mut shape = shape.take()?;
+        load_chart(&mut shape, rels, archive);
+        return Some(shape.build());
+    }
+    if shape
+        .as_ref()
+        .is_some_and(|shape| shape.unsupported_content.is_some())
+    {
+        return shape.take().map(ShapeBuilder::build);
+    }
+    let shape = shape.take()?;
+    let table = table.take()?;
+    Some(Shape {
+        position: shape.position,
+        size: shape.size,
+        shape_type: ShapeType::Table(table.build()),
+        ..Default::default()
+    })
+}
+
+fn load_chart<R: Read + Seek>(
+    shape: &mut ShapeBuilder,
+    rels: &HashMap<String, String>,
+    archive: &mut ZipArchive<R>,
+) {
+    let Some(target) = shape
+        .chart_rel_id
+        .as_ref()
+        .and_then(|rel_id| rels.get(rel_id))
+    else {
+        return;
+    };
+    let path = resolve_relationship_path("ppt/slides", target);
+    let Ok(chart_xml) = read_archive_entry(archive, &path) else {
+        return;
+    };
+    shape.chart_direct_spec = chart_parser::parse_chart(&chart_xml).ok().flatten();
+
+    let chart_rels_path = relationships_path(&path);
+    let Ok(chart_rels_xml) = read_archive_entry(archive, &chart_rels_path) else {
+        return;
+    };
+    let Ok(chart_rels) = relationships::parse_relationships(&chart_rels_xml) else {
+        return;
+    };
+    for preview_target in chart_rels.values() {
+        let preview_path = resolve_relative_file_path(&path, preview_target);
+        let extension = preview_path.rsplit('.').next().unwrap_or("").to_lowercase();
+        if !matches!(
+            extension.as_str(),
+            "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "svg" | "emf" | "wmf"
+        ) {
+            continue;
+        }
+        if let Ok(bytes) = read_archive_bytes(archive, &preview_path)
+            && !bytes.is_empty()
+        {
+            shape.chart_preview_mime = Some(mime_from_extension(&preview_path));
+            shape.chart_preview_image = Some(bytes);
+            break;
+        }
+    }
+}
 
 pub(crate) fn read_archive_entry<R: Read + Seek>(
     archive: &mut ZipArchive<R>,

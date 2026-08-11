@@ -1,6 +1,7 @@
 use log::warn;
 use quick_xml::events::{BytesEnd, BytesStart};
 
+use super::slide_parser::ShapeBuilder;
 use crate::model::slide::{UnresolvedType, UnsupportedData};
 
 pub(crate) struct UnsupportedGraphic {
@@ -42,6 +43,15 @@ pub(crate) fn unsupported_data(
         element_type: element_type.unwrap_or(UnresolvedType::SmartArt),
         raw_xml,
     }
+}
+
+pub(crate) fn finish_raw_capture(shape: &mut Option<ShapeBuilder>, raw_xml: &mut String) {
+    if let Some(shape) = shape.as_mut()
+        && !raw_xml.is_empty()
+    {
+        shape.raw_xml_capture = Some(raw_xml.clone());
+    }
+    raw_xml.clear();
 }
 
 pub(crate) fn append_start_element(
