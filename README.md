@@ -211,7 +211,9 @@ PPTX → pptx2html-turbo (Rust) → HTML + Metadata
                                               └── DrawingML effects → CSS (shadow, glow, blur)
 ```
 
-The Rust core converts PPTX to HTML with high fidelity. Elements it cannot fully render (SmartArt, Math, OLE, and custom geometry) are emitted as structured placeholders with an ordered diagnostic sideband containing a safe source reference. Package-level unsupported parts and relationships are reported even when they do not produce a visible shape. The optional Python `pptx2html-enhance` package uses placeholder metadata to transform supported fallback types into semantic HTML.
+The Rust core converts PPTX to HTML with high fidelity. Elements it cannot fully render (SmartArt, Math, OLE, and custom geometry) are emitted as structured placeholders with an ordered diagnostic sideband containing a safe source reference. Package-level unsupported parts and relationships are reported even when they do not produce a visible shape; relationship diagnostics identify only the source part and relationship ID, never the target. The optional Python `pptx2html-enhance` package uses placeholder metadata to transform supported fallback types into semantic HTML.
+
+Rust consumers that construct `ConversionResult` should use `ConversionResult::new(html, slide_count)` and then populate any required metadata fields. The Task 11 `diagnostics` field necessarily makes legacy external struct literals source-incompatible, while the existing `unresolved_elements` field and its returned projection remain unchanged. `ConversionResult::diagnostics()` provides a stable ordered slice accessor.
 
 ### Project Layout
 
