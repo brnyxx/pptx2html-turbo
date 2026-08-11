@@ -1,0 +1,5991 @@
+{
+  "schema_version": 1,
+  "contract": {
+    "preset_inventory": "ECMA-376 Part 1 5th edition ST_ShapeType",
+    "preset_count": 187,
+    "dispatch_completeness_is_not_adjustment_semantics_completeness": true,
+    "exactness_policy": "Official formulas and constraints classify the source contract only; renderer fidelity remains non-exact until native PowerPoint evidence passes."
+  },
+  "official_artifact": {
+    "edition": "ECMA-376 Part 1, 5th edition, December 2016",
+    "landing_page_url": "https://ecma-international.org/publications-and-standards/standards/ecma-376/",
+    "download_url": "https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip",
+    "sha256": "9d0bcad9cf06054785b03762fcfadbf6bab7e54a5f9d69434e34b7fd464d4129",
+    "inventory_member": "OfficeOpenXML-XMLSchema-Strict.zip/dml-main.xsd",
+    "inventory_member_sha256": "078871240cff323ddd22a395281421b737fa61508fd39ffaa2947ba2bc01175e",
+    "geometry_member": "OfficeOpenXML-DrawingMLGeometries.zip/presetShapeDefinitions.xml",
+    "geometry_member_sha256": "2f7c868d857c1e3c4b5a6068759fe0e07d77ad58377a6618d1b02ba3507b6939",
+    "known_source_gap": "presetShapeDefinitions.xml repeats upDownArrow and omits upArrow; upArrow semantics are unavailable rather than inferred."
+  },
+  "official_sources": [
+    {
+      "scope": "a:avLst semantics",
+      "url": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.adjustvaluelist?view=openxml-3.0.1"
+    },
+    {
+      "scope": "a:prstGeom contract",
+      "url": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.presetgeometry?view=openxml-3.0.1"
+    }
+  ],
+  "custom_geometry_adjustments": {
+    "element": "a:custGeom/a:avLst/a:gd",
+    "name_contract": "open",
+    "formula_contract": "Each a:gd name is document-defined and its fmla is a value-based guide; it is not checked against preset keys.",
+    "source_status": "available",
+    "source_url": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.adjustvaluelist?view=openxml-3.0.1"
+  },
+  "presets": [
+    {
+      "name": "line",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "lineInv",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "triangle",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "rtTriangle",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "rect",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "diamond",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "parallelogram",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "trapezoid",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "nonIsoscelesTrapezoid",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "pentagon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "hf",
+          "default_formula": "val 105146",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        },
+        {
+          "name": "vf",
+          "default_formula": "val 110557",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "hexagon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        },
+        {
+          "name": "vf",
+          "default_formula": "val 115470",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "heptagon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "hf",
+          "default_formula": "val 102572",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        },
+        {
+          "name": "vf",
+          "default_formula": "val 105210",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "octagon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 29289",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "decagon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "vf",
+          "default_formula": "val 105146",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "dodecagon",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star4",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star5",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 19098",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "hf",
+          "default_formula": "val 105146",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        },
+        {
+          "name": "vf",
+          "default_formula": "val 110557",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star6",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 28868",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "hf",
+          "default_formula": "val 115470",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star7",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 34601",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "hf",
+          "default_formula": "val 102572",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        },
+        {
+          "name": "vf",
+          "default_formula": "val 105210",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star8",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 37500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star10",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 42533",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "hf",
+          "default_formula": "val 105146",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star12",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 37500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star16",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 37500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star24",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 37500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "ssd2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "star32",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 37500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "ssd2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "roundRect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "round1Rect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "round2SameRect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "round2DiagRect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "snipRoundRect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "snip1Rect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "snip2SameRect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "snip2DiagRect",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "plaque",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "ellipse",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "teardrop",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 100000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "200000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "homePlate",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "chevron",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "pieWedge",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "pie",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 16200000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "blockArc",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 10800000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "donut",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "noSmoking",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "rightArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "upArrow",
+      "source_status": "unavailable",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "The official 5th-edition geometry artifact omits this preset definition.",
+        "observed_consumed_keys": [
+          "adj1",
+          "adj2"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "downArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "stripedRightArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "notchedRightArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bentUpArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftRightArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "upDownArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftUpArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftRightUpArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "quadArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 22500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 22500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 22500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftArrowCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 64977",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "rightArrowCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 64977",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "upArrowCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 64977",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "downArrowCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 64977",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftRightArrowCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 48123",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "upDownArrowCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 48123",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "quadArrowCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18515",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 18515",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18515",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 48123",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "a1",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bentArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 43750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "uturnArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "25000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 43750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj4"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 75000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "minAdj5",
+              "maximum_formula": "100000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "circularArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 1142319",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAng"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 20457681",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 10800000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "25000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftCircularArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -1142319",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "minAng",
+              "maximum_formula": "0"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 1142319",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 10800000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "25000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftRightCircularArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 1142319",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAng"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 20457681",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val 11942319",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "radius",
+              "minimum_formula": "0",
+              "maximum_formula": "25000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedRightArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "a2"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedLeftArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "a2"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedUpArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "a2"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedDownArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "adj2"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "swooshArrow",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "1",
+              "maximum_formula": "75000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "cube",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "can",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "lightningBolt",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "heart",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "sun",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "12500",
+              "maximum_formula": "46875"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "moon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "87500"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "smileyFace",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 4653",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-4653",
+              "maximum_formula": "4653"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "irregularSeal1",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "irregularSeal2",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "foldedCorner",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bevel",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "frame",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "halfFrame",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 33333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 33333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "corner",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "diagStripe",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "chord",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 2700000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 16200000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "arc",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 16200000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "0",
+              "maximum_formula": "21599999"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftBracket",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "rightBracket",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftBrace",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "rightBrace",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bracketPair",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bracePair",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "25000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "straightConnector1",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bentConnector2",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bentConnector3",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bentConnector4",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "bentConnector5",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedConnector2",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedConnector3",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedConnector4",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "curvedConnector5",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "callout1",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -38333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "callout2",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -46667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "callout3",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 100000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj7",
+          "default_formula": "val 112963",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj8",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "accentCallout1",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -38333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "accentCallout2",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -46667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "accentCallout3",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 100000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj7",
+          "default_formula": "val 112963",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj8",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "borderCallout1",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -38333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "borderCallout2",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -46667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "borderCallout3",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 100000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj7",
+          "default_formula": "val 112963",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj8",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "accentBorderCallout1",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -38333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "accentBorderCallout2",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 112500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -46667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "accentBorderCallout3",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 18750",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj4",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj5",
+          "default_formula": "val 100000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj6",
+          "default_formula": "val -16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj7",
+          "default_formula": "val 112963",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj8",
+          "default_formula": "val -8333",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "wedgeRectCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val -20833",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 62500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "wedgeRoundRectCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val -20833",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 62500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "unavailable",
+          "constraints": []
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "wedgeEllipseCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val -20833",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 62500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "cloudCallout",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val -20833",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 62500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "-2147483647",
+              "maximum_formula": "2147483647"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "cloud",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "ribbon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "33333"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "25000",
+              "maximum_formula": "75000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "ribbon2",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "33333"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "25000",
+              "maximum_formula": "75000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "ellipseRibbon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "25000",
+              "maximum_formula": "75000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "minAdj3",
+              "maximum_formula": "a1"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "ellipseRibbon2",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "25000",
+              "maximum_formula": "100000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "minAdj3",
+              "maximum_formula": "a1"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "leftRightRibbon",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj1"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 50000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 16667",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "33333"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "verticalScroll",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "25000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "horizontalScroll",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "25000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "wave",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 12500",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "20000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-10000",
+              "maximum_formula": "10000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "doubleWave",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 6250",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "12500"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 0",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "-10000",
+              "maximum_formula": "10000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "plus",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj",
+          "default_formula": "val 25000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartProcess",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartDecision",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartInputOutput",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "flowChartPredefinedProcess",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartInternalStorage",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartDocument",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "flowChartMultidocument",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "flowChartTerminator",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartPreparation",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartManualInput",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "flowChartManualOperation",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartConnector",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartPunchedCard",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartPunchedTape",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartSummingJunction",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartOr",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartCollate",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartSort",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartExtract",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartMerge",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartOfflineStorage",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartOnlineStorage",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartMagneticTape",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartMagneticDisk",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartMagneticDrum",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartDisplay",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartDelay",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "flowChartAlternateProcess",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "flowChartOffpageConnector",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonBlank",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonHome",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonHelp",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonInformation",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonForwardNext",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonBackPrevious",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonEnd",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonBeginning",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonReturn",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonDocument",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonSound",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "actionButtonMovie",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "gear6",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 15000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "20000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 3526",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "5358"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "gear9",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 10000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "20000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 1763",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "0",
+              "maximum_formula": "2679"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "funnel",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "mathPlus",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 23520",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "73490"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate",
+        "reason": "Current Rust consumes a key not defined for this preset by the official geometry artifact.",
+        "observed_consumed_keys": [
+          "adj"
+        ],
+        "observed_keys_authority": "Current Rust consumption only; non-normative and not an official formula or range."
+      }
+    },
+    {
+      "name": "mathMinus",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 23520",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "100000"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "mathMultiply",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 23520",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "51965"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "mathDivide",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 23520",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "1000",
+              "maximum_formula": "36745"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 5880",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj2"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 11760",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "x",
+              "minimum_formula": "1000",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "mathEqual",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 23520",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "36745"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 11760",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "mAdj2"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "mathNotEqual",
+      "source_status": "available",
+      "adjustments": [
+        {
+          "name": "adj1",
+          "default_formula": "val 23520",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "50000"
+            }
+          ]
+        },
+        {
+          "name": "adj2",
+          "default_formula": "val 6600000",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahPolar",
+              "axis": "angle",
+              "minimum_formula": "4200000",
+              "maximum_formula": "6600000"
+            }
+          ]
+        },
+        {
+          "name": "adj3",
+          "default_formula": "val 11760",
+          "source_status": "available",
+          "range_status": "available",
+          "constraints": [
+            {
+              "handle": "ahXY",
+              "axis": "y",
+              "minimum_formula": "0",
+              "maximum_formula": "maxAdj3"
+            }
+          ]
+        }
+      ],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "cornerTabs",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "squareTabs",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "plaqueTabs",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "chartX",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "chartStar",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    },
+    {
+      "name": "chartPlus",
+      "source_status": "available",
+      "adjustments": [],
+      "preservation": {
+        "fidelity": "non-exact",
+        "policy": "preserve-and-gate"
+      }
+    }
+  ]
+}
