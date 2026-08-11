@@ -1,8 +1,273 @@
 use quick_xml::events::BytesStart;
 
+use super::master_parser::{is_lvl_ppr, parse_def_rpr_attrs, parse_lvl_index, parse_lvl_ppr_attrs};
 use super::slide_parser::ShapeBuilder;
 use super::xml_utils;
 use crate::model::*;
+
+#[derive(Default)]
+pub(crate) struct TextSaxState {
+    pub(crate) paragraph: Option<ParagraphBuilder>,
+    pub(crate) run: Option<RunBuilder>,
+    pub(crate) in_text: bool,
+    pub(crate) in_run_properties: bool,
+    pub(crate) in_line_spacing: bool,
+    pub(crate) in_space_before: bool,
+    pub(crate) in_space_after: bool,
+    pub(crate) in_default_run_properties: bool,
+    pub(crate) in_list_style: bool,
+    pub(crate) in_list_default_run_properties: bool,
+    pub(crate) in_list_line_spacing: bool,
+    pub(crate) in_list_space_before: bool,
+    pub(crate) in_list_space_after: bool,
+    pub(crate) level: Option<usize>,
+    pub(crate) paragraph_defaults: Option<ParagraphDefaults>,
+    pub(crate) run_defaults: Option<RunDefaults>,
+    pub(crate) in_bullet_color: bool,
+}
+
+impl TextSaxState {
+    pub(crate) fn handle_text(&mut self, text: &str) -> bool {
+        if !self.in_text {
+            return false;
+        }
+
+        append_text(&mut self.run, text);
+        true
+    }
+
+    pub(crate) fn handle_start(
+        &mut self,
+        local: &str,
+        element: &BytesStart<'_>,
+        shape: &mut Option<ShapeBuilder>,
+        in_table_cell: bool,
+    ) -> bool {
+        if in_table_cell {
+            return false;
+        }
+        match local {
+            "txBody" => {
+                if let Some(shape) = shape.as_mut() {
+                    shape.has_text_body = true;
+                }
+            }
+            "bodyPr" if shape.is_some() => parse_body_properties(element, shape),
+            "lstStyle" if shape.is_some() => self.in_list_style = true,
+            tag if self.in_list_style && is_lvl_ppr(tag) => {
+                self.level = Some(parse_lvl_index(tag));
+                let mut defaults = ParagraphDefaults::default();
+                parse_lvl_ppr_attrs(element, &mut defaults);
+                self.paragraph_defaults = Some(defaults);
+            }
+            "defRPr" if self.in_list_style && self.level.is_some() => {
+                self.in_list_default_run_properties = true;
+                let mut defaults = RunDefaults::default();
+                parse_def_rpr_attrs(element, &mut defaults);
+                self.run_defaults = Some(defaults);
+            }
+            "lnSpc"
+                if self.in_list_style
+                    && self.level.is_some()
+                    && !self.in_list_default_run_properties =>
+            {
+                self.in_list_line_spacing = true
+            }
+            "spcBef"
+                if self.in_list_style
+                    && self.level.is_some()
+                    && !self.in_list_default_run_properties =>
+            {
+                self.in_list_space_before = true
+            }
+            "spcAft"
+                if self.in_list_style
+                    && self.level.is_some()
+                    && !self.in_list_default_run_properties =>
+            {
+                self.in_list_space_after = true
+            }
+            "normAutofit" | "noAutofit" | "spAutoFit" if shape.is_some() => {
+                shape
+                    .as_mut()
+                    .expect("shape builder for autofit")
+                    .text_auto_fit = parse_auto_fit(local, element)
+            }
+            "p" if shape.is_some() => start_paragraph(&mut self.paragraph),
+            "pPr" if self.paragraph.is_some() => {
+                parse_paragraph_properties(element, &mut self.paragraph)
+            }
+            "defRPr" if self.paragraph.is_some() && self.run.is_none() => {
+                self.in_default_run_properties = true;
+                apply_paragraph_default_run_properties(
+                    self.paragraph
+                        .as_mut()
+                        .expect("paragraph builder for defRPr"),
+                    element,
+                );
+            }
+            "lnSpc" if self.paragraph.is_some() => self.in_line_spacing = true,
+            "spcBef" if self.paragraph.is_some() => self.in_space_before = true,
+            "spcAft" if self.paragraph.is_some() => self.in_space_after = true,
+            "buClr" if self.paragraph.is_some() => self.in_bullet_color = true,
+            "r" if self.paragraph.is_some() => start_run(&mut self.run),
+            "rPr" if self.run.is_some() => {
+                self.in_run_properties = true;
+                parse_run_properties(element, &mut self.run);
+            }
+            "t" if self.run.is_some() => self.in_text = true,
+            "br" if self.paragraph.is_some() => self.push_break(),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn handle_empty(
+        &mut self,
+        local: &str,
+        element: &BytesStart<'_>,
+        shape: &mut Option<ShapeBuilder>,
+        in_table_cell: bool,
+    ) -> bool {
+        if in_table_cell {
+            return false;
+        }
+        match local {
+            "bodyPr" if shape.is_some() => parse_body_properties(element, shape),
+            "normAutofit" | "noAutofit" | "spAutoFit" if shape.is_some() => {
+                shape
+                    .as_mut()
+                    .expect("shape builder for autofit")
+                    .text_auto_fit = parse_auto_fit(local, element)
+            }
+            "pPr" if self.paragraph.is_some() => {
+                parse_paragraph_properties(element, &mut self.paragraph)
+            }
+            "rPr" if self.run.is_some() => parse_run_properties(element, &mut self.run),
+            "defRPr" if self.paragraph.is_some() && self.run.is_none() => {
+                apply_paragraph_default_run_properties(
+                    self.paragraph
+                        .as_mut()
+                        .expect("paragraph builder for defRPr"),
+                    element,
+                )
+            }
+            "br" if self.paragraph.is_some() => self.push_break(),
+            "latin" | "ea" | "cs" => {
+                let Some(typeface) = xml_utils::attr_str(element, "typeface") else {
+                    return true;
+                };
+                if self.in_list_default_run_properties {
+                    if let Some(defaults) = self.run_defaults.as_mut() {
+                        assign_typeface_to_defaults(defaults, local, typeface);
+                    }
+                } else if self.in_default_run_properties {
+                    if let Some(paragraph) = self.paragraph.as_mut() {
+                        assign_typeface_to_paragraph(paragraph, local, typeface);
+                    }
+                } else if let Some(run) = self.run.as_mut() {
+                    assign_typeface_to_run(run, local, typeface);
+                }
+            }
+            "spcPct" | "spcPts" => {
+                if let Some(spacing) = parse_spacing(local, element) {
+                    if self.in_list_style {
+                        assign_spacing_defaults(
+                            self.paragraph_defaults.as_mut(),
+                            spacing,
+                            self.in_list_line_spacing,
+                            self.in_list_space_before,
+                            self.in_list_space_after,
+                        );
+                    } else {
+                        assign_spacing_paragraph(
+                            self.paragraph.as_mut(),
+                            spacing,
+                            self.in_line_spacing,
+                            self.in_space_before,
+                            self.in_space_after,
+                        );
+                    }
+                }
+            }
+            "buFont" => parse_bullet_font(element, &mut self.paragraph),
+            "buSzPct" | "buSzPts" => parse_bullet_size(local, element, &mut self.paragraph),
+            "buNone" | "buChar" | "buAutoNum" => parse_bullet(local, element, &mut self.paragraph),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn handle_end(
+        &mut self,
+        local: &str,
+        shape: &mut Option<ShapeBuilder>,
+        current_color: &mut Option<Color>,
+    ) -> bool {
+        match local {
+            "t" if self.in_text => self.in_text = false,
+            "rPr" if self.in_run_properties => self.in_run_properties = false,
+            "defRPr" if self.in_default_run_properties => {
+                if let Some(color) = current_color.take()
+                    && let Some(paragraph) = self.paragraph.as_mut()
+                {
+                    paragraph.def_rpr_color = Some(color);
+                }
+                self.in_default_run_properties = false;
+            }
+            "defRPr" if self.in_list_default_run_properties => {
+                if let Some(defaults) = self.paragraph_defaults.as_mut() {
+                    defaults.def_run_props = self.run_defaults.take();
+                }
+                self.in_list_default_run_properties = false;
+            }
+            "lnSpc" if self.in_list_line_spacing => self.in_list_line_spacing = false,
+            "lnSpc" if self.in_line_spacing => self.in_line_spacing = false,
+            "spcBef" if self.in_list_space_before => self.in_list_space_before = false,
+            "spcBef" if self.in_space_before => self.in_space_before = false,
+            "spcAft" if self.in_list_space_after => self.in_list_space_after = false,
+            "spcAft" if self.in_space_after => self.in_space_after = false,
+            "lstStyle" if self.in_list_style => self.in_list_style = false,
+            tag if self.in_list_style && is_lvl_ppr(tag) => {
+                if let (Some(defaults), Some(level)) = (self.paragraph_defaults.take(), self.level)
+                {
+                    store_level_defaults(shape, level, defaults);
+                }
+                self.level = None;
+            }
+            "buClr" if self.in_bullet_color => self.in_bullet_color = false,
+            "r" if self.paragraph.is_some() => finish_run(&mut self.run, &mut self.paragraph),
+            "p" if shape.is_some() => finish_paragraph(&mut self.paragraph, shape),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn push_break(&mut self) {
+        let run = RunBuilder {
+            is_break: true,
+            text: "\n".to_owned(),
+            ..Default::default()
+        };
+        if let Some(paragraph) = self.paragraph.as_mut() {
+            paragraph.runs.push(run.build());
+        }
+    }
+}
+
+pub(crate) fn store_level_defaults(
+    shape: &mut Option<ShapeBuilder>,
+    level: usize,
+    defaults: ParagraphDefaults,
+) {
+    if level >= 9 {
+        return;
+    }
+    if let Some(shape) = shape.as_mut() {
+        let list_style = shape.text_list_style.get_or_insert_with(ListStyle::default);
+        list_style.levels[level] = Some(defaults);
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct ParagraphBuilder {
@@ -425,6 +690,7 @@ pub(crate) fn assign_spacing_paragraph(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(crate) fn assign_typeface(
     local: &str,
     element: &BytesStart<'_>,

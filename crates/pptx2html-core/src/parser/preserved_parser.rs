@@ -4,6 +4,53 @@ use quick_xml::events::{BytesEnd, BytesStart};
 use super::slide_parser::ShapeBuilder;
 use crate::model::slide::{UnresolvedType, UnsupportedData};
 
+#[derive(Default)]
+pub(crate) struct PreservedSaxState {
+    capturing: bool,
+    raw_xml: String,
+}
+
+impl PreservedSaxState {
+    pub(crate) fn start_capture(&mut self) {
+        self.capturing = true;
+        self.raw_xml.clear();
+    }
+
+    pub(crate) fn capture_start(&mut self, element: &BytesStart<'_>, local: &str) {
+        if self.capturing && local != "graphicData" {
+            append_start_element(element, local, &mut self.raw_xml);
+        }
+    }
+
+    pub(crate) fn capture_empty(&mut self, element: &BytesStart<'_>, local: &str) {
+        if self.capturing {
+            append_empty_element(element, local, &mut self.raw_xml);
+        }
+    }
+
+    pub(crate) fn capture_text(&mut self, text: &str) -> bool {
+        if !self.capturing {
+            return false;
+        }
+        self.raw_xml.push_str(text);
+        true
+    }
+
+    pub(crate) fn capture_end(&mut self, element: &BytesEnd<'_>, local: &str) {
+        if self.capturing && local != "graphicData" {
+            append_end_element(element, local, &mut self.raw_xml);
+        }
+    }
+
+    pub(crate) fn finish_capture(&mut self, shape: &mut Option<ShapeBuilder>) {
+        if !self.capturing {
+            return;
+        }
+        self.capturing = false;
+        finish_raw_capture(shape, &mut self.raw_xml);
+    }
+}
+
 pub(crate) struct UnsupportedGraphic {
     pub(crate) label: &'static str,
     pub(crate) element_type: UnresolvedType,

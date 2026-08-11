@@ -5,6 +5,7 @@ use quick_xml::events::BytesStart;
 use zip::ZipArchive;
 
 use super::chart_parser;
+use super::preserved_parser::PreservedSaxState;
 use super::preserved_parser::classify_unsupported_graphic;
 use super::relationships;
 use super::slide_parser::ShapeBuilder;
@@ -12,6 +13,80 @@ use super::table_parser::TableBuilder;
 use super::xml_utils;
 use crate::error::{PptxError, PptxResult};
 use crate::model::{Shape, ShapeType};
+
+#[derive(Default)]
+pub(crate) struct GraphicFrameSaxState {
+    in_frame: bool,
+    in_data: bool,
+    is_chart: bool,
+}
+
+pub(crate) enum GraphicFrameEnd {
+    None,
+    FinishFrame,
+}
+
+impl GraphicFrameSaxState {
+    pub(crate) fn in_frame(&self) -> bool {
+        self.in_frame
+    }
+
+    pub(crate) fn handle_start(
+        &mut self,
+        local: &str,
+        element: &BytesStart<'_>,
+        shape: &mut Option<ShapeBuilder>,
+        preserved: &mut PreservedSaxState,
+    ) -> bool {
+        match local {
+            "graphicFrame" => {
+                self.in_frame = true;
+                start_frame(shape);
+                true
+            }
+            "graphicData" if self.in_frame => {
+                self.in_data = true;
+                if let Some(uri) = xml_utils::attr_str(element, "uri") {
+                    self.is_chart = uri.contains("chart");
+                    if classify_data(&uri, shape) && !self.is_chart {
+                        preserved.start_capture();
+                    }
+                }
+                true
+            }
+            "chart" if self.in_data && self.is_chart => {
+                assign_chart_relationship(element, shape);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn handle_end(
+        &mut self,
+        local: &str,
+        shape: &mut Option<ShapeBuilder>,
+        preserved: &mut PreservedSaxState,
+    ) -> GraphicFrameEnd {
+        match local {
+            "graphicData" => {
+                self.in_data = false;
+                preserved.finish_capture(shape);
+                GraphicFrameEnd::None
+            }
+            "graphicFrame" => {
+                self.in_frame = false;
+                self.in_data = false;
+                GraphicFrameEnd::FinishFrame
+            }
+            _ => GraphicFrameEnd::None,
+        }
+    }
+
+    pub(crate) fn take_chart_flag(&mut self) -> bool {
+        std::mem::take(&mut self.is_chart)
+    }
+}
 
 pub(crate) fn start_frame(shape: &mut Option<ShapeBuilder>) {
     *shape = Some(ShapeBuilder::default());

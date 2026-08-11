@@ -25,3 +25,20 @@ pub(crate) fn assign_hyperlink(
         run.hyperlink = target;
     }
 }
+
+pub(crate) fn handle_start(
+    local: &str,
+    element: &BytesStart<'_>,
+    relationships: &HashMap<String, String>,
+    shape_in_run_properties: bool,
+    table_in_run_properties: bool,
+    shape_run: &mut Option<RunBuilder>,
+    cell_run: &mut Option<RunBuilder>,
+) -> bool {
+    if local != "hlinkClick" || (!shape_in_run_properties && !table_in_run_properties) {
+        return false;
+    }
+
+    assign_hyperlink(element, relationships, shape_run, cell_run);
+    true
+}

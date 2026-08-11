@@ -2,10 +2,204 @@ use quick_xml::events::BytesStart;
 
 use super::text_parser::{
     ParagraphBuilder, RunBuilder, append_text as append_run_text,
+    apply_paragraph_default_run_properties, assign_spacing_paragraph, assign_typeface_to_paragraph,
+    assign_typeface_to_run, parse_bullet, parse_bullet_font, parse_bullet_size,
+    parse_paragraph_properties, parse_run_properties, parse_spacing,
     start_paragraph as start_text_paragraph, start_run as start_text_run,
 };
 use super::xml_utils;
 use crate::model::*;
+
+#[derive(Default)]
+pub(crate) struct TableSaxState {
+    pub(crate) in_table: bool,
+    pub(crate) in_row: bool,
+    pub(crate) in_cell: bool,
+    pub(crate) in_properties: bool,
+    pub(crate) border_side: Option<String>,
+    pub(crate) builder: Option<TableBuilder>,
+    pub(crate) row: Option<TableRowBuilder>,
+    pub(crate) cell: Option<TableCellBuilder>,
+    pub(crate) paragraphs: Vec<TextParagraph>,
+    pub(crate) paragraph: Option<ParagraphBuilder>,
+    pub(crate) run: Option<RunBuilder>,
+    pub(crate) in_text: bool,
+    pub(crate) in_run_properties: bool,
+    pub(crate) in_bullet_color: bool,
+    pub(crate) in_default_run_properties: bool,
+    pub(crate) in_line_spacing: bool,
+    pub(crate) in_space_before: bool,
+    pub(crate) in_space_after: bool,
+}
+
+impl TableSaxState {
+    pub(crate) fn handle_start(
+        &mut self,
+        local: &str,
+        element: &BytesStart<'_>,
+        in_graphic_frame: bool,
+    ) -> bool {
+        match local {
+            "tbl" if in_graphic_frame => start_table(&mut self.in_table, &mut self.builder),
+            "tblPr" if self.in_table => parse_table_properties(element, &mut self.builder),
+            "gridCol" if self.in_table => parse_column(element, &mut self.builder),
+            "tr" if self.in_table => start_row(element, &mut self.in_row, &mut self.row),
+            "tc" if self.in_row => start_cell(
+                element,
+                &mut self.in_cell,
+                &mut self.cell,
+                &mut self.paragraphs,
+            ),
+            "tcPr" if self.in_cell => {
+                parse_cell_properties(element, &mut self.in_properties, &mut self.cell)
+            }
+            "lnL" | "lnR" | "lnT" | "lnB" if self.in_properties => {
+                start_border(local, element, &mut self.border_side, &mut self.cell)
+            }
+            "prstDash" if self.in_properties && self.border_side.is_some() => {
+                parse_border_dash(element, self.border_side.as_deref(), &mut self.cell)
+            }
+            "p" if self.in_cell => start_paragraph(&mut self.paragraph),
+            "pPr" if self.in_cell && self.paragraph.is_some() => {
+                parse_paragraph_properties(element, &mut self.paragraph)
+            }
+            "defRPr" if self.in_cell && self.paragraph.is_some() && self.run.is_none() => {
+                self.in_default_run_properties = true;
+                apply_paragraph_default_run_properties(
+                    self.paragraph
+                        .as_mut()
+                        .expect("table paragraph builder for start defRPr"),
+                    element,
+                );
+            }
+            "lnSpc" if self.in_cell && self.paragraph.is_some() => self.in_line_spacing = true,
+            "spcBef" if self.in_cell && self.paragraph.is_some() => self.in_space_before = true,
+            "spcAft" if self.in_cell && self.paragraph.is_some() => self.in_space_after = true,
+            "buClr" if self.in_cell && self.paragraph.is_some() => self.in_bullet_color = true,
+            "r" if self.in_cell && self.paragraph.is_some() => start_run(&mut self.run),
+            "rPr" if self.in_cell && self.run.is_some() => {
+                self.in_run_properties = true;
+                parse_run_properties(element, &mut self.run);
+            }
+            "t" if self.in_cell && self.run.is_some() => self.in_text = true,
+            "br" if self.in_cell && self.paragraph.is_some() => self.push_break(),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn handle_end(&mut self, local: &str, current_color: &mut Option<Color>) -> bool {
+        match local {
+            "t" if self.in_text => self.in_text = false,
+            "rPr" if self.in_run_properties => self.in_run_properties = false,
+            "defRPr" if self.in_default_run_properties => {
+                if let Some(color) = current_color.take()
+                    && let Some(paragraph) = self.paragraph.as_mut()
+                {
+                    paragraph.def_rpr_color = Some(color);
+                }
+                self.in_default_run_properties = false;
+            }
+            "r" if self.in_cell && self.paragraph.is_some() => {
+                finish_run(&mut self.run, &mut self.paragraph)
+            }
+            "p" if self.in_cell => finish_paragraph(&mut self.paragraph, &mut self.paragraphs),
+            "buClr" if self.in_bullet_color => self.in_bullet_color = false,
+            "lnL" | "lnR" | "lnT" | "lnB" if self.in_properties => self.border_side = None,
+            "tcPr" => self.in_properties = false,
+            "tc" => {
+                finish_cell(&mut self.cell, &mut self.paragraphs, &mut self.row);
+                self.in_cell = false;
+                self.paragraph = None;
+                self.run = None;
+                self.in_text = false;
+                self.in_run_properties = false;
+            }
+            "tr" => {
+                finish_row(&mut self.row, &mut self.builder);
+                self.in_row = false;
+            }
+            "tbl" => self.in_table = false,
+            "lnSpc" if self.in_line_spacing => self.in_line_spacing = false,
+            "spcBef" if self.in_space_before => self.in_space_before = false,
+            "spcAft" if self.in_space_after => self.in_space_after = false,
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn handle_empty(&mut self, local: &str, element: &BytesStart<'_>) -> bool {
+        match local {
+            "gridCol" if self.in_table => parse_column(element, &mut self.builder),
+            "pPr" if self.in_cell && self.paragraph.is_some() => {
+                parse_paragraph_properties(element, &mut self.paragraph)
+            }
+            "defRPr" if self.in_cell && self.paragraph.is_some() && self.run.is_none() => {
+                apply_paragraph_default_run_properties(
+                    self.paragraph
+                        .as_mut()
+                        .expect("table paragraph builder for defRPr"),
+                    element,
+                )
+            }
+            "rPr" if self.in_cell && self.run.is_some() => {
+                parse_run_properties(element, &mut self.run)
+            }
+            "br" if self.in_cell && self.paragraph.is_some() => self.push_break(),
+            "latin" | "ea" | "cs" if self.in_cell => {
+                if let Some(typeface) = xml_utils::attr_str(element, "typeface") {
+                    if self.in_default_run_properties {
+                        if let Some(paragraph) = self.paragraph.as_mut() {
+                            assign_typeface_to_paragraph(paragraph, local, typeface);
+                        }
+                    } else if let Some(run) = self.run.as_mut() {
+                        assign_typeface_to_run(run, local, typeface);
+                    }
+                }
+            }
+            "spcPct" | "spcPts" if self.in_cell => {
+                if let Some(spacing) = parse_spacing(local, element) {
+                    assign_spacing_paragraph(
+                        self.paragraph.as_mut(),
+                        spacing,
+                        self.in_line_spacing,
+                        self.in_space_before,
+                        self.in_space_after,
+                    );
+                }
+            }
+            "buFont" if self.in_cell => parse_bullet_font(element, &mut self.paragraph),
+            "buSzPct" | "buSzPts" if self.in_cell => {
+                parse_bullet_size(local, element, &mut self.paragraph)
+            }
+            "buNone" | "buChar" | "buAutoNum" if self.in_cell => {
+                parse_bullet(local, element, &mut self.paragraph)
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn push_break(&mut self) {
+        let run = RunBuilder {
+            is_break: true,
+            text: "\n".to_owned(),
+            ..Default::default()
+        };
+        if let Some(paragraph) = self.paragraph.as_mut() {
+            paragraph.runs.push(run.build());
+        }
+    }
+
+    pub(crate) fn handle_text(&mut self, text: &str) -> bool {
+        if !self.in_text {
+            return false;
+        }
+
+        append_run_text(&mut self.run, text);
+        true
+    }
+}
 
 pub(crate) fn start_table(in_table: &mut bool, builder: &mut Option<TableBuilder>) {
     *in_table = true;
@@ -95,10 +289,6 @@ pub(crate) fn start_paragraph(paragraph: &mut Option<ParagraphBuilder>) {
 
 pub(crate) fn start_run(run: &mut Option<RunBuilder>) {
     start_text_run(run);
-}
-
-pub(crate) fn append_text(run: &mut Option<RunBuilder>, text: &str) {
-    append_run_text(run, text);
 }
 
 pub(crate) fn parse_cell_properties(

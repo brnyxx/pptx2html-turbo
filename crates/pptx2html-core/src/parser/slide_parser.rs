@@ -5,50 +5,46 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 use zip::ZipArchive;
 
-use super::action_parser::assign_hyperlink;
+use super::action_parser;
 #[cfg(test)]
 use super::action_parser::hyperlink_rel_id;
 #[cfg(test)]
 use super::fill_parser::assign_background_color_target;
 pub(crate) use super::fill_parser::parse_line_end;
+use super::fill_parser::{ColorTargets, FillSaxState, assign_style_ref_no_color, ensure_style_ref};
+#[cfg(test)]
 use super::fill_parser::{
-    assign_color, assign_style_ref_color, assign_style_ref_no_color,
-    dispatch_color as dispatch_parsed_color, ensure_style_ref, finish_glow,
-    finish_outer_shadow as finish_shape_outer_shadow, parse_glow_radius,
-    parse_outer_shadow as parse_shape_outer_shadow,
+    assign_color, assign_style_ref_color, dispatch_color as dispatch_parsed_color,
 };
 use super::graphic_frame_parser::{
-    assign_chart_relationship, classify_data as classify_graphic_data, finish_frame,
-    mime_from_extension, resolve_relationship_path as resolve_rel_path, start_frame,
+    GraphicFrameEnd, GraphicFrameSaxState, finish_frame, mime_from_extension,
+    resolve_relationship_path as resolve_rel_path,
 };
 #[cfg(test)]
 use super::graphic_frame_parser::{
     read_archive_bytes, read_archive_entry, relationships_path as rels_path_for,
     resolve_relative_file_path,
 };
-use super::master_parser::{is_lvl_ppr, parse_def_rpr_attrs, parse_lvl_index, parse_lvl_ppr_attrs};
-use super::preserved_parser::{
-    append_empty_element, append_end_element, append_start_element, finish_raw_capture,
-    unsupported_data,
-};
-use super::table_parser;
+use super::preserved_parser::{PreservedSaxState, unsupported_data};
+use super::table_parser::TableSaxState;
 #[cfg(test)]
 use super::table_parser::assign_cell_color as assign_tc_color;
-use super::table_parser::{TableBuilder, TableCellBuilder, TableRowBuilder, assign_cell_color};
+#[cfg(test)]
+use super::table_parser::{TableBuilder, TableCellBuilder, TableRowBuilder};
+use super::text_parser::TextSaxState;
 pub(crate) use super::text_parser::parse_autofit_ratio;
+#[cfg(test)]
 use super::text_parser::{
-    ParagraphBuilder, RunBuilder, append_text,
+    ParagraphBuilder, RunBuilder,
     apply_paragraph_default_run_properties as apply_paragraph_def_rpr, assign_spacing_defaults,
-    assign_spacing_paragraph, assign_typeface, finish_paragraph as finish_shape_paragraph,
-    finish_run as finish_shape_run, parse_auto_fit as parse_shape_auto_fit,
-    parse_body_properties as parse_body_pr, parse_bullet, parse_bullet_font, parse_bullet_size,
-    parse_paragraph_properties as parse_para_props, parse_run_properties as parse_run_props,
-    parse_spacing as parse_spacing_tag, start_paragraph as start_shape_paragraph,
-    start_run as start_shape_run,
+    assign_spacing_paragraph, assign_typeface, parse_auto_fit as parse_shape_auto_fit,
+    parse_body_properties as parse_body_pr, parse_paragraph_properties as parse_para_props,
+    parse_run_properties as parse_run_props, parse_spacing as parse_spacing_tag,
 };
 #[cfg(test)]
 use super::text_parser::{
     assign_typeface_to_defaults, assign_typeface_to_paragraph, assign_typeface_to_run,
+    store_level_defaults as store_shape_level_defaults,
 };
 use super::xml_utils;
 use crate::error::{PptxError, PptxResult};
@@ -65,41 +61,12 @@ pub fn parse_slide<R: Read + Seek>(
     let mut depth: Vec<String> = Vec::new();
 
     let mut current_shape: Option<ShapeBuilder> = None;
-    let mut current_paragraph: Option<ParagraphBuilder> = None;
-    let mut current_run: Option<RunBuilder> = None;
-    let mut in_text = false;
+    let mut text = TextSaxState::default();
 
     // Fill/Border/Color parsing state
-    let mut current_color: Option<Color> = None;
+    let mut fill = FillSaxState::default();
     let mut in_sp_pr = false;
-    let mut in_ln = false;
-    let mut in_r_pr = false;
     let mut in_nv_pr = false;
-    let mut in_grad_fill = false;
-    let mut grad_stops: Vec<GradientStop> = Vec::new();
-    let mut grad_angle: f64 = 0.0;
-    let mut grad_type = GradientType::Linear;
-    let mut current_gs_pos: f64 = 0.0;
-
-    // Paragraph spacing nesting state
-    let mut in_ln_spc = false;
-    let mut in_spc_bef = false;
-    let mut in_spc_aft = false;
-
-    // Paragraph-level defRPr nesting state
-    let mut in_para_def_rpr = false;
-
-    let mut in_shape_lst_style = false;
-    let mut in_shape_def_rpr = false;
-    let mut in_shape_ln_spc = false;
-    let mut in_shape_spc_bef = false;
-    let mut in_shape_spc_aft = false;
-    let mut current_shape_lvl: Option<usize> = None;
-    let mut current_shape_para_defaults: Option<ParagraphDefaults> = None;
-    let mut current_shape_run_defaults: Option<RunDefaults> = None;
-
-    // Bullet color nesting state
-    let mut in_bu_clr = false;
 
     // Shape style reference (<p:style>) state
     let mut in_p_style = false;
@@ -108,21 +75,9 @@ pub fn parse_slide<R: Read + Seek>(
     let mut p_style_idx: Option<String> = None;
 
     // Table parsing state
-    let mut in_graphic_frame = false;
-    let mut in_tbl = false;
-    let mut in_tr = false;
-    let mut in_tc = false;
-    let mut in_tc_pr = false;
-    let mut tc_border_side: Option<String> = None;
-    let mut table_builder: Option<TableBuilder> = None;
-    let mut current_row: Option<TableRowBuilder> = None;
-    let mut current_cell: Option<TableCellBuilder> = None;
-    let mut cell_paragraphs: Vec<TextParagraph> = Vec::new();
-    let mut cell_paragraph: Option<ParagraphBuilder> = None;
-    let mut cell_run: Option<RunBuilder> = None;
-    let mut in_cell_text = false;
-    let mut in_cell_r_pr = false;
-    let mut in_cell_bu_clr = false;
+    let mut graphic_frame = GraphicFrameSaxState::default();
+    let mut preserved = PreservedSaxState::default();
+    let mut table = TableSaxState::default();
 
     // Group shape parsing state
     let mut grp_stack: Vec<GroupContext> = Vec::new();
@@ -149,26 +104,6 @@ pub fn parse_slide<R: Read + Seek>(
     let mut current_polar_handle: Option<PolarAdjustHandle> = None;
     let mut current_connection_site: Option<ConnectionSite> = None;
 
-    // Text shadow and highlight parsing state
-    let mut in_effect_lst = false;
-    let mut in_outer_shdw = false;
-    let mut outer_shdw_blur: f64 = 0.0;
-    let mut outer_shdw_dist: f64 = 0.0;
-    let mut outer_shdw_dir: f64 = 0.0;
-    let mut in_highlight = false;
-
-    // Shape-level effectLst parsing state
-    let mut in_shape_effect_lst = false;
-    let mut in_shape_outer_shdw = false;
-    let mut shape_shdw_blur: f64 = 0.0;
-    let mut shape_shdw_dist: f64 = 0.0;
-    let mut shape_shdw_dir: f64 = 0.0;
-    let mut shape_shdw_alpha: f64 = 1.0;
-    let mut in_shape_glow = false;
-    let mut shape_glow_rad: f64 = 0.0;
-    let mut shape_glow_alpha: f64 = 1.0;
-    let mut shape_effect_color: Option<Color> = None;
-
     // Background fill state
     let mut in_bg_pr = false;
     let mut in_bg_blip_fill = false;
@@ -179,13 +114,6 @@ pub fn parse_slide<R: Read + Seek>(
     let mut bg_grad_angle: f64 = 0.0;
     let mut bg_grad_type = GradientType::Linear;
     let mut bg_gs_pos: f64 = 0.0;
-
-    // Chart detection state
-    let mut in_graphic_data = false;
-    let mut graphic_data_is_chart = false;
-    // Raw XML capture buffer for unsupported graphicData content
-    let mut capturing_raw_xml = false;
-    let mut raw_xml_buf = String::new();
 
     loop {
         match reader.read_event() {
@@ -206,9 +134,29 @@ pub fn parse_slide<R: Read + Seek>(
                     continue;
                 }
 
-                // Capture raw XML inside graphicData for unresolved content
-                if capturing_raw_xml && local != "graphicData" {
-                    append_start_element(e, &local, &mut raw_xml_buf);
+                preserved.capture_start(e, &local);
+                if graphic_frame.handle_start(&local, e, &mut current_shape, &mut preserved) {
+                    continue;
+                }
+                if table.handle_start(&local, e, graphic_frame.in_frame()) {
+                    continue;
+                }
+                if text.handle_start(&local, e, &mut current_shape, table.in_cell) {
+                    continue;
+                }
+                if action_parser::handle_start(
+                    &local,
+                    e,
+                    rels,
+                    text.in_run_properties,
+                    table.in_run_properties,
+                    &mut text.run,
+                    &mut table.run,
+                ) {
+                    continue;
+                }
+                if fill.handle_start(&local, e, in_sp_pr, &mut current_shape, &text, &table) {
+                    continue;
                 }
 
                 match local.as_str() {
@@ -230,116 +178,6 @@ pub fn parse_slide<R: Read + Seek>(
                     "bgPr" => {
                         in_bg_pr = true;
                     }
-                    // ── Graphic frame (tables/charts) ──
-                    "graphicFrame" => {
-                        in_graphic_frame = true;
-                        start_frame(&mut current_shape);
-                    }
-                    // Graphic data with URI (detect charts / SmartArt / OLE / Math)
-                    "graphicData" if in_graphic_frame => {
-                        in_graphic_data = true;
-                        if let Some(uri) = xml_utils::attr_str(e, "uri") {
-                            graphic_data_is_chart = uri.contains("chart");
-                            if classify_graphic_data(&uri, &mut current_shape)
-                                && !graphic_data_is_chart
-                            {
-                                capturing_raw_xml = true;
-                                raw_xml_buf.clear();
-                            }
-                        }
-                    }
-                    // Table start
-                    "tbl" if in_graphic_frame => {
-                        table_parser::start_table(&mut in_tbl, &mut table_builder);
-                    }
-                    // Table properties (bandRow, bandCol, firstRow, etc.)
-                    "tblPr" if in_tbl => {
-                        table_parser::parse_table_properties(e, &mut table_builder);
-                    }
-                    // Table column width (open-tag variant: <a:gridCol w="..."></a:gridCol>)
-                    "gridCol" if in_tbl => {
-                        table_parser::parse_column(e, &mut table_builder);
-                    }
-                    // Table row
-                    "tr" if in_tbl => {
-                        table_parser::start_row(e, &mut in_tr, &mut current_row);
-                    }
-                    // Table cell
-                    "tc" if in_tr => {
-                        table_parser::start_cell(
-                            e,
-                            &mut in_tc,
-                            &mut current_cell,
-                            &mut cell_paragraphs,
-                        );
-                    }
-                    // Table cell properties
-                    "tcPr" if in_tc => {
-                        table_parser::parse_cell_properties(e, &mut in_tc_pr, &mut current_cell);
-                    }
-                    // Table cell border elements inside tcPr
-                    "lnL" | "lnR" | "lnT" | "lnB" if in_tc_pr => {
-                        table_parser::start_border(
-                            &local,
-                            e,
-                            &mut tc_border_side,
-                            &mut current_cell,
-                        );
-                    }
-                    // Dash style inside table cell border
-                    "prstDash" if in_tc_pr && tc_border_side.is_some() => {
-                        table_parser::parse_border_dash(
-                            e,
-                            tc_border_side.as_deref(),
-                            &mut current_cell,
-                        );
-                    }
-                    // Paragraph inside table cell
-                    "p" if in_tc => {
-                        table_parser::start_paragraph(&mut cell_paragraph);
-                    }
-                    // Paragraph properties inside table cell
-                    "pPr" if in_tc && cell_paragraph.is_some() => {
-                        parse_para_props(e, &mut cell_paragraph);
-                    }
-                    // Paragraph-level defRPr inside table cell paragraph
-                    "defRPr" if in_tc && cell_paragraph.is_some() && cell_run.is_none() => {
-                        in_para_def_rpr = true;
-                        apply_paragraph_def_rpr(
-                            cell_paragraph
-                                .as_mut()
-                                .expect("table paragraph builder for start defRPr"),
-                            e,
-                        );
-                    }
-                    // Spacing containers inside table cell
-                    "lnSpc" if in_tc && cell_paragraph.is_some() => {
-                        in_ln_spc = true;
-                    }
-                    "spcBef" if in_tc && cell_paragraph.is_some() => {
-                        in_spc_bef = true;
-                    }
-                    "spcAft" if in_tc && cell_paragraph.is_some() => {
-                        in_spc_aft = true;
-                    }
-                    // Bullet color inside table cell
-                    "buClr" if in_tc && cell_paragraph.is_some() => {
-                        in_cell_bu_clr = true;
-                    }
-                    // Run inside table cell
-                    "r" if in_tc && cell_paragraph.is_some() => {
-                        table_parser::start_run(&mut cell_run);
-                    }
-                    // Run properties inside table cell
-                    "rPr" if in_tc && cell_run.is_some() => {
-                        in_cell_r_pr = true;
-                        parse_run_props(e, &mut cell_run);
-                    }
-                    // Text content inside table cell
-                    "t" if in_tc && cell_run.is_some() => {
-                        in_cell_text = true;
-                    }
-
                     // ── Regular shape handling ──
                     // Shape start
                     "sp" | "pic" | "cxnSp" => {
@@ -367,148 +205,6 @@ pub fn parse_slide<R: Read + Seek>(
                             e,
                         );
                     }
-                    // Line/border
-                    "ln" if in_sp_pr => {
-                        in_ln = true;
-                        let sb = current_shape.as_mut().expect("shape builder for line");
-                        if let Some(w) = xml_utils::attr_str(e, "w") {
-                            sb.border_width = Emu::parse_emu(&w).to_pt();
-                        } else {
-                            sb.border_width = 0.0;
-                        }
-                        sb.border_cap = match xml_utils::attr_str(e, "cap").as_deref() {
-                            Some("rnd") => LineCap::Round,
-                            Some("flat") => LineCap::Flat,
-                            _ => LineCap::Square,
-                        };
-                        sb.border_compound = match xml_utils::attr_str(e, "cmpd").as_deref() {
-                            Some("dbl") => CompoundLine::Double,
-                            Some("thickThin") => CompoundLine::ThickThin,
-                            Some("thinThick") => CompoundLine::ThinThick,
-                            Some("tri") => CompoundLine::Triple,
-                            _ => CompoundLine::Single,
-                        };
-                        sb.border_alignment = match xml_utils::attr_str(e, "algn").as_deref() {
-                            Some("in") => LineAlignment::Inset,
-                            _ => LineAlignment::Center,
-                        };
-                    }
-                    // Text body (non-table)
-                    "txBody" if !in_tc => {
-                        current_shape
-                            .as_mut()
-                            .expect("shape builder for text body")
-                            .has_text_body = true;
-                    }
-                    // bodyPr — text area properties
-                    "bodyPr" if current_shape.is_some() && !in_tc => {
-                        parse_body_pr(e, &mut current_shape);
-                    }
-                    "lstStyle" if current_shape.is_some() && !in_tc => {
-                        in_shape_lst_style = true;
-                    }
-                    s if in_shape_lst_style && is_lvl_ppr(s) => {
-                        let lvl = parse_lvl_index(s);
-                        current_shape_lvl = Some(lvl);
-                        let mut pd = ParagraphDefaults::default();
-                        parse_lvl_ppr_attrs(e, &mut pd);
-                        current_shape_para_defaults = Some(pd);
-                    }
-                    "defRPr" if in_shape_lst_style && current_shape_lvl.is_some() => {
-                        in_shape_def_rpr = true;
-                        let mut rd = RunDefaults::default();
-                        parse_def_rpr_attrs(e, &mut rd);
-                        current_shape_run_defaults = Some(rd);
-                    }
-                    "lnSpc"
-                        if in_shape_lst_style
-                            && current_shape_lvl.is_some()
-                            && !in_shape_def_rpr =>
-                    {
-                        in_shape_ln_spc = true;
-                    }
-                    "spcBef"
-                        if in_shape_lst_style
-                            && current_shape_lvl.is_some()
-                            && !in_shape_def_rpr =>
-                    {
-                        in_shape_spc_bef = true;
-                    }
-                    "spcAft"
-                        if in_shape_lst_style
-                            && current_shape_lvl.is_some()
-                            && !in_shape_def_rpr =>
-                    {
-                        in_shape_spc_aft = true;
-                    }
-                    // normAutofit — shrink text to fit (child of bodyPr)
-                    "normAutofit" if current_shape.is_some() && !in_tc => {
-                        current_shape
-                            .as_mut()
-                            .expect("shape builder for normAutofit")
-                            .text_auto_fit = parse_shape_auto_fit(local.as_str(), e);
-                    }
-                    "noAutofit" if current_shape.is_some() && !in_tc => {
-                        current_shape
-                            .as_mut()
-                            .expect("shape builder for noAutofit")
-                            .text_auto_fit = parse_shape_auto_fit(local.as_str(), e);
-                    }
-                    // spAutoFit — resize shape to fit text (child of bodyPr)
-                    "spAutoFit" if current_shape.is_some() && !in_tc => {
-                        current_shape
-                            .as_mut()
-                            .expect("shape builder for spAutoFit")
-                            .text_auto_fit = parse_shape_auto_fit(local.as_str(), e);
-                    }
-                    // Paragraph (non-table)
-                    "p" if current_shape.is_some() && !in_tc => {
-                        start_shape_paragraph(&mut current_paragraph);
-                    }
-                    // Paragraph properties
-                    "pPr" if current_paragraph.is_some() && !in_tc => {
-                        parse_para_props(e, &mut current_paragraph);
-                    }
-                    // Paragraph-level defRPr (default run properties inside pPr)
-                    "defRPr" if current_paragraph.is_some() && !in_tc && current_run.is_none() => {
-                        in_para_def_rpr = true;
-                        apply_paragraph_def_rpr(
-                            current_paragraph
-                                .as_mut()
-                                .expect("paragraph builder for defRPr"),
-                            e,
-                        );
-                    }
-                    // Paragraph spacing containers (non-table)
-                    "lnSpc" if current_paragraph.is_some() && !in_tc => {
-                        in_ln_spc = true;
-                    }
-                    "spcBef" if current_paragraph.is_some() && !in_tc => {
-                        in_spc_bef = true;
-                    }
-                    "spcAft" if current_paragraph.is_some() && !in_tc => {
-                        in_spc_aft = true;
-                    }
-                    // Bullet color container (non-table)
-                    "buClr" if current_paragraph.is_some() && !in_tc => {
-                        in_bu_clr = true;
-                    }
-                    // Text run (non-table)
-                    "r" if current_paragraph.is_some() && !in_tc => {
-                        start_shape_run(&mut current_run);
-                    }
-                    // Run properties (non-table)
-                    "rPr" if current_run.is_some() && !in_tc => {
-                        in_r_pr = true;
-                        parse_run_props(e, &mut current_run);
-                    }
-                    "hlinkClick" if in_r_pr || in_cell_r_pr => {
-                        assign_hyperlink(e, rels, &mut current_run, &mut cell_run);
-                    }
-                    // Text content (non-table)
-                    "t" if current_run.is_some() && !in_tc => {
-                        in_text = true;
-                    }
                     // Shape style reference (<p:style>)
                     "style" if current_shape.is_some() && !in_sp_pr => {
                         in_p_style = true;
@@ -519,91 +215,10 @@ pub fn parse_slide<R: Read + Seek>(
                         p_style_current_ref = Some(local.clone());
                         p_style_idx = xml_utils::attr_str(e, "idx");
                     }
-                    // Gradient fill
-                    "gradFill" if in_sp_pr && !in_ln => {
-                        in_grad_fill = true;
-                        grad_stops.clear();
-                        grad_angle = 0.0;
-                        grad_type = GradientType::Linear;
-                    }
-                    // Gradient stop
-                    "gs" if in_grad_fill => {
-                        current_gs_pos = xml_utils::attr_str(e, "pos")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .map(|v| v / 100_000.0)
-                            .unwrap_or(0.0);
-                    }
                     // Gradient path type (Start variant — has fillToRect child)
                     "path" if in_bg_grad_fill => {
                         if let Some(val) = xml_utils::attr_str(e, "path") {
                             bg_grad_type = GradientType::from_path_attr(&val);
-                        }
-                    }
-                    "path" if in_grad_fill => {
-                        if let Some(val) = xml_utils::attr_str(e, "path") {
-                            grad_type = GradientType::from_path_attr(&val);
-                        }
-                    }
-                    // Color element (Start — may have child modifiers)
-                    "srgbClr" => {
-                        if let Some(val) = xml_utils::attr_str(e, "val") {
-                            if in_shape_outer_shdw || in_shape_glow {
-                                shape_effect_color = Some(Color::rgb(val));
-                            } else {
-                                current_color = Some(Color::rgb(val));
-                            }
-                        }
-                    }
-                    "schemeClr" => {
-                        if let Some(val) = xml_utils::attr_str(e, "val") {
-                            if in_shape_outer_shdw || in_shape_glow {
-                                shape_effect_color = Some(Color::theme(val));
-                            } else {
-                                current_color = Some(Color::theme(val));
-                            }
-                        }
-                    }
-                    "prstClr" => {
-                        if let Some(val) = xml_utils::attr_str(e, "val") {
-                            if in_shape_outer_shdw || in_shape_glow {
-                                shape_effect_color = Some(Color::preset(val));
-                            } else {
-                                current_color = Some(Color::preset(val));
-                            }
-                        }
-                    }
-                    "sysClr" => {
-                        if in_shape_outer_shdw || in_shape_glow {
-                            if let Some(val) = xml_utils::attr_str(e, "val") {
-                                shape_effect_color = Some(Color::system(val));
-                            } else if let Some(val) = xml_utils::attr_str(e, "lastClr") {
-                                shape_effect_color = Some(Color::rgb(val));
-                            }
-                        } else if let Some(val) = xml_utils::attr_str(e, "val") {
-                            current_color = Some(Color::system(val));
-                        } else if let Some(val) = xml_utils::attr_str(e, "lastClr") {
-                            current_color = Some(Color::rgb(val));
-                        }
-                    }
-                    // ── Text break (<a:br>) ──
-                    "br" if current_paragraph.is_some() && !in_tc => {
-                        let br_run = RunBuilder {
-                            is_break: true,
-                            text: "\n".to_string(),
-                            ..Default::default()
-                        };
-                        if let Some(pb) = current_paragraph.as_mut() {
-                            pb.runs.push(br_run.build());
-                        }
-                    }
-                    "br" if in_tc && cell_paragraph.is_some() => {
-                        let br_run = RunBuilder {
-                            is_break: true,
-                            text: "\n".to_string(),
-                            ..Default::default()
-                        };
-                        if let Some(pb) = cell_paragraph.as_mut() {
-                            pb.runs.push(br_run.build());
                         }
                     }
                     // ── Adjust values (<a:avLst>) ──
@@ -612,47 +227,6 @@ pub fn parse_slide<R: Read + Seek>(
                     }
                     "gdLst" if in_cust_geom => {
                         in_av_lst = true;
-                    }
-                    // ── Text highlight (<a:highlight>) ──
-                    "highlight" if in_r_pr || in_cell_r_pr => {
-                        in_highlight = true;
-                    }
-                    // ── Effect list (<a:effectLst>) for text shadow ──
-                    "effectLst" if in_r_pr || in_cell_r_pr => {
-                        in_effect_lst = true;
-                    }
-                    // ── Outer shadow inside text effectLst ──
-                    "outerShdw" if in_effect_lst => {
-                        in_outer_shdw = true;
-                        outer_shdw_blur = xml_utils::attr_str(e, "blurRad")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .map(|v| Emu(v as i64).to_pt())
-                            .unwrap_or(0.0);
-                        outer_shdw_dist = xml_utils::attr_str(e, "dist")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .map(|v| Emu(v as i64).to_pt())
-                            .unwrap_or(0.0);
-                        outer_shdw_dir = xml_utils::attr_str(e, "dir")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .map(|v| v / 60_000.0)
-                            .unwrap_or(0.0);
-                    }
-                    // ── Shape-level effect list (<a:effectLst> inside <p:spPr>) ──
-                    "effectLst" if in_sp_pr && current_shape.is_some() => {
-                        in_shape_effect_lst = true;
-                    }
-                    // ── Shape-level outer shadow ──
-                    "outerShdw" if in_shape_effect_lst => {
-                        in_shape_outer_shdw = true;
-                        (shape_shdw_blur, shape_shdw_dist, shape_shdw_dir) =
-                            parse_shape_outer_shadow(e);
-                        shape_shdw_alpha = 1.0;
-                    }
-                    // ── Shape-level glow ──
-                    "glow" if in_shape_effect_lst => {
-                        in_shape_glow = true;
-                        shape_glow_rad = parse_glow_radius(e);
-                        shape_glow_alpha = 1.0;
                     }
                     // ── Background gradFill ──
                     "gradFill" if in_bg_pr => {
@@ -847,33 +421,55 @@ pub fn parse_slide<R: Read + Seek>(
                     continue;
                 }
 
-                // Capture self-closing elements inside graphicData
-                if capturing_raw_xml {
-                    append_empty_element(e, &local, &mut raw_xml_buf);
+                preserved.capture_empty(e, &local);
+                if graphic_frame.handle_start(&local, e, &mut current_shape, &mut preserved) {
+                    continue;
+                }
+                if table.handle_empty(&local, e) {
+                    continue;
+                }
+                if text.handle_empty(&local, e, &mut current_shape, table.in_cell) {
+                    continue;
+                }
+                if action_parser::handle_start(
+                    &local,
+                    e,
+                    rels,
+                    text.in_run_properties,
+                    table.in_run_properties,
+                    &mut text.run,
+                    &mut table.run,
+                ) {
+                    continue;
+                }
+                if fill.handle_empty(&local, e, in_sp_pr, &mut current_shape) {
+                    continue;
+                }
+                if let Some(color) = fill.parse_empty_color(&local, e) {
+                    fill.route_color(
+                        color,
+                        ColorTargets {
+                            depth: &depth,
+                            in_shape_properties: in_sp_pr,
+                            shape: &mut current_shape,
+                            text: &mut text,
+                            table: &mut table,
+                            in_style: in_p_style,
+                            style_kind: p_style_current_ref.as_deref(),
+                            style_index: p_style_idx.as_deref(),
+                            style: &mut p_style_builder,
+                            in_background: in_bg_pr,
+                            in_background_image: in_bg_blip_fill,
+                            in_background_gradient: in_bg_grad_fill,
+                            background_stop_position: bg_gs_pos,
+                            background_stops: &mut bg_grad_stops,
+                            background_solid_color: &mut bg_solid_color,
+                        },
+                    );
+                    continue;
                 }
 
                 match local.as_str() {
-                    // Table column width
-                    "gridCol" if in_tbl => {
-                        table_parser::parse_column(e, &mut table_builder);
-                    }
-                    // Paragraph properties inside table cell (Empty variant)
-                    "pPr" if in_tc && cell_paragraph.is_some() => {
-                        parse_para_props(e, &mut cell_paragraph);
-                    }
-                    // Paragraph-level defRPr inside table cell (Empty variant)
-                    "defRPr" if in_tc && cell_paragraph.is_some() && cell_run.is_none() => {
-                        apply_paragraph_def_rpr(
-                            cell_paragraph
-                                .as_mut()
-                                .expect("table paragraph builder for defRPr"),
-                            e,
-                        );
-                    }
-                    // Run properties inside table cell (Empty variant)
-                    "rPr" if in_tc && cell_run.is_some() => {
-                        parse_run_props(e, &mut cell_run);
-                    }
                     // Shape position/size — only inside <a:xfrm> (or group grpSpPr).
                     // <a:off> and <a:ext> also appear inside <a:extLst> (extension
                     // lists) where they carry a `uri` attribute but no cx/cy.
@@ -963,121 +559,6 @@ pub fn parse_slide<R: Read + Seek>(
                             sb.preset_geometry = Some(prst);
                         }
                     }
-                    // bodyPr (Empty variant)
-                    "bodyPr" if current_shape.is_some() && !in_tc => {
-                        parse_body_pr(e, &mut current_shape);
-                    }
-                    // normAutofit (Empty variant — self-closing tag)
-                    "normAutofit" if current_shape.is_some() && !in_tc => {
-                        current_shape
-                            .as_mut()
-                            .expect("shape builder for empty normAutofit")
-                            .text_auto_fit = parse_shape_auto_fit(local.as_str(), e);
-                    }
-                    "noAutofit" if current_shape.is_some() && !in_tc => {
-                        current_shape
-                            .as_mut()
-                            .expect("shape builder for empty noAutofit")
-                            .text_auto_fit = parse_shape_auto_fit(local.as_str(), e);
-                    }
-                    // spAutoFit (Empty variant)
-                    "spAutoFit" if current_shape.is_some() && !in_tc => {
-                        current_shape
-                            .as_mut()
-                            .expect("shape builder for empty spAutoFit")
-                            .text_auto_fit = parse_shape_auto_fit(local.as_str(), e);
-                    }
-                    // Paragraph properties (Empty variant, non-table)
-                    "pPr" if current_paragraph.is_some() && !in_tc => {
-                        parse_para_props(e, &mut current_paragraph);
-                    }
-                    // Paragraph-level defRPr (Empty variant — self-closing, no children)
-                    "defRPr" if current_paragraph.is_some() && !in_tc && current_run.is_none() => {
-                        apply_paragraph_def_rpr(
-                            current_paragraph
-                                .as_mut()
-                                .expect("paragraph builder for empty defRPr"),
-                            e,
-                        );
-                    }
-                    // Run properties (Empty variant, non-table)
-                    "rPr" if current_run.is_some() && !in_tc => {
-                        parse_run_props(e, &mut current_run);
-                    }
-                    "hlinkClick" if in_r_pr || in_cell_r_pr => {
-                        assign_hyperlink(e, rels, &mut current_run, &mut cell_run);
-                    }
-                    // noFill -- explicit transparent
-                    "noFill" => {
-                        if in_ln {
-                            if let Some(sb) = &mut current_shape {
-                                sb.border_style = BorderStyle::None;
-                                sb.border_width = 0.0;
-                                sb.border_no_fill = true;
-                            }
-                        } else if in_sp_pr && let Some(sb) = &mut current_shape {
-                            sb.fill = Fill::NoFill;
-                        }
-                    }
-                    // Line dash style
-                    "prstDash" if in_ln => {
-                        if let Some(sb) = &mut current_shape
-                            && let Some(val) = xml_utils::attr_str(e, "val")
-                        {
-                            sb.border_style = match val.as_str() {
-                                "solid" => BorderStyle::Solid,
-                                "dash" | "lgDash" | "sysDash" => BorderStyle::Dashed,
-                                "dot" | "sysDot" | "lgDashDot" | "lgDashDotDot" | "sysDashDot"
-                                | "sysDashDotDot" => BorderStyle::Dotted,
-                                _ => BorderStyle::Solid,
-                            };
-                            sb.dash_style = match val.as_str() {
-                                "solid" => DashStyle::Solid,
-                                "dash" => DashStyle::Dash,
-                                "dot" => DashStyle::Dot,
-                                "dashDot" => DashStyle::DashDot,
-                                "lgDash" => DashStyle::LongDash,
-                                "lgDashDot" => DashStyle::LongDashDot,
-                                "lgDashDotDot" => DashStyle::LongDashDotDot,
-                                "sysDash" => DashStyle::SystemDash,
-                                "sysDot" => DashStyle::SystemDot,
-                                "sysDashDot" => DashStyle::SystemDashDot,
-                                "sysDashDotDot" => DashStyle::SystemDashDotDot,
-                                _ => DashStyle::Solid,
-                            };
-                        }
-                    }
-                    // Line join styles (inside <a:ln>)
-                    "round" if in_ln => {
-                        if let Some(sb) = &mut current_shape {
-                            sb.border_join = LineJoin::Round;
-                        }
-                    }
-                    "bevel" if in_ln => {
-                        if let Some(sb) = &mut current_shape {
-                            sb.border_join = LineJoin::Bevel;
-                        }
-                    }
-                    "miter" if in_ln => {
-                        if let Some(sb) = &mut current_shape {
-                            sb.border_join = LineJoin::Miter;
-                            sb.miter_limit = xml_utils::attr_str(e, "lim")
-                                .and_then(|v| v.parse::<f64>().ok())
-                                .map(|v| v / 100_000.0);
-                        }
-                    }
-                    // Line ending: head arrow (<a:headEnd>)
-                    "headEnd" if in_ln => {
-                        if let Some(sb) = &mut current_shape {
-                            sb.head_end = parse_line_end(e);
-                        }
-                    }
-                    // Line ending: tail arrow (<a:tailEnd>)
-                    "tailEnd" if in_ln => {
-                        if let Some(sb) = &mut current_shape {
-                            sb.tail_end = parse_line_end(e);
-                        }
-                    }
                     // Gradient direction (linear)
                     "lin" if in_bg_grad_fill => {
                         if let Some(ang) = xml_utils::attr_str(e, "ang") {
@@ -1085,22 +566,10 @@ pub fn parse_slide<R: Read + Seek>(
                         }
                         bg_grad_type = GradientType::Linear;
                     }
-                    "lin" if in_grad_fill => {
-                        if let Some(ang) = xml_utils::attr_str(e, "ang") {
-                            // OOXML angle: in 1/60000 degree units
-                            grad_angle = ang.parse::<f64>().unwrap_or(0.0) / 60_000.0;
-                        }
-                        grad_type = GradientType::Linear;
-                    }
                     // Gradient path type (radial/rectangular/shape)
                     "path" if in_bg_grad_fill => {
                         if let Some(val) = xml_utils::attr_str(e, "path") {
                             bg_grad_type = GradientType::from_path_attr(&val);
-                        }
-                    }
-                    "path" if in_grad_fill => {
-                        if let Some(val) = xml_utils::attr_str(e, "path") {
-                            grad_type = GradientType::from_path_attr(&val);
                         }
                     }
                     // Style ref elements (Empty variant -- self-closing with color child)
@@ -1108,196 +577,6 @@ pub fn parse_slide<R: Read + Seek>(
                         // Self-closing style ref with no child color
                         if let Some(idx_val) = xml_utils::attr_str(e, "idx") {
                             assign_style_ref_no_color(&local, &idx_val, &mut p_style_builder);
-                        }
-                    }
-                    // Color element (Empty — simple color without modifiers)
-                    "srgbClr" => {
-                        if let Some(val) = xml_utils::attr_str(e, "val") {
-                            dispatch_parsed_color(
-                                Color::rgb(val),
-                                &depth,
-                                in_sp_pr,
-                                in_ln,
-                                in_r_pr,
-                                in_grad_fill,
-                                current_gs_pos,
-                                in_shape_outer_shdw || in_shape_glow,
-                                &mut shape_effect_color,
-                                in_highlight,
-                                in_cell_r_pr,
-                                &mut cell_run,
-                                &mut current_run,
-                                in_outer_shdw,
-                                &mut current_color,
-                                in_cell_bu_clr,
-                                &mut cell_paragraph,
-                                in_shape_def_rpr,
-                                &mut current_shape_run_defaults,
-                                in_tc_pr,
-                                &tc_border_side,
-                                &mut current_cell,
-                                in_bu_clr,
-                                &mut current_paragraph,
-                                in_p_style,
-                                p_style_current_ref.as_deref(),
-                                p_style_idx.as_deref(),
-                                &mut p_style_builder,
-                                in_bg_pr,
-                                in_bg_blip_fill,
-                                in_bg_grad_fill,
-                                bg_gs_pos,
-                                &mut bg_grad_stops,
-                                &mut bg_solid_color,
-                                &mut current_shape,
-                                &mut grad_stops,
-                            );
-                        }
-                    }
-                    "schemeClr" => {
-                        if let Some(val) = xml_utils::attr_str(e, "val") {
-                            dispatch_parsed_color(
-                                Color::theme(val),
-                                &depth,
-                                in_sp_pr,
-                                in_ln,
-                                in_r_pr,
-                                in_grad_fill,
-                                current_gs_pos,
-                                in_shape_outer_shdw || in_shape_glow,
-                                &mut shape_effect_color,
-                                in_highlight,
-                                in_cell_r_pr,
-                                &mut cell_run,
-                                &mut current_run,
-                                in_outer_shdw,
-                                &mut current_color,
-                                in_cell_bu_clr,
-                                &mut cell_paragraph,
-                                in_shape_def_rpr,
-                                &mut current_shape_run_defaults,
-                                in_tc_pr,
-                                &tc_border_side,
-                                &mut current_cell,
-                                in_bu_clr,
-                                &mut current_paragraph,
-                                in_p_style,
-                                p_style_current_ref.as_deref(),
-                                p_style_idx.as_deref(),
-                                &mut p_style_builder,
-                                in_bg_pr,
-                                in_bg_blip_fill,
-                                in_bg_grad_fill,
-                                bg_gs_pos,
-                                &mut bg_grad_stops,
-                                &mut bg_solid_color,
-                                &mut current_shape,
-                                &mut grad_stops,
-                            );
-                        }
-                    }
-                    "prstClr" => {
-                        if let Some(val) = xml_utils::attr_str(e, "val") {
-                            dispatch_parsed_color(
-                                Color::preset(val),
-                                &depth,
-                                in_sp_pr,
-                                in_ln,
-                                in_r_pr,
-                                in_grad_fill,
-                                current_gs_pos,
-                                in_shape_outer_shdw || in_shape_glow,
-                                &mut shape_effect_color,
-                                in_highlight,
-                                in_cell_r_pr,
-                                &mut cell_run,
-                                &mut current_run,
-                                in_outer_shdw,
-                                &mut current_color,
-                                in_cell_bu_clr,
-                                &mut cell_paragraph,
-                                in_shape_def_rpr,
-                                &mut current_shape_run_defaults,
-                                in_tc_pr,
-                                &tc_border_side,
-                                &mut current_cell,
-                                in_bu_clr,
-                                &mut current_paragraph,
-                                in_p_style,
-                                p_style_current_ref.as_deref(),
-                                p_style_idx.as_deref(),
-                                &mut p_style_builder,
-                                in_bg_pr,
-                                in_bg_blip_fill,
-                                in_bg_grad_fill,
-                                bg_gs_pos,
-                                &mut bg_grad_stops,
-                                &mut bg_solid_color,
-                                &mut current_shape,
-                                &mut grad_stops,
-                            );
-                        }
-                    }
-                    "sysClr" => {
-                        let color = if let Some(val) = xml_utils::attr_str(e, "lastClr") {
-                            Color::rgb(val)
-                        } else if let Some(val) = xml_utils::attr_str(e, "val") {
-                            Color::system(val)
-                        } else {
-                            Color::none()
-                        };
-                        if !color.is_none() {
-                            dispatch_parsed_color(
-                                color,
-                                &depth,
-                                in_sp_pr,
-                                in_ln,
-                                in_r_pr,
-                                in_grad_fill,
-                                current_gs_pos,
-                                in_shape_outer_shdw || in_shape_glow,
-                                &mut shape_effect_color,
-                                in_highlight,
-                                in_cell_r_pr,
-                                &mut cell_run,
-                                &mut current_run,
-                                in_outer_shdw,
-                                &mut current_color,
-                                in_cell_bu_clr,
-                                &mut cell_paragraph,
-                                in_shape_def_rpr,
-                                &mut current_shape_run_defaults,
-                                in_tc_pr,
-                                &tc_border_side,
-                                &mut current_cell,
-                                in_bu_clr,
-                                &mut current_paragraph,
-                                in_p_style,
-                                p_style_current_ref.as_deref(),
-                                p_style_idx.as_deref(),
-                                &mut p_style_builder,
-                                in_bg_pr,
-                                in_bg_blip_fill,
-                                in_bg_grad_fill,
-                                bg_gs_pos,
-                                &mut bg_grad_stops,
-                                &mut bg_solid_color,
-                                &mut current_shape,
-                                &mut grad_stops,
-                            );
-                        }
-                    }
-                    // Color modifiers (Empty tags)
-                    "tint" | "shade" | "alpha" | "lumMod" | "lumOff" | "satMod" | "satOff"
-                    | "hueMod" | "hueOff" | "comp" | "inv" | "gray" => {
-                        let val = xml_utils::attr_str(e, "val").and_then(|v| v.parse::<i32>().ok());
-                        if let Some(modifier) = ColorModifier::from_ooxml(&local, val) {
-                            if in_shape_outer_shdw || in_shape_glow {
-                                if let Some(ref mut color) = shape_effect_color {
-                                    color.modifiers.push(modifier);
-                                }
-                            } else if let Some(ref mut color) = current_color {
-                                color.modifiers.push(modifier);
-                            }
                         }
                     }
                     // Placeholder
@@ -1320,101 +599,6 @@ pub fn parse_slide<R: Read + Seek>(
                                 }
                             }
                         }
-                    }
-                    // Font (table cell, paragraph defRPr, or regular run)
-                    "latin" | "ea" | "cs" => {
-                        assign_typeface(
-                            &local,
-                            e,
-                            &mut cell_run,
-                            in_shape_def_rpr,
-                            &mut current_shape_run_defaults,
-                            in_para_def_rpr,
-                            if in_tc {
-                                cell_paragraph.as_mut()
-                            } else {
-                                current_paragraph.as_mut()
-                            },
-                            &mut current_run,
-                        );
-                    }
-                    // Spacing percentage / points (inside lnSpc/spcBef/spcAft) — cell or regular
-                    "spcPct" | "spcPts" => {
-                        if let Some(spacing) = parse_spacing_tag(&local, e) {
-                            if in_shape_lst_style {
-                                assign_spacing_defaults(
-                                    current_shape_para_defaults.as_mut(),
-                                    spacing,
-                                    in_shape_ln_spc,
-                                    in_shape_spc_bef,
-                                    in_shape_spc_aft,
-                                );
-                            } else {
-                                assign_spacing_paragraph(
-                                    if in_tc {
-                                        cell_paragraph.as_mut()
-                                    } else {
-                                        current_paragraph.as_mut()
-                                    },
-                                    spacing,
-                                    in_ln_spc,
-                                    in_spc_bef,
-                                    in_spc_aft,
-                                );
-                            }
-                        }
-                    }
-                    // Bullet font (cell or regular)
-                    "buFont" => {
-                        let target = if in_tc {
-                            &mut cell_paragraph
-                        } else {
-                            &mut current_paragraph
-                        };
-                        parse_bullet_font(e, target);
-                    }
-                    // Bullet size (percentage, cell or regular)
-                    "buSzPct" => {
-                        let target = if in_tc {
-                            &mut cell_paragraph
-                        } else {
-                            &mut current_paragraph
-                        };
-                        parse_bullet_size(local.as_str(), e, target);
-                    }
-                    // Bullet size (points, cell or regular)
-                    "buSzPts" => {
-                        let target = if in_tc {
-                            &mut cell_paragraph
-                        } else {
-                            &mut current_paragraph
-                        };
-                        parse_bullet_size(local.as_str(), e, target);
-                    }
-                    // Bullet (cell or regular)
-                    "buNone" => {
-                        let target = if in_tc {
-                            &mut cell_paragraph
-                        } else {
-                            &mut current_paragraph
-                        };
-                        parse_bullet(local.as_str(), e, target);
-                    }
-                    "buChar" => {
-                        let target = if in_tc {
-                            &mut cell_paragraph
-                        } else {
-                            &mut current_paragraph
-                        };
-                        parse_bullet(local.as_str(), e, target);
-                    }
-                    "buAutoNum" => {
-                        let target = if in_tc {
-                            &mut cell_paragraph
-                        } else {
-                            &mut current_paragraph
-                        };
-                        parse_bullet(local.as_str(), e, target);
                     }
                     // ── Adjust value guide (<a:gd>) inside avLst ──
                     "gd" if in_av_lst => {
@@ -1567,128 +751,74 @@ pub fn parse_slide<R: Read + Seek>(
                             }
                         }
                     }
-                    // ── Chart reference inside graphicData ──
-                    "chart" if in_graphic_data && graphic_data_is_chart => {
-                        assign_chart_relationship(e, &mut current_shape);
-                    }
-                    // ── Text break (Empty variant) ──
-                    "br" if current_paragraph.is_some() && !in_tc => {
-                        let br_run = RunBuilder {
-                            is_break: true,
-                            text: "\n".to_string(),
-                            ..Default::default()
-                        };
-                        if let Some(pb) = current_paragraph.as_mut() {
-                            pb.runs.push(br_run.build());
-                        }
-                    }
-                    "br" if in_tc && cell_paragraph.is_some() => {
-                        let br_run = RunBuilder {
-                            is_break: true,
-                            text: "\n".to_string(),
-                            ..Default::default()
-                        };
-                        if let Some(pb) = cell_paragraph.as_mut() {
-                            pb.runs.push(br_run.build());
-                        }
-                    }
                     _ => {}
                 }
             }
-            Ok(Event::Text(ref e)) if capturing_raw_xml => {
-                raw_xml_buf.push_str(&e.unescape().unwrap_or_default());
-                // Fall through to regular text handlers
-                if in_cell_text {
-                    if let Some(rb) = &mut cell_run {
-                        rb.text.push_str(&e.unescape().unwrap_or_default());
-                    }
-                } else if in_text && let Some(rb) = &mut current_run {
-                    rb.text.push_str(&e.unescape().unwrap_or_default());
+            Ok(Event::Text(ref e)) => {
+                let value = e.unescape().unwrap_or_default();
+                preserved.capture_text(&value);
+                if !table.handle_text(&value) {
+                    text.handle_text(&value);
                 }
-            }
-            Ok(Event::Text(ref e)) if in_cell_text => {
-                table_parser::append_text(&mut cell_run, &e.unescape().unwrap_or_default());
-            }
-            Ok(Event::Text(ref e)) if in_text => {
-                append_text(&mut current_run, &e.unescape().unwrap_or_default());
             }
             Ok(Event::End(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
                 depth.pop();
 
-                // Capture closing tags for raw XML (before graphicData end stops capture)
-                if capturing_raw_xml && local != "graphicData" {
-                    append_end_element(e, &local, &mut raw_xml_buf);
+                preserved.capture_end(e, &local);
+                if table.handle_end(&local, &mut fill.current_color) {
+                    continue;
+                }
+                if text.handle_end(&local, &mut current_shape, &mut fill.current_color) {
+                    continue;
+                }
+                if fill.handle_end(&local, &mut current_shape, &mut text, &mut table) {
+                    continue;
+                }
+                if let Some(color) = fill.take_completed_color(&local) {
+                    fill.route_color(
+                        color,
+                        ColorTargets {
+                            depth: &depth,
+                            in_shape_properties: in_sp_pr,
+                            shape: &mut current_shape,
+                            text: &mut text,
+                            table: &mut table,
+                            in_style: in_p_style,
+                            style_kind: p_style_current_ref.as_deref(),
+                            style_index: p_style_idx.as_deref(),
+                            style: &mut p_style_builder,
+                            in_background: in_bg_pr,
+                            in_background_image: in_bg_blip_fill,
+                            in_background_gradient: in_bg_grad_fill,
+                            background_stop_position: bg_gs_pos,
+                            background_stops: &mut bg_grad_stops,
+                            background_solid_color: &mut bg_solid_color,
+                        },
+                    );
+                    continue;
+                }
+                if matches!(
+                    graphic_frame.handle_end(&local, &mut current_shape, &mut preserved,),
+                    GraphicFrameEnd::FinishFrame
+                ) {
+                    if let Some(shape) = finish_frame(
+                        graphic_frame.take_chart_flag(),
+                        &mut current_shape,
+                        &mut table.builder,
+                        rels,
+                        archive,
+                    ) {
+                        if let Some(group) = grp_stack.last_mut() {
+                            group.shapes.push(shape);
+                        } else {
+                            slide.shapes.push(shape);
+                        }
+                    }
+                    continue;
                 }
 
                 match local.as_str() {
-                    // ── Table cell text end events ──
-                    "t" if in_cell_text => {
-                        in_cell_text = false;
-                    }
-                    "rPr" if in_cell_r_pr => {
-                        in_cell_r_pr = false;
-                    }
-                    "r" if in_tc && cell_paragraph.is_some() => {
-                        table_parser::finish_run(&mut cell_run, &mut cell_paragraph);
-                    }
-                    "p" if in_tc => {
-                        table_parser::finish_paragraph(&mut cell_paragraph, &mut cell_paragraphs);
-                    }
-                    "buClr" if in_cell_bu_clr => {
-                        in_cell_bu_clr = false;
-                    }
-                    // End of table cell border sides
-                    "lnL" | "lnR" | "lnT" | "lnB" if in_tc_pr => {
-                        tc_border_side = None;
-                    }
-                    // End of table cell properties
-                    "tcPr" => {
-                        in_tc_pr = false;
-                    }
-                    // End of table cell
-                    "tc" => {
-                        table_parser::finish_cell(
-                            &mut current_cell,
-                            &mut cell_paragraphs,
-                            &mut current_row,
-                        );
-                        in_tc = false;
-                        cell_paragraph = None;
-                        cell_run = None;
-                        in_cell_text = false;
-                        in_cell_r_pr = false;
-                    }
-                    // End of table row
-                    "tr" => {
-                        table_parser::finish_row(&mut current_row, &mut table_builder);
-                        in_tr = false;
-                    }
-                    // End of table
-                    "tbl" => {
-                        in_tbl = false;
-                    }
-                    // End of graphic frame — finalize table or chart shape
-                    "graphicFrame" => {
-                        if let Some(shape) = finish_frame(
-                            graphic_data_is_chart,
-                            &mut current_shape,
-                            &mut table_builder,
-                            rels,
-                            archive,
-                        ) {
-                            if !grp_stack.is_empty() {
-                                if let Some(gc) = grp_stack.last_mut() {
-                                    gc.shapes.push(shape);
-                                }
-                            } else {
-                                slide.shapes.push(shape);
-                            }
-                        }
-                        in_graphic_frame = false;
-                        in_graphic_data = false;
-                        graphic_data_is_chart = false;
-                    }
                     // ── Group shape end ──
                     "grpSp" => {
                         if let Some(gc) = grp_stack.pop() {
@@ -1827,180 +957,6 @@ pub fn parse_slide<R: Read + Seek>(
                             }));
                         }
                     }
-                    "graphicData" => {
-                        in_graphic_data = false;
-                        if capturing_raw_xml {
-                            capturing_raw_xml = false;
-                            finish_raw_capture(&mut current_shape, &mut raw_xml_buf);
-                        }
-                    }
-                    "effectLst" if in_effect_lst => in_effect_lst = false,
-                    "effectLst" if in_shape_effect_lst => in_shape_effect_lst = false,
-                    "outerShdw" if in_outer_shdw => {
-                        in_outer_shdw = false;
-                        if let Some(color) = current_color.take() {
-                            let shadow = TextShadow {
-                                color,
-                                blur_rad: outer_shdw_blur,
-                                dist: outer_shdw_dist,
-                                dir: outer_shdw_dir,
-                            };
-                            if in_cell_r_pr {
-                                if let Some(rb) = cell_run.as_mut() {
-                                    rb.shadow = Some(shadow);
-                                }
-                            } else if in_r_pr && let Some(rb) = current_run.as_mut() {
-                                rb.shadow = Some(shadow);
-                            }
-                        }
-                    }
-                    "outerShdw" if in_shape_outer_shdw => {
-                        in_shape_outer_shdw = false;
-                        finish_shape_outer_shadow(
-                            &mut current_shape,
-                            &mut shape_effect_color,
-                            shape_shdw_blur,
-                            shape_shdw_dist,
-                            shape_shdw_dir,
-                            shape_shdw_alpha,
-                        );
-                    }
-                    "glow" if in_shape_glow => {
-                        in_shape_glow = false;
-                        finish_glow(
-                            &mut current_shape,
-                            &mut shape_effect_color,
-                            shape_glow_rad,
-                            shape_glow_alpha,
-                        );
-                    }
-                    "highlight" if in_highlight => {
-                        in_highlight = false;
-                        if let Some(color) = current_color.take() {
-                            if in_cell_r_pr {
-                                if let Some(rb) = cell_run.as_mut() {
-                                    rb.highlight = Some(color);
-                                }
-                            } else if in_r_pr && let Some(rb) = current_run.as_mut() {
-                                rb.highlight = Some(color);
-                            }
-                        }
-                    }
-
-                    // ── Original shape end events ──
-                    "t" => in_text = false,
-                    "rPr" => in_r_pr = false,
-                    "defRPr" if in_para_def_rpr => {
-                        // Assign accumulated color to paragraph defRPr (table cell or regular)
-                        if let Some(color) = current_color.take() {
-                            if in_tc {
-                                if let Some(pb) = cell_paragraph.as_mut() {
-                                    pb.def_rpr_color = Some(color);
-                                }
-                            } else if let Some(pb) = current_paragraph.as_mut() {
-                                pb.def_rpr_color = Some(color);
-                            }
-                        }
-                        in_para_def_rpr = false;
-                    }
-                    "defRPr" if in_shape_def_rpr => {
-                        if let Some(pd) = current_shape_para_defaults.as_mut() {
-                            pd.def_run_props = current_shape_run_defaults.take();
-                        }
-                        in_shape_def_rpr = false;
-                    }
-                    // End of paragraph spacing containers
-                    "lnSpc" if in_shape_ln_spc => in_shape_ln_spc = false,
-                    "lnSpc" => in_ln_spc = false,
-                    "spcBef" if in_shape_spc_bef => in_shape_spc_bef = false,
-                    "spcBef" => in_spc_bef = false,
-                    "spcAft" if in_shape_spc_aft => in_shape_spc_aft = false,
-                    "spcAft" => in_spc_aft = false,
-                    "lstStyle" if in_shape_lst_style => in_shape_lst_style = false,
-                    s if in_shape_lst_style && is_lvl_ppr(s) => {
-                        if let (Some(pd), Some(lvl)) =
-                            (current_shape_para_defaults.take(), current_shape_lvl)
-                        {
-                            store_shape_level_defaults(&mut current_shape, lvl, pd);
-                        }
-                        current_shape_lvl = None;
-                    }
-                    "buClr" => in_bu_clr = false,
-                    "r" => {
-                        finish_shape_run(&mut current_run, &mut current_paragraph);
-                    }
-                    "p" if current_shape.is_some() => {
-                        finish_shape_paragraph(&mut current_paragraph, &mut current_shape);
-                    }
-                    // End of color element — assign to target after applying modifiers
-                    "srgbClr" | "schemeClr" | "prstClr" | "sysClr" => {
-                        if let Some(color) = current_color.take() {
-                            if in_highlight {
-                                // Highlight color goes to run
-                                if in_cell_r_pr {
-                                    if let Some(rb) = cell_run.as_mut() {
-                                        rb.highlight = Some(color);
-                                    }
-                                } else if in_r_pr && let Some(rb) = current_run.as_mut() {
-                                    rb.highlight = Some(color);
-                                }
-                            } else if in_outer_shdw {
-                                // Shadow color: don't consume, let outerShdw End handler use it
-                                current_color = Some(color);
-                            } else if in_shape_outer_shdw || in_shape_glow {
-                                // Shape effect color: store for End handler
-                                shape_effect_color = Some(color);
-                            } else if in_para_def_rpr {
-                                // Paragraph default run color is applied when defRPr closes.
-                                current_color = Some(color);
-                            } else if in_cell_bu_clr {
-                                if let Some(pb) = cell_paragraph.as_mut() {
-                                    pb.bu_color = Some(color);
-                                }
-                            } else if in_tc_pr {
-                                assign_cell_color(color, &tc_border_side, &mut current_cell);
-                            } else if in_cell_r_pr {
-                                if let Some(rb) = cell_run.as_mut() {
-                                    rb.color = color;
-                                }
-                            } else if in_bu_clr {
-                                // Bullet color
-                                if let Some(pb) = current_paragraph.as_mut() {
-                                    pb.bu_color = Some(color);
-                                }
-                            } else if in_p_style && p_style_current_ref.is_some() {
-                                assign_style_ref_color(
-                                    p_style_current_ref.as_deref().unwrap_or(""),
-                                    p_style_idx.as_deref().unwrap_or("0"),
-                                    color,
-                                    &mut p_style_builder,
-                                );
-                            } else if in_bg_pr && !in_bg_blip_fill {
-                                // Background solid/gradient fill color
-                                if in_bg_grad_fill && depth_contains(&depth, "gs") {
-                                    bg_grad_stops.push(GradientStop {
-                                        position: bg_gs_pos,
-                                        color,
-                                    });
-                                } else {
-                                    bg_solid_color = Some(color);
-                                }
-                            } else {
-                                assign_color(
-                                    color,
-                                    &depth,
-                                    in_sp_pr,
-                                    in_ln,
-                                    in_r_pr,
-                                    in_grad_fill,
-                                    current_gs_pos,
-                                    &mut current_shape,
-                                    &mut current_run,
-                                    &mut grad_stops,
-                                );
-                            }
-                        }
-                    }
                     // End of style ref children
                     "lnRef" | "fillRef" | "effectRef" | "fontRef"
                         if in_p_style && p_style_current_ref.is_some() =>
@@ -2024,21 +980,6 @@ pub fn parse_slide<R: Read + Seek>(
                     "gradFill" if in_bg_grad_fill => {
                         in_bg_grad_fill = false;
                         // bg_grad_stops will be consumed when bgPr ends
-                    }
-                    // End of gradient fill
-                    "gradFill" if in_grad_fill => {
-                        in_grad_fill = false;
-                        if let Some(sb) = &mut current_shape {
-                            sb.fill = Fill::Gradient(GradientFill {
-                                gradient_type: std::mem::take(&mut grad_type),
-                                stops: std::mem::take(&mut grad_stops),
-                                angle: grad_angle,
-                            });
-                        }
-                    }
-                    // End of line/border
-                    "ln" if in_ln => {
-                        in_ln = false;
                     }
                     // End of non-visual properties
                     "nvPr" => {
@@ -2263,25 +1204,25 @@ pub(crate) struct ShapeBuilder {
     flip_h: bool,
     flip_v: bool,
     pub(crate) paragraphs: Vec<TextParagraph>,
-    has_text_body: bool,
+    pub(crate) has_text_body: bool,
     is_picture: bool,
     image_rel_id: Option<String>,
     preset_geometry: Option<String>,
     adjust_values: HashMap<String, f64>,
     // Fill/Border
     pub(crate) fill: Fill,
-    border_width: f64,
+    pub(crate) border_width: f64,
     pub(crate) border_color: Color,
     pub(crate) border_style: BorderStyle,
-    border_no_fill: bool,
-    dash_style: DashStyle,
-    border_cap: LineCap,
-    border_compound: CompoundLine,
-    border_alignment: LineAlignment,
-    border_join: LineJoin,
-    miter_limit: Option<f64>,
-    head_end: Option<LineEnd>,
-    tail_end: Option<LineEnd>,
+    pub(crate) border_no_fill: bool,
+    pub(crate) dash_style: DashStyle,
+    pub(crate) border_cap: LineCap,
+    pub(crate) border_compound: CompoundLine,
+    pub(crate) border_alignment: LineAlignment,
+    pub(crate) border_join: LineJoin,
+    pub(crate) miter_limit: Option<f64>,
+    pub(crate) head_end: Option<LineEnd>,
+    pub(crate) tail_end: Option<LineEnd>,
     // bodyPr
     pub(crate) text_vertical_align: VerticalAlign,
     pub(crate) text_vertical_align_explicit: bool,
@@ -2445,16 +1386,6 @@ impl ShapeBuilder {
             effects,
             ..Default::default()
         }
-    }
-}
-
-fn store_shape_level_defaults(shape: &mut Option<ShapeBuilder>, lvl: usize, pd: ParagraphDefaults) {
-    if lvl >= 9 {
-        return;
-    }
-    if let Some(shape) = shape.as_mut() {
-        let list_style = shape.text_list_style.get_or_insert_with(ListStyle::default);
-        list_style.levels[lvl] = Some(pd);
     }
 }
 
