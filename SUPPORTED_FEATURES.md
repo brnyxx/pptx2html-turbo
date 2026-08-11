@@ -77,6 +77,9 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Text shadow | `<a:effectLst><a:outerShdw>` | Supported |
 | Line break | `<a:br>` | Supported |
 | Hyperlink | `<a:hlinkClick>` | Approximate |
+| Mouse-over action metadata | `<a:hlinkMouseOver>` | Approximate |
+| Internal slide / first / last / next / previous action | `<a:hlinkClick action="ppaction://...">` | Approximate |
+| Media, program, macro, file, and custom action preservation | `<a:hlinkClick action="...">` | fallback |
 | Text alignment | `<a:pPr algn="...">` | Supported |
 | Line spacing | `<a:lnSpc>` | Supported |
 | Space before/after | `<a:spcBef>` / `<a:spcAft>` | Supported |

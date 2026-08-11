@@ -208,6 +208,8 @@ evaluate/
 | bullets      | 5     | Simple, nested, bold labels, colored     |
 | mixed        | 5     | Dashboard, comparison, architecture      |
 
+The deterministic completion `actions.pptx` is a separate contract fixture. Its presentation order is `slide1.xml`, `slide42.xml`, then `slide7.xml`; the specific-slide action on the first slide targets the third presentation slide. It also carries safe HTTPS/mailto, blocked JavaScript, click/mouse-over, four relative navigation actions, no-op, media, program/macro, shape, picture, connector, shape-run, and table-cell-run stimuli. This fixture verifies package structure and converter behavior, not exact PowerPoint boundary or hidden-slide traversal semantics (`[교차검증 필요]`).
+
 ## Autoresearch Integration
 
 This evaluation infrastructure is the regression loop in the autoresearch pattern. The LLM agent:
