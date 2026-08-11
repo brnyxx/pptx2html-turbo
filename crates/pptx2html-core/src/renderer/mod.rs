@@ -5636,18 +5636,18 @@ mod tests {
 
         let alt_ctx = slide_ctx.for_slide(None, Some(1));
         assert_eq!(
-            alt_ctx
-                .scheme
-                .and_then(|scheme| Some(scheme.accent1.as_str())),
+            alt_ctx.scheme.map(|scheme| scheme.accent1.as_str()),
             Some("00FF00")
         );
         let inherited_ctx = slide_ctx.for_slide(None, None);
         assert_eq!(inherited_ctx.clr_map.map(|_| true), Some(true));
 
-        let mut presentation = Presentation::default();
-        presentation.slide_size = Size {
-            width: Emu(914_400),
-            height: Emu(457_200),
+        let mut presentation = Presentation {
+            slide_size: Size {
+                width: Emu(914_400),
+                height: Emu(457_200),
+            },
+            ..Default::default()
         };
         presentation.slides.push(Slide {
             shapes: vec![Shape {
@@ -5677,10 +5677,12 @@ mod tests {
 
     #[test]
     fn render_with_scale_wraps_slide_in_scaled_shell() {
-        let mut presentation = Presentation::default();
-        presentation.slide_size = Size {
-            width: Emu(914_400),
-            height: Emu(457_200),
+        let mut presentation = Presentation {
+            slide_size: Size {
+                width: Emu(914_400),
+                height: Emu(457_200),
+            },
+            ..Default::default()
         };
         presentation.slides.push(Slide {
             shapes: vec![Shape {

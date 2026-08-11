@@ -35,10 +35,12 @@ fn render_with_metadata(
 }
 
 fn render_model_shapes(shapes: Vec<Shape>) -> String {
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.slides.push(Slide {
         shapes,
@@ -752,10 +754,12 @@ fn renders_table_paragraph_and_external_picture_fallbacks_through_public_rendere
         ..Default::default()
     };
 
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.slides.push(Slide {
         shapes: vec![table_shape, picture_shape],
@@ -827,10 +831,12 @@ fn renders_remaining_chart_label_and_gradient_branches_through_public_renderer()
         ..Default::default()
     };
 
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.slides.push(Slide {
         background: Some(gradient_fill(GradientType::Radial)),
@@ -994,10 +1000,12 @@ fn renders_master_text_body_inheritance_paths_through_public_renderer() {
         ..Default::default()
     };
 
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.masters.push(SlideMaster {
         shapes: vec![master_shape],
@@ -1076,10 +1084,12 @@ fn renders_anchor_geometry_and_fill_fallbacks_through_public_renderer() {
         ..Default::default()
     };
 
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.slides.push(Slide {
         background: Some(Fill::Solid(SolidFill {
@@ -1418,10 +1428,12 @@ fn renders_last_renderer_fallback_edges_through_public_renderer() {
         ..Default::default()
     };
 
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.slides.push(Slide {
         background: Some(Fill::None),

@@ -1193,7 +1193,7 @@ mod coverage_tests {
             std::mem::discriminant(&second_body.auto_fit),
             std::mem::discriminant(&AutoFit::Shrink)
         );
-        assert_eq!(second_body.word_wrap, true);
+        assert!(second_body.word_wrap);
         assert!(second.border.no_fill);
         assert_eq!(second.border.width, 0.0);
 

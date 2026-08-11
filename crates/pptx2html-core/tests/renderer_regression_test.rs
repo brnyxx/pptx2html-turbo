@@ -25,10 +25,12 @@ fn chart_shape(spec: ChartSpec) -> Shape {
 
 #[test]
 fn renderer_handles_chart_edge_case_branches_via_public_html_renderer() {
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.themes.push(Theme {
         name: "Theme".to_string(),
@@ -142,10 +144,12 @@ fn renderer_handles_chart_edge_case_branches_via_public_html_renderer() {
 
 #[test]
 fn renderer_assigns_expected_external_asset_extensions_via_public_wrappers() {
-    let mut presentation = Presentation::default();
-    presentation.slide_size = Size {
-        width: Emu(9_144_000),
-        height: Emu(6_858_000),
+    let mut presentation = Presentation {
+        slide_size: Size {
+            width: Emu(9_144_000),
+            height: Emu(6_858_000),
+        },
+        ..Default::default()
     };
     presentation.slides.push(Slide {
         shapes: vec![

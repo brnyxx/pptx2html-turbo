@@ -740,7 +740,7 @@ mod tests {
         let r = color.resolve(None, None).unwrap();
         // Result should be a lightened blue
         assert!(r.r > 0x44);
-        assert!(r.b > 0xC4 || r.b == 0xC4); // should be brighter
+        assert!(r.b >= 0xC4); // should be brighter
     }
 
     #[test]

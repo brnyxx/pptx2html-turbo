@@ -158,7 +158,7 @@ fn build_column_chart_pptx() -> Vec<u8> {
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
 </Relationships>"#;
 
-    let chart_xml = format!(
+    let chart_xml = String::from(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -203,7 +203,7 @@ fn build_column_chart_pptx() -> Vec<u8> {
       </c:valAx>
     </c:plotArea>
   </c:chart>
-</c:chartSpace>"#
+</c:chartSpace>"#,
     );
 
     let buf = Vec::new();
@@ -312,7 +312,7 @@ fn build_chart_with_axis_titles_pptx() -> Vec<u8> {
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
 </Relationships>"#;
 
-    let chart_xml = format!(
+    let chart_xml = String::from(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -375,7 +375,7 @@ fn build_chart_with_axis_titles_pptx() -> Vec<u8> {
       </c:valAx>
     </c:plotArea>
   </c:chart>
-</c:chartSpace>"#
+</c:chartSpace>"#,
     );
 
     let buf = Vec::new();
@@ -874,7 +874,7 @@ fn build_area_chart_pptx() -> Vec<u8> {
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
 </Relationships>"#;
 
-    let chart_xml = format!(
+    let chart_xml = String::from(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -912,7 +912,7 @@ fn build_area_chart_pptx() -> Vec<u8> {
       <c:valAx><c:axId val="456"/><c:crossAx val="123"/></c:valAx>
     </c:plotArea>
   </c:chart>
-</c:chartSpace>"#
+</c:chartSpace>"#,
     );
 
     let buf = Vec::new();
@@ -1490,7 +1490,7 @@ fn build_pie_chart_pptx() -> Vec<u8> {
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
 </Relationships>"#;
 
-    let chart_xml = format!(
+    let chart_xml = String::from(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -1526,7 +1526,7 @@ fn build_pie_chart_pptx() -> Vec<u8> {
     </c:plotArea>
     <c:legend><c:legendPos val="r"/></c:legend>
   </c:chart>
-</c:chartSpace>"#
+</c:chartSpace>"#,
     );
 
     let buf = Vec::new();
