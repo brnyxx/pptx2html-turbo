@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - Add the public `Bullet::Picture` variant for typed DrawingML picture bullets.
 - Rust consumers with exhaustive `Bullet` matches must add a `Bullet::Picture` arm.
 - Publish this public enum change only in the next semver-major release; package manifests remain unchanged on the current release line.
+- Add `Presentation::embedded_inventory` as typed presentation-owned fallback state while retaining the original public `model::embedded::EmbeddedInventory` marker. Existing exhaustive `Presentation` literals must add `embedded_inventory: Default::default()` (or switch to `..Default::default()`); an external-crate compile contract pins both the legacy `E0063` failure and the migrated literal. This avoids ambient parser state and semantic overloading of unrelated public fields.
+- Restrict embedded previews to a dependency-free safe PNG subset: CRC-valid IHDR/IDAT/IEND-only, bounded 8-bit non-interlaced RGBA with stored-zlib/filter-0 scanlines. Other PNG forms and JPEG/GIF/WebP previews fall back to placeholders.
+- Bound unknown package-part inventory to 128 sorted entries and 32 KiB of part-name metadata, followed by one deterministic omitted-count diagnostic.
 
 ### Rendering / Public API
 - Preserve slide notes, notes-master associations, legacy comments/authors, and modern comments/authors as typed off-canvas metadata in the existing deterministic diagnostics JSON
