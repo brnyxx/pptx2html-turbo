@@ -6,7 +6,7 @@ use base64::Engine;
 use super::{RenderCtx, UnresolvedCollector};
 use crate::model::{
     CapabilityStage, ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily,
-    ImageFill, MediaData, MediaKind, Presentation, SupportTier,
+    ImageFill, MediaData, MediaFailure, MediaKind, Presentation, SupportTier,
 };
 
 pub(super) fn render(
@@ -108,6 +108,29 @@ fn image_source(image: &ImageFill, ctx: &RenderCtx<'_>) -> String {
     }
 }
 
+fn diagnostic_reason(
+    media: &MediaData,
+    failure: MediaFailure,
+    shape_id: u32,
+    has_poster: bool,
+) -> String {
+    let fallback = if has_poster { "poster" } else { "placeholder" };
+    let content_type = if failure == MediaFailure::UnsupportedContentType {
+        media
+            .content_type
+            .as_deref()
+            .map(|value| format!(";content_type={value}"))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    format!(
+        "kind={};failure={};fallback={fallback};identity=shape-{shape_id}{content_type}",
+        media.kind.as_str(),
+        failure.as_str()
+    )
+}
+
 fn push_diagnostic(media: &MediaData, shape_id: u32, has_poster: bool, ctx: &RenderCtx<'_>) {
     let Some(failure) = media.failure else {
         return;
@@ -136,16 +159,8 @@ fn push_diagnostic(media: &MediaData, shape_id: u32, has_poster: bool, ctx: &Ren
                 ..Default::default()
             },
             raw_reference: Some(media.relationship_id.clone()),
-            fallback_kind: if has_poster {
-                FallbackKind::MediaPoster
-            } else {
-                FallbackKind::MediaPlaceholder
-            },
-            reason: format!(
-                "kind={};failure={};identity=shape-{shape_id}",
-                media.kind.as_str(),
-                failure.as_str()
-            ),
+            fallback_kind: FallbackKind::PreservedPart,
+            reason: diagnostic_reason(media, failure, shape_id, has_poster),
         });
 }
 

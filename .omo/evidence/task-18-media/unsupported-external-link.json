@@ -1,16 +1,34 @@
 {
+  "fixture": {
+    "path": "/tmp/task18-external-media.pptx",
+    "sha256": "d3ea44ad90a122b6140af49958afea0304b61bd238d90e4957cb960d75c016fd"
+  },
+  "html": {
+    "path": "/tmp/task18-external-a.html",
+    "sha256": "bceb0a93276dfb20c7a798a0a0ed69a65e3c734e1d175c3d64ee325d4b3f1a43"
+  },
+  "screenshot": {
+    "path": ".omo/evidence/task-18-media/media-browser.png",
+    "sha256": "0e89f20118744b9e833c08fecd53a4f1c3f0bbd155c794d17f7f873f505e9cd4"
+  },
+  "browser": {
+    "product": "Google Chrome",
+    "version": "151.0.7922.137"
+  },
+  "externalTargetFixture": true,
+  "expectedFallback": "external-target",
   "fallbackCount": 1,
-  "posterCount": 1,
-  "placeholderCount": 0,
   "fallbacks": [
     {
       "kind": "audio",
-      "reason": "unsupported-content-type",
+      "reason": "external-target",
       "sourceScheme": "data",
       "label": "Unsupported audio"
     }
   ],
   "externalHttpLinks": [],
   "externalMediaSources": [],
+  "mediaElementErrors": [],
+  "externalHttpRequestCount": 0,
   "externalHttpRequests": []
 }

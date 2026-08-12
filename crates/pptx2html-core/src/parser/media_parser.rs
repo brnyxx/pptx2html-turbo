@@ -163,6 +163,9 @@ fn resolve_poster<R: Read + Seek>(
         return None;
     }
     let data = read_bounded(archive, &path).ok()?;
+    if !valid_image_bytes(content_type, &data) {
+        return None;
+    }
     Some(ImageFill {
         rel_id: relationship_id.to_owned(),
         data,
@@ -221,6 +224,109 @@ fn resolve_owner_relative(owner_part: &str, target: &str) -> Option<String> {
     path.starts_with("ppt/media/").then_some(path)
 }
 
+fn valid_image_bytes(content_type: &str, data: &[u8]) -> bool {
+    match content_type {
+        "image/png" => valid_png(data),
+        "image/jpeg" => valid_jpeg(data),
+        "image/gif" => {
+            data.len() >= 14
+                && matches!(data.get(..6), Some(b"GIF87a" | b"GIF89a"))
+                && u16::from_le_bytes([data[6], data[7]]) > 0
+                && u16::from_le_bytes([data[8], data[9]]) > 0
+                && data[10..data.len() - 1].contains(&0x2c)
+                && data.last() == Some(&0x3b)
+        }
+        "image/webp" => {
+            data.len() >= 20
+                && data.starts_with(b"RIFF")
+                && data.get(8..12) == Some(&b"WEBP"[..])
+                && matches!(data.get(12..16), Some(b"VP8 " | b"VP8L" | b"VP8X"))
+                && u32::from_le_bytes([data[4], data[5], data[6], data[7]]) as usize + 8
+                    == data.len()
+                && u32::from_le_bytes([data[16], data[17], data[18], data[19]]) > 0
+                && u32::from_le_bytes([data[16], data[17], data[18], data[19]]) as usize
+                    <= data.len() - 20
+        }
+        _ => false,
+    }
+}
+
+fn valid_png(data: &[u8]) -> bool {
+    if !data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return false;
+    }
+    let mut offset = 8_usize;
+    let mut first = true;
+    let mut has_image_data = false;
+    while offset.checked_add(12).is_some_and(|end| end <= data.len()) {
+        let length = u32::from_be_bytes(match data[offset..offset + 4].try_into() {
+            Ok(value) => value,
+            Err(_) => return false,
+        }) as usize;
+        let Some(end) = offset
+            .checked_add(12)
+            .and_then(|base| base.checked_add(length))
+        else {
+            return false;
+        };
+        if end > data.len() {
+            return false;
+        }
+        let kind = &data[offset + 4..offset + 8];
+        if first {
+            if kind != b"IHDR" || length != 13 {
+                return false;
+            }
+            let width = u32::from_be_bytes(match data[offset + 8..offset + 12].try_into() {
+                Ok(value) => value,
+                Err(_) => return false,
+            });
+            let height = u32::from_be_bytes(match data[offset + 12..offset + 16].try_into() {
+                Ok(value) => value,
+                Err(_) => return false,
+            });
+            if width == 0 || height == 0 {
+                return false;
+            }
+            first = false;
+        } else if kind == b"IDAT" {
+            has_image_data |= length > 0;
+        } else if kind == b"IEND" {
+            return length == 0 && has_image_data && end == data.len();
+        }
+        offset = end;
+    }
+    false
+}
+
+fn valid_jpeg(data: &[u8]) -> bool {
+    if data.len() < 12 || !data.starts_with(&[0xff, 0xd8]) || !data.ends_with(&[0xff, 0xd9]) {
+        return false;
+    }
+    let mut offset = 2_usize;
+    let mut has_frame = false;
+    while offset + 4 <= data.len() - 2 {
+        if data[offset] != 0xff {
+            return false;
+        }
+        let marker = data[offset + 1];
+        offset += 2;
+        if marker == 0xd8 || marker == 0xd9 || marker == 0x00 {
+            return false;
+        }
+        let length = u16::from_be_bytes([data[offset], data[offset + 1]]) as usize;
+        if length < 2 || offset + length > data.len() - 2 {
+            return false;
+        }
+        if marker == 0xda {
+            return has_frame && offset + length < data.len() - 2;
+        }
+        has_frame |= matches!(marker, 0xc0..=0xc3 | 0xc5..=0xc7 | 0xc9..=0xcb | 0xcd..=0xcf);
+        offset += length;
+    }
+    false
+}
+
 fn is_pcm_wav(data: &[u8]) -> bool {
     if data.len() < 44 || &data[..4] != b"RIFF" || &data[8..12] != b"WAVE" {
         return false;
@@ -262,10 +368,20 @@ fn is_avc_mp4(data: &[u8]) -> bool {
     if ftyp.kind != *b"ftyp" || ftyp.payload.len() < 8 {
         return false;
     }
+    let media_payload_bytes = top_level
+        .iter()
+        .filter(|item| item.kind == *b"mdat")
+        .try_fold(0_u64, |total, item| {
+            total.checked_add(u64::try_from(item.payload.len()).ok()?)
+        });
+    let Some(media_payload_bytes) = media_payload_bytes.filter(|size| *size > 0) else {
+        return false;
+    };
     top_level
         .iter()
         .filter(|item| item.kind == *b"moov")
-        .any(|moov| contains_avc_track(moov.payload))
+        .filter_map(|moov| avc_sample_bytes(moov.payload))
+        .any(|sample_bytes| sample_bytes > 0 && sample_bytes <= media_payload_bytes)
 }
 
 #[derive(Clone, Copy)]
@@ -305,21 +421,49 @@ fn boxes(mut data: &[u8]) -> Option<Vec<IsoBox<'_>>> {
     Some(result)
 }
 
-fn contains_avc_track(moov: &[u8]) -> bool {
-    boxes(moov).is_some_and(|tracks| {
-        tracks
-            .iter()
-            .filter(|item| item.kind == *b"trak")
-            .any(|trak| {
-                child_boxes(trak.payload, b"mdia").any(|mdia| {
-                    child_boxes(mdia.payload, b"minf").any(|minf| {
-                        child_boxes(minf.payload, b"stbl").any(|stbl| {
-                            child_boxes(stbl.payload, b"stsd")
-                                .any(|stsd| valid_avc_stsd(stsd.payload))
+fn avc_sample_bytes(moov: &[u8]) -> Option<u64> {
+    boxes(moov)?
+        .into_iter()
+        .filter(|item| item.kind == *b"trak")
+        .filter_map(|trak| {
+            child_boxes(trak.payload, b"mdia").find_map(|mdia| {
+                child_boxes(mdia.payload, b"minf").find_map(|minf| {
+                    child_boxes(minf.payload, b"stbl").find_map(|stbl| {
+                        let has_avc = child_boxes(stbl.payload, b"stsd")
+                            .any(|stsd| valid_avc_stsd(stsd.payload));
+                        has_avc.then(|| {
+                            child_boxes(stbl.payload, b"stsz")
+                                .filter_map(|stsz| sample_bytes(stsz.payload))
+                                .max()
+                                .unwrap_or(0)
                         })
                     })
                 })
             })
+        })
+        .max()
+}
+
+fn sample_bytes(payload: &[u8]) -> Option<u64> {
+    if payload.len() < 12 {
+        return None;
+    }
+    let sample_size = u32::from_be_bytes(payload[4..8].try_into().ok()?) as u64;
+    let sample_count = u32::from_be_bytes(payload[8..12].try_into().ok()?) as usize;
+    if sample_count == 0 {
+        return None;
+    }
+    if sample_size > 0 {
+        return sample_size.checked_mul(u64::try_from(sample_count).ok()?);
+    }
+    let expected = 12_usize.checked_add(sample_count.checked_mul(4)?)?;
+    if payload.len() != expected {
+        return None;
+    }
+    payload[12..].chunks_exact(4).try_fold(0_u64, |total, raw| {
+        let size = u32::from_be_bytes(raw.try_into().ok()?) as u64;
+        (size > 0).then_some(())?;
+        total.checked_add(size)
     })
 }
 
@@ -407,19 +551,32 @@ mod tests {
         stsd_payload.extend_from_slice(&1_u32.to_be_bytes());
         stsd_payload.extend_from_slice(&entry);
         let stsd = iso_box(b"stsd", &stsd_payload);
-        let stbl = iso_box(b"stbl", &stsd);
+        let mut stsz_payload = vec![0_u8; 4];
+        stsz_payload.extend_from_slice(&0_u32.to_be_bytes());
+        stsz_payload.extend_from_slice(&1_u32.to_be_bytes());
+        stsz_payload.extend_from_slice(&4_u32.to_be_bytes());
+        let stsz = iso_box(b"stsz", &stsz_payload);
+        let mut stbl_payload = stsd.clone();
+        stbl_payload.extend_from_slice(&stsz);
+        let stbl = iso_box(b"stbl", &stbl_payload);
         let minf = iso_box(b"minf", &stbl);
         let mdia = iso_box(b"mdia", &minf);
         let trak = iso_box(b"trak", &mdia);
         let moov = iso_box(b"moov", &trak);
         let mut ftyp_payload = Vec::from(&b"isom\0\0\0\0"[..]);
         ftyp_payload.extend_from_slice(b"avc1");
-        let mut file = iso_box(b"ftyp", &ftyp_payload);
-        file.extend_from_slice(&moov);
+
+        let mut metadata_only = iso_box(b"ftyp", &ftyp_payload);
+        metadata_only.extend_from_slice(&moov);
+        assert!(!is_avc_mp4(&metadata_only));
+
+        let mut file = metadata_only;
+        file.extend_from_slice(&iso_box(b"mdat", &[1, 2, 3, 4]));
         assert!(is_avc_mp4(&file));
 
         let mut wrong_nesting = iso_box(b"ftyp", &ftyp_payload);
         wrong_nesting.extend_from_slice(&iso_box(b"moov", &stsd));
+        wrong_nesting.extend_from_slice(&iso_box(b"mdat", &[1, 2, 3, 4]));
         assert!(!is_avc_mp4(&wrong_nesting));
     }
 }

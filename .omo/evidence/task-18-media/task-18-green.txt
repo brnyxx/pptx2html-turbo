@@ -1,0 +1,278 @@
+   Compiling pptx2html-core v1.1.0 (/Users/adminstrator/Desktop/hyungjoo-drb/personal/pptx2html-turbo-task-18/crates/pptx2html-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.75s
+     Running tests/media_test.rs (target/debug/deps/media_test-bedaaf8d9cc441ce)
+
+running 14 tests
+test task_18_preserves_legacy_exhaustive_fallback_kind_matches ... ok
+test fixtures::fixture_api_contract::minimal_fixture_custom_xml_options_build_a_package ... ok
+test fixtures::fixture_api_contract::minimal_fixture_relationship_and_extra_file_options_build_a_package ... ok
+test fake_mp4_substrings_and_foreign_content_type_attributes_are_rejected ... ok
+test external_media_is_never_loaded_and_has_typed_placeholder_fallback ... ok
+test poster_requires_safe_internal_official_image_relationship_and_valid_bytes ... ok
+test unsupported_mime_diagnostic_preserves_mime_without_target_leakage ... ok
+test authoritative_content_types_root_and_direct_children_are_required ... ok
+test official_timing_media_node_metadata_is_preserved_without_execution ... ok
+test internal_official_pcm_wav_renders_native_controls_and_media_action ... ok
+test requested_metadata_is_preserved_but_autoplay_is_never_invented ... ok
+test wrong_relationship_type_and_unsafe_owner_relative_path_fall_back ... ok
+test fixtures::fixture_api_contract::feature_fixture_builders_create_and_validate_a_package ... ok
+test foreign_relationship_foreign_nv_pr_and_wrong_owner_stacks_never_authorize_media ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+   Compiling pptx2html-core v1.1.0 (/Users/adminstrator/Desktop/hyungjoo-drb/personal/pptx2html-turbo-task-18/crates/pptx2html-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.87s
+     Running unittests src/lib.rs (target/debug/deps/pptx2html_core-90e134ad80f2ccb6)
+
+running 1 test
+test parser::media_parser::tests::iso_box_parser_requires_avc_sample_entry_with_avcc_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 411 filtered out; finished in 0.00s
+
+     Running tests/action_semantics_test.rs (target/debug/deps/action_semantics_test-b40a815102e448bc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/coverage_regression_test.rs (target/debug/deps/coverage_regression_test-fad008cc934b95d2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+
+     Running tests/diagnostic_contract_test.rs (target/debug/deps/diagnostic_contract_test-bf4716d73a965264)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/edge_case_test.rs (target/debug/deps/edge_case_test-3ba32fb0b94ca368)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 141 filtered out; finished in 0.00s
+
+     Running tests/fixture_contract_test.rs (target/debug/deps/fixture_contract_test-4324be039bb8280c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_arrow_semantics_test.rs (target/debug/deps/geometry_adjustment_arrow_semantics_test-7ba69c589b4f5a7d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_arrow_test.rs (target/debug/deps/geometry_adjustment_arrow_test-76944b442c721787)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_basic_test.rs (target/debug/deps/geometry_adjustment_basic_test-1ca8369595a3733d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_remaining_test.rs (target/debug/deps/geometry_adjustment_remaining_test-d3f95af34b3d3e13)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/hierarchy_test.rs (target/debug/deps/hierarchy_test-7910afd9a8d6545a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 0.00s
+
+     Running tests/integration_test.rs (target/debug/deps/integration_test-b08c5b674d69be23)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 178 filtered out; finished in 0.00s
+
+     Running tests/media_test.rs (target/debug/deps/media_test-bedaaf8d9cc441ce)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/parser_seam_test.rs (target/debug/deps/parser_seam_test-fc5c00dc76c6bdef)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.01s
+
+     Running tests/pattern_fill_test.rs (target/debug/deps/pattern_fill_test-10a98965cc0715d2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/picture_bullet_test.rs (target/debug/deps/picture_bullet_test-18d870b1df4fdb4e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+
+     Running tests/public_api_test.rs (target/debug/deps/public_api_test-d342e69cf75c9f31)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/renderer_regression_test.rs (target/debug/deps/renderer_regression_test-f7671f3bc579e161)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/renderer_seam_test.rs (target/debug/deps/renderer_seam_test-ac41bfeedf8d67cb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/table_style_review_test.rs (target/debug/deps/table_style_review_test-ecf985eb8fa2fa88)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/table_style_test.rs (target/debug/deps/table_style_test-1f5252df8e531d56)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s
+     Running unittests src/lib.rs (target/debug/deps/pptx2html_core-90e134ad80f2ccb6)
+
+running 1 test
+test parser::picture_bullet_parser::content_type_tests::requires_official_elements_and_unqualified_attributes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 411 filtered out; finished in 0.00s
+
+     Running tests/action_semantics_test.rs (target/debug/deps/action_semantics_test-b40a815102e448bc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/coverage_regression_test.rs (target/debug/deps/coverage_regression_test-fad008cc934b95d2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+
+     Running tests/diagnostic_contract_test.rs (target/debug/deps/diagnostic_contract_test-bf4716d73a965264)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/edge_case_test.rs (target/debug/deps/edge_case_test-3ba32fb0b94ca368)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 141 filtered out; finished in 0.00s
+
+     Running tests/fixture_contract_test.rs (target/debug/deps/fixture_contract_test-4324be039bb8280c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_arrow_semantics_test.rs (target/debug/deps/geometry_adjustment_arrow_semantics_test-7ba69c589b4f5a7d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_arrow_test.rs (target/debug/deps/geometry_adjustment_arrow_test-76944b442c721787)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_basic_test.rs (target/debug/deps/geometry_adjustment_basic_test-1ca8369595a3733d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/geometry_adjustment_remaining_test.rs (target/debug/deps/geometry_adjustment_remaining_test-d3f95af34b3d3e13)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/hierarchy_test.rs (target/debug/deps/hierarchy_test-7910afd9a8d6545a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 0.00s
+
+     Running tests/integration_test.rs (target/debug/deps/integration_test-b08c5b674d69be23)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 178 filtered out; finished in 0.00s
+
+     Running tests/media_test.rs (target/debug/deps/media_test-bedaaf8d9cc441ce)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/parser_seam_test.rs (target/debug/deps/parser_seam_test-fc5c00dc76c6bdef)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/pattern_fill_test.rs (target/debug/deps/pattern_fill_test-10a98965cc0715d2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/picture_bullet_test.rs (target/debug/deps/picture_bullet_test-18d870b1df4fdb4e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+
+     Running tests/public_api_test.rs (target/debug/deps/public_api_test-d342e69cf75c9f31)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/renderer_regression_test.rs (target/debug/deps/renderer_regression_test-f7671f3bc579e161)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/renderer_seam_test.rs (target/debug/deps/renderer_seam_test-ac41bfeedf8d67cb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/table_style_review_test.rs (target/debug/deps/table_style_review_test-ecf985eb8fa2fa88)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/table_style_test.rs (target/debug/deps/table_style_test-1f5252df8e531d56)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s

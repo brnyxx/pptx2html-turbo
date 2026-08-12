@@ -929,6 +929,7 @@ Worktree/ownership protocol:
   - [ ] `python3 evaluate/check_exactness_contract.py --repo-root .` and all evaluation unit tests pass.
   - [ ] `python3 evaluate/powerpoint_evidence.py gate --family text-layout --golden-set-dir evaluate/golden_set --output-dir evaluate/powerpoint_golden --output-json <attemptDir>/task-23-powerpoint-text-layout-gate.json` remains nonzero on this Mac with a clear missing-native-evidence report; `text-layout` is the only family currently accepted by `EXACT_PROMOTION_FAMILIES`, and no exact tier is promoted.
   - [ ] Full Rust, Python evaluation, format, clippy, and doc checks pass; `git diff --check` is clean and `.DS_Store` remains untracked/unmodified.
+  - [ ] Release-boundary review records that public `Shape::actions` already broke exhaustive external struct literals at `dd3bafb`; decide the semver/migration treatment here without attributing or rewriting that Task 15 change during Task 18, and verify all pre-Task18 `Shape` literals remain otherwise source-compatible.
 
   QA scenarios (MANDATORY - task incomplete without these):
   ```

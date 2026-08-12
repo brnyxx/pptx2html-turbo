@@ -183,7 +183,11 @@ fn parse_slide_impl<R: Read + Seek>(
                 if text.handle_start(&local, e, &mut current_shape, table.in_cell) {
                     continue;
                 }
-                if drawingml && in_nv_pr && matches!(local.as_str(), "audioFile" | "videoFile") {
+                if drawingml
+                    && matches!(local.as_str(), "audioFile" | "videoFile")
+                    && current_shape.as_ref().is_some_and(|shape| shape.is_picture)
+                    && exact_media_owner_stack(&depth, &presentationml_depth, true)
+                {
                     assign_shape_media(
                         &mut current_shape,
                         &local,
@@ -472,7 +476,11 @@ fn parse_slide_impl<R: Read + Seek>(
                 if text.handle_empty(&local, e, &mut current_shape, table.in_cell) {
                     continue;
                 }
-                if drawingml && in_nv_pr && matches!(local.as_str(), "audioFile" | "videoFile") {
+                if drawingml
+                    && matches!(local.as_str(), "audioFile" | "videoFile")
+                    && current_shape.as_ref().is_some_and(|shape| shape.is_picture)
+                    && exact_media_owner_stack(&depth, &presentationml_depth, false)
+                {
                     assign_shape_media(
                         &mut current_shape,
                         &local,
@@ -1081,14 +1089,16 @@ fn apply_media_timing_metadata(xml: &str, slide: &mut Slide) {
                         ..Default::default()
                     };
                     current = Some((depth, metadata));
-                } else if let Some((_, metadata)) = current.as_mut() {
-                    if local == "cTn" && is_presentationml(&namespace) {
+                } else if let Some((_, metadata)) = current.as_mut()
+                    && is_presentationml(&namespace)
+                {
+                    if local == "cTn" {
                         metadata.loop_requested = unqualified_attr(element, "repeatCount")
                             .map(|value| value == "indefinite");
-                    } else if local == "stCond" && is_presentationml(&namespace) {
+                    } else if matches!(local, "cond" | "stCond") {
                         metadata.autoplay_requested =
                             unqualified_attr(element, "delay").map(|value| value == "0");
-                    } else if local == "spTgt" && is_presentationml(&namespace) {
+                    } else if local == "spTgt" {
                         metadata.shape_id =
                             unqualified_attr(element, "spid").and_then(|value| value.parse().ok());
                     }
@@ -1106,14 +1116,16 @@ fn apply_media_timing_metadata(xml: &str, slide: &mut Slide) {
                 let namespace = reader.resolve_element(element.name()).0;
                 let element_name = element.name();
                 let local = xml_utils::local_name(element_name.as_ref());
-                if let Some((_, metadata)) = current.as_mut() {
-                    if local == "cTn" && is_presentationml(&namespace) {
+                if let Some((_, metadata)) = current.as_mut()
+                    && is_presentationml(&namespace)
+                {
+                    if local == "cTn" {
                         metadata.loop_requested = unqualified_attr(element, "repeatCount")
                             .map(|value| value == "indefinite");
-                    } else if local == "stCond" && is_presentationml(&namespace) {
+                    } else if matches!(local, "cond" | "stCond") {
                         metadata.autoplay_requested =
                             unqualified_attr(element, "delay").map(|value| value == "0");
-                    } else if local == "spTgt" && is_presentationml(&namespace) {
+                    } else if local == "spTgt" {
                         metadata.shape_id =
                             unqualified_attr(element, "spid").and_then(|value| value.parse().ok());
                     }
@@ -1172,6 +1184,26 @@ fn apply_requested_metadata(shapes: &mut [Shape], metadata: &RequestedMediaMetad
             apply_requested_metadata(children, metadata);
         }
     }
+}
+
+fn exact_media_owner_stack(
+    depth: &[String],
+    presentationml_depth: &[bool],
+    includes_media_element: bool,
+) -> bool {
+    let suffix_len = if includes_media_element { 4 } else { 3 };
+    if depth.len() < suffix_len || presentationml_depth.len() != depth.len() {
+        return false;
+    }
+    let start = depth.len() - suffix_len;
+    let valid_picture_parent = start > 0
+        && matches!(depth[start - 1].as_str(), "spTree" | "grpSp")
+        && presentationml_depth[start - 1];
+    valid_picture_parent
+        && depth[start..start + 3] == ["pic", "nvPicPr", "nvPr"]
+        && presentationml_depth[start..start + 3]
+            .iter()
+            .all(|official| *official)
 }
 
 fn depth_contains(depth: &[String], tag: &str) -> bool {
@@ -1403,7 +1435,7 @@ fn media_number<T: std::str::FromStr>(
 ) -> Option<T> {
     names
         .iter()
-        .find_map(|name| xml_utils::attr_str(element, name))?
+        .find_map(|name| unqualified_attr(element, name))?
         .parse()
         .ok()
 }
@@ -1411,7 +1443,7 @@ fn media_number<T: std::str::FromStr>(
 fn media_bool(element: &quick_xml::events::BytesStart<'_>, names: &[&str]) -> Option<bool> {
     match names
         .iter()
-        .find_map(|name| xml_utils::attr_str(element, name))?
+        .find_map(|name| unqualified_attr(element, name))?
         .as_str()
     {
         "1" | "true" => Some(true),

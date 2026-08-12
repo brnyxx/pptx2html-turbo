@@ -23,6 +23,7 @@ pub struct MinimalPptx {
     custom_theme_xml: Option<String>,
     slide_rels_xml: Option<String>,
     core_properties_xml: Option<String>,
+    content_types_xml: Option<String>,
     extra_files: Vec<(String, Vec<u8>)>,
 }
 
@@ -51,6 +52,7 @@ impl MinimalPptx {
             custom_theme_xml: None,
             slide_rels_xml: None,
             core_properties_xml: None,
+            content_types_xml: None,
             extra_files: Vec::new(),
         }
     }
@@ -166,6 +168,11 @@ impl MinimalPptx {
         self
     }
 
+    pub fn with_content_types(mut self, content_types_xml: &str) -> Self {
+        self.content_types_xml = Some(content_types_xml.to_string());
+        self
+    }
+
     pub fn with_extra_file(mut self, path: &str, data: &[u8]) -> Self {
         self.extra_files.push((path.to_string(), data.to_vec()));
         self
@@ -178,15 +185,17 @@ impl MinimalPptx {
         let opts = SimpleFileOptions::default();
 
         // [Content_Types].xml
-        let content_types = if self.layout_xml.is_some() && self.core_properties_xml.is_some() {
-            CONTENT_TYPES_WITH_LAYOUT_AND_CORE
-        } else if self.layout_xml.is_some() {
-            CONTENT_TYPES_WITH_LAYOUT
-        } else if self.core_properties_xml.is_some() {
-            CONTENT_TYPES_WITH_CORE
-        } else {
-            CONTENT_TYPES
-        };
+        let content_types = self.content_types_xml.as_deref().unwrap_or_else(|| {
+            if self.layout_xml.is_some() && self.core_properties_xml.is_some() {
+                CONTENT_TYPES_WITH_LAYOUT_AND_CORE
+            } else if self.layout_xml.is_some() {
+                CONTENT_TYPES_WITH_LAYOUT
+            } else if self.core_properties_xml.is_some() {
+                CONTENT_TYPES_WITH_CORE
+            } else {
+                CONTENT_TYPES
+            }
+        });
         zip.start_file("[Content_Types].xml", opts).unwrap();
         zip.write_all(content_types.as_bytes()).unwrap();
 
@@ -419,6 +428,7 @@ mod fixture_api_contract {
             .with_presentation_rels("<Relationships/>")
             .with_slide_rels("<Relationships/>")
             .with_core_properties("<cp:coreProperties/>")
+            .with_content_types(super::CONTENT_TYPES)
             .with_extra_file("ppt/media/fixture.bin", b"fixture")
             .build();
 

@@ -1,0 +1,254 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling cfg-if v1.0.4
+   Compiling serde_core v1.0.228
+   Compiling libc v0.2.183
+   Compiling serde v1.0.228
+   Compiling crossbeam-utils v0.8.21
+   Compiling memchr v2.8.0
+   Compiling crc32fast v1.5.0
+   Compiling zerocopy v0.8.47
+   Compiling simd-adler32 v0.3.9
+   Compiling autocfg v1.5.0
+   Compiling zmij v1.0.21
+   Compiling adler2 v2.0.1
+   Compiling rayon-core v1.13.0
+   Compiling num-traits v0.2.19
+   Compiling thiserror v2.0.18
+   Compiling serde_json v1.0.149
+   Compiling either v1.15.0
+   Compiling miniz_oxide v0.8.9
+   Compiling plotters-backend v0.3.7
+   Compiling itoa v1.0.18
+   Compiling zip v2.4.2
+   Compiling syn v2.0.117
+   Compiling anstyle v1.0.14
+   Compiling regex-syntax v0.8.10
+   Compiling getrandom v0.4.2
+   Compiling hashbrown v0.16.1
+   Compiling crossbeam-epoch v0.9.18
+   Compiling ciborium-io v0.2.2
+   Compiling crossbeam-deque v0.8.6
+   Compiling equivalent v1.0.2
+   Compiling bumpalo v3.20.2
+   Compiling clap_lex v1.1.0
+   Compiling log v0.4.29
+   Compiling rustix v1.1.4
+   Compiling clap_builder v4.6.0
+   Compiling zopfli v0.8.3
+   Compiling indexmap v2.13.0
+   Compiling regex-automata v0.4.14
+   Compiling plotters-svg v0.3.7
+   Compiling errno v0.3.14
+   Compiling flate2 v1.1.9
+   Compiling itertools v0.10.5
+   Compiling serde_derive v1.0.228
+   Compiling zerocopy-derive v0.8.47
+   Compiling thiserror-impl v2.0.18
+   Compiling displaydoc v0.2.5
+   Compiling same-file v1.0.6
+   Compiling once_cell v1.21.4
+   Compiling bitflags v2.11.0
+   Compiling cast v0.3.0
+   Compiling walkdir v2.5.0
+   Compiling rayon v1.11.0
+   Compiling regex v1.12.3
+   Compiling plotters v0.3.7
+   Compiling clap v4.6.0
+   Compiling is-terminal v0.4.17
+   Compiling diff v0.1.13
+   Compiling base64 v0.22.1
+   Compiling anes v0.1.6
+   Compiling yansi v1.0.1
+   Compiling criterion-plot v0.5.0
+   Compiling fastrand v2.3.0
+   Compiling oorandom v11.1.5
+   Compiling pretty_assertions v1.4.1
+   Compiling tempfile v3.27.0
+   Compiling quick-xml v0.37.5
+   Compiling tinytemplate v1.2.1
+   Compiling pptx2html-core v1.1.0 (/private/tmp/pptx2html-task18-red/crates/pptx2html-core)
+   Compiling half v2.7.1
+   Compiling ciborium-ll v0.2.2
+   Compiling ciborium v0.2.2
+   Compiling criterion v0.5.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.97s
+     Running tests/media_test.rs (target/debug/deps/media_test-bedaaf8d9cc441ce)
+
+running 13 tests
+test fixtures::fixture_api_contract::minimal_fixture_relationship_and_extra_file_options_build_a_package ... ok
+test fixtures::fixture_api_contract::minimal_fixture_custom_xml_options_build_a_package ... ok
+
+thread 'unsupported_mime_diagnostic_preserves_mime_without_target_leakage' (205608533) panicked at crates/pptx2html-core/tests/media_test.rs:270:5:
+assertion failed: diagnostic.reason.contains("content_type=audio/mpeg")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'authoritative_content_types_root_and_direct_children_are_required' (205608522) panicked at crates/pptx2html-core/tests/media_test.rs:244:9:
+assertion failed: !result.html.contains("<audio")
+test external_media_is_never_loaded_and_has_typed_placeholder_fallback ... ok
+test internal_official_pcm_wav_renders_native_controls_and_media_action ... ok
+test fake_mp4_substrings_and_foreign_content_type_attributes_are_rejected ... ok
+test official_timing_media_node_metadata_is_preserved_without_execution ... ok
+test authoritative_content_types_root_and_direct_children_are_required ... FAILED
+
+thread 'poster_requires_safe_internal_official_image_relationship_and_valid_bytes' (205608531) panicked at crates/pptx2html-core/tests/media_test.rs:221:5:
+assertion failed: result.html.contains("media-placeholder")
+test unsupported_mime_diagnostic_preserves_mime_without_target_leakage ... FAILED
+test poster_requires_safe_internal_official_image_relationship_and_valid_bytes ... FAILED
+
+thread 'requested_metadata_is_preserved_but_autoplay_is_never_invented' (205608532) panicked at crates/pptx2html-core/tests/media_test.rs:147:5:
+assertion failed: !result.html.contains("data-media-trim-")
+test requested_metadata_is_preserved_but_autoplay_is_never_invented ... FAILED
+test wrong_relationship_type_and_unsafe_owner_relative_path_fall_back ... ok
+test fixtures::fixture_api_contract::feature_fixture_builders_create_and_validate_a_package ... ok
+
+thread 'foreign_relationship_foreign_nv_pr_and_wrong_owner_stacks_never_authorize_media' (205608528) panicked at crates/pptx2html-core/tests/media_test.rs:107:9:
+assertion failed: !result.html.contains("<audio")
+test foreign_relationship_foreign_nv_pr_and_wrong_owner_stacks_never_authorize_media ... FAILED
+
+failures:
+
+failures:
+    authoritative_content_types_root_and_direct_children_are_required
+    foreign_relationship_foreign_nv_pr_and_wrong_owner_stacks_never_authorize_media
+    poster_requires_safe_internal_official_image_relationship_and_valid_bytes
+    requested_metadata_is_preserved_but_autoplay_is_never_invented
+    unsupported_mime_diagnostic_preserves_mime_without_target_leakage
+
+test result: FAILED. 8 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+error: test failed, to rerun pass `-p pptx2html-core --test media_test`
+
+exit_code=101
+base_commit=fa1f84a67ab8812316dcb8dfb1c73ae6054b2155
+
+
+=== RED probe: metadata-only AVC must reject ===
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling cfg-if v1.0.4
+   Compiling serde_core v1.0.228
+   Compiling libc v0.2.183
+   Compiling serde v1.0.228
+   Compiling crossbeam-utils v0.8.21
+   Compiling memchr v2.8.0
+   Compiling zerocopy v0.8.47
+   Compiling crc32fast v1.5.0
+   Compiling autocfg v1.5.0
+   Compiling simd-adler32 v0.3.9
+   Compiling zmij v1.0.21
+   Compiling rayon-core v1.13.0
+   Compiling serde_json v1.0.149
+   Compiling num-traits v0.2.19
+   Compiling either v1.15.0
+   Compiling adler2 v2.0.1
+   Compiling thiserror v2.0.18
+   Compiling miniz_oxide v0.8.9
+   Compiling log v0.4.29
+   Compiling crossbeam-epoch v0.9.18
+   Compiling equivalent v1.0.2
+   Compiling zip v2.4.2
+   Compiling bumpalo v3.20.2
+   Compiling crossbeam-deque v0.8.6
+   Compiling plotters-backend v0.3.7
+   Compiling syn v2.0.117
+   Compiling regex-syntax v0.8.10
+   Compiling clap_lex v1.1.0
+   Compiling itoa v1.0.18
+   Compiling hashbrown v0.16.1
+   Compiling anstyle v1.0.14
+   Compiling ciborium-io v0.2.2
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.2
+   Compiling clap_builder v4.6.0
+   Compiling errno v0.3.14
+   Compiling plotters-svg v0.3.7
+   Compiling zopfli v0.8.3
+   Compiling flate2 v1.1.9
+   Compiling indexmap v2.13.0
+   Compiling itertools v0.10.5
+   Compiling cast v0.3.0
+   Compiling bitflags v2.11.0
+   Compiling once_cell v1.21.4
+   Compiling same-file v1.0.6
+   Compiling walkdir v2.5.0
+   Compiling rayon v1.11.0
+   Compiling plotters v0.3.7
+   Compiling is-terminal v0.4.17
+   Compiling anes v0.1.6
+   Compiling base64 v0.22.1
+   Compiling diff v0.1.13
+   Compiling yansi v1.0.1
+   Compiling fastrand v2.3.0
+   Compiling regex-automata v0.4.14
+   Compiling oorandom v11.1.5
+   Compiling pretty_assertions v1.4.1
+   Compiling tempfile v3.27.0
+   Compiling clap v4.6.0
+   Compiling criterion-plot v0.5.0
+   Compiling regex v1.12.3
+   Compiling serde_derive v1.0.228
+   Compiling zerocopy-derive v0.8.47
+   Compiling thiserror-impl v2.0.18
+   Compiling displaydoc v0.2.5
+   Compiling tinytemplate v1.2.1
+   Compiling quick-xml v0.37.5
+   Compiling pptx2html-core v1.1.0 (/private/tmp/pptx2html-task18-red-extra/crates/pptx2html-core)
+   Compiling half v2.7.1
+   Compiling ciborium-ll v0.2.2
+   Compiling ciborium v0.2.2
+   Compiling criterion v0.5.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 51.13s
+     Running unittests src/lib.rs (target/debug/deps/pptx2html_core-90e134ad80f2ccb6)
+
+running 1 test
+
+thread 'parser::media_parser::tests::iso_box_parser_requires_avc_sample_entry_with_avcc_child' (205785474) panicked at crates/pptx2html-core/src/parser/media_parser.rs:419:9:
+metadata-only AVC must reject
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test parser::media_parser::tests::iso_box_parser_requires_avc_sample_entry_with_avcc_child ... FAILED
+
+failures:
+
+failures:
+    parser::media_parser::tests::iso_box_parser_requires_avc_sample_entry_with_avcc_child
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 411 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p pptx2html-core --lib`
+mdat_red_exit_code=101
+
+=== RED probe: legacy exhaustive FallbackKind match ===
+   Compiling pptx2html-core v1.1.0 (/private/tmp/pptx2html-task18-red-extra/crates/pptx2html-core)
+error[E0004]: non-exhaustive patterns: `FallbackKind::MediaPoster` and `FallbackKind::MediaPlaceholder` not covered
+  --> crates/pptx2html-core/tests/fallback_compat_test.rs:3:11
+   |
+ 3 |     match kind {
+   |           ^^^^ patterns `FallbackKind::MediaPoster` and `FallbackKind::MediaPlaceholder` not covered
+   |
+note: `FallbackKind` defined here
+  --> crates/pptx2html-core/src/model/preserved.rs:48:1
+   |
+48 | pub enum FallbackKind {
+   | ^^^^^^^^^^^^^^^^^^^^^
+...
+58 |     MediaPoster,
+   |     ----------- not covered
+59 |     MediaPlaceholder,
+   |     ---------------- not covered
+   = note: the matched value is of type `FallbackKind`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern, a match arm with multiple or-patterns as shown, or multiple match arms
+   |
+12 ~         FallbackKind::ActionMetadata => "action",
+13 ~         FallbackKind::MediaPoster | FallbackKind::MediaPlaceholder => todo!(),
+   |
+
+For more information about this error, try `rustc --explain E0004`.
+error: could not compile `pptx2html-core` (test "fallback_compat_test") due to 1 previous error
+fallback_exhaustive_red_exit_code=101
+base_commit=fa1f84a67ab8812316dcb8dfb1c73ae6054b2155

@@ -26,42 +26,47 @@ impl ContentTypes {
     pub(crate) fn parse(xml: &str) -> Self {
         let mut reader = NsReader::from_str(xml);
         let mut content_types = Self::default();
+        let mut depth = 0_usize;
+        let mut official_root = false;
         loop {
             match reader.read_resolved_event() {
-                Ok((
-                    ResolveResult::Bound(namespace),
-                    Event::Empty(element) | Event::Start(element),
-                )) if namespace.as_ref()
-                    == b"http://schemas.openxmlformats.org/package/2006/content-types" =>
-                {
-                    match xml_utils::local_name(element.name().as_ref()) {
-                        "Default" => {
-                            if let Some((extension, content_type)) =
-                                unqualified_content_type_attributes(&element, "Extension")
-                            {
-                                content_types
-                                    .defaults
-                                    .insert(extension.to_ascii_lowercase(), content_type);
-                            }
-                        }
-                        "Override" => {
-                            if let Some((part_name, content_type)) =
-                                unqualified_content_type_attributes(&element, "PartName")
-                            {
-                                content_types.overrides.insert(
-                                    part_name.trim_start_matches('/').to_owned(),
-                                    content_type,
-                                );
-                            }
-                        }
-                        _ => {}
+                Ok((namespace, Event::Start(element))) => {
+                    if depth == 0 {
+                        official_root =
+                            official_content_type_element(&namespace, &element, "Types");
                     }
+                    depth += 1;
                 }
+                Ok((namespace, Event::Empty(element))) if depth == 1 && official_root => {
+                    content_types.insert_element(&namespace, &element);
+                }
+                Ok((_, Event::End(_))) => depth = depth.saturating_sub(1),
                 Ok((_, Event::Eof)) | Err(_) => break,
                 _ => {}
             }
         }
         content_types
+    }
+
+    fn insert_element(
+        &mut self,
+        namespace: &ResolveResult<'_>,
+        element: &quick_xml::events::BytesStart<'_>,
+    ) {
+        if official_content_type_element(namespace, element, "Default") {
+            if let Some((extension, content_type)) =
+                unqualified_content_type_attributes(element, "Extension")
+            {
+                self.defaults
+                    .insert(extension.to_ascii_lowercase(), content_type);
+            }
+        } else if official_content_type_element(namespace, element, "Override")
+            && let Some((part_name, content_type)) =
+                unqualified_content_type_attributes(element, "PartName")
+        {
+            self.overrides
+                .insert(part_name.trim_start_matches('/').to_owned(), content_type);
+        }
     }
 
     pub(crate) fn for_part(&self, part_name: &str) -> Option<&str> {
@@ -73,6 +78,15 @@ impl ContentTypes {
                 self.defaults.get(&extension).map(String::as_str)
             })
     }
+}
+
+fn official_content_type_element(
+    namespace: &ResolveResult<'_>,
+    element: &quick_xml::events::BytesStart<'_>,
+    local_name: &str,
+) -> bool {
+    matches!(namespace, ResolveResult::Bound(value) if value.as_ref() == b"http://schemas.openxmlformats.org/package/2006/content-types")
+        && xml_utils::local_name(element.name().as_ref()) == local_name
 }
 
 fn unqualified_content_type_attributes(
@@ -255,6 +269,16 @@ mod content_type_tests {
             r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types" xmlns:x="urn:foreign"><Default x:Extension="wav" ContentType="audio/wav"/></Types>"#,
         );
         assert!(foreign_attribute.for_part("ppt/media/a.wav").is_none());
+
+        let nested = ContentTypes::parse(
+            r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><wrapper><Default Extension="wav" ContentType="audio/wav"/></wrapper></Types>"#,
+        );
+        assert!(nested.for_part("ppt/media/a.wav").is_none());
+
+        let foreign_root = ContentTypes::parse(
+            r#"<x:Types xmlns:x="urn:foreign" xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="wav" ContentType="audio/wav"/></x:Types>"#,
+        );
+        assert!(foreign_root.for_part("ppt/media/a.wav").is_none());
 
         let official = ContentTypes::parse(
             r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="wav" ContentType="audio/wav"/></Types>"#,

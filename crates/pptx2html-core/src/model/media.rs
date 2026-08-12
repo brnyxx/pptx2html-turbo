@@ -96,10 +96,14 @@ impl MediaData {
 
     pub(crate) fn encode_marker(&self) -> String {
         format!(
-            "application/x-pptx2html-media;kind={};rid={};rtype={};failure={};trim_start={};trim_end={};loop={};volume={};autoplay={}",
+            "application/x-pptx2html-media;kind={};rid={};rtype={};ctype={};failure={};trim_start={};trim_end={};loop={};volume={};autoplay={}",
             self.kind.as_str(),
             self.relationship_id,
             self.relationship_type.as_deref().unwrap_or(""),
+            self.content_type
+                .as_deref()
+                .filter(|value| safe_content_type(value))
+                .unwrap_or(""),
             self.failure.map(MediaFailure::as_str).unwrap_or("none"),
             optional_number(self.trim_start),
             optional_number(self.trim_end),
@@ -132,7 +136,9 @@ impl MediaData {
             relationship_type: value("rtype")
                 .filter(|raw| !raw.is_empty())
                 .map(str::to_owned),
-            content_type: None,
+            content_type: value("ctype")
+                .filter(|raw| !raw.is_empty() && safe_content_type(raw))
+                .map(str::to_owned),
             data: Vec::new(),
             failure,
             trim_start: parse_optional_number(value("trim_start")),
@@ -162,6 +168,14 @@ impl MediaFailure {
         .into_iter()
         .find(|failure| failure.as_str() == value)
     }
+}
+
+fn safe_content_type(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 127
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'+' | b'.'))
 }
 
 fn optional_number<T: ToString>(value: Option<T>) -> String {
