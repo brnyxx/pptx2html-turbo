@@ -18,6 +18,7 @@ if __package__:
         slide_relationships as notes_slide_relationships,
     )
     from .completion_deck_package import (
+        NS,
         REL,
         Deck,
         mp4_bytes,
@@ -52,6 +53,7 @@ else:
         slide_relationships as notes_slide_relationships,
     )
     from completion_deck_package import (
+        NS,
         REL,
         Deck,
         mp4_bytes,
@@ -309,6 +311,37 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                     '<a:lstStyle/><a:p><a:pPr rtl="1"/><a:r><a:rPr lang="ar-SA"/>'
                     '<a:t>مرحبا PowerPoint 2026 بالعالم</a:t></a:r></a:p></p:txBody></p:sp>',
                     "",
+                ),
+            ),
+        ),
+        Deck(
+            "handout-master",
+            (("", ""),),
+            presentation_rels=(
+                (
+                    "rIdHandout",
+                    REL + "handoutMaster",
+                    "handoutMasters/handoutMaster1.xml",
+                    None,
+                ),
+            ),
+            parts=(
+                (
+                    "ppt/handoutMasters/handoutMaster1.xml",
+                    (
+                        f'<?xml version="1.0"?><p:handoutMaster {NS}><p:cSld '
+                        'name="Printed handout"><p:spTree><p:nvGrpSpPr/><p:grpSpPr/>'
+                        '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Header"/></p:nvSpPr>'
+                        '<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r>'
+                        '<a:t>HANDOUT_HEADER</a:t></a:r></a:p></p:txBody></p:sp>'
+                        '</p:spTree></p:cSld></p:handoutMaster>'
+                    ).encode(),
+                ),
+            ),
+            types=(
+                (
+                    "/ppt/handoutMasters/handoutMaster1.xml",
+                    "application/vnd.openxmlformats-officedocument.presentationml.handoutMaster+xml",
                 ),
             ),
         ),

@@ -190,8 +190,12 @@ pub const CAPABILITY_NOTES: (SupportTier, Option<CapabilityStage>, &str, &str) =
     "p:notes",
     "fallback",
 );
-pub const CAPABILITY_HANDOUT_MASTER: (SupportTier, Option<CapabilityStage>, &str, &str) =
-    (SupportTier::Unparsed, None, "p:handoutMaster", "unparsed");
+pub const CAPABILITY_HANDOUT_MASTER: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:handoutMaster",
+    "fallback",
+);
 pub const CAPABILITY_COMMENTS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Fallback,
     Some(CapabilityStage::Parsed),

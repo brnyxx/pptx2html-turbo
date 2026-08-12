@@ -11,6 +11,26 @@ pub(super) fn append(
     include_slide: impl Fn(usize) -> bool,
     include_unreferenced_authors: bool,
 ) {
+    for handout in &inventory.handout_masters {
+        diagnostics.push(ConversionDiagnostic {
+            code: "HANDOUT_MASTER_METADATA".to_owned(),
+            family: FeatureFamily::Layout,
+            support_tier: SupportTier::Fallback,
+            stage: Some(CapabilityStage::Parsed),
+            location: DiagnosticLocation::default(),
+            raw_reference: Some(format!(
+                "part={}\nrelationship_id={}\nname={}\nshape_count={}\ntext={}",
+                handout.part_name,
+                handout.relationship_id,
+                handout.name.as_deref().unwrap_or_default(),
+                handout.shape_count,
+                handout.text
+            )),
+            fallback_kind: FallbackKind::PreservedPart,
+            reason: "Handout master metadata was preserved without slide-surface rendering"
+                .to_owned(),
+        });
+    }
     let referenced_authors: HashSet<_> = inventory
         .comments
         .iter()

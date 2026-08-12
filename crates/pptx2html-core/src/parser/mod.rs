@@ -124,6 +124,12 @@ impl PptxParser {
             pres_relationships_exact,
             &mut notes_comments,
         );
+        notes_comments_parser::collect_handout_masters(
+            &mut archive,
+            &pres_relationships,
+            pres_relationships_exact,
+            &mut notes_comments,
+        );
 
         let table_styles = match table_style_package_diagnostics::select(&pres_relationships).target
         {

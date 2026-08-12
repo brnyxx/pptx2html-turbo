@@ -111,6 +111,43 @@ fn preserves_notes_master_and_classic_and_modern_comments_off_canvas() {
 }
 
 #[test]
+fn handout_master_is_preserved_as_typed_package_metadata() {
+    let relationships = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+  <Relationship Id="rIdHandout" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/handoutMaster" Target="handoutMasters/handoutMaster1.xml"/>
+</Relationships>"#;
+    let handout = br#"<?xml version="1.0" encoding="UTF-8"?>
+<p:handoutMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld name="Printed handout"><p:spTree><p:nvGrpSpPr/><p:grpSpPr/>
+    <p:sp><p:nvSpPr><p:cNvPr id="2" name="Header"/></p:nvSpPr><p:spPr/>
+      <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>HANDOUT_HEADER</a:t></a:r></a:p></p:txBody>
+    </p:sp>
+  </p:spTree></p:cSld>
+</p:handoutMaster>"#;
+    let bytes = MinimalPptx::new("<p:sp/>")
+        .with_presentation_rels(relationships)
+        .with_extra_file("ppt/handoutMasters/handoutMaster1.xml", handout)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("handout master fixture converts");
+    let metadata = raw_for(&result, "HANDOUT_MASTER_METADATA");
+
+    assert_eq!(metadata.len(), 1);
+    assert!(metadata[0].contains("part=ppt/handoutMasters/handoutMaster1.xml"));
+    assert!(metadata[0].contains("relationship_id=rIdHandout"));
+    assert!(metadata[0].contains("shape_count=1"));
+    assert!(metadata[0].contains("text=HANDOUT_HEADER"));
+    assert_eq!(
+        tiers_for(&result, "HANDOUT_MASTER_METADATA"),
+        vec!["fallback"],
+    );
+}
+
+#[test]
 fn missing_author_preserves_comment_and_emits_stable_code() {
     let result = convert_bytes_with_metadata(&missing_author_package()).expect("fixture converts");
     let unresolved = raw_for(&result, "COMMENT_AUTHOR_UNRESOLVED");

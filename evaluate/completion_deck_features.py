@@ -75,6 +75,14 @@ ABSENT_AUTHOR = NegativeSpec(
 
 
 FEATURES = (
+    _f(
+        24,
+        "handout-master",
+        "handout-master",
+        "<p:handoutMaster",
+        part="ppt/handoutMasters/handoutMaster1.xml",
+        relationship_disposition="internal",
+    ),
     _f(24, "rtl-text", "rtl-text", '<a:pPr rtl="1"/>'),
     _f(8, "patterns", "adjustment-basic", '<a:prstGeom prst="roundRect"><a:avLst>'),
     _f(9, "patterns", "adjustment-arrows", '<a:prstGeom prst="rightArrow"><a:avLst>'),

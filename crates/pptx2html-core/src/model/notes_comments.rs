@@ -33,6 +33,15 @@ pub struct SlideNote {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HandoutMasterMetadata {
+    pub part_name: String,
+    pub relationship_id: String,
+    pub name: Option<String>,
+    pub shape_count: usize,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SlideComment {
     pub kind: CommentKind,
     pub slide_number: usize,
@@ -88,6 +97,7 @@ pub struct AnnotationIssue {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NotesCommentsInventory {
     pub authors: Vec<CommentAuthor>,
+    pub handout_masters: Vec<HandoutMasterMetadata>,
     pub notes: Vec<SlideNote>,
     pub comments: Vec<SlideComment>,
     pub issues: Vec<AnnotationIssue>,

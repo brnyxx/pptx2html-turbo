@@ -14,6 +14,8 @@ pub(super) const NOTES_SLIDE: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
 pub(super) const NOTES_MASTER: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+pub(super) const HANDOUT_MASTER: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/handoutMaster";
 pub(super) const MODERN_COMMENTS: &str =
     "http://schemas.microsoft.com/office/2018/10/relationships/comments";
 pub(super) const MODERN_AUTHORS: &str =

@@ -10,8 +10,10 @@ use std::io::{Read, Seek};
 use zip::ZipArchive;
 
 use super::relationships::Relationship;
-use crate::model::{CommentAuthor, CommentKind, NotesCommentsInventory};
-use relationship::{LEGACY_AUTHORS, LEGACY_COMMENTS, MODERN_AUTHORS, MODERN_COMMENTS, NOTES_SLIDE};
+use crate::model::{CommentAuthor, CommentKind, HandoutMasterMetadata, NotesCommentsInventory};
+use relationship::{
+    HANDOUT_MASTER, LEGACY_AUTHORS, LEGACY_COMMENTS, MODERN_AUTHORS, MODERN_COMMENTS, NOTES_SLIDE,
+};
 
 #[derive(Default)]
 pub(crate) struct AuthorIndex {
@@ -81,6 +83,44 @@ pub(crate) fn collect_authors<R: Read + Seek>(
         }
     }
     authors
+}
+
+pub(crate) fn collect_handout_masters<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    relationships: &[Relationship],
+    relationships_exact: bool,
+    inventory: &mut NotesCommentsInventory,
+) {
+    if !relationships_exact {
+        return;
+    }
+    for relation in relationship::unique(relationships, &[HANDOUT_MASTER], inventory, None) {
+        let Some(part) = relationship::internal_part(
+            "ppt/presentation.xml",
+            relation,
+            "ppt/handoutMasters/",
+            None,
+            inventory,
+        ) else {
+            continue;
+        };
+        let Some(part_xml) = relationship::read_part(archive, &part, relation, None, inventory)
+        else {
+            continue;
+        };
+        let (metadata, malformed) = xml::handout_master_metadata(&part_xml);
+        if let Some(reason) = malformed {
+            relationship::part_issue(inventory, None, &part, Some(relation), reason);
+            continue;
+        }
+        inventory.handout_masters.push(HandoutMasterMetadata {
+            part_name: part,
+            relationship_id: relation.id.clone(),
+            name: metadata.name,
+            shape_count: metadata.shape_count,
+            text: metadata.text,
+        });
+    }
 }
 
 pub(crate) fn collect_slide<R: Read + Seek>(
