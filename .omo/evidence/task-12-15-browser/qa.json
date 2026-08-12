@@ -1,0 +1,325 @@
+{
+  "assertion_count": 25,
+  "browser": {
+    "name": "chromium",
+    "version": "145.0.7632.6"
+  },
+  "native_fidelity_claimed": false,
+  "schema_version": 1,
+  "screenshots": {
+    "task-12-patterns-960x720-full": {
+      "dimensions": [
+        980,
+        2240
+      ],
+      "file": "task-12-patterns-960x720-full.png",
+      "full_page": true,
+      "sha256": "dbd9174c8aff7ad4d59256c05a4ec241429d6f121f536f564cb4a5125db5855a",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-13-picture-bullets-390x844": {
+      "dimensions": [
+        390,
+        844
+      ],
+      "file": "task-13-picture-bullets-390x844.png",
+      "full_page": false,
+      "sha256": "040f1dc8089c7c0c08a1b3a880f2a83710ac6ec4ac0b441bfd1d6c4c6721ab3f",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    },
+    "task-13-picture-bullets-960x720": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-13-picture-bullets-960x720.png",
+      "full_page": false,
+      "sha256": "fd14e6147407f7ab0020de4d46e0b990cc5ecea61515696300150e7913ddd954",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-14-table-styles-960x720": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-14-table-styles-960x720.png",
+      "full_page": false,
+      "sha256": "c9fadec382e6e2534d34ffe73ad1bf54258cf975a632b0d79a8f0b290113133c",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-connector": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-connector.png",
+      "full_page": false,
+      "sha256": "6c1c9e2c8a70470dc4031ee8ed33f1653c62443d1950ac6f3ad3ed4596f7ea65",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-first": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-first.png",
+      "full_page": false,
+      "sha256": "431ac04bf6c5929d1c3cd5d623ad3709931278684c85d0377e1951f55e5c6198",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-initial": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-initial.png",
+      "full_page": false,
+      "sha256": "e8021a7cc28c3910cf8c0075df26ff66f005fc7ed6e0f0962629cbfa84b250b7",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-inner-group": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-inner-group.png",
+      "full_page": false,
+      "sha256": "6c1c9e2c8a70470dc4031ee8ed33f1653c62443d1950ac6f3ad3ed4596f7ea65",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-last": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-last.png",
+      "full_page": false,
+      "sha256": "3f0a4c4fe7b0bc037dbf62ae6a4884e3375b0e3c2a7e076571e6db474300fc23",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-leaf": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-leaf.png",
+      "full_page": false,
+      "sha256": "431ac04bf6c5929d1c3cd5d623ad3709931278684c85d0377e1951f55e5c6198",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-next": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-next.png",
+      "full_page": false,
+      "sha256": "6c1c9e2c8a70470dc4031ee8ed33f1653c62443d1950ac6f3ad3ed4596f7ea65",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-previous": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-previous.png",
+      "full_page": false,
+      "sha256": "431ac04bf6c5929d1c3cd5d623ad3709931278684c85d0377e1951f55e5c6198",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    },
+    "task-15-specific": {
+      "dimensions": [
+        960,
+        720
+      ],
+      "file": "task-15-specific.png",
+      "full_page": false,
+      "sha256": "3f0a4c4fe7b0bc037dbf62ae6a4884e3375b0e3c2a7e076571e6db474300fc23",
+      "viewport": {
+        "height": 720,
+        "width": 960
+      }
+    }
+  },
+  "tasks": {
+    "12": {
+      "assertions": {
+        "diagnostic_identity": "pattern-s0-e0",
+        "pattern_labels": 54,
+        "svg_repeat_shapes": 54,
+        "table_pattern": true,
+        "trellis_background": true
+      },
+      "diagnostic_counts": {
+        "DRAWINGML_CUSTOM_GEOMETRY_FALLBACK": 1,
+        "DRAWINGML_PATTERN_UNSUPPORTED": 1,
+        "OOXML_ELEMENT_UNSUPPORTED": 14,
+        "OOXML_RELATIONSHIP_UNSUPPORTED": 1
+      }
+    },
+    "13": {
+      "assertions": [
+        {
+          "image_sizes": [
+            "20pt",
+            "5pt",
+            "80pt",
+            "12.5pt"
+          ],
+          "viewport": "desktop",
+          "visible_fallbacks": 4,
+          "visible_images": 4
+        },
+        {
+          "image_sizes": [
+            "20pt",
+            "5pt",
+            "80pt",
+            "12.5pt"
+          ],
+          "viewport": "mobile",
+          "visible_fallbacks": 4,
+          "visible_images": 4
+        }
+      ],
+      "diagnostic_counts": {
+        "OOXML_ELEMENT_UNSUPPORTED": 7,
+        "OOXML_RELATIONSHIP_UNSUPPORTED": 1,
+        "PICTURE_BULLET_IMAGE_MISSING": 4
+      },
+      "leakage": {
+        "credentials": false,
+        "external_uri": false,
+        "svg_payload": false
+      }
+    },
+    "14": {
+      "assertions": {
+        "fallback_visible": true,
+        "grid_span": 2,
+        "logical_cells": 18,
+        "merge_continuation_hidden": true,
+        "no_fill": "rgba(0, 0, 0, 0)",
+        "override_color": "rgb(171, 205, 239)",
+        "region_color_count": 7
+      },
+      "diagnostic": {
+        "code": "TABLE_STYLE_DEFINITION_UNAVAILABLE",
+        "fallback_kind": "table-style-definition-unavailable",
+        "family": "tables",
+        "location": {
+          "part_name": "ppt/slides/slide1.xml",
+          "position": null,
+          "qualified_element_name": "a:tableStyleId",
+          "relationship_id": null,
+          "relationship_type": null,
+          "size": null,
+          "slide_index": 0
+        },
+        "raw_reference": "table_id=3;style_id={5C22544A-7EE6-4342-B048-85BDC9FD1C3A};source_kind=built_in;firstRow=0;lastRow=0;firstCol=1;lastCol=0;bandRow=0;bandCol=1",
+        "reason": "Referenced table style definition is unavailable; no appearance was invented",
+        "stage": "resolved",
+        "support_tier": "approximate"
+      },
+      "diagnostic_counts": {
+        "OOXML_ELEMENT_UNSUPPORTED": 7,
+        "OOXML_RELATIONSHIP_UNSUPPORTED": 1,
+        "TABLE_STYLE_DEFINITION_UNAVAILABLE": 1
+      }
+    },
+    "15": {
+      "action_diagnostic_counts": {
+        "ACTION_UNSAFE_URI": 2,
+        "ACTION_UNSUPPORTED": 3
+      },
+      "assertions": {
+        "dialogs": 0,
+        "hover_only_inert": true,
+        "javascript_hrefs": 0,
+        "nonzero_top_level_shapes": 17,
+        "outer_hover_inert": true,
+        "owner_run_table_group_precedence": true,
+        "popups": 0,
+        "safe_link_attributes": true,
+        "states": [
+          {
+            "hash": "#slide-2",
+            "scenario": "next"
+          },
+          {
+            "hash": "#slide-1",
+            "scenario": "previous"
+          },
+          {
+            "hash": "#slide-1",
+            "scenario": "first"
+          },
+          {
+            "hash": "#slide-3",
+            "scenario": "last"
+          },
+          {
+            "hash": "#slide-3",
+            "scenario": "specific"
+          },
+          {
+            "hash": "#slide-2",
+            "scenario": "connector"
+          },
+          {
+            "hash": "#slide-2",
+            "scenario": "inner-group"
+          },
+          {
+            "hash": "#slide-1",
+            "scenario": "leaf"
+          }
+        ],
+        "top_level_overlaps": 0,
+        "unsafe_program_macro_noop_media_inert": true
+      },
+      "diagnostic_counts": {
+        "ACTION_UNSAFE_URI": 2,
+        "ACTION_UNSUPPORTED": 3,
+        "OOXML_ELEMENT_UNSUPPORTED": 13,
+        "OOXML_RELATIONSHIP_UNSUPPORTED": 1
+      }
+    }
+  }
+}

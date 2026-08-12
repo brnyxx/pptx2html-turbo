@@ -36,11 +36,11 @@ def _positive_table() -> str:
     rows.append(f'<a:tr h="500000">{merged}</a:tr>')
     grid = "<a:tblGrid>" + '<a:gridCol w="1000000"/>' * 4 + "</a:tblGrid>"
     properties = f'<a:tblPr firstRow="1" lastRow="1" firstCol="1" lastCol="1" bandRow="1" bandCol="1"><a:tableStyleId>{CUSTOM_STYLE}</a:tableStyleId></a:tblPr>'
-    return f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="2" name="present style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>{properties}{grid}{"".join(rows)}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
+    return f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="2" name="present style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="300000" y="400000"/><a:ext cx="5700000" cy="3500000"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>{properties}{grid}{"".join(rows)}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
 
 
 def _negative_table() -> str:
-    return f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="3" name="missing style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstCol="1" bandCol="1"><a:tableStyleId>{UNAVAILABLE_STYLE}</a:tableStyleId></a:tblPr><a:tblGrid><a:gridCol w="3000000"/></a:tblGrid><a:tr h="500000">{_cell("built-in unavailable")}</a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
+    return f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="3" name="missing style"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="6200000" y="400000"/><a:ext cx="2500000" cy="1000000"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstCol="1" bandCol="1"><a:tableStyleId>{UNAVAILABLE_STYLE}</a:tableStyleId></a:tblPr><a:tblGrid><a:gridCol w="3000000"/></a:tblGrid><a:tr h="500000">{_cell("built-in unavailable")}</a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
 
 
 TABLES = _positive_table() + _negative_table()

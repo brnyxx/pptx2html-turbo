@@ -358,7 +358,7 @@ impl HtmlRenderer {
         format!(
             r#"* {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ background: #f0f0f0; font-family: 'Calibri', 'Malgun Gothic', sans-serif; }}
-.pptx-container {{ display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 20px; }}
+.pptx-container {{ display: flex; flex-direction: column; align-items: safe center; gap: 20px; padding: 20px; }}
 .slide-shell {{
   position: relative;
   flex: 0 0 auto;

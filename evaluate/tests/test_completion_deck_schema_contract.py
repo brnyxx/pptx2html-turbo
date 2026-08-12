@@ -216,6 +216,52 @@ class CompletionDeckSchemaTests(unittest.TestCase):
             table_run = table.find(".//a:rPr/a:hlinkClick", NS)
             self.assertEqual(table_run.get(f"{{{NS['r']}}}id"), "rIdMailto")
 
+    def test_browser_fixtures_have_nonzero_nonoverlapping_geometry(self) -> None:
+        def rectangle(transform: ElementTree.Element) -> tuple[int, int, int, int]:
+            offset = transform.find("a:off", NS)
+            extent = transform.find("a:ext", NS)
+            self.assertIsNotNone(offset)
+            self.assertIsNotNone(extent)
+            width, height = int(extent.get("cx")), int(extent.get("cy"))
+            self.assertGreater(width, 0)
+            self.assertGreater(height, 0)
+            return int(offset.get("x")), int(offset.get("y")), width, height
+
+        with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
+            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            frames = slide.findall(".//p:graphicFrame", NS)
+            table_rectangles = [rectangle(frame.find("p:xfrm", NS)) for frame in frames]
+            self.assertEqual(len(table_rectangles), 2)
+            self.assertNotEqual(table_rectangles[0][:2], table_rectangles[1][:2])
+
+        with zipfile.ZipFile(self.root / "actions.pptx") as archive:
+            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            action_rectangles = []
+            expected = {
+                "next", "previous", "first", "last", "specific", "external",
+                "mailto", "unsafe", "hover", "program", "macro", "no-op",
+                "run links",
+            }
+            for shape in slide.findall("./p:cSld/p:spTree/p:sp", NS):
+                name = shape.find("p:nvSpPr/p:cNvPr", NS).get("name")
+                if name in expected:
+                    action_rectangles.append(
+                        rectangle(shape.find("p:spPr/a:xfrm", NS))
+                    )
+            self.assertEqual(len(action_rectangles), 13)
+            self.assertEqual(len(action_rectangles), len(set(action_rectangles)))
+            for frame in slide.findall(
+                "./p:cSld/p:spTree/p:graphicFrame", NS
+            ):
+                rectangle(frame.find("p:xfrm", NS))
+            leaf = next(
+                shape
+                for shape in slide.findall(".//p:sp", NS)
+                if shape.find("p:nvSpPr/p:cNvPr", NS).get("name")
+                == "group leaf"
+            )
+            rectangle(leaf.find("p:spPr/a:xfrm", NS))
+
     def test_missing_table_style_fixture_preserves_id_and_flags(self) -> None:
         with zipfile.ZipFile(self.root / "table-styles.pptx") as archive:
             slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))

@@ -30,6 +30,17 @@ class PictureBulletCompletionDeckTests(unittest.TestCase):
                     for paragraph in slide.findall(".//a:p", NS)
                     if paragraph.find("a:r/a:t", NS) is not None
                 }
+                picture_shape = next(
+                    shape
+                    for shape in slide.findall(".//p:sp", NS)
+                    if shape.find("p:nvSpPr/p:cNvPr", NS).get("name")
+                    == "picture bullets"
+                )
+                transform = picture_shape.find("p:spPr/a:xfrm", NS)
+                self.assertIsNotNone(transform)
+                extent = transform.find("a:ext", NS)
+                self.assertGreater(int(extent.get("cx")), 0)
+                self.assertGreater(int(extent.get("cy")), 0)
                 self.assertIsNotNone(paragraphs["Size text"].find("a:pPr/a:buSzTx", NS))
                 self.assertEqual(
                     paragraphs["Size 25"].find("a:pPr/a:buSzPct", NS).get("val"),

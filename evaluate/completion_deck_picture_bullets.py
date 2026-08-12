@@ -18,7 +18,9 @@ def _paragraph(reference: str, size: str, text: str) -> str:
 
 PICTURE_BULLETS: Final = (
     '<p:sp><p:nvSpPr><p:cNvPr id="2" name="picture bullets"/>'
-    "<p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>"
+    '<p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="400000" y="300000"/>'
+    '<a:ext cx="8300000" cy="6100000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/>'
+    '</a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>'
     + "".join(
         (
             _paragraph('r:embed="rIdImage"', "<a:buSzTx/>", "Size text"),
