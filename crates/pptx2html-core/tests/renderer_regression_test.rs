@@ -14,6 +14,7 @@ fn chart_shape(spec: ChartSpec) -> Shape {
             preview_image: None,
             preview_mime: None,
             direct_spec: Some(spec),
+            ..Default::default()
         }),
         size: Size {
             width: Emu(1_828_800),

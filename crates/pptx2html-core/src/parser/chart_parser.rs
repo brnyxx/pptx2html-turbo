@@ -1,13 +1,311 @@
+use std::collections::{BTreeMap, BTreeSet};
+
 use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::name::ResolveResult;
+use quick_xml::reader::NsReader;
 
 use super::xml_utils;
 use crate::error::PptxResult;
 use crate::model::{
-    ChartBubbleSizeRepresents, ChartDataLabelPosition, ChartDataLabelSettings, ChartGrouping,
-    ChartMarkerSpec, ChartOfPieType, ChartRadarStyle, ChartScatterStyle, ChartSeries, ChartSpec,
-    ChartSplitType, ChartType,
+    ChartBubbleSizeRepresents, ChartDataLabelPosition, ChartDataLabelSettings, ChartFallbackReason,
+    ChartGrouping, ChartMarkerSpec, ChartOfPieType, ChartRadarStyle, ChartScatterStyle,
+    ChartSeries, ChartSpec, ChartSplitType, ChartType,
 };
+
+const CLASSIC_CHART_NS: &[u8] = b"http://schemas.openxmlformats.org/drawingml/2006/chart";
+const CHARTEX_NS: &[u8] = b"http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+pub(crate) struct ChartParseOutcome {
+    pub(crate) direct_spec: Option<ChartSpec>,
+    pub(crate) fallback_reason: Option<ChartFallbackReason>,
+    pub(crate) qualified_name: Option<String>,
+}
+
+pub(crate) fn classify_and_parse(xml: &str) -> PptxResult<ChartParseOutcome> {
+    let classification = classify(xml)?;
+    if let Some(reason) = classification.reason {
+        return Ok(ChartParseOutcome {
+            direct_spec: None,
+            fallback_reason: Some(reason),
+            qualified_name: classification.qualified_name,
+        });
+    }
+
+    let Some(spec) = parse_direct_chart(xml)? else {
+        return Ok(ChartParseOutcome {
+            direct_spec: None,
+            fallback_reason: Some(ChartFallbackReason::NoSeries),
+            qualified_name: classification.qualified_name,
+        });
+    };
+    let fallback_reason = direct_compatibility_failure(&spec);
+    Ok(ChartParseOutcome {
+        direct_spec: fallback_reason.is_none().then_some(spec),
+        fallback_reason,
+        qualified_name: classification.qualified_name,
+    })
+}
+
+struct Classification {
+    reason: Option<ChartFallbackReason>,
+    qualified_name: Option<String>,
+}
+
+fn classify(xml: &str) -> PptxResult<Classification> {
+    let mut reader = NsReader::from_str(xml);
+    let mut buffer = Vec::new();
+    let mut families = Vec::new();
+    let mut family_axis_ids = BTreeSet::new();
+    let mut defined_axes = BTreeMap::new();
+    let mut axis_crossings = BTreeMap::new();
+    let mut in_family = false;
+    let mut axis_kind: Option<String> = None;
+    let mut axis_id: Option<String> = None;
+    let mut qualified_name = None;
+    let mut saw_chartex = false;
+
+    loop {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element) | Event::Empty(element))) => {
+                let element_name = element.name();
+                let local = xml_utils::local_name(element_name.as_ref());
+                let classic = matches!(namespace, ResolveResult::Bound(ref value) if value.as_ref() == CLASSIC_CHART_NS);
+                let chartex = matches!(namespace, ResolveResult::Bound(ref value) if value.as_ref() == CHARTEX_NS);
+                if chartex {
+                    saw_chartex = true;
+                    qualified_name.get_or_insert_with(|| {
+                        String::from_utf8_lossy(element.name().as_ref()).into_owned()
+                    });
+                }
+                if !classic {
+                    buffer.clear();
+                    continue;
+                }
+                if is_chart_family(local) {
+                    families.push(local.to_owned());
+                    in_family = !element.is_empty();
+                    qualified_name.get_or_insert_with(|| {
+                        String::from_utf8_lossy(element.name().as_ref()).into_owned()
+                    });
+                } else if matches!(local, "catAx" | "dateAx" | "valAx" | "serAx") {
+                    if !element.is_empty() {
+                        axis_kind = Some(local.to_owned());
+                    }
+                } else if local == "axId"
+                    && let Some(value) = xml_utils::attr_str(&element, "val")
+                {
+                    if in_family {
+                        family_axis_ids.insert(value);
+                    } else if let Some(kind) = axis_kind.as_ref() {
+                        defined_axes.insert(value.clone(), kind.clone());
+                        axis_id = Some(value);
+                    }
+                } else if local == "crossAx"
+                    && let Some(id) = axis_id.as_ref()
+                    && let Some(crossing) = xml_utils::attr_str(&element, "val")
+                {
+                    axis_crossings.insert(id.clone(), crossing);
+                }
+            }
+            Ok((namespace, Event::End(element))) => {
+                if !matches!(namespace, ResolveResult::Bound(ref value) if value.as_ref() == CLASSIC_CHART_NS)
+                {
+                    buffer.clear();
+                    continue;
+                }
+                let element_name = element.name();
+                let local = xml_utils::local_name(element_name.as_ref());
+                if is_chart_family(local) {
+                    in_family = false;
+                } else if matches!(local, "catAx" | "dateAx" | "valAx" | "serAx") {
+                    axis_kind = None;
+                    axis_id = None;
+                }
+            }
+            Ok((_, Event::Eof)) => break,
+            Err(error) => return Err(crate::error::PptxError::Xml(error)),
+            _ => {}
+        }
+        buffer.clear();
+    }
+
+    let reason = if saw_chartex {
+        Some(ChartFallbackReason::ChartEx)
+    } else if families.is_empty() {
+        Some(ChartFallbackReason::UnsupportedFamily)
+    } else if families.len() > 1 {
+        Some(ChartFallbackReason::CombinationChart)
+    } else if !is_direct_family(&families[0]) {
+        Some(ChartFallbackReason::UnsupportedFamily)
+    } else if family_requires_axes(&families[0])
+        && !axes_are_compatible(
+            &families[0],
+            &family_axis_ids,
+            &defined_axes,
+            &axis_crossings,
+        )
+    {
+        Some(ChartFallbackReason::IncompatibleAxes)
+    } else {
+        None
+    };
+    Ok(Classification {
+        reason,
+        qualified_name,
+    })
+}
+
+fn is_chart_family(local: &str) -> bool {
+    matches!(
+        local,
+        "areaChart"
+            | "area3DChart"
+            | "barChart"
+            | "bar3DChart"
+            | "bubbleChart"
+            | "doughnutChart"
+            | "lineChart"
+            | "line3DChart"
+            | "ofPieChart"
+            | "pieChart"
+            | "pie3DChart"
+            | "radarChart"
+            | "scatterChart"
+            | "stockChart"
+            | "surfaceChart"
+            | "surface3DChart"
+    )
+}
+
+fn is_direct_family(local: &str) -> bool {
+    matches!(
+        local,
+        "areaChart"
+            | "area3DChart"
+            | "barChart"
+            | "bar3DChart"
+            | "bubbleChart"
+            | "doughnutChart"
+            | "lineChart"
+            | "line3DChart"
+            | "ofPieChart"
+            | "pieChart"
+            | "pie3DChart"
+            | "radarChart"
+            | "scatterChart"
+    )
+}
+
+fn family_requires_axes(local: &str) -> bool {
+    matches!(
+        local,
+        "areaChart"
+            | "area3DChart"
+            | "barChart"
+            | "bar3DChart"
+            | "bubbleChart"
+            | "lineChart"
+            | "line3DChart"
+            | "scatterChart"
+    )
+}
+
+fn axes_are_compatible(
+    family: &str,
+    references: &BTreeSet<String>,
+    definitions: &BTreeMap<String, String>,
+    crossings: &BTreeMap<String, String>,
+) -> bool {
+    if references.len() != 2
+        || !references.iter().all(|id| definitions.contains_key(id))
+        || !references.iter().all(|id| {
+            crossings
+                .get(id)
+                .is_some_and(|crossing| crossing != id && references.contains(crossing))
+        })
+    {
+        return false;
+    }
+    let kinds = references
+        .iter()
+        .filter_map(|id| definitions.get(id).map(String::as_str))
+        .collect::<Vec<_>>();
+    if matches!(family, "scatterChart" | "bubbleChart") {
+        kinds.iter().all(|kind| *kind == "valAx")
+    } else {
+        kinds.iter().filter(|kind| **kind == "valAx").count() == 1
+            && kinds
+                .iter()
+                .filter(|kind| matches!(**kind, "catAx" | "dateAx"))
+                .count()
+                == 1
+    }
+}
+
+fn direct_compatibility_failure(spec: &ChartSpec) -> Option<ChartFallbackReason> {
+    let first = spec.series.first()?;
+    let compatible = match spec.chart_type {
+        ChartType::Scatter => {
+            let count = first.x_values.len();
+            count > 0
+                && spec
+                    .series
+                    .iter()
+                    .all(|series| series.x_values.len() == count && series.values.len() == count)
+        }
+        ChartType::Bubble => {
+            let count = first.x_values.len();
+            count > 0
+                && spec.series.iter().all(|series| {
+                    series.x_values.len() == count
+                        && series.values.len() == count
+                        && series.bubble_sizes.len() == count
+                })
+        }
+        _ => {
+            let count = first.categories.len();
+            count > 0
+                && spec.series.iter().all(|series| {
+                    series.categories.len() == count
+                        && series.values.len() == count
+                        && series.categories == first.categories
+                })
+        }
+    };
+    if !compatible {
+        return Some(ChartFallbackReason::IncompatibleSeries);
+    }
+    let supported_variant = match spec.chart_type {
+        ChartType::Area => !matches!(
+            spec.grouping,
+            ChartGrouping::Stacked | ChartGrouping::PercentStacked
+        ),
+        ChartType::Bubble => {
+            spec.series.len() == 1
+                && spec.data_labels.is_none()
+                && spec
+                    .series
+                    .iter()
+                    .all(|series| series.bubble_sizes.iter().all(|size| *size >= 0.0))
+                && !matches!(
+                    spec.bubble_size_represents,
+                    Some(ChartBubbleSizeRepresents::Width)
+                )
+        }
+        ChartType::OfPie => {
+            spec.series.len() == 1
+                && spec.data_labels.is_none()
+                && matches!(spec.of_pie_type, Some(ChartOfPieType::Pie))
+                && matches!(spec.split_type, Some(ChartSplitType::Pos))
+                && spec.split_pos.is_some_and(|value| value >= 1.0)
+        }
+        ChartType::Radar => spec.data_labels.is_none(),
+        ChartType::Pie | ChartType::Doughnut => spec.series.len() == 1,
+        _ => true,
+    };
+    (!supported_variant).then_some(ChartFallbackReason::UnsupportedVariant)
+}
 
 #[derive(Default)]
 struct SeriesBuilder {
@@ -19,7 +317,7 @@ struct SeriesBuilder {
     marker: Option<ChartMarkerSpec>,
 }
 
-pub fn parse_chart(xml: &str) -> PptxResult<Option<ChartSpec>> {
+fn parse_direct_chart(xml: &str) -> PptxResult<Option<ChartSpec>> {
     let mut reader = Reader::from_str(xml);
     let mut in_bar_chart = false;
     let mut in_line_chart = false;

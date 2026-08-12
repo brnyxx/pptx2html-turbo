@@ -2875,7 +2875,7 @@ fn build_bubble_chart_semantics_pptx(
         <c:axId val="123"/>
         <c:axId val="456"/>
       </c:bubbleChart>
-      <c:catAx><c:axId val="123"/><c:crossAx val="456"/></c:catAx>
+      <c:valAx><c:axId val="123"/><c:crossAx val="456"/></c:valAx>
       <c:valAx><c:axId val="456"/><c:crossAx val="123"/></c:valAx>
     </c:plotArea>
   </c:chart>

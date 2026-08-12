@@ -47,12 +47,13 @@ pub use presentation::{ClrMap, FontScheme, Presentation};
 pub use preserved::{ConversionDiagnostic, DiagnosticLocation, FallbackKind};
 pub use slide::{
     AutoFit, Bullet, BulletAutoNum, BulletChar, BulletSize, ChartBubbleSizeRepresents, ChartData,
-    ChartDataLabelPosition, ChartDataLabelSettings, ChartGrouping, ChartMarkerSpec, ChartOfPieType,
-    ChartRadarStyle, ChartScatterStyle, ChartSeries, ChartSpec, ChartSplitType, ChartType,
-    ConnectionRef, CropRect, GroupData, ParagraphDefRPr, PictureBullet, PictureBulletFailure,
-    PictureBulletImage, PictureBulletRelationshipMode, PictureBulletTargetMode, PictureData, Shape,
-    ShapeType, Slide, TableCell, TableData, TableRow, TextBody, TextMargins, TextParagraph,
-    TextRun, UnresolvedElement, UnresolvedType, UnsupportedData, VerticalAlign,
+    ChartDataLabelPosition, ChartDataLabelSettings, ChartFallbackData, ChartFallbackReason,
+    ChartGrouping, ChartMarkerSpec, ChartOfPieType, ChartRadarStyle, ChartScatterStyle,
+    ChartSeries, ChartSpec, ChartSplitType, ChartType, ConnectionRef, CropRect, GroupData,
+    ParagraphDefRPr, PictureBullet, PictureBulletFailure, PictureBulletImage,
+    PictureBulletRelationshipMode, PictureBulletTargetMode, PictureData, Shape, ShapeType, Slide,
+    TableCell, TableData, TableRow, TextBody, TextMargins, TextParagraph, TextRun,
+    UnresolvedElement, UnresolvedType, UnsupportedData, VerticalAlign,
 };
 pub use style::{
     Alignment, Border, BorderStyle, CompoundLine, DashStyle, Fill, FontStyle, GlowEffect,

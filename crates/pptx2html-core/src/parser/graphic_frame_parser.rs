@@ -12,7 +12,11 @@ use super::slide_parser::ShapeBuilder;
 use super::table_parser::TableBuilder;
 use super::xml_utils;
 use crate::error::{PptxError, PptxResult};
-use crate::model::{Shape, ShapeType};
+use crate::model::{ChartFallbackReason, Shape, ShapeType};
+
+const CLASSIC_CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+const CHARTEX_URI: &str = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+const IMAGE_RELATIONSHIP_SUFFIX: &str = "/image";
 
 #[derive(Default)]
 pub(crate) struct GraphicFrameSaxState {
@@ -47,7 +51,7 @@ impl GraphicFrameSaxState {
             "graphicData" if self.in_frame => {
                 self.in_data = true;
                 if let Some(uri) = xml_utils::attr_str(element, "uri") {
-                    self.is_chart = uri.contains("chart");
+                    self.is_chart = matches!(uri.as_str(), CLASSIC_CHART_URI | CHARTEX_URI);
                     if classify_data(&uri, shape) && !self.is_chart {
                         preserved.start_capture();
                     }
@@ -96,7 +100,7 @@ pub(crate) fn classify_data(uri: &str, shape: &mut Option<ShapeBuilder>) -> bool
     let Some(shape) = shape.as_mut() else {
         return false;
     };
-    if uri.contains("chart") {
+    if matches!(uri, CLASSIC_CHART_URI | CHARTEX_URI) {
         shape.is_chart = true;
         return true;
     }
@@ -148,28 +152,62 @@ fn load_chart<R: Read + Seek>(
     rels: &HashMap<String, String>,
     archive: &mut ZipArchive<R>,
 ) {
-    let Some(target) = shape
-        .chart_rel_id
-        .as_ref()
-        .and_then(|rel_id| rels.get(rel_id))
-    else {
+    let Some(rel_id) = shape.chart_rel_id.as_ref() else {
+        shape.chart_fallback_reason = Some(ChartFallbackReason::MissingRelationshipId);
         return;
     };
-    let path = resolve_relationship_path("ppt/slides", target);
+    let Some(target) = rels.get(rel_id) else {
+        shape.chart_fallback_reason = Some(ChartFallbackReason::MissingRelationship);
+        return;
+    };
+    let Some(path) = safe_relationship_path("ppt/slides", target) else {
+        shape.chart_fallback_reason = Some(ChartFallbackReason::MissingPart);
+        return;
+    };
     let Ok(chart_xml) = read_archive_entry(archive, &path) else {
+        shape.chart_fallback_reason = Some(ChartFallbackReason::MissingPart);
         return;
     };
-    shape.chart_direct_spec = chart_parser::parse_chart(&chart_xml).ok().flatten();
+    shape.chart_raw_xml = Some(chart_xml.clone());
+    match chart_parser::classify_and_parse(&chart_xml) {
+        Ok(outcome) => {
+            shape.chart_direct_spec = outcome.direct_spec;
+            shape.chart_fallback_reason = outcome.fallback_reason;
+            shape.chart_qualified_name = outcome.qualified_name;
+        }
+        Err(_) => {
+            shape.chart_fallback_reason = Some(ChartFallbackReason::InvalidXml);
+        }
+    }
+    if shape.chart_fallback_reason.is_none() {
+        shape.chart_raw_xml = None;
+    }
 
     let chart_rels_path = relationships_path(&path);
     let Ok(chart_rels_xml) = read_archive_entry(archive, &chart_rels_path) else {
         return;
     };
-    let Ok(chart_rels) = relationships::parse_relationships(&chart_rels_xml) else {
+    let Ok(mut chart_rels) = relationships::parse_relationship_records(&chart_rels_xml) else {
         return;
     };
-    for preview_target in chart_rels.values() {
-        let preview_path = resolve_relative_file_path(&path, preview_target);
+    chart_rels.sort_by(|left, right| {
+        left.target
+            .cmp(&right.target)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    for relationship in chart_rels {
+        if !matches!(
+            relationship.target_mode,
+            relationships::TargetMode::Internal
+        ) || !relationship
+            .relationship_type
+            .ends_with(IMAGE_RELATIONSHIP_SUFFIX)
+        {
+            continue;
+        }
+        let Some(preview_path) = safe_relative_file_path(&path, &relationship.target) else {
+            continue;
+        };
         let extension = preview_path.rsplit('.').next().unwrap_or("").to_lowercase();
         if !matches!(
             extension.as_str(),
@@ -185,6 +223,34 @@ fn load_chart<R: Read + Seek>(
             break;
         }
     }
+}
+
+fn safe_relative_file_path(base_file: &str, target: &str) -> Option<String> {
+    let base_directory = base_file.rsplit_once('/').map(|(directory, _)| directory)?;
+    safe_relationship_path(base_directory, target)
+}
+
+fn safe_relationship_path(base_directory: &str, target: &str) -> Option<String> {
+    if target.is_empty()
+        || target.starts_with('/')
+        || target.contains('\\')
+        || target.contains('%')
+        || target.contains(':')
+        || target.split('/').any(str::is_empty)
+    {
+        return None;
+    }
+    let mut parts = base_directory.split('/').collect::<Vec<_>>();
+    for segment in target.split('/') {
+        match segment {
+            "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            _ => parts.push(segment),
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
 }
 
 pub(crate) fn read_archive_entry<R: Read + Seek>(
@@ -220,6 +286,7 @@ pub(crate) fn relationships_path(part_path: &str) -> String {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn resolve_relative_file_path(base_file: &str, target: &str) -> String {
     let base_directory = base_file
         .rsplit_once('/')

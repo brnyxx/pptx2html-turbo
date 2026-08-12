@@ -20,7 +20,7 @@ Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bind
 - Typed click and mouse-over action preservation for shape, group, picture, connector, table graphic-frame, and text-run surfaces
 - Slide notes, notes-master links, and legacy/modern comments and authors preserved as typed off-canvas fallback metadata
 - Layout-preserving whole-slide scale/zoom across Rust, CLI, Python, and WASM surfaces
-- Approximate direct chart rendering for clustered, stacked, and percent-stacked bar/column charts plus simple line, flat area3D, single-series/no-dLbls bubble (non-negative sizes, area semantics, bubbleScale support), multi-series/no-dLbls radar (approximate marker handling), single-series/no-dLbls ofPie (`ofPieType=pie`, `splitType=pos`), pie, doughnut, and flat pie3D charts
+- Approximate direct chart rendering for a bounded compatible subset, with namespace-aware classic/ChartEx classification and deterministic preview-or-placeholder fallback plus one typed diagnostic for every rejected chart
 - Graceful placeholders for unsupported content (SmartArt, OLE, Math)
 - Self-contained HTML output (single file, no external dependencies)
 

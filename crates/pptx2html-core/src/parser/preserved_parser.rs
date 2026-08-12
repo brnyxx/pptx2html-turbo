@@ -63,6 +63,11 @@ fn collect_xml_diagnostics(
     timing_parser::collect_diagnostics(name, &xml, diagnostics);
     effect_diagnostics::collect(name, &xml, diagnostics);
     picture_bullet_diagnostics::collect(archive, name, &xml, diagnostics)?;
+    // Chart parts are classified as a whole by chart_parser so one rejected chart
+    // cannot fan out into a diagnostic for every unsupported descendant.
+    if name.starts_with("ppt/charts/") {
+        return Ok(());
+    }
     let mut reader = NsReader::from_str(&xml);
     let mut buffer = Vec::new();
     loop {

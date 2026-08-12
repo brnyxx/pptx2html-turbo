@@ -139,6 +139,18 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                     + root.findall(".//c:serAx", NS)
                 )
                 self.assertEqual(len(defined), axes)
+            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            frames = slide.findall(".//p:graphicFrame", NS)
+            self.assertEqual(len(frames), 3)
+            positions = []
+            for frame in frames:
+                transform = frame.find("p:xfrm", NS)
+                offset = transform.find("a:off", NS)
+                extent = transform.find("a:ext", NS)
+                positions.append(int(offset.get("x")))
+                self.assertGreater(int(extent.get("cx")), 0)
+                self.assertGreater(int(extent.get("cy")), 0)
+            self.assertEqual(positions, sorted(positions))
             self.assertIn("ppt/charts/_rels/chart2.xml.rels", archive.namelist())
             self.assertNotIn("ppt/charts/_rels/chart3.xml.rels", archive.namelist())
 

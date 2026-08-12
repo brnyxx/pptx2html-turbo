@@ -938,7 +938,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         if let ShapeType::Chart(ref chart_data) = shape.shape_type {
-            charts::render_chart(chart_data, ctx, w, h, html);
+            charts::render_chart(chart_data, ctx, w, h, pos, size, html);
             return;
         }
 
@@ -2885,6 +2885,7 @@ mod tests {
                 preview_image: Some(vec![1, 2, 3, 4]),
                 preview_mime: Some("image/png".to_string()),
                 direct_spec: None,
+                ..Default::default()
             }),
             size: Size {
                 width: Emu(914_400),
@@ -2922,6 +2923,7 @@ mod tests {
                 preview_image: None,
                 preview_mime: None,
                 direct_spec: Some(spec),
+                ..Default::default()
             }),
             size: Size {
                 width: Emu(1_828_800),
@@ -3423,6 +3425,7 @@ mod tests {
                 preview_image: None,
                 preview_mime: None,
                 direct_spec: Some(spec),
+                ..Default::default()
             }),
             size: Size {
                 width: Emu(1_828_800),

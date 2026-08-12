@@ -217,7 +217,8 @@ Notes and comments are metadata only and are never inserted into the visible sli
 
 | Feature | ECMA-376 Element | Status |
 |---------|-----------------|--------|
-| Chart detection | `<c:chart>` URI | Supported |
+| Namespace-aware classic/ChartEx family classification | chart part root and plot-area families | Supported |
+| Chart detection | exact classic `<c:chart>` or ChartEx graphic URI | Supported |
 | Direct bar/column charts | `<c:barChart>` | Approximate |
 | Bar/column spacing controls | `<c:gapWidth>`, `<c:overlap>` | Approximate |
 | Bar/column data labels | `<c:dLbls>` | Approximate |
@@ -235,9 +236,9 @@ Notes and comments are metadata only and are never inserted into the visible sli
 | Direct pie charts (single-series) | `<c:pieChart>` | Approximate |
 | Direct doughnut charts (single-series) | `<c:doughnutChart>` | Approximate |
 | Direct pie3D charts (single-series, flat render) | `<c:pie3DChart>` | Approximate |
-| Chart preview image | embedded preview | Fallback |
-| Unsupported / complex chart families | other chart spaces | Fallback |
-| Chart placeholder | — | Fallback |
+| Chart preview image | deterministic first safe internal image relationship | Fallback |
+| Combination charts, incompatible axes/series, ChartEx, unsupported/complex families, and broken references | preserved chart XML with one typed diagnostic | Fallback |
+| Chart placeholder | no usable preview | Fallback |
 | SmartArt | `<dgm:*>` | Fallback |
 | OLE objects | `<p:oleObj>` | Fallback |
 | Math equations | `<m:*>` | Fallback |

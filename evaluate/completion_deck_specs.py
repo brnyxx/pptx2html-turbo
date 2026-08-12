@@ -189,11 +189,11 @@ TIMING_SHAPES: Final = ''.join(
 )
 TIMING_TAIL: Final = '<p:transition spd="slow"><p:{transition}/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" nodeType="tmRoot"><p:childTnLst><p:par><p:cTn id="10" nodeType="clickEffect"><p:stCondLst><p:cond delay="25"/></p:stCondLst><p:childTnLst><p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="11" dur="300"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par><p:par><p:cTn id="12" nodeType="withEffect"><p:childTnLst><p:set><p:cBhvr><p:cTn id="13" dur="1"/><p:tgtEl><p:spTgt spid="3"/></p:tgtEl></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set></p:childTnLst></p:cTn></p:par><p:par><p:cTn id="14" nodeType="afterEffect"><p:childTnLst><p:animEffect transition="out" filter="fade"><p:cBhvr><p:cTn id="15" dur="200"/><p:tgtEl><p:spTgt spid="3"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par><p:par><p:cTn id="20" nodeType="clickEffect"><p:childTnLst><p:animEffect transition="out" filter="fade"><p:cBhvr><p:cTn id="21" dur="250"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par><p:animMotion origin="layout" path="M 0 0 L 1 1"><p:cBhvr><p:cTn id="30" dur="1000"/><p:tgtEl><p:spTgt spid="4"/></p:tgtEl></p:cBhvr></p:animMotion></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>'
 CHARTS: Final = "".join(
-    f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id={quoteattr(str(i))} name={quoteattr(name)}/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id={quoteattr(rid)}/></a:graphicData></a:graphic></p:graphicFrame>'
-    for i, name, rid in (
-        (2, "direct", "rIdChartDirect"),
-        (3, "preview", "rIdChartPreview"),
-        (4, "placeholder", "rIdChartPlaceholder"),
+    f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id={quoteattr(str(i))} name={quoteattr(name)}/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x={quoteattr(str(x))} y="1200000"/><a:ext cx="2700000" cy="2400000"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id={quoteattr(rid)}/></a:graphicData></a:graphic></p:graphicFrame>'
+    for i, name, rid, x in (
+        (2, "direct", "rIdChartDirect", 200000),
+        (3, "preview", "rIdChartPreview", 3200000),
+        (4, "placeholder", "rIdChartPlaceholder", 6200000),
     )
 )
 

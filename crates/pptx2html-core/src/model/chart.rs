@@ -5,6 +5,48 @@ pub struct ChartData {
     pub preview_image: Option<Vec<u8>>,
     pub preview_mime: Option<String>,
     pub direct_spec: Option<ChartSpec>,
+    /// Compact typed metadata retained whenever direct rendering is not safe.
+    pub fallback: Option<Box<ChartFallbackData>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChartFallbackData {
+    pub reason: ChartFallbackReason,
+    pub raw_xml: Option<Box<str>>,
+    pub qualified_name: Option<Box<str>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChartFallbackReason {
+    MissingRelationshipId,
+    MissingRelationship,
+    MissingPart,
+    InvalidXml,
+    ChartEx,
+    UnsupportedFamily,
+    CombinationChart,
+    IncompatibleAxes,
+    IncompatibleSeries,
+    UnsupportedVariant,
+    NoSeries,
+}
+
+impl ChartFallbackReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MissingRelationshipId => "missing-relationship-id",
+            Self::MissingRelationship => "missing-relationship",
+            Self::MissingPart => "missing-chart-part",
+            Self::InvalidXml => "invalid-chart-xml",
+            Self::ChartEx => "chartex",
+            Self::UnsupportedFamily => "unsupported-family",
+            Self::CombinationChart => "combination-chart",
+            Self::IncompatibleAxes => "incompatible-axes",
+            Self::IncompatibleSeries => "incompatible-series",
+            Self::UnsupportedVariant => "unsupported-variant",
+            Self::NoSeries => "no-series-data",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -39,7 +39,9 @@ def _space(plot: str) -> bytes:
 
 def _series(index: int) -> str:
     value = quoteattr(str(index))
-    return f"<c:ser><c:idx val={value}/><c:order val={value}/></c:ser>"
+    first = str(index + 1)
+    second = str((index + 1) * 2)
+    return f'<c:ser><c:idx val={value}/><c:order val={value}/><c:tx><c:v>Series {index + 1}</c:v></c:tx><c:cat><c:strLit><c:ptCount val="2"/><c:pt idx="0"><c:v>A</c:v></c:pt><c:pt idx="1"><c:v>B</c:v></c:pt></c:strLit></c:cat><c:val><c:numLit><c:ptCount val="2"/><c:pt idx="0"><c:v>{first}</c:v></c:pt><c:pt idx="1"><c:v>{second}</c:v></c:pt></c:numLit></c:val></c:ser>'
 
 
 def _cat_axis(axis: int, crossing: int) -> str:
