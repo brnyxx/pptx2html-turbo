@@ -20,6 +20,7 @@ mod table_style_diagnostics;
 mod table_styles;
 mod tables;
 pub mod text_metrics;
+mod timing;
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -303,8 +304,12 @@ impl HtmlRenderer {
         html.push_str("<style>\n");
         html.push_str(&Self::global_css(slide_w, slide_h));
         let has_actions = actions::presentation_has_actions(pres);
+        let has_timing = timing::presentation_has_timing(pres);
         if has_actions {
             html.push_str(actions::CSS);
+        }
+        if has_timing {
+            html.push_str(timing::CSS);
         }
         html.push_str("</style>\n");
         html.push_str("</head>\n<body>\n");
@@ -330,6 +335,11 @@ impl HtmlRenderer {
         }
 
         html.push_str("</div>\n");
+        if has_timing {
+            html.push_str("<script type=\"application/json\" id=\"pptx2html-timing\">");
+            html.push_str(&timing::metadata(pres));
+            html.push_str("</script>\n");
+        }
         media::append_diagnostics(pres, &collector);
         embedded_fallback::append_diagnostics(pres, &collector);
         let mut coll = collector.into_inner();
@@ -355,6 +365,9 @@ impl HtmlRenderer {
         html.push_str("</script>\n");
         if has_actions {
             html.push_str(actions::RUNTIME);
+        }
+        if has_timing {
+            html.push_str(timing::RUNTIME);
         }
         html.push_str("\n</body>\n</html>");
         Ok(ConversionResult {
@@ -865,7 +878,28 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
             style_buf.push_str("; overflow: hidden");
         }
 
-        let _ = writeln!(html, "<div class=\"shape\" style=\"{style_buf}\">");
+        let timing_attributes = ctx.slide.map_or_else(String::new, |slide| {
+            if slide.timing.initially_hidden(shape.id) {
+                format!(
+                    " data-pptx-shape-id=\"{}\" data-timing-initial=\"hidden\"",
+                    shape.id
+                )
+            } else if slide
+                .timing
+                .groups
+                .iter()
+                .flat_map(|group| &group.effects)
+                .any(|effect| effect.shape_id == shape.id)
+            {
+                format!(" data-pptx-shape-id=\"{}\"", shape.id)
+            } else {
+                String::new()
+            }
+        });
+        let _ = writeln!(
+            html,
+            "<div class=\"shape\"{timing_attributes} style=\"{style_buf}\">"
+        );
         actions::render_shape_surface(&shape.actions, shape.id, ctx, html);
         Self::render_reflection_from_diagnostics(shape, &resolved_fill, pos, size, ctx, html);
 

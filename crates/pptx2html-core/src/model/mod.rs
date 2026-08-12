@@ -67,3 +67,7 @@ pub use table_style::{
     TableCellStyle, TableStyle, TableStyleIssue, TableStylePrimitiveReference, TableStyleReference,
     TableStyleRegion, TableStyleSourceKind, TableTextStyle,
 };
+pub use timing::{
+    AnimationEffect, AnimationTrigger, SlideTransition, TimingEffect, TimingFallback, TimingGroup,
+    TimingInventory, TimingSource, TimingSourceKind, TransitionKind,
+};

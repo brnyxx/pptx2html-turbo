@@ -242,6 +242,17 @@ Notes and comments are metadata only and are never inserted into the visible sli
 | OLE objects | `<p:oleObj>` | Fallback |
 | Math equations | `<m:*>` | Fallback |
 
+## Transitions and timing
+
+| Feature | ECMA-376 Element | Status |
+|---------|-----------------|--------|
+| Click-triggered cut/fade slide transitions | `<p:transition><p:cut|fade>` | Approximate; automatic advance is never executed |
+| Click, with-previous, and after-previous groups | `<p:cTn nodeType="...">` | Approximate; interaction-driven only, with no autoplay or loops |
+| Appear, disappear, and fade effects on resolved slide shapes | `<p:set>` / `<p:animEffect>` | Approximate for finite durations from 1 through 10000 ms |
+| Other timing commands, unresolved targets, unbounded durations, and automatic advance | other `<p:timing>` content | Fallback metadata; targets remain statically visible |
+
+The original top-level transition and timing XML is retained in source order with stable generated identities. Unsupported behavior emits `PRESENTATIONML_TIMING_FALLBACK`; this is not an exact PowerPoint timing implementation.
+
 ## Effects
 
 | Feature | ECMA-376 Element | Status |

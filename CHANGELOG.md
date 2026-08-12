@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Timing and transitions
+
+- Preserve ordered slide transition/timing XML and approximately execute only bounded cut/fade and click/with-previous/after-previous appear, disappear, or fade behavior on resolved slide shapes
+- Keep automatic advance, loops, unbounded effects, unsupported commands, and unresolved targets inert with typed `PRESENTATIONML_TIMING_FALLBACK` diagnostics
+- Add public slide timing types, `Slide::timing`, `FeatureFamily::Animation`, and `FallbackKind::TimingMetadata`; exhaustive matches and slide struct literals require a next-semver-major source migration while package versions remain unchanged
+
 ### Breaking API notice - next semver-major only
 
 - Add the public `Bullet::Picture` variant for typed DrawingML picture bullets.

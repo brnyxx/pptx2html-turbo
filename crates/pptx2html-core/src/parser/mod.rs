@@ -300,6 +300,7 @@ impl PptxParser {
                         &mut archive,
                     );
                     resolve_table_style_references(&mut slide.shapes, &table_styles);
+                    slide.timing = timing_parser::parse(&slide_xml)?;
                     slide.hidden = slide_ref.hidden;
 
                     // Find which layout this slide references
