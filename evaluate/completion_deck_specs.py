@@ -172,6 +172,7 @@ CHARTS: Final = "".join(
 
 def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
     image = png_bytes()
+    visible_notes_body = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="visible body"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="914400" y="1828800"/><a:ext cx="7315200" cy="1371600"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="DCEEFF"/></a:solidFill></p:spPr><p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr sz="2800" b="1"/><a:t>VISIBLE_SLIDE_BODY</a:t></a:r></a:p></p:txBody></p:sp>'
     comments_tail = '<p:extLst><p:ext uri="{6950BFC3-D8DA-4A85-94F7-54DA5524770B}"><p188:commentRel r:id="rIdModernComments"/></p:ext></p:extLst>'
     return (
         Deck(
@@ -211,7 +212,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
         ),
         Deck(
             "notes-comments",
-            (("", comments_tail),),
+            ((visible_notes_body, comments_tail),),
             notes_slide_relationships(),
             notes_presentation_relationships(),
             notes_parts(),

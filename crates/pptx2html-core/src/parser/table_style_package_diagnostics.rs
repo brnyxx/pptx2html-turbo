@@ -33,6 +33,18 @@ pub(crate) fn select(relationships: &[Relationship]) -> Selection {
         .iter()
         .filter(|item| item.relationship_type == RELATIONSHIP_TYPE)
     {
+        if relationship.target.contains('/')
+            || relationship
+                .target
+                .split('/')
+                .any(|segment| matches!(segment, "." | ".."))
+        {
+            issues.push(SelectionIssue::Rejected {
+                id: safe_id(&relationship.id),
+                reason: "domain_path",
+            });
+            continue;
+        }
         let target = match &relationship.target_mode {
             TargetMode::Internal => {
                 relationships::resolve_internal_target(OWNER_PART, &relationship.target)

@@ -139,8 +139,12 @@ pub(crate) fn resolve_internal_target(
         if segment.is_empty() {
             return Err(TargetError::EmptySegment);
         }
-        if matches!(segment, "." | "..") {
+        if segment == "." {
             return Err(TargetError::DotSegment);
+        }
+        if segment == ".." {
+            path.pop().ok_or(TargetError::DotSegment)?;
+            continue;
         }
         path.push(segment);
     }
@@ -170,6 +174,17 @@ mod tests {
             resolve_internal_target("ppt/presentation.xml", "tableStyles.xml"),
             Ok("ppt/tableStyles.xml".to_owned())
         );
+        assert_eq!(
+            resolve_internal_target("ppt/slides/slide1.xml", "../notesSlides/notesSlide1.xml"),
+            Ok("ppt/notesSlides/notesSlide1.xml".to_owned())
+        );
+        assert_eq!(
+            resolve_internal_target(
+                "ppt/slides/sections/slide1.xml",
+                "../../notesSlides/notesSlide1.xml"
+            ),
+            Ok("ppt/notesSlides/notesSlide1.xml".to_owned())
+        );
     }
 
     #[test]
@@ -177,12 +192,12 @@ mod tests {
         for target in [
             "",
             "/ppt/tableStyles.xml",
-            "../tableStyles.xml",
             "./tableStyles.xml",
             "tables//styles.xml",
             "tables\\styles.xml",
             "https://example.test/styles.xml",
             "%2e%2e/tableStyles.xml",
+            "../../../tableStyles.xml",
         ] {
             assert!(resolve_internal_target("ppt/presentation.xml", target).is_err());
         }

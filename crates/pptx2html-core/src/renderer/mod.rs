@@ -11,6 +11,7 @@ mod fallback;
 mod fills;
 mod geometry;
 mod media;
+mod notes_comments;
 mod pattern_tiles;
 mod patterns;
 mod picture_bullets;
@@ -318,6 +319,22 @@ impl HtmlRenderer {
         media::append_diagnostics(pres, &collector);
         embedded_fallback::append_diagnostics(pres, &collector);
         let mut coll = collector.into_inner();
+        let all_slides_included = !pres.slides.is_empty()
+            && pres
+                .slides
+                .iter()
+                .enumerate()
+                .all(|(index, slide)| opts.should_include_slide(index + 1, slide.hidden));
+        notes_comments::append(
+            &pres.notes_comments,
+            &mut coll.diagnostics,
+            |slide_number| {
+                pres.slides
+                    .get(slide_number.saturating_sub(1))
+                    .is_some_and(|slide| opts.should_include_slide(slide_number, slide.hidden))
+            },
+            all_slides_included,
+        );
         fallback::sort_and_deduplicate(&mut coll.diagnostics);
         html.push_str("<script type=\"application/json\" id=\"pptx2html-diagnostics\">");
         html.push_str(&fallback::diagnostics_json(&coll.diagnostics));

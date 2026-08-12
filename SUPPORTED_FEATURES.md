@@ -199,6 +199,20 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Hidden slides | `show="0"` | Supported |
 | Multiple themes | theme1.xml, theme2.xml, ... | Supported |
 
+## Notes and comments
+
+| Feature | ECMA-376 / MS-PPTX element or part | Status |
+|---------|------------------------------------|--------|
+| Slide notes text and one-based slide association | Notes Slide `<p:notes>` / `<a:t>` | parsed off-canvas fallback metadata |
+| Notes-master association | Notes Slide relationship to Notes Master part | exact parsed metadata |
+| Legacy comments and authors | `<p:cmLst>/<p:cm>/<p:text>`, `<p:cmAuthorLst>` | parsed off-canvas fallback metadata |
+| Modern comments and authors | `p188:cmLst/p188:cm/p188:txBody`, Author part | parsed off-canvas fallback metadata |
+| Missing comment author | unresolved `authorId` | fallback with exact `COMMENT_AUTHOR_UNRESOLVED`; text retained |
+| Unknown modern comment extension | `p188:extLst` foreign payload | fallback raw XML with no exact semantic claim |
+| External, unsafe, duplicate, malformed, or namespace-spoofed annotation relation | package relationship | fallback diagnostic; target is not opened or exposed |
+
+Notes and comments are metadata only and are never inserted into the visible slide canvas. The relationship and element bounds are limited to the Microsoft Notes Slide, legacy comments, PresentationML structure, modern `CT_Comment`, Comment Part, and Author Part documentation linked from the README.
+
 ## Charts and Embedded Content
 
 | Feature | ECMA-376 Element | Status |

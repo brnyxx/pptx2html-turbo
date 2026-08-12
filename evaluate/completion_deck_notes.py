@@ -110,7 +110,7 @@ def _classic_authors() -> bytes:
 
 
 def _modern_comments() -> bytes:
-    return f'<?xml version="1.0"?><p188:cmLst {NS}><p188:cm id="{{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}}" authorId="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" created="2026-01-01T00:00:00Z"><p188:unknownAnchor/><p188:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>MODERN_COMMENT</a:t></a:r></a:p></p188:txBody></p188:cm></p188:cmLst>'.encode()
+    return f'<?xml version="1.0"?><p188:cmLst {NS}><p188:cm id="{{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}}" authorId="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" created="2026-01-01T00:00:00Z"><p188:unknownAnchor/><p188:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>MODERN_COMMENT</a:t></a:r></a:p></p188:txBody><p188:extLst><p:ext uri="fixture-modern-extension"><future:payload xmlns:future="urn:pptx2html:fixture:future">MODERN_EXTENSION_SENTINEL&lt;/script&gt;</future:payload></p:ext></p188:extLst></p188:cm></p188:cmLst>'.encode()
 
 
 def _modern_authors() -> bytes:

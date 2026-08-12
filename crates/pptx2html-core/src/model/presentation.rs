@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::geometry::Size;
 use super::hierarchy::{FmtScheme, ListStyle, SlideLayout, SlideMaster};
+use super::notes_comments::NotesCommentsInventory;
 use super::slide::Slide;
 
 /// Top-level presentation structure
@@ -15,6 +16,7 @@ pub struct Presentation {
     pub layouts: Vec<SlideLayout>,
     pub default_text_style: Option<ListStyle>,
     pub clr_map: ClrMap,
+    pub notes_comments: NotesCommentsInventory,
 }
 
 impl Presentation {

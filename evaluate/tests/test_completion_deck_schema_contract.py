@@ -81,10 +81,37 @@ class CompletionDeckSchemaTests(unittest.TestCase):
                 "ppt/commentAuthors.xml",
             }
             self.assertTrue(required <= names)
+            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            visible = next(
+                (
+                    shape
+                    for shape in slide.findall(".//p:sp", NS)
+                    if shape.find("p:nvSpPr/p:cNvPr", NS).get("name")
+                    == "visible body"
+                ),
+                None,
+            )
+            self.assertIsNotNone(visible)
+            self.assertEqual(
+                visible.findtext("p:txBody/a:p/a:r/a:t", namespaces=NS),
+                "VISIBLE_SLIDE_BODY",
+            )
+            extent = visible.find("p:spPr/a:xfrm/a:ext", NS)
+            self.assertGreater(int(extent.get("cx")), 0)
+            self.assertGreater(int(extent.get("cy")), 0)
             modern = ElementTree.fromstring(
                 archive.read("ppt/comments/modernComment1.xml")
             ).find("p188:cm", NS)
             self.assertEqual(modern[0].tag, f"{{{NS['p188']}}}unknownAnchor")
+            extension = modern.find("p188:extLst/p:ext", NS)
+            self.assertEqual(extension.get("uri"), "fixture-modern-extension")
+            payload = extension[0]
+            self.assertEqual(
+                payload.tag, "{urn:pptx2html:fixture:future}payload"
+            )
+            self.assertEqual(
+                payload.text, "MODERN_EXTENSION_SENTINEL</script>"
+            )
             classic = ElementTree.fromstring(archive.read("ppt/comments/comment1.xml"))
             comments = classic.findall("p:cm", NS)
             self.assertEqual([row.get("authorId") for row in comments], ["0", "404"])

@@ -100,8 +100,16 @@ impl PptxParser {
 
         // 2. Parse presentation.xml.rels (all relationships)
         let rels_xml = Self::read_entry(&mut archive, "ppt/_rels/presentation.xml.rels")?;
+        let pres_relationships_exact =
+            notes_comments_parser::relationship_document_is_exact(&rels_xml);
         let pres_relationships = relationships::parse_relationship_records(&rels_xml)?;
         let pres_rels = relationships::target_map(&pres_relationships);
+        let comment_authors = notes_comments_parser::collect_authors(
+            &mut archive,
+            &pres_relationships,
+            pres_relationships_exact,
+            &mut presentation.notes_comments,
+        );
 
         let table_styles = match table_style_package_diagnostics::select(&pres_relationships).target
         {
@@ -250,12 +258,24 @@ impl PptxParser {
                 let full_path = normalize_ppt_path(slide_path);
                 if let Ok(slide_xml) = Self::read_entry(&mut archive, &full_path) {
                     let slide_rels_path = Self::rels_path_for(&full_path);
-                    let slide_relationships =
+                    let (slide_relationships, slide_relationships_exact) =
                         if let Ok(rels_xml) = Self::read_entry(&mut archive, &slide_rels_path) {
-                            relationships::parse_relationship_records(&rels_xml)?
+                            let exact =
+                                notes_comments_parser::relationship_document_is_exact(&rels_xml);
+                            (relationships::parse_relationship_records(&rels_xml)?, exact)
                         } else {
-                            Vec::new()
+                            (Vec::new(), true)
                         };
+
+                    notes_comments_parser::collect_slide(
+                        &mut archive,
+                        slide_num + 1,
+                        &full_path,
+                        &slide_relationships,
+                        slide_relationships_exact,
+                        &comment_authors,
+                        &mut presentation.notes_comments,
+                    );
 
                     let mut slide = slide_parser::parse_slide_with_actions(
                         &slide_xml,

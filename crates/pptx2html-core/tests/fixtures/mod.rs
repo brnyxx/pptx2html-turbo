@@ -19,6 +19,7 @@ pub struct MinimalPptx {
     layout_rels_xml: Option<String>,
     has_layout_rel: bool,
     presentation_xml: Option<String>,
+    presentation_rels_xml: Option<String>,
     custom_theme_xml: Option<String>,
     slide_rels_xml: Option<String>,
     core_properties_xml: Option<String>,
@@ -46,6 +47,7 @@ impl MinimalPptx {
             layout_rels_xml: None,
             has_layout_rel: false,
             presentation_xml: None,
+            presentation_rels_xml: None,
             custom_theme_xml: None,
             slide_rels_xml: None,
             core_properties_xml: None,
@@ -149,6 +151,11 @@ impl MinimalPptx {
         self
     }
 
+    pub fn with_presentation_rels(mut self, rels_xml: &str) -> Self {
+        self.presentation_rels_xml = Some(rels_xml.to_string());
+        self
+    }
+
     pub fn with_slide_rels(mut self, slide_rels_xml: &str) -> Self {
         self.slide_rels_xml = Some(slide_rels_xml.to_string());
         self
@@ -195,7 +202,11 @@ impl MinimalPptx {
         // ppt/_rels/presentation.xml.rels
         zip.start_file("ppt/_rels/presentation.xml.rels", opts)
             .unwrap();
-        zip.write_all(PRESENTATION_RELS.as_bytes()).unwrap();
+        let presentation_rels = self
+            .presentation_rels_xml
+            .as_deref()
+            .unwrap_or(PRESENTATION_RELS);
+        zip.write_all(presentation_rels.as_bytes()).unwrap();
 
         // ppt/slides/slide1.xml
         zip.start_file("ppt/slides/slide1.xml", opts).unwrap();
@@ -403,6 +414,7 @@ mod fixture_api_contract {
             .with_slide_layout_rel()
             .with_layout_rels("<Relationships/>")
             .with_presentation_xml("<p:presentation/>")
+            .with_presentation_rels("<Relationships/>")
             .with_slide_rels("<Relationships/>")
             .with_core_properties("<cp:coreProperties/>")
             .with_extra_file("ppt/media/fixture.bin", b"fixture")
