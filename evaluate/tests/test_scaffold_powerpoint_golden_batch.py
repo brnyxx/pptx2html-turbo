@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pptx import Presentation
 
+from evaluate.completion_deck_package import png_bytes
 from evaluate.scaffold_powerpoint_golden_batch import (
     ScaffoldError,
     scaffold_powerpoint_golden_batch,
@@ -43,8 +44,8 @@ class ScaffoldPowerPointGoldenBatchTests(unittest.TestCase):
 
             deck_output = output_dir / "sample"
             deck_output.mkdir()
-            (deck_output / "Slide1.PNG").write_bytes(b"png1")
-            (deck_output / "Slide2.PNG").write_bytes(b"png2")
+            (deck_output / "Slide1.PNG").write_bytes(png_bytes())
+            (deck_output / "Slide2.PNG").write_bytes(png_bytes())
 
             summary = scaffold_powerpoint_golden_batch(
                 golden_set,
@@ -78,13 +79,17 @@ class ScaffoldPowerPointGoldenBatchTests(unittest.TestCase):
 
     def _metadata(self) -> dict[str, str]:
         return {
+            "producer": "Microsoft PowerPoint",
+            "platform": "Windows",
             "powerpoint_version": "16.0.17726.20160",
+            "powerpoint_build": "16.0.17726.20160",
             "powerpoint_channel": "Current Channel",
             "windows_version": "Windows 11 23H2",
             "export_command": "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golden_set -OutputDir ./powerpoint_golden",
             "output_resolution": "960x540",
             "golden_set_revision": "abc1234",
-            "capture_date": "2026-04-02",
+            "capture_timestamp": "2026-04-02T12:00:00Z",
+            "batch_id": "powerpoint-test-batch",
         }
 
 

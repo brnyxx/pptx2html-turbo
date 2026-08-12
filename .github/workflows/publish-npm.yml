@@ -49,6 +49,19 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install evaluate test dependencies
+        run: python3 -m pip install -r evaluate/requirements-test.txt
+
+      - name: Run evaluate helper tests
+        run: python3 -m unittest discover -s evaluate/tests -p 'test_*.py' -v
+
+      - name: Check exactness contract
+        run: python3 evaluate/check_exactness_contract.py --repo-root .
+
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 

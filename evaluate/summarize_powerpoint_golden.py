@@ -7,9 +7,19 @@ from pathlib import Path
 from pptx import Presentation
 
 try:
-    from evaluate.validate_powerpoint_golden import REQUIRED_METADATA_FIELDS
+    from evaluate.powerpoint_provenance import validate_provenance
+    from evaluate.validate_powerpoint_golden import (
+        REQUIRED_METADATA_FIELDS,
+        ValidationError,
+        validate_powerpoint_golden_batch,
+    )
 except ModuleNotFoundError:
-    from validate_powerpoint_golden import REQUIRED_METADATA_FIELDS
+    from powerpoint_provenance import validate_provenance
+    from validate_powerpoint_golden import (
+        REQUIRED_METADATA_FIELDS,
+        ValidationError,
+        validate_powerpoint_golden_batch,
+    )
 
 
 def summarize_powerpoint_golden_batch(
@@ -53,7 +63,7 @@ def summarize_powerpoint_golden_batch(
             missing_fields = [
                 field for field in REQUIRED_METADATA_FIELDS if not metadata.get(field)
             ]
-            if missing_fields:
+            if missing_fields or validate_provenance(metadata):
                 invalid_metadata.append(deck_name)
 
         slide_pngs = sorted(path.name for path in deck_output.glob("Slide*.PNG"))
@@ -80,9 +90,13 @@ def summarize_powerpoint_golden_batch(
     manifest_deck_count_matches = False
     manifest_slide_count_matches = False
     batch_identity = {
+        "batch_id": None,
+        "producer": None,
+        "platform": None,
         "golden_set_revision": None,
-        "capture_date": None,
+        "capture_timestamp": None,
         "powerpoint_version": None,
+        "powerpoint_build": None,
         "powerpoint_channel": None,
         "windows_version": None,
         "output_resolution": None,
@@ -100,7 +114,8 @@ def summarize_powerpoint_golden_batch(
         for key in batch_identity:
             batch_identity[key] = manifest.get(key)
 
-    evidence_ready_for_exact_promotion = (
+    provenance_errors: list[str] = []
+    preliminarily_complete = (
         not missing_decks
         and not missing_metadata
         and not invalid_metadata
@@ -109,6 +124,12 @@ def summarize_powerpoint_golden_batch(
         and manifest_deck_count_matches
         and manifest_slide_count_matches
     )
+    if preliminarily_complete:
+        try:
+            validate_powerpoint_golden_batch(golden_set_dir, output_dir)
+        except ValidationError as error:
+            provenance_errors.append(str(error))
+    evidence_ready_for_exact_promotion = preliminarily_complete and not provenance_errors
 
     return {
         "golden_deck_count": len(golden_decks),
@@ -122,6 +143,7 @@ def summarize_powerpoint_golden_batch(
         "manifest_deck_count_matches": manifest_deck_count_matches,
         "manifest_slide_count_matches": manifest_slide_count_matches,
         "batch_identity": batch_identity,
+        "provenance_errors": provenance_errors,
         "evidence_ready_for_exact_promotion": evidence_ready_for_exact_promotion,
         "deck_details": deck_details,
     }

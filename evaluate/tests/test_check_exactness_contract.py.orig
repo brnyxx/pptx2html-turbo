@@ -4,7 +4,6 @@ import contextlib
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 import unittest
 from collections.abc import Iterator
@@ -140,7 +139,7 @@ class CheckExactnessContractTests(unittest.TestCase):
             features.write_text(features.read_text().replace('relationship_disposition="internal-video",', 'relationship_disposition="none",', 1))
             payload = check_exactness_contract(root)
         self.assertTrue(
-            "MEDIA_VIDEO_INTERNAL_FIXTURE_REQUIRED" in payload["missing_checks"]
+            MEDIA_BLOCKER in payload["missing_checks"]
             or any(
                 item.startswith("COMPLETION_VALIDATOR_NONZERO:")
                 and "internal-video" in item
@@ -214,9 +213,9 @@ class CheckExactnessContractTests(unittest.TestCase):
             supported = root / "SUPPORTED_FEATURES.md"
             supported.write_text(
                 supported.read_text()
-                + "\n | Feature | Status |\n"
-                + " | --- | --- |\n"
-                + " | Rectangle | Not yet |\n"
+                + "\n| Feature | Status |\n"
+                + "| --- | --- |\n"
+                + "| Rectangle | Not yet |\n"
             )
             payload = check_exactness_contract(root, verify_generated=False)
         self.assertIn(
@@ -267,15 +266,8 @@ class CheckExactnessContractTests(unittest.TestCase):
             except ProcessLookupError:
                 alive = False
             else:
-                state = subprocess.run(
-                    ("ps", "-o", "stat=", "-p", str(descendant_pid)),
-                    capture_output=True,
-                    check=False,
-                    text=True,
-                )
-                alive = state.returncode == 0 and not state.stdout.lstrip().startswith("Z")
-                if alive:
-                    os.kill(descendant_pid, 9)
+                alive = True
+                os.kill(descendant_pid, 9)
             self.assertFalse(alive, "timed-out subprocess descendant survived")
 
     def test_duplicate_generated_deck_bytes_are_rejected(self) -> None:

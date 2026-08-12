@@ -30,6 +30,7 @@ class FeatureSpec:
     negative: NegativeSpec | None = None
     schema_expectation: SchemaExpectation = SchemaExpectation.POSITIVE
     expected_diagnostic: str | None = None
+    relationship_disposition: str = "none"
 
 
 S = "ppt/slides/slide1.xml"
@@ -45,6 +46,7 @@ def _f(
     negative: NegativeSpec | None = None,
     schema_expectation: SchemaExpectation = SchemaExpectation.POSITIVE,
     expected_diagnostic: str | None = None,
+    relationship_disposition: str = "none",
 ) -> FeatureSpec:
     return FeatureSpec(
         task,
@@ -55,6 +57,7 @@ def _f(
         negative,
         schema_expectation,
         expected_diagnostic,
+        relationship_disposition,
     )
 
 
@@ -166,7 +169,13 @@ FEATURES = (
     _f(17, "reflection-3d", "reflection", "<a:reflection "),
     _f(17, "reflection-3d", "drawingml-3d-fallback", "<a:scene3d>"),
     _f(18, "media", "media-audio", '<a:audioFile r:link="rIdAudio"/>'),
-    _f(18, "media", "media-video", '<a:videoFile r:link="rIdVideo"/>'),
+    _f(
+        18,
+        "media",
+        "media-video",
+        '<a:videoFile r:link="rIdVideo"/>',
+        relationship_disposition="internal-video",
+    ),
     _f(18, "media", "media-unsupported", '<a:audioFile r:link="rIdUnsupported"/>'),
     _f(
         19,

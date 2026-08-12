@@ -139,10 +139,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+      - name: Run evaluate helper tests
+        run: python3 -m unittest discover -s evaluate/tests -p 'test_*.py' -v
       - name: Check exactness contract
         run: |
           mkdir -p artifacts/evaluate
-          python evaluate/check_exactness_contract.py --repo-root . --output-json artifacts/evaluate/exactness-contract-report.json
+          python3 evaluate/check_exactness_contract.py --repo-root . --output-json artifacts/evaluate/exactness-contract-report.json
       - name: Generate PowerPoint evidence summary
         run: |
           python evaluate/powerpoint_evidence.py summary --golden-set-dir evaluate/golden_set --output-dir evaluate/powerpoint_golden --output-json artifacts/evaluate/powerpoint-evidence-summary.json

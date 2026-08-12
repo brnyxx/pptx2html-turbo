@@ -8,6 +8,7 @@ from pathlib import Path
 from pptx import Presentation
 
 from evaluate.powerpoint_evidence import main
+from evaluate.completion_deck_package import png_bytes
 
 
 TEXT_LAYOUT_DECKS = [
@@ -63,7 +64,7 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
             self._create_pptx(deck_path, slide_count=1)
             deck_output = output_dir / "sample"
             deck_output.mkdir()
-            (deck_output / "Slide1.PNG").write_bytes(b"png1")
+            (deck_output / "Slide1.PNG").write_bytes(png_bytes())
 
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
@@ -76,6 +77,8 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         str(output_dir),
                         "--powerpoint-version",
                         "16.0.17726.20160",
+                        "--powerpoint-build",
+                        "16.0.17726.20160",
                         "--powerpoint-channel",
                         "Current Channel",
                         "--windows-version",
@@ -86,8 +89,10 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         "960x540",
                         "--golden-set-revision",
                         "abc1234",
-                        "--capture-date",
-                        "2026-04-02",
+                        "--capture-timestamp",
+                        "2026-04-02T12:00:00Z",
+                        "--batch-id",
+                        "powerpoint-test-batch",
                     ]
                 )
             self.assertEqual(scaffold_exit, 0)
@@ -210,7 +215,7 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                 self._create_pptx(deck_path, slide_count=1)
                 deck_output = output_dir / deck_name
                 deck_output.mkdir()
-                (deck_output / "Slide1.PNG").write_bytes(b"png1")
+                (deck_output / "Slide1.PNG").write_bytes(png_bytes())
 
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
@@ -223,6 +228,8 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         str(output_dir),
                         "--powerpoint-version",
                         "16.0.17726.20160",
+                        "--powerpoint-build",
+                        "16.0.17726.20160",
                         "--powerpoint-channel",
                         "Current Channel",
                         "--windows-version",
@@ -233,8 +240,10 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         "960x540",
                         "--golden-set-revision",
                         "abc1234",
-                        "--capture-date",
-                        "2026-04-02",
+                        "--capture-timestamp",
+                        "2026-04-02T12:00:00Z",
+                        "--batch-id",
+                        "powerpoint-test-batch",
                     ]
                 )
             self.assertEqual(scaffold_exit, 0)
@@ -271,13 +280,13 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                 self._create_pptx(deck_path, slide_count=1)
                 deck_output = output_dir / deck_name
                 deck_output.mkdir()
-                (deck_output / "Slide1.PNG").write_bytes(b"png1")
+                (deck_output / "Slide1.PNG").write_bytes(png_bytes())
 
             extra_deck = golden_set / "shapes_01_rectangles.pptx"
             self._create_pptx(extra_deck, slide_count=1)
             extra_output = output_dir / "shapes_01_rectangles"
             extra_output.mkdir()
-            (extra_output / "Slide1.PNG").write_bytes(b"png1")
+            (extra_output / "Slide1.PNG").write_bytes(png_bytes())
 
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
@@ -290,6 +299,8 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         str(output_dir),
                         "--powerpoint-version",
                         "16.0.17726.20160",
+                        "--powerpoint-build",
+                        "16.0.17726.20160",
                         "--powerpoint-channel",
                         "Current Channel",
                         "--windows-version",
@@ -300,8 +311,10 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         "960x540",
                         "--golden-set-revision",
                         "abc1234",
-                        "--capture-date",
-                        "2026-04-02",
+                        "--capture-timestamp",
+                        "2026-04-02T12:00:00Z",
+                        "--batch-id",
+                        "powerpoint-test-batch",
                     ]
                 )
             self.assertEqual(scaffold_exit, 0)

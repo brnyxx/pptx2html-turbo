@@ -1,23 +1,30 @@
 {
+  "producer": "Microsoft PowerPoint",
+  "platform": "Windows",
   "powerpoint_version": "16.0.17726.20160",
+  "powerpoint_build": "16.0.17726.20160",
   "powerpoint_channel": "Current Channel",
   "windows_version": "Windows 11 23H2",
   "export_command": "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golden_set -OutputDir ./powerpoint_golden",
   "output_resolution": "960x540",
   "golden_set_revision": "abc1234",
-  "capture_date": "2026-04-02",
-  "deck_count": 2,
-  "total_slide_count": 5,
+  "capture_timestamp": "2026-04-02T12:00:00Z",
+  "batch_id": "powerpoint-example-batch",
+  "deck_count": 1,
+  "total_slide_count": 1,
   "decks": [
     {
-      "name": "basic_text_01_runs",
-      "slide_count": 2,
-      "output_dir": "basic_text_01_runs"
-    },
-    {
-      "name": "basic_text_02_bullets",
-      "slide_count": 3,
-      "output_dir": "basic_text_02_bullets"
+      "name": "sample",
+      "slide_count": 1,
+      "output_dir": "sample",
+      "source_pptx_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "metadata_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "slides": [
+        {
+          "file": "Slide1.PNG",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ]
     }
   ]
 }

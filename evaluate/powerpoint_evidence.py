@@ -66,12 +66,14 @@ def main(argv: list[str] | None = None) -> int:
     scaffold_parser = subparsers.add_parser("scaffold")
     add_common_paths(scaffold_parser)
     scaffold_parser.add_argument("--powerpoint-version", required=True)
+    scaffold_parser.add_argument("--powerpoint-build", required=True)
     scaffold_parser.add_argument("--powerpoint-channel", required=True)
     scaffold_parser.add_argument("--windows-version", required=True)
     scaffold_parser.add_argument("--export-command", required=True)
     scaffold_parser.add_argument("--output-resolution", required=True)
     scaffold_parser.add_argument("--golden-set-revision", required=True)
-    scaffold_parser.add_argument("--capture-date", required=True)
+    scaffold_parser.add_argument("--capture-timestamp", required=True)
+    scaffold_parser.add_argument("--batch-id", required=True)
 
     args = parser.parse_args(argv)
 
@@ -80,13 +82,17 @@ def main(argv: list[str] | None = None) -> int:
             args.golden_set_dir,
             args.output_dir,
             metadata={
+                "producer": "Microsoft PowerPoint",
+                "platform": "Windows",
                 "powerpoint_version": args.powerpoint_version,
+                "powerpoint_build": args.powerpoint_build,
                 "powerpoint_channel": args.powerpoint_channel,
                 "windows_version": args.windows_version,
                 "export_command": args.export_command,
                 "output_resolution": args.output_resolution,
                 "golden_set_revision": args.golden_set_revision,
-                "capture_date": args.capture_date,
+                "capture_timestamp": args.capture_timestamp,
+                "batch_id": args.batch_id,
             },
         )
         emit(summary, args.output_json)

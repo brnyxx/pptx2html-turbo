@@ -11,9 +11,12 @@ param(
 
     [string]$OutputResolution = "Unknown",
 
-    [string]$GoldenSetRevision = "Unknown",
+    [Parameter(Mandatory = $true)]
+    [string]$GoldenSetRevision,
 
-    [string]$CaptureDate = (Get-Date -Format "yyyy-MM-dd")
+    [string]$CaptureTimestamp = (Get-Date).ToUniversalTime().ToString("o"),
+
+    [string]$BatchId = ("powerpoint-" + [Guid]::NewGuid().ToString("N"))
 )
 
 Set-StrictMode -Version Latest
@@ -41,11 +44,13 @@ $presentations = $null
 $scriptRoot = Split-Path -Parent $PSCommandPath
 $resolvedOutput = Resolve-Path -Path $OutputDir
 $powerPointVersion = $null
+$powerPointBuild = $null
 
 try {
     $powerPoint = New-Object -ComObject PowerPoint.Application
     $powerPoint.Visible = 1
     $powerPointVersion = $powerPoint.Version
+    $powerPointBuild = "$($powerPoint.Version).$($powerPoint.Build)"
     $presentations = $powerPoint.Presentations
 
     Get-ChildItem -Path $resolvedInput -Filter *.pptx | Sort-Object Name | ForEach-Object {
@@ -95,9 +100,11 @@ $exportCommand = "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golde
     --golden-set-dir $resolvedInput `
     --output-dir $resolvedOutput `
     --powerpoint-version $powerPointVersion `
+    --powerpoint-build $powerPointBuild `
     --powerpoint-channel $PowerPointChannel `
     --windows-version $WindowsVersion `
     --export-command $exportCommand `
     --output-resolution $OutputResolution `
     --golden-set-revision $GoldenSetRevision `
-    --capture-date $CaptureDate
+    --capture-timestamp $CaptureTimestamp `
+    --batch-id $BatchId

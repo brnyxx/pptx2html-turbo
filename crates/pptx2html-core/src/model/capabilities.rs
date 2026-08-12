@@ -141,6 +141,353 @@ impl CapabilityMatrix {
     }
 }
 
+// BEGIN EXACTNESS CAPABILITY REGISTRATIONS
+pub const CAPABILITY_PRESENTATION: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:presentation",
+    "direct",
+);
+pub const CAPABILITY_PRESENTATION_PROPERTIES: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:presentationPr",
+    "direct",
+);
+pub const CAPABILITY_SLIDE_MASTER: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Resolved),
+    "p:sldMaster",
+    "direct",
+);
+pub const CAPABILITY_SLIDE_LAYOUT: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Resolved),
+    "p:sldLayout",
+    "direct",
+);
+pub const CAPABILITY_SLIDE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:sld",
+    "direct",
+);
+pub const CAPABILITY_THEME: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Resolved),
+    "a:theme",
+    "direct",
+);
+pub const CAPABILITY_NOTES_MASTER: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:notesMaster",
+    "fallback",
+);
+pub const CAPABILITY_NOTES: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:notes",
+    "fallback",
+);
+pub const CAPABILITY_HANDOUT_MASTER: (SupportTier, Option<CapabilityStage>, &str, &str) =
+    (SupportTier::Unparsed, None, "p:handoutMaster", "unparsed");
+pub const CAPABILITY_COMMENTS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:cmLst",
+    "fallback",
+);
+pub const CAPABILITY_COMMENT_AUTHORS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:cmAuthorLst",
+    "fallback",
+);
+pub const CAPABILITY_SHAPE_TREE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:spTree",
+    "direct",
+);
+pub const CAPABILITY_PRESET_SHAPE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:prstGeom",
+    "direct",
+);
+pub const CAPABILITY_CUSTOM_GEOMETRY: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:custGeom",
+    "direct",
+);
+pub const CAPABILITY_CONNECTOR: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:cxnSp",
+    "direct",
+);
+pub const CAPABILITY_GROUP_SHAPE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:grpSp",
+    "direct",
+);
+pub const CAPABILITY_PICTURE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:pic",
+    "direct",
+);
+pub const CAPABILITY_TEXT_BODY: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:txBody",
+    "direct",
+);
+pub const CAPABILITY_RTL_TEXT: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_BULLETS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:buChar",
+    "direct",
+);
+pub const CAPABILITY_PICTURE_BULLETS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "a:buBlip",
+    "fallback",
+);
+pub const CAPABILITY_FILLS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:solidFill",
+    "direct",
+);
+pub const CAPABILITY_PATTERN_FILL: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "a:pattFill",
+    "fallback",
+);
+pub const CAPABILITY_EFFECTS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:outerShdw",
+    "direct",
+);
+pub const CAPABILITY_REFLECTION_AND_3D: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "a:reflection",
+    "fallback",
+);
+pub const CAPABILITY_TABLE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:tbl",
+    "direct",
+);
+pub const CAPABILITY_TABLE_STYLE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "PPTX_COMPLETENESS_FALLBACK",
+    "fallback",
+);
+pub const CAPABILITY_IMAGE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+    "direct",
+);
+pub const CAPABILITY_CHART_DIRECT_SUBSET: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+    "direct",
+);
+pub const CAPABILITY_CHART_PREVIEW_FALLBACK: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+    "fallback",
+);
+pub const CAPABILITY_CHART_PLACEHOLDER_FALLBACK: (
+    SupportTier,
+    Option<CapabilityStage>,
+    &str,
+    &str,
+) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+    "fallback",
+);
+pub const CAPABILITY_DIAGRAM: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+    "fallback",
+);
+pub const CAPABILITY_DIAGRAM_DATA: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "dgm:dataModel",
+    "fallback",
+);
+pub const CAPABILITY_DIAGRAM_LAYOUT: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "dgm:layoutDef",
+    "fallback",
+);
+pub const CAPABILITY_DIAGRAM_STYLES: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "dgm:styleDef",
+    "fallback",
+);
+pub const CAPABILITY_DIAGRAM_COLORS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "dgm:colorsDef",
+    "fallback",
+);
+pub const CAPABILITY_OLE_EMBEDDED_OBJECT: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:oleObj",
+    "fallback",
+);
+pub const CAPABILITY_MATH: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "m:oMath",
+    "fallback",
+);
+pub const CAPABILITY_MEDIA_AUDIO: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:audioFile",
+    "direct",
+);
+pub const CAPABILITY_MEDIA_VIDEO: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:videoFile",
+    "direct",
+);
+pub const CAPABILITY_HYPERLINK_RUN_AND_CELL: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+    "direct",
+);
+pub const CAPABILITY_SHAPE_HYPERLINK_AND_ACTION: (
+    SupportTier,
+    Option<CapabilityStage>,
+    &str,
+    &str,
+) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+    "fallback",
+);
+pub const CAPABILITY_TIMING_AND_ANIMATION: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:timing",
+    "direct",
+);
+pub const CAPABILITY_TRANSITIONS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "p:transition",
+    "direct",
+);
+pub const CAPABILITY_EXTENSIONS: (SupportTier, Option<CapabilityStage>, &str, &str) =
+    (SupportTier::Unparsed, None, "p:extLst", "unparsed");
+pub const CAPABILITY_ALTERNATE_CONTENT: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "mc:AlternateContent",
+    "fallback",
+);
+pub const CAPABILITY_BIBLIOGRAPHY: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_ADDITIONAL_CHARACTERISTICS: (
+    SupportTier,
+    Option<CapabilityStage>,
+    &str,
+    &str,
+) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_CUSTOM_XML: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+    "unparsed",
+);
+pub const CAPABILITY_THUMBNAIL: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_THEME_OVERRIDE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_SLIDE_SYNCHRONIZATION: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_CONTENT_PART: (SupportTier, Option<CapabilityStage>, &str, &str) =
+    (SupportTier::Unparsed, None, "p:contentPart", "unparsed");
+pub const CAPABILITY_EMBEDDED_PACKAGE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_EMBEDDED_CONTROL_PERSISTENCE: (
+    SupportTier,
+    Option<CapabilityStage>,
+    &str,
+    &str,
+) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+pub const CAPABILITY_USER_DEFINED_TAGS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Unparsed,
+    None,
+    "PPTX_COMPLETENESS_FALLBACK",
+    "unparsed",
+);
+// END EXACTNESS CAPABILITY REGISTRATIONS
+
 #[cfg(test)]
 mod tests {
     use super::{CapabilityStage, FeatureCapability, FeatureFamily, SupportTier};

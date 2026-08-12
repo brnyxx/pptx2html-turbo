@@ -1,68 +1,3599 @@
 {
   "schema_version": "2.0",
   "contract_scope": "current and target dispositions; no exact claim without feature evidence",
-  "dimensions": ["semantic", "visual", "behavioral"],
-  "tiers": ["exact", "approximate", "fallback", "unparsed"],
-  "stages": ["parsed", "resolved", "rendered", "fidelity-tested", "not-applicable"],
-  "fallback_metadata_required": ["code", "family", "tier", "stage", "slide_index", "part_name", "relationship_id", "relationship_type", "qualified_name", "bounds", "raw_reference", "fallback_kind", "reason"],
-  "exact_promotion_evidence_required": ["oracle", "powerpoint_version", "windows_version", "capture_metadata", "fixture_bundle", "artifact_paths"],
-  "exact_promotion_gate": {"code": "EXACT_REQUIRES_POWERPOINT_EVIDENCE", "oracle": "PowerPoint-native", "evidence_status": "required-before-promotion"},
+  "dimensions": [
+    "semantic",
+    "visual",
+    "behavioral"
+  ],
+  "tiers": [
+    "exact",
+    "approximate",
+    "fallback",
+    "unparsed"
+  ],
+  "stages": [
+    "parsed",
+    "resolved",
+    "rendered",
+    "fidelity-tested",
+    "not-applicable"
+  ],
+  "fallback_metadata_required": [
+    "code",
+    "family",
+    "tier",
+    "stage",
+    "slide_index",
+    "part_name",
+    "relationship_id",
+    "relationship_type",
+    "qualified_name",
+    "bounds",
+    "raw_reference",
+    "fallback_kind",
+    "reason"
+  ],
+  "exact_promotion_evidence_required": [
+    "oracle",
+    "powerpoint_version",
+    "windows_version",
+    "capture_metadata",
+    "fixture_bundle",
+    "artifact_paths"
+  ],
+  "exact_promotion_gate": {
+    "code": "EXACT_REQUIRES_POWERPOINT_EVIDENCE",
+    "oracle": "PowerPoint-native",
+    "evidence_status": "required-before-promotion"
+  },
   "features": [
-    {"id":"presentation","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:presentation"},"fallback_policy":{"kind":"preserve-with-diagnostic","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"presentation-properties","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:presentationPr"},"fallback_policy":{"kind":"preserve-with-diagnostic","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"slide-master","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:sldMaster"},"fallback_policy":{"kind":"preserve-with-diagnostic","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"resolved"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"resolved"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"slide-layout","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:sldLayout"},"fallback_policy":{"kind":"preserve-with-diagnostic","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"resolved"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"resolved"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"slide","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:sld"},"fallback_policy":{"kind":"preserve-with-diagnostic","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"theme","family":"drawingml-theme","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"a:theme"},"fallback_policy":{"kind":"preserve-with-diagnostic","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"resolved"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"resolved"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"notes-master","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:notesMaster"},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"NOTES_SLIDE_METADATA"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"notes","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:notes"},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"NOTES_SLIDE_METADATA"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"handout-master","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:handoutMaster"},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"comments","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:cmLst"},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"LEGACY_COMMENT_METADATA"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"comment-authors","family":"presentationml-package","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:cmAuthorLst"},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"COMMENT_AUTHOR_METADATA"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"shape-tree","family":"presentationml-shapes","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:spTree"},"fallback_policy":{"kind":"shape-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"preset-shape","family":"drawingml-geometry","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:prstGeom"},"fallback_policy":{"kind":"shape-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"custom-geometry","family":"drawingml-geometry","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:custGeom"},"fallback_policy":{"kind":"shape-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"connector","family":"presentationml-shapes","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:cxnSp"},"fallback_policy":{"kind":"shape-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"group-shape","family":"presentationml-shapes","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:grpSp"},"fallback_policy":{"kind":"shape-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"picture","family":"presentationml-shapes","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:pic"},"fallback_policy":{"kind":"image-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"text-body","family":"drawingml-text","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"p:txBody"},"fallback_policy":{"kind":"text-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"rtl-text","family":"drawingml-text","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"text-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"bullets","family":"drawingml-text","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:buChar"},"fallback_policy":{"kind":"text-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"picture-bullets","family":"drawingml-text","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:buBlip"},"fallback_policy":{"kind":"text-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"fills","family":"drawingml-fill","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.fill?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:solidFill"},"fallback_policy":{"kind":"style-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"pattern-fill","family":"drawingml-fill","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.fill?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:pattFill"},"fallback_policy":{"kind":"style-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"effects","family":"drawingml-effects","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:outerShdw"},"fallback_policy":{"kind":"style-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"reflection-and-3d","family":"drawingml-effects","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"a:reflection"},"fallback_policy":{"kind":"bounded-reflection-and-raw-3d-metadata","diagnostic_code":"DRAWINGML_3D_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"table","family":"drawingml-table","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"a:tbl"},"fallback_policy":{"kind":"table-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"table-style","family":"drawingml-table","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"table-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"image","family":"openxml-relationship","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"},"fallback_policy":{"kind":"image-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"chart-direct-subset","family":"openxml-relationship","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"},"fallback_policy":{"kind":"chart-preview-or-placeholder","diagnostic_code":"DRAWINGML_CHART_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"chart-preview-fallback","family":"openxml-relationship","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"},"fallback_policy":{"kind":"chart-preview-or-placeholder","diagnostic_code":"DRAWINGML_CHART_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"chart-placeholder-fallback","family":"openxml-relationship","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"},"fallback_policy":{"kind":"chart-preview-or-placeholder","diagnostic_code":"DRAWINGML_CHART_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"diagram","family":"drawingml-diagram","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"},"fallback_policy":{"kind":"diagram-preview-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"diagram-data","family":"drawingml-diagram","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.diagrams.datamodel?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"dgm:dataModel"},"fallback_policy":{"kind":"diagram-preview-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"diagram-layout","family":"drawingml-diagram","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.linq.dgm.layoutdef?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"dgm:layoutDef"},"fallback_policy":{"kind":"diagram-preview-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"diagram-styles","family":"drawingml-diagram","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.diagrams.styledefinition?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"dgm:styleDef"},"fallback_policy":{"kind":"diagram-preview-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"diagram-colors","family":"drawingml-diagram","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.linq.dgm.colorsdef?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"dgm:colorsDef"},"fallback_policy":{"kind":"diagram-preview-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"ole-embedded-object","family":"presentationml-embedded","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"p:oleObj"},"fallback_policy":{"kind":"embedded-object-preview-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"math","family":"office-math","official_source":"https://ecma-international.org/publications-and-standards/standards/ecma-376/","source_status":"verified","ooxml":{"qualified_name":"m:oMath"},"fallback_policy":{"kind":"math-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"media-audio","family":"drawingml-media","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"a:audioFile"},"fallback_policy":{"kind":"media-poster-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}}},
-    {"id":"media-video","family":"drawingml-media","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"qualified_name":"a:videoFile"},"fallback_policy":{"kind":"media-poster-or-placeholder","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}}},
-    {"id":"hyperlink-run-and-cell","family":"drawingml-interaction","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"},"fallback_policy":{"kind":"action-metadata","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"shape-hyperlink-and-action","family":"drawingml-interaction","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"},"fallback_policy":{"kind":"action-metadata","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"timing-and-animation","family":"presentationml-animation","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-presentation-slides","source_status":"verified","ooxml":{"qualified_name":"p:timing"},"fallback_policy":{"kind":"timing-metadata","diagnostic_code":"PRESENTATIONML_TIMING_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}}},
-    {"id":"transitions","family":"presentationml-animation","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-presentation-slides","source_status":"verified","ooxml":{"qualified_name":"p:transition"},"fallback_policy":{"kind":"timing-metadata","diagnostic_code":"PRESENTATIONML_TIMING_FALLBACK"},"current":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}},"target":{"semantic":{"tier":"approximate","stage":"parsed"},"visual":{"tier":"approximate","stage":"rendered"},"behavioral":{"tier":"approximate","stage":"rendered"}}},
-    {"id":"extensions","family":"presentationml-extension","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-presentation-slides","source_status":"verified","ooxml":{"qualified_name":"p:extLst"},"fallback_policy":{"kind":"extension-raw-xml","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"alternate-content","family":"markup-compatibility","official_source":"https://learn.microsoft.com/en-us/office/open-xml/general/introduction-to-markup-compatibility","source_status":"verified","ooxml":{"qualified_name":"mc:AlternateContent"},"fallback_policy":{"kind":"selected-branch-with-raw-alternatives","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"rendered"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"bibliography","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"additional-characteristics","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"custom-xml","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"verified","ooxml":{"relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"thumbnail","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"theme-override","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"slide-synchronization","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"content-part","family":"presentationml-content","official_source":"https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.presentation.contentpart?view=openxml-3.0.1","source_status":"verified","ooxml":{"qualified_name":"p:contentPart","relationship_type":"http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"embedded-package","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"embedded-control-persistence","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}},
-    {"id":"user-defined-tags","family":"openxml-part","official_source":"https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document","source_status":"unavailable","ooxml":{},"fallback_policy":{"kind":"metadata-sideband","diagnostic_code":"PPTX_COMPLETENESS_FALLBACK"},"current":{"semantic":{"tier":"unparsed","stage":"not-applicable"},"visual":{"tier":"unparsed","stage":"not-applicable"},"behavioral":{"tier":"unparsed","stage":"not-applicable"}},"target":{"semantic":{"tier":"fallback","stage":"parsed"},"visual":{"tier":"fallback","stage":"not-applicable"},"behavioral":{"tier":"fallback","stage":"not-applicable"}}}
+    {
+      "id": "presentation",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:presentation"
+      },
+      "fallback_policy": {
+        "kind": "preserve-with-diagnostic",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_PRESENTATION",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:presentation",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-presentation",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "presentation-properties",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:presentationPr"
+      },
+      "fallback_policy": {
+        "kind": "preserve-with-diagnostic",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_PRESENTATION_PROPERTIES",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:presentationPr",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-presentation-properties",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "slide-master",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:sldMaster"
+      },
+      "fallback_policy": {
+        "kind": "preserve-with-diagnostic",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "resolved"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "resolved"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_SLIDE_MASTER",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "resolved",
+            "binding_token": "p:sldMaster",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/hierarchy_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-slide-master",
+        "focused_test_case": "test_background_default_white"
+      }
+    },
+    {
+      "id": "slide-layout",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:sldLayout"
+      },
+      "fallback_policy": {
+        "kind": "preserve-with-diagnostic",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "resolved"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "resolved"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_SLIDE_LAYOUT",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "resolved",
+            "binding_token": "p:sldLayout",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/hierarchy_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-slide-layout",
+        "focused_test_case": "test_background_default_white"
+      }
+    },
+    {
+      "id": "slide",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:sld"
+      },
+      "fallback_policy": {
+        "kind": "preserve-with-diagnostic",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_SLIDE",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:sld",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-slide",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "theme",
+      "family": "drawingml-theme",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:theme"
+      },
+      "fallback_policy": {
+        "kind": "preserve-with-diagnostic",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "resolved"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "resolved"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_THEME",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "resolved",
+            "binding_token": "a:theme",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-theme",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "notes-master",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:notesMaster"
+      },
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "NOTES_SLIDE_METADATA"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_NOTES_MASTER",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "p:notesMaster",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/notes_comments_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-notes-master",
+        "focused_test_case": "preserves_notes_master_and_classic_and_modern_comments_off_canvas"
+      }
+    },
+    {
+      "id": "notes",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:notes"
+      },
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "NOTES_SLIDE_METADATA"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_NOTES",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "p:notes",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/notes_comments_test.rs",
+        "completion_scenarios": [
+          "notes-slide"
+        ],
+        "documentation_anchor": "capability-notes",
+        "focused_test_case": "preserves_notes_master_and_classic_and_modern_comments_off_canvas"
+      }
+    },
+    {
+      "id": "handout-master",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:handoutMaster"
+      },
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_HANDOUT_MASTER",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "p:handoutMaster",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-handout-master",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "comments",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:cmLst"
+      },
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "LEGACY_COMMENT_METADATA"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_COMMENTS",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "p:cmLst",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/notes_comments_test.rs",
+        "completion_scenarios": [
+          "comments-legacy",
+          "comments-modern"
+        ],
+        "documentation_anchor": "capability-comments",
+        "focused_test_case": "preserves_notes_master_and_classic_and_modern_comments_off_canvas"
+      }
+    },
+    {
+      "id": "comment-authors",
+      "family": "presentationml-package",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:cmAuthorLst"
+      },
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "COMMENT_AUTHOR_METADATA"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_COMMENT_AUTHORS",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "p:cmAuthorLst",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/notes_comments_test.rs",
+        "completion_scenarios": [
+          "comment-author-missing"
+        ],
+        "documentation_anchor": "capability-comment-authors",
+        "focused_test_case": "preserves_notes_master_and_classic_and_modern_comments_off_canvas"
+      }
+    },
+    {
+      "id": "shape-tree",
+      "family": "presentationml-shapes",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:spTree"
+      },
+      "fallback_policy": {
+        "kind": "shape-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_SHAPE_TREE",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:spTree",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-shape-tree",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "preset-shape",
+      "family": "drawingml-geometry",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:prstGeom"
+      },
+      "fallback_policy": {
+        "kind": "shape-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_PRESET_SHAPE",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:prstGeom",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/geometry_adjustment_basic_test.rs",
+        "completion_scenarios": [
+          "adjustment-basic",
+          "adjustment-arrows",
+          "adjustment-remaining"
+        ],
+        "documentation_anchor": "capability-preset-shape",
+        "focused_test_case": "official_basic_adjustment_table_matches_task_two_bundle"
+      }
+    },
+    {
+      "id": "custom-geometry",
+      "family": "drawingml-geometry",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:custGeom"
+      },
+      "fallback_policy": {
+        "kind": "shape-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_CUSTOM_GEOMETRY",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:custGeom",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/geometry_adjustment_remaining_test.rs",
+        "completion_scenarios": [
+          "custom-geometry-unknown-formula"
+        ],
+        "documentation_anchor": "capability-custom-geometry",
+        "focused_test_case": "remaining_manifest_rows_are_consumed_by_official_rendering"
+      }
+    },
+    {
+      "id": "connector",
+      "family": "presentationml-shapes",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:cxnSp"
+      },
+      "fallback_policy": {
+        "kind": "shape-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_CONNECTOR",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:cxnSp",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-connector",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "group-shape",
+      "family": "presentationml-shapes",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:grpSp"
+      },
+      "fallback_policy": {
+        "kind": "shape-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_GROUP_SHAPE",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:grpSp",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-group-shape",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "picture",
+      "family": "presentationml-shapes",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:pic"
+      },
+      "fallback_policy": {
+        "kind": "image-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_PICTURE",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:pic",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-picture",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "text-body",
+      "family": "drawingml-text",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:txBody"
+      },
+      "fallback_policy": {
+        "kind": "text-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_TEXT_BODY",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:txBody",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-text-body",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "rtl-text",
+      "family": "drawingml-text",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "text-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_RTL_TEXT",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-rtl-text",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "bullets",
+      "family": "drawingml-text",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:buChar"
+      },
+      "fallback_policy": {
+        "kind": "text-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_BULLETS",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:buChar",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-bullets",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "picture-bullets",
+      "family": "drawingml-text",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:buBlip"
+      },
+      "fallback_policy": {
+        "kind": "text-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_PICTURE_BULLETS",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "a:buBlip",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/picture_bullet/assets.rs",
+        "completion_scenarios": [
+          "picture-bullet-embedded",
+          "picture-bullet-missing"
+        ],
+        "documentation_anchor": "capability-picture-bullets",
+        "focused_test_case": "embedded_png_has_equivalent_marker_semantics_in_both_asset_modes"
+      }
+    },
+    {
+      "id": "fills",
+      "family": "drawingml-fill",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.fill?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:solidFill"
+      },
+      "fallback_policy": {
+        "kind": "style-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_FILLS",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:solidFill",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-fills",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "pattern-fill",
+      "family": "drawingml-fill",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.fill?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:pattFill"
+      },
+      "fallback_policy": {
+        "kind": "style-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_PATTERN_FILL",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "a:pattFill",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/pattern_fill_test/inventory.rs",
+        "completion_scenarios": [
+          "pattern-fill-known",
+          "pattern-fill-unknown"
+        ],
+        "documentation_anchor": "capability-pattern-fill",
+        "focused_test_case": "classifies_the_exact_official_pattern_inventory"
+      }
+    },
+    {
+      "id": "effects",
+      "family": "drawingml-effects",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:outerShdw"
+      },
+      "fallback_policy": {
+        "kind": "style-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_EFFECTS",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:outerShdw",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/effects_3d_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-effects",
+        "focused_test_case": "renders_bounded_reflection_and_truthful_stable_diagnostics"
+      }
+    },
+    {
+      "id": "reflection-and-3d",
+      "family": "drawingml-effects",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:reflection"
+      },
+      "fallback_policy": {
+        "kind": "bounded-reflection-and-raw-3d-metadata",
+        "diagnostic_code": "DRAWINGML_3D_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_REFLECTION_AND_3D",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "a:reflection",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/effects_3d_test.rs",
+        "completion_scenarios": [
+          "reflection",
+          "drawingml-3d-fallback"
+        ],
+        "documentation_anchor": "capability-reflection-and-3d",
+        "focused_test_case": "renders_bounded_reflection_and_truthful_stable_diagnostics"
+      }
+    },
+    {
+      "id": "table",
+      "family": "drawingml-table",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:tbl"
+      },
+      "fallback_policy": {
+        "kind": "table-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_TABLE",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:tbl",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-table",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "table-style",
+      "family": "drawingml-table",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "table-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_TABLE_STYLE",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/table_style_test.rs",
+        "completion_scenarios": [
+          "table-style-regions",
+          "table-style-missing"
+        ],
+        "documentation_anchor": "capability-table-style",
+        "focused_test_case": "parses_style_id_flags_and_office_region_precedence"
+      }
+    },
+    {
+      "id": "image",
+      "family": "openxml-relationship",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+      },
+      "fallback_policy": {
+        "kind": "image-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_IMAGE",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-image",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "chart-direct-subset",
+      "family": "openxml-relationship",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+      },
+      "fallback_policy": {
+        "kind": "chart-preview-or-placeholder",
+        "diagnostic_code": "DRAWINGML_CHART_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_CHART_DIRECT_SUBSET",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/chart_completeness_test.rs",
+        "completion_scenarios": [
+          "chart-direct"
+        ],
+        "documentation_anchor": "capability-chart-direct-subset",
+        "focused_test_case": "every_classic_family_has_one_public_deterministic_disposition"
+      }
+    },
+    {
+      "id": "chart-preview-fallback",
+      "family": "openxml-relationship",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+      },
+      "fallback_policy": {
+        "kind": "chart-preview-or-placeholder",
+        "diagnostic_code": "DRAWINGML_CHART_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/parser/chart_diagnostics.rs",
+            "kind": "rust-symbol",
+            "token": "build_diagnostic",
+            "dimension": "visual",
+            "support_tier": "fallback",
+            "stage": "rendered",
+            "binding_token": "DRAWINGML_CHART_FALLBACK",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/chart_completeness_test.rs",
+        "completion_scenarios": [
+          "chart-preview-fallback"
+        ],
+        "documentation_anchor": "capability-chart-preview-fallback",
+        "focused_test_case": "every_classic_family_has_one_public_deterministic_disposition"
+      }
+    },
+    {
+      "id": "chart-placeholder-fallback",
+      "family": "openxml-relationship",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+      },
+      "fallback_policy": {
+        "kind": "chart-preview-or-placeholder",
+        "diagnostic_code": "DRAWINGML_CHART_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/parser/chart_diagnostics.rs",
+            "kind": "rust-symbol",
+            "token": "build_diagnostic",
+            "dimension": "visual",
+            "support_tier": "fallback",
+            "stage": "rendered",
+            "binding_token": "DRAWINGML_CHART_FALLBACK",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/chart_completeness_test.rs",
+        "completion_scenarios": [
+          "chart-placeholder"
+        ],
+        "documentation_anchor": "capability-chart-placeholder-fallback",
+        "focused_test_case": "every_classic_family_has_one_public_deterministic_disposition"
+      }
+    },
+    {
+      "id": "diagram",
+      "family": "drawingml-diagram",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
+      },
+      "fallback_policy": {
+        "kind": "diagram-preview-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_DIAGRAM",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/fixture_contract_test.rs",
+        "completion_scenarios": [
+          "fallback-smartart"
+        ],
+        "documentation_anchor": "capability-diagram",
+        "focused_test_case": "package_builder_emits_deterministic_feature_parts_when_declared"
+      }
+    },
+    {
+      "id": "diagram-data",
+      "family": "drawingml-diagram",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.diagrams.datamodel?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "dgm:dataModel"
+      },
+      "fallback_policy": {
+        "kind": "diagram-preview-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_DIAGRAM_DATA",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "dgm:dataModel",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "covered-by-parent-scenario",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-diagram-data",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "diagram-layout",
+      "family": "drawingml-diagram",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.linq.dgm.layoutdef?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "dgm:layoutDef"
+      },
+      "fallback_policy": {
+        "kind": "diagram-preview-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_DIAGRAM_LAYOUT",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "dgm:layoutDef",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "covered-by-parent-scenario",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-diagram-layout",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "diagram-styles",
+      "family": "drawingml-diagram",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.diagrams.styledefinition?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "dgm:styleDef"
+      },
+      "fallback_policy": {
+        "kind": "diagram-preview-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_DIAGRAM_STYLES",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "dgm:styleDef",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "covered-by-parent-scenario",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-diagram-styles",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "diagram-colors",
+      "family": "drawingml-diagram",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.linq.dgm.colorsdef?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "dgm:colorsDef"
+      },
+      "fallback_policy": {
+        "kind": "diagram-preview-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_DIAGRAM_COLORS",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "dgm:colorsDef",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "covered-by-parent-scenario",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-diagram-colors",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "ole-embedded-object",
+      "family": "presentationml-embedded",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:oleObj"
+      },
+      "fallback_policy": {
+        "kind": "embedded-object-preview-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_OLE_EMBEDDED_OBJECT",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "p:oleObj",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/fixture_contract_test.rs",
+        "completion_scenarios": [
+          "fallback-ole"
+        ],
+        "documentation_anchor": "capability-ole-embedded-object",
+        "focused_test_case": "package_builder_emits_deterministic_feature_parts_when_declared"
+      }
+    },
+    {
+      "id": "math",
+      "family": "office-math",
+      "official_source": "https://ecma-international.org/publications-and-standards/standards/ecma-376/",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "m:oMath"
+      },
+      "fallback_policy": {
+        "kind": "math-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_MATH",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "m:oMath",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/fixture_contract_test.rs",
+        "completion_scenarios": [
+          "fallback-math"
+        ],
+        "documentation_anchor": "capability-math",
+        "focused_test_case": "package_builder_emits_deterministic_feature_parts_when_declared"
+      }
+    },
+    {
+      "id": "media-audio",
+      "family": "drawingml-media",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:audioFile"
+      },
+      "fallback_policy": {
+        "kind": "media-poster-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_MEDIA_AUDIO",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:audioFile",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/media_test.rs",
+        "completion_scenarios": [
+          "media-audio",
+          "media-unsupported"
+        ],
+        "documentation_anchor": "capability-media-audio",
+        "focused_test_case": "task_18_preserves_legacy_exhaustive_fallback_kind_matches"
+      }
+    },
+    {
+      "id": "media-video",
+      "family": "drawingml-media",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:videoFile"
+      },
+      "fallback_policy": {
+        "kind": "media-poster-or-placeholder",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_MEDIA_VIDEO",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:videoFile",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/media_test.rs",
+        "completion_scenarios": [
+          "media-video"
+        ],
+        "documentation_anchor": "capability-media-video",
+        "focused_test_case": "task_18_preserves_legacy_exhaustive_fallback_kind_matches"
+      }
+    },
+    {
+      "id": "hyperlink-run-and-cell",
+      "family": "drawingml-interaction",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+      },
+      "fallback_policy": {
+        "kind": "action-metadata",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_HYPERLINK_RUN_AND_CELL",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/action_semantics_test.rs",
+        "scenario_exemption": {
+          "reason": "baseline-outside-tasks-8-21",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-hyperlink-run-and-cell",
+        "focused_test_case": "typed_actions_are_preserved_by_trigger_when_package_is_parsed"
+      }
+    },
+    {
+      "id": "shape-hyperlink-and-action",
+      "family": "drawingml-interaction",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+      },
+      "fallback_policy": {
+        "kind": "action-metadata",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_SHAPE_HYPERLINK_AND_ACTION",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/action_semantics_test.rs",
+        "completion_scenarios": [
+          "action-external",
+          "action-internal",
+          "action-unsafe",
+          "action-table-frame",
+          "action-group"
+        ],
+        "documentation_anchor": "capability-shape-hyperlink-and-action",
+        "focused_test_case": "typed_actions_are_preserved_by_trigger_when_package_is_parsed"
+      }
+    },
+    {
+      "id": "timing-and-animation",
+      "family": "presentationml-animation",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-presentation-slides",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:timing"
+      },
+      "fallback_policy": {
+        "kind": "timing-metadata",
+        "diagnostic_code": "PRESENTATIONML_TIMING_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_TIMING_AND_ANIMATION",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:timing",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/timing_transition_test.rs",
+        "completion_scenarios": [
+          "animation-bounded",
+          "animation-unsupported"
+        ],
+        "documentation_anchor": "capability-timing-and-animation",
+        "focused_test_case": "namespace_aware_parser_preserves_order_and_stable_source_identities"
+      }
+    },
+    {
+      "id": "transitions",
+      "family": "presentationml-animation",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-presentation-slides",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:transition"
+      },
+      "fallback_policy": {
+        "kind": "timing-metadata",
+        "diagnostic_code": "PRESENTATIONML_TIMING_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "approximate",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "approximate",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "approximate",
+          "stage": "rendered"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_TRANSITIONS",
+            "dimension": "semantic",
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "p:transition",
+            "disposition_token": "direct"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/timing_transition_test.rs",
+        "completion_scenarios": [
+          "transition-cut",
+          "transition-fade"
+        ],
+        "documentation_anchor": "capability-transitions",
+        "focused_test_case": "namespace_aware_parser_preserves_order_and_stable_source_identities"
+      }
+    },
+    {
+      "id": "extensions",
+      "family": "presentationml-extension",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-presentation-slides",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:extLst"
+      },
+      "fallback_policy": {
+        "kind": "extension-raw-xml",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_EXTENSIONS",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "p:extLst",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "completion_scenarios": [
+          "fallback-unknown-extension"
+        ],
+        "documentation_anchor": "capability-extensions",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "alternate-content",
+      "family": "markup-compatibility",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/general/introduction-to-markup-compatibility",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "mc:AlternateContent"
+      },
+      "fallback_policy": {
+        "kind": "selected-branch-with-raw-alternatives",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "rendered"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_ALTERNATE_CONTENT",
+            "dimension": "semantic",
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "mc:AlternateContent",
+            "disposition_token": "fallback"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/fixture_contract_test.rs",
+        "completion_scenarios": [
+          "fallback-alternate-content"
+        ],
+        "documentation_anchor": "capability-alternate-content",
+        "focused_test_case": "package_builder_emits_deterministic_feature_parts_when_declared"
+      }
+    },
+    {
+      "id": "bibliography",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_BIBLIOGRAPHY",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-bibliography",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "additional-characteristics",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_ADDITIONAL_CHARACTERISTICS",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-additional-characteristics",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "custom-xml",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "verified",
+      "ooxml": {
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"
+      },
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_CUSTOM_XML",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-custom-xml",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "thumbnail",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_THUMBNAIL",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-thumbnail",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "theme-override",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_THEME_OVERRIDE",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-theme-override",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "slide-synchronization",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_SLIDE_SYNCHRONIZATION",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-slide-synchronization",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "content-part",
+      "family": "presentationml-content",
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.presentation.contentpart?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "p:contentPart",
+        "relationship_type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"
+      },
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_CONTENT_PART",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "p:contentPart",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-content-part",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "embedded-package",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_EMBEDDED_PACKAGE",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-embedded-package",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "embedded-control-persistence",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_EMBEDDED_CONTROL_PERSISTENCE",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-embedded-control-persistence",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    },
+    {
+      "id": "user-defined-tags",
+      "family": "openxml-part",
+      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
+      "source_status": "unavailable",
+      "ooxml": {},
+      "fallback_policy": {
+        "kind": "metadata-sideband",
+        "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
+      },
+      "current": {
+        "semantic": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "visual": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "unparsed",
+          "stage": "not-applicable"
+        }
+      },
+      "target": {
+        "semantic": {
+          "tier": "fallback",
+          "stage": "parsed"
+        },
+        "visual": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        },
+        "behavioral": {
+          "tier": "fallback",
+          "stage": "not-applicable"
+        }
+      },
+      "verification": {
+        "implementation": [
+          {
+            "path": "crates/pptx2html-core/src/model/capabilities.rs",
+            "kind": "rust-symbol",
+            "token": "CAPABILITY_USER_DEFINED_TAGS",
+            "dimension": "semantic",
+            "support_tier": "unparsed",
+            "stage": "not-applicable",
+            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
+            "disposition_token": "unparsed"
+          }
+        ],
+        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "scenario_exemption": {
+          "reason": "deferred-after-task-23",
+          "dispositions": [
+            "current",
+            "target"
+          ]
+        },
+        "documentation_anchor": "capability-user-defined-tags",
+        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      }
+    }
   ]
 }

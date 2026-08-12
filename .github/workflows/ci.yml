@@ -88,11 +88,11 @@ jobs:
       - name: Install evaluate test dependencies
         run: python -m pip install -r evaluate/requirements-test.txt
       - name: Run evaluate helper tests
-        run: python -m unittest evaluate.tests.test_validate_powerpoint_golden evaluate.tests.test_scaffold_powerpoint_golden_batch evaluate.tests.test_summarize_powerpoint_golden evaluate.tests.test_powerpoint_evidence_cli evaluate.tests.test_check_exactness_contract -v
+        run: python3 -m unittest discover -s evaluate/tests -p 'test_*.py' -v
       - name: Check exactness contract
         run: |
           mkdir -p artifacts/evaluate
-          python evaluate/check_exactness_contract.py --repo-root . --output-json artifacts/evaluate/exactness-contract-report.json
+          python3 evaluate/check_exactness_contract.py --repo-root . --output-json artifacts/evaluate/exactness-contract-report.json
       - name: Generate PowerPoint evidence reports
         run: |
           python evaluate/powerpoint_evidence.py summary --golden-set-dir evaluate/golden_set --output-dir evaluate/powerpoint_golden --output-json artifacts/evaluate/powerpoint-evidence-summary.json

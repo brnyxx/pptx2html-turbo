@@ -63,6 +63,11 @@ def assert_inventory(
         case.assertIn(expected, canonical_ids, scenario)
         case.assertIs(row["powerpoint_capture_required"], True)
         case.assertEqual(row["native_evidence"], {"images": [], "metadata": None})
+        case.assertIn(
+            row["relationship_disposition"],
+            {"none", "internal", "external", "internal-audio", "internal-video"},
+            scenario,
+        )
     case.assertIs(manifest["powerpoint_capture_required"], True)
     case.assertEqual(manifest["native_evidence"], {"images": [], "metadata": None})
     expectations = {row["id"]: row["schema_expectation"] for row in rows}
@@ -70,3 +75,5 @@ def assert_inventory(
     case.assertEqual(expectations["pattern-fill-unknown"], "negative")
     unknown = next(row for row in rows if row["id"] == "pattern-fill-unknown")
     case.assertEqual(unknown["expected_diagnostic"], "DRAWINGML_PATTERN_UNSUPPORTED")
+    media_video = next(row for row in rows if row["id"] == "media-video")
+    case.assertEqual(media_video["relationship_disposition"], "internal-video")

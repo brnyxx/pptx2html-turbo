@@ -119,32 +119,6 @@ class CompletionDeckSchemaTests(unittest.TestCase):
             self.assertIsNotNone(authors.find("p:cmAuthor[@id='0']", NS))
             self.assertIsNone(authors.find("p:cmAuthor[@id='404']", NS))
 
-    def test_media_cases_are_distinct_and_safe_video_is_internal(self) -> None:
-        with zipfile.ZipFile(self.root / "media.pptx") as archive:
-            names = set(archive.namelist())
-            self.assertIn("ppt/media/audio.wav", names)
-            self.assertIn("ppt/media/video.mp4", names)
-            self.assertIn("ppt/media/poster.png", names)
-            self.assertIn("ppt/media/unsupported.bin", names)
-            slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
-            owners = {
-                owner.get("name"): owner.get("id")
-                for owner in slide.findall(".//p:cNvPr", NS)
-            }
-            self.assertEqual(
-                set(owners),
-                {
-                    "",
-                    "audio",
-                    "safe baseline AVC video",
-                    "unsupported codec",
-                    "external media never fetched",
-                    "poster only",
-                },
-            )
-            poster_only = slide.find(".//p:cNvPr[@name='poster only']/../p:nvPr", NS)
-            self.assertEqual(len(poster_only), 0)
-
     def test_charts_have_required_series_axes_and_preview_bounds(self) -> None:
         with zipfile.ZipFile(self.root / "charts.pptx") as archive:
             expectations = (

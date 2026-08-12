@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import binascii
 import io
 import struct
@@ -91,12 +90,184 @@ def wav_bytes() -> bytes:
     )
 
 
-def mp4_bytes() -> bytes:
-    """Return a deterministic one-frame baseline-AVC MP4 fixture."""
-    encoded = (
-        "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMObW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAAMgAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjl0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAAMgAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAACAAAAAgAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAADIAAAAAAABAAAAAAGxbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAoAAAACABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABXG1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAARxzdGJsAAAAuHN0c2QAAAAAAAAAAQAAAKhhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAACAAIABIAAAASAAAAAAAAAABFUxhdmM2Mi4xMS4xMDAgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAALmF2Y0MBQsAK/+EAFmdCwArZCWwEQAAAAwBAAAADAoPEiZIBAAVoy4PLIAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAAGYwAAAAAAAAABhzdHRzAAAAAAAAAAEAAAABAAAIAAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAQAAAAEAAAAUc3RzegAAAAAAAAKOAAAAAQAAABRzdGNvAAAAAAAAAAEAAAM+AAAAYXVkdGEAAABZbWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAsaWxzdAAAACSpdG9vAAAAHGRhdGEAAAABAAAAAExhdmY2Mi4zLjEwMAAAAAhmcmVlAAAClm1kYXQAAAJwBgX//2zcRem95tlIt5Ys2CDZI+7veDI2NCAtIGNvcmUgMTY1IHIzMjIyIGIzNTYwNWEgLSBILjI2NC9NUEVHLTQgQVZDIGNvZGVjIC0gQ29weWxlZnQgMjAwMy0yMDI1IC0gaHR0cDovL3d3dy52aWRlb2xhbi5vcmcveDI2NC5odG1sIC0gb3B0aW9uczogY2FiYWM9MCByZWY9MyBkZWJsb2NrPTE6MDowIGFuYWx5c2U9MHgxOjB4MTExIG1lPWhleCBzdWJtZT03IHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTEgbWVfcmFuZ2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0xIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIxLDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PS0yIHRocmVhZHM9MSBsb29rYWhlYWRfdGhyZWFkcz0xIHNsaWNlZF90aHJlYWRzPTAgbnI9MCBkZWNpbWF0ZT0xIGludGVybGFjZWQ9MCBibHVyYXlfY29tcGF0PTAgY29uc3RyYWluZWRfaW50cmE9MCBiZnJhbWVzPTAgd2VpZ2h0cD0wIGtleWludD0yNTAga2V5aW50X21pbj01IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAAFmWIhA/xGKAALSMcAAVco4AAhgyddeA="
+class _BitWriter:
+    def __init__(self) -> None:
+        self.data = bytearray()
+        self.position = 0
+
+    def bit(self, value: int) -> None:
+        if self.position % 8 == 0:
+            self.data.append(0)
+        if value:
+            self.data[-1] |= 1 << (7 - self.position % 8)
+        self.position += 1
+
+    def bits(self, value: int, count: int) -> None:
+        for shift in reversed(range(count)):
+            self.bit((value >> shift) & 1)
+
+    def ue(self, value: int) -> None:
+        code = value + 1
+        width = code.bit_length()
+        for _ in range(width - 1):
+            self.bit(0)
+        self.bits(code, width)
+
+    def se(self, value: int) -> None:
+        self.ue(-2 * value if value <= 0 else 2 * value - 1)
+
+    def align_zero(self) -> None:
+        while self.position % 8:
+            self.bit(0)
+
+    def raw(self, values: bytes) -> None:
+        assert self.position % 8 == 0
+        self.data.extend(values)
+        self.position += len(values) * 8
+
+    def finish_rbsp(self) -> bytes:
+        self.bit(1)
+        self.align_zero()
+        return bytes(self.data)
+
+
+def _ebsp_nal(header: int, rbsp: bytes) -> bytes:
+    result = bytearray([header])
+    zeros = 0
+    for value in rbsp:
+        if zeros >= 2 and value <= 3:
+            result.append(3)
+            zeros = 0
+        result.append(value)
+        zeros = zeros + 1 if value == 0 else 0
+    return bytes(result)
+
+
+def _mp4_box(kind: bytes, payload: bytes) -> bytes:
+    return struct.pack(">I4s", len(payload) + 8, kind) + payload
+
+
+def mp4_bytes(width_mbs: int = 2, height_mbs: int = 1, pixel_seed: int = 0x31) -> bytes:
+    """Build a deterministic single-frame Constrained-Baseline all-I_PCM MP4."""
+    assert 1 <= width_mbs <= 16 and 1 <= height_mbs <= 16
+    width, height = width_mbs * 16, height_mbs * 16
+
+    sps_bits = _BitWriter()
+    sps_bits.bits(66, 8)
+    sps_bits.bits(0xC0, 8)
+    sps_bits.bits(30, 8)
+    for value in (0, 0, 0, 0, 1):
+        sps_bits.ue(value)
+    sps_bits.bit(0)
+    sps_bits.ue(width_mbs - 1)
+    sps_bits.ue(height_mbs - 1)
+    for value in (1, 1, 0, 0):
+        sps_bits.bit(value)
+    sps = _ebsp_nal(0x67, sps_bits.finish_rbsp())
+
+    pps_bits = _BitWriter()
+    pps_bits.ue(0)
+    pps_bits.ue(0)
+    pps_bits.bit(0)
+    pps_bits.bit(0)
+    for _ in range(3):
+        pps_bits.ue(0)
+    pps_bits.bit(0)
+    pps_bits.bits(0, 2)
+    for _ in range(3):
+        pps_bits.se(0)
+    for value in (0, 0, 0):
+        pps_bits.bit(value)
+    pps = _ebsp_nal(0x68, pps_bits.finish_rbsp())
+
+    slice_bits = _BitWriter()
+    for value in (0, 7, 0):
+        slice_bits.ue(value)
+    slice_bits.bits(0, 4)
+    slice_bits.ue(0)
+    slice_bits.bits(0, 4)
+    slice_bits.bit(0)
+    slice_bits.bit(0)
+    slice_bits.se(0)
+    for macroblock in range(width_mbs * height_mbs):
+        slice_bits.ue(25)
+        slice_bits.align_zero()
+        slice_bits.raw(
+            bytes(
+                (pixel_seed + macroblock * 17 + index) & 0xFF
+                for index in range(384)
+            )
+        )
+    idr = _ebsp_nal(0x65, slice_bits.finish_rbsp())
+    sample = struct.pack(">I", len(idr)) + idr
+
+    avcc = (
+        bytes([1, 66, 0xC0, 30, 0xFF, 0xE1])
+        + struct.pack(">H", len(sps))
+        + sps
+        + bytes([1])
+        + struct.pack(">H", len(pps))
+        + pps
     )
-    return base64.b64decode(encoded, validate=True)
+    compressor = bytes([0]) + bytes(31)
+    avc1 = _mp4_box(
+        b"avc1",
+        bytes(6)
+        + struct.pack(">H", 1)
+        + bytes(16)
+        + struct.pack(">HHII", width, height, 72 << 16, 72 << 16)
+        + bytes(4)
+        + struct.pack(">H", 1)
+        + compressor
+        + struct.pack(">Hh", 24, -1)
+        + _mp4_box(b"avcC", avcc),
+    )
+    stsd = _mp4_box(b"stsd", bytes(4) + struct.pack(">I", 1) + avc1)
+    stts = _mp4_box(b"stts", bytes(4) + struct.pack(">III", 1, 1, 1000))
+    stsc = _mp4_box(b"stsc", bytes(4) + struct.pack(">IIII", 1, 1, 1, 1))
+    stsz = _mp4_box(b"stsz", bytes(4) + struct.pack(">III", 0, 1, len(sample)))
+    stss = _mp4_box(b"stss", bytes(4) + struct.pack(">II", 1, 1))
+    ftyp = _mp4_box(b"ftyp", b"isom" + struct.pack(">I", 0x200) + b"isomavc1mp41")
+
+    def moov(chunk_offset: int) -> bytes:
+        stco = _mp4_box(b"stco", bytes(4) + struct.pack(">II", 1, chunk_offset))
+        stbl = _mp4_box(b"stbl", stsd + stts + stsc + stsz + stco + stss)
+        url = _mp4_box(b"url ", b"\0\0\0\1")
+        dref = _mp4_box(b"dref", bytes(4) + struct.pack(">I", 1) + url)
+        dinf = _mp4_box(b"dinf", dref)
+        vmhd = _mp4_box(b"vmhd", b"\0\0\0\1" + bytes(8))
+        minf = _mp4_box(b"minf", vmhd + dinf + stbl)
+        mdhd = _mp4_box(b"mdhd", bytes(12) + struct.pack(">IIHH", 1000, 1000, 0x55C4, 0))
+        hdlr = _mp4_box(b"hdlr", bytes(8) + b"vide" + bytes(12) + b"Video\0")
+        mdia = _mp4_box(b"mdia", mdhd + hdlr + minf)
+        matrix = struct.pack(">9I", 0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000)
+        tkhd = _mp4_box(
+            b"tkhd",
+            b"\0\0\0\3"
+            + bytes(8)
+            + struct.pack(">II", 1, 0)
+            + struct.pack(">I", 1000)
+            + bytes(8)
+            + struct.pack(">hhhh", 0, 0, 0, 0)
+            + matrix
+            + struct.pack(">II", width << 16, height << 16),
+        )
+        trak = _mp4_box(b"trak", tkhd + mdia)
+        mvhd = _mp4_box(
+            b"mvhd",
+            bytes(12)
+            + struct.pack(">II", 1000, 1000)
+            + struct.pack(">Ih", 0x10000, 0x100)
+            + bytes(10)
+            + matrix
+            + bytes(24)
+            + struct.pack(">I", 2),
+        )
+        return _mp4_box(b"moov", mvhd + trak)
+
+    placeholder = moov(0)
+    movie = moov(len(ftyp) + len(placeholder) + 8)
+    return ftyp + movie + _mp4_box(b"mdat", sample)
 
 
 def deck_bytes(deck: Deck) -> bytes:

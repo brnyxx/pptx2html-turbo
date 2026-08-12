@@ -20,6 +20,7 @@ class FeatureLike(Protocol):
     token: str
     schema_expectation: SchemaExpectation
     expected_diagnostic: str | None
+    relationship_disposition: str
 
 
 SCENARIO_CANONICAL: Final = {
@@ -77,6 +78,17 @@ def validate_features(features: tuple[FeatureLike, ...], canonical_path: Path) -
             f"COMPLETION_SCENARIO_MISMATCH missing={','.join(missing)} extra={','.join(extra)}"
         )
     for feature in features:
+        if feature.relationship_disposition not in {
+            "none",
+            "internal",
+            "external",
+            "internal-audio",
+            "internal-video",
+        }:
+            raise ContractError(
+                "COMPLETION_RELATIONSHIP_DISPOSITION_INVALID "
+                f"id={feature.feature_id} value={feature.relationship_disposition}"
+            )
         try:
             expectation = SchemaExpectation(feature.schema_expectation)
         except ValueError as error:

@@ -20,7 +20,6 @@ if __package__:
     from .completion_deck_package import (
         REL,
         Deck,
-        mp4_bytes,
         png_bytes,
         wav_bytes,
     )
@@ -54,7 +53,6 @@ else:
     from completion_deck_package import (
         REL,
         Deck,
-        mp4_bytes,
         png_bytes,
         wav_bytes,
     )

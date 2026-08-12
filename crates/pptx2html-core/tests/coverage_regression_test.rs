@@ -56,7 +56,6 @@ fn renderer_chart_shape(spec: ChartSpec) -> Shape {
             preview_image: None,
             preview_mime: None,
             direct_spec: Some(spec),
-            ..Default::default()
         }),
         size: Size {
             width: Emu(1_828_800),
@@ -3434,6 +3433,12 @@ fn parses_empty_event_autonum_bullet_none_and_gradient_stop_matrix_through_publi
 
 #[test]
 fn parses_grouped_chart_table_unsupported_and_image_fill_branches_through_public_parser() {
+    let chart_preview = [
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0,
+        0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde, 0, 0, 0, 12, b'I', b'D', b'A',
+        b'T', 8, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0, 0, 3, 1, 1, 0, 0x18, 0xdd, 0x8d, 0xb1, 0, 0, 0,
+        0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
     let slide = r#"
       <p:grpSp>
         <p:nvGrpSpPr><p:cNvPr id="60" name="Outer Group"></p:cNvPr><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
@@ -3476,7 +3481,7 @@ fn parses_grouped_chart_table_unsupported_and_image_fill_branches_through_public
           <p:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="914400"/></p:xfrm>
           <a:graphic>
             <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
-              <chart r:id="rIdChart"/>
+              <c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdChart"/>
             </a:graphicData>
           </a:graphic>
         </p:graphicFrame>
@@ -3563,7 +3568,7 @@ fn parses_grouped_chart_table_unsupported_and_image_fill_branches_through_public
         )
         .with_extra_file("ppt/charts/chart1.xml", chart_xml.as_bytes())
         .with_extra_file("ppt/charts/_rels/chart1.xml.rels", chart_rels.as_bytes())
-        .with_extra_file("ppt/media/chart-preview.png", b"preview")
+        .with_extra_file("ppt/media/chart-preview.png", &chart_preview)
         .with_extra_file("ppt/media/fill.png", b"fill-bytes")
         .build();
 
@@ -3609,7 +3614,10 @@ fn parses_grouped_chart_table_unsupported_and_image_fill_branches_through_public
             _ => None,
         })
         .expect("grouped chart");
-    assert_eq!(chart.preview_image.as_deref(), Some(b"preview".as_slice()));
+    assert_eq!(
+        chart.preview_image.as_deref(),
+        Some(chart_preview.as_slice())
+    );
     assert_eq!(chart.preview_mime.as_deref(), Some("image/png"));
 
     assert!(outer_group.iter().any(|shape| matches!(
@@ -3768,7 +3776,7 @@ fn parses_start_tag_cell_hyperlink_defrpr_and_nonimage_chart_preview_through_pub
         <p:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="914400"/></p:xfrm>
         <a:graphic>
           <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
-            <chart r:id="rIdChart"/>
+            <c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdChart"/>
           </a:graphicData>
         </a:graphic>
       </p:graphicFrame>

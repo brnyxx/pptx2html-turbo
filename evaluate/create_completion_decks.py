@@ -64,6 +64,7 @@ def generate(output: Path, adjustment_manifest: Path) -> None:
                 "id": feature.feature_id,
                 "completeness_feature_id": SCENARIO_CANONICAL[feature.feature_id],
                 "schema_expectation": feature.schema_expectation,
+                "relationship_disposition": feature.relationship_disposition,
                 **(
                     {"expected_diagnostic": feature.expected_diagnostic}
                     if feature.expected_diagnostic
