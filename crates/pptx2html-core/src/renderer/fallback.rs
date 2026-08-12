@@ -142,15 +142,43 @@ pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) 
 type DiagnosticKey<'a> = (
     Option<&'a str>,
     Option<usize>,
+    u8,
+    Option<usize>,
     Option<&'a str>,
     Option<&'a str>,
     Option<&'a str>,
 );
 
+fn effect_encounter(diagnostic: &ConversionDiagnostic) -> Option<usize> {
+    if !is_ordered_effect(diagnostic) {
+        return None;
+    }
+    diagnostic
+        .location
+        .relationship_id
+        .as_deref()?
+        .rsplit_once("-effect-")?
+        .1
+        .parse()
+        .ok()
+}
+
+fn is_ordered_effect(diagnostic: &ConversionDiagnostic) -> bool {
+    matches!(
+        diagnostic.code.as_str(),
+        "DRAWINGML_REFLECTION_APPROXIMATE"
+            | "DRAWINGML_REFLECTION_FALLBACK"
+            | "DRAWINGML_THEME_EFFECT_FALLBACK"
+            | "DRAWINGML_3D_FALLBACK"
+    )
+}
+
 fn diagnostic_sort_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
     (
         diagnostic.location.part_name.as_deref(),
         diagnostic.location.slide_index,
+        u8::from(is_ordered_effect(diagnostic)),
+        effect_encounter(diagnostic),
         diagnostic.location.qualified_element_name.as_deref(),
         diagnostic.location.relationship_id.as_deref(),
         if matches!(
@@ -168,6 +196,8 @@ fn diagnostic_deduplication_key(diagnostic: &ConversionDiagnostic) -> Diagnostic
     (
         diagnostic.location.part_name.as_deref(),
         diagnostic.location.slide_index,
+        u8::from(is_ordered_effect(diagnostic)),
+        effect_encounter(diagnostic),
         diagnostic.location.qualified_element_name.as_deref(),
         diagnostic.location.relationship_id.as_deref(),
         diagnostic.raw_reference.as_deref(),

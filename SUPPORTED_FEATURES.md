@@ -248,7 +248,9 @@ Notes and comments are metadata only and are never inserted into the visible sli
 |---------|-----------------|--------|
 | Text shadow | `<a:outerShdw>` | Approximate |
 | Shape shadow | `<a:effectLst>` | Approximate |
-| Reflection | `<a:reflection>` | Approximate (bounded CSS mirror/mask; no PowerPoint-fidelity claim) |
+| Reflection | `<a:reflection>` | Approximate for namespace-validated direct shapes (bounded CSS mirror/mask; typed attributes plus raw XML; no PowerPoint-fidelity claim), fallback otherwise |
 | Glow | `<a:glow>` | Approximate |
-| 3D scene and shape effects | `<a:scene3d>`, `<a:sp3d>` | Fallback (context-qualified ordered raw metadata) |
-| Effect DAG | `<a:effectDag>` | Fallback (ordered raw metadata) |
+| 3D scene and shape effects | `<a:scene3d>`, `<a:sp3d>` | Fallback (typed camera, camera rotation, light rig/rotation, material, depth/extrusion/contour, and top/bottom bevel properties plus context-qualified raw XML) |
+| Effect DAG | `<a:effectDag>` | Fallback (typed name plus numerically source-ordered raw metadata) |
+
+Advanced-effect metadata uses the private `drawingml-effect-metadata-v1` envelope and does not add fields to public `ShapeEffects`. Encounter order is stored and sorted numerically. Raw XML is capped at 65,536 UTF-8 bytes per effect; typed string values are capped at 1,024 UTF-8 bytes. Truncated values retain their original byte length and deterministic FNV-1a 64-bit hash, and the diagnostic reason explicitly reports raw XML truncation.

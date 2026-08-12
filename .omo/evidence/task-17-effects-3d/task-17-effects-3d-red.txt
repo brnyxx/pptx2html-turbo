@@ -1,0 +1,72 @@
+   Compiling pptx2html-core v1.1.0 (/Users/adminstrator/Desktop/hyungjoo-drb/personal/pptx2html-turbo-task-17/crates/pptx2html-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.95s
+     Running tests/effects_3d_test.rs (target/debug/deps/effects_3d_test-1fde52a6391f535d)
+
+running 1 test
+test renders_bounded_reflection_and_truthful_stable_diagnostics ... FAILED
+
+failures:
+
+---- renders_bounded_reflection_and_truthful_stable_diagnostics stdout ----
+
+thread 'renders_bounded_reflection_and_truthful_stable_diagnostics' (205514425) panicked at crates/pptx2html-core/tests/effects_3d_test.rs:69:5:
+assertion failed: reflection.raw_reference.as_deref().is_some_and(|metadata|
+        {
+            metadata.contains("\"kind\":\"reflection\"") &&
+                        metadata.contains("\"blur_radius_emu\":\"40000\"") &&
+                    metadata.contains("\"scale_y\":\"-100000\"") &&
+                metadata.contains("\"raw_xml\":\"")
+        })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    renders_bounded_reflection_and_truthful_stable_diagnostics
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p pptx2html-core --test effects_3d_test`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/effects_3d_test.rs (target/debug/deps/effects_3d_test-1fde52a6391f535d)
+
+running 1 test
+test spoofed_shape_ancestors_never_claim_a_rendered_reflection ... FAILED
+
+failures:
+
+---- spoofed_shape_ancestors_never_claim_a_rendered_reflection stdout ----
+
+thread 'spoofed_shape_ancestors_never_claim_a_rendered_reflection' (205514433) panicked at crates/pptx2html-core/tests/effects_3d_test.rs:212:5:
+assertion `left == right` failed
+  left: 1
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    spoofed_shape_ancestors_never_claim_a_rendered_reflection
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p pptx2html-core --test effects_3d_test`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/effects_3d_test.rs (target/debug/deps/effects_3d_test-1fde52a6391f535d)
+
+running 1 test
+test huge_effect_dag_has_bounded_raw_payload_with_loss_metadata ... FAILED
+
+failures:
+
+---- huge_effect_dag_has_bounded_raw_payload_with_loss_metadata stdout ----
+
+thread 'huge_effect_dag_has_bounded_raw_payload_with_loss_metadata' (205514444) panicked at crates/pptx2html-core/tests/effects_3d_test.rs:275:5:
+bounded metadata was 200056 bytes
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    huge_effect_dag_has_bounded_raw_payload_with_loss_metadata
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p pptx2html-core --test effects_3d_test`

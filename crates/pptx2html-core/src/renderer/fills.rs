@@ -11,8 +11,30 @@ use super::{
     Position, RenderCtx, Shape, ShapeEffects, Size, push_sep,
 };
 
-fn reflection_attributes(raw_xml: &str) -> Vec<(String, String)> {
-    let mut reader = Reader::from_str(raw_xml);
+fn reflection_attributes(metadata: &str) -> Vec<(String, String)> {
+    const TYPED_FIELDS: [(&str, &str); 12] = [
+        ("blurRad", "blur_radius_emu"),
+        ("stA", "start_alpha"),
+        ("endA", "end_alpha"),
+        ("stPos", "start_position"),
+        ("endPos", "end_position"),
+        ("dist", "distance_emu"),
+        ("dir", "direction"),
+        ("sx", "scale_x"),
+        ("sy", "scale_y"),
+        ("kx", "skew_x"),
+        ("ky", "skew_y"),
+        ("algn", "alignment"),
+    ];
+    if metadata.starts_with('{') {
+        return TYPED_FIELDS
+            .into_iter()
+            .filter_map(|(attribute, field)| {
+                json_string_field(metadata, field).map(|value| (attribute.to_owned(), value))
+            })
+            .collect();
+    }
+    let mut reader = Reader::from_str(metadata);
     match reader.read_event() {
         Ok(Event::Start(element) | Event::Empty(element)) => element
             .attributes()
@@ -25,6 +47,13 @@ fn reflection_attributes(raw_xml: &str) -> Vec<(String, String)> {
             .collect(),
         _ => Vec::new(),
     }
+}
+
+fn json_string_field(json: &str, name: &str) -> Option<String> {
+    let marker = format!("\"{name}\":\"");
+    let value = json.split_once(&marker)?.1;
+    let end = value.find('"')?;
+    Some(value[..end].to_owned())
 }
 
 fn bounded_attribute(

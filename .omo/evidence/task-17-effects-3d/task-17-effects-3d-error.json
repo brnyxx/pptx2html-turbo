@@ -1,0 +1,98 @@
+[
+  {
+    "code": "DRAWINGML_REFLECTION_APPROXIMATE",
+    "family": "shapes",
+    "support_tier": "approximate",
+    "stage": "rendered",
+    "location": {
+      "slide_index": 0,
+      "part_name": "ppt/slides/slide1.xml",
+      "relationship_id": "shape-2-effect-0000",
+      "relationship_type": null,
+      "qualified_element_name": "a:reflection",
+      "position": {
+        "x": 914400,
+        "y": 914400
+      },
+      "size": {
+        "width": 2743200,
+        "height": 914400
+      }
+    },
+    "raw_reference": "{\"schema\":\"drawingml-effect-metadata-v1\",\"kind\":\"reflection\",\"encounter_order\":0,\"blur_radius_emu\":\"40000\",\"start_alpha\":\"50000\",\"end_alpha\":\"0\",\"start_position\":\"0\",\"end_position\":\"100000\",\"distance_emu\":\"25400\",\"direction\":\"5400000\",\"scale_y\":\"-100000\",\"raw_xml_limit_bytes\":65536,\"raw_xml_original_bytes\":118,\"raw_xml_truncated\":false,\"raw_xml_hash_fnv1a64\":\"59adce5a31b121c5\",\"raw_xml\":\"<a:reflection blurRad=\\\"40000\\\" stA=\\\"50000\\\" endA=\\\"0\\\" stPos=\\\"0\\\" endPos=\\\"100000\\\" dist=\\\"25400\\\" dir=\\\"5400000\\\" sy=\\\"-100000\\\"/>\"}",
+    "fallback_kind": "style-approximation",
+    "reason": "Reflection was rendered with bounded browser blur, transform, and mask primitives; this approximation does not claim PowerPoint fidelity"
+  },
+  {
+    "code": "DRAWINGML_3D_FALLBACK",
+    "family": "shapes",
+    "support_tier": "fallback",
+    "stage": "parsed",
+    "location": {
+      "slide_index": 0,
+      "part_name": "ppt/slides/slide1.xml",
+      "relationship_id": "shape-2-effect-0001",
+      "relationship_type": null,
+      "qualified_element_name": "a:scene3d",
+      "position": {
+        "x": 914400,
+        "y": 914400
+      },
+      "size": {
+        "width": 2743200,
+        "height": 914400
+      }
+    },
+    "raw_reference": "{\"schema\":\"drawingml-effect-metadata-v1\",\"kind\":\"scene3d\",\"encounter_order\":1,\"camera_preset\":\"perspectiveFront\",\"light_rig\":\"threePt\",\"light_direction\":\"t\",\"raw_xml_limit_bytes\":65536,\"raw_xml_original_bytes\":93,\"raw_xml_truncated\":false,\"raw_xml_hash_fnv1a64\":\"1aaa735e5676609d\",\"raw_xml\":\"<a:scene3d><a:camera prst=\\\"perspectiveFront\\\"/><a:lightRig rig=\\\"threePt\\\" dir=\\\"t\\\"/></a:scene3d>\"}",
+    "fallback_kind": "preserved-effect-metadata",
+    "reason": "a:scene3d was preserved in source order as typed and raw metadata and not rendered as Office 3D"
+  },
+  {
+    "code": "DRAWINGML_3D_FALLBACK",
+    "family": "shapes",
+    "support_tier": "fallback",
+    "stage": "parsed",
+    "location": {
+      "slide_index": 0,
+      "part_name": "ppt/slides/slide1.xml",
+      "relationship_id": "shape-2-effect-0002",
+      "relationship_type": null,
+      "qualified_element_name": "a:effectDag",
+      "position": {
+        "x": 914400,
+        "y": 914400
+      },
+      "size": {
+        "width": 2743200,
+        "height": 914400
+      }
+    },
+    "raw_reference": "{\"schema\":\"drawingml-effect-metadata-v1\",\"kind\":\"effectDag\",\"encounter_order\":2,\"dag_name\":\"ordered\",\"raw_xml_limit_bytes\":65536,\"raw_xml_original_bytes\":87,\"raw_xml_truncated\":false,\"raw_xml_hash_fnv1a64\":\"059ce700a4388213\",\"raw_xml\":\"<a:effectDag name=\\\"ordered\\\"><a:cont name=\\\"first\\\"/><a:cont name=\\\"second\\\"/></a:effectDag>\"}",
+    "fallback_kind": "preserved-effect-metadata",
+    "reason": "a:effectDag was preserved in source order as typed and raw metadata and not rendered as Office 3D"
+  },
+  {
+    "code": "DRAWINGML_3D_FALLBACK",
+    "family": "shapes",
+    "support_tier": "fallback",
+    "stage": "parsed",
+    "location": {
+      "slide_index": 0,
+      "part_name": "ppt/slides/slide1.xml",
+      "relationship_id": "shape-2-effect-0003",
+      "relationship_type": null,
+      "qualified_element_name": "a:sp3d",
+      "position": {
+        "x": 914400,
+        "y": 914400
+      },
+      "size": {
+        "width": 2743200,
+        "height": 914400
+      }
+    },
+    "raw_reference": "{\"schema\":\"drawingml-effect-metadata-v1\",\"kind\":\"sp3d\",\"encounter_order\":3,\"material\":\"warmMatte\",\"extrusion_height_emu\":\"120000\",\"top_bevel_preset\":\"circle\",\"top_bevel_width_emu\":\"25400\",\"top_bevel_height_emu\":\"12700\",\"raw_xml_limit_bytes\":65536,\"raw_xml_original_bytes\":107,\"raw_xml_truncated\":false,\"raw_xml_hash_fnv1a64\":\"3e8109835781b8d4\",\"raw_xml\":\"<a:sp3d extrusionH=\\\"120000\\\" prstMaterial=\\\"warmMatte\\\"><a:bevelT w=\\\"25400\\\" h=\\\"12700\\\" prst=\\\"circle\\\"/></a:sp3d>\"}",
+    "fallback_kind": "preserved-effect-metadata",
+    "reason": "a:sp3d was preserved in source order as typed and raw metadata and not rendered as Office 3D"
+  }
+]
