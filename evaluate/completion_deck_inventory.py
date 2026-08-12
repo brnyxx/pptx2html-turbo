@@ -24,6 +24,7 @@ class FeatureLike(Protocol):
 
 
 SCENARIO_CANONICAL: Final = {
+    "extensions": "extensions",
     "handout-master": "handout-master",
     "rtl-text": "rtl-text",
     "adjustment-basic": "preset-shape",

@@ -212,8 +212,10 @@ pub fn convert_bytes_with_options_metadata(
     data: &[u8],
     opts: &ConversionOptions,
 ) -> PptxResult<ConversionResult> {
-    let (presentation, notes_comments, timings) = PptxParser::parse_bytes_with_metadata(data)?;
-    let diagnostics = parser::collect_package_diagnostics(data)?;
+    let (presentation, notes_comments, timings, extensions) =
+        PptxParser::parse_bytes_with_metadata(data)?;
+    let mut diagnostics = parser::collect_package_diagnostics(data)?;
+    diagnostics.extend(parser::presentation_extension_diagnostics(&extensions));
     HtmlRenderer::render_with_options_diagnostics(
         &presentation,
         opts,

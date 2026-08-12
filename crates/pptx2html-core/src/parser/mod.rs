@@ -18,6 +18,7 @@ mod notes_comments_parser;
 mod pattern_fill_parser;
 mod picture_bullet_diagnostics;
 mod picture_bullet_parser;
+mod presentation_extension_parser;
 mod preserved_parser;
 pub mod relationships;
 mod slide_parser;
@@ -32,6 +33,7 @@ mod theme_parser;
 mod timing_parser;
 mod xml_utils;
 
+pub(crate) use presentation_extension_parser::diagnostics as presentation_extension_diagnostics;
 pub(crate) use preserved_parser::collect_package_diagnostics;
 
 use std::collections::HashMap;
@@ -45,8 +47,8 @@ use zip::ZipArchive;
 
 use crate::error::{PptxError, PptxResult};
 use crate::model::{
-    Emu, ListStyle, NotesCommentsInventory, Presentation, Shape, ShapeType, Size, TableStyle,
-    TableStyleSourceKind,
+    Emu, ListStyle, NotesCommentsInventory, Presentation, PresentationExtensionMetadata, Shape,
+    ShapeType, Size, TableStyle, TableStyleSourceKind,
 };
 
 #[derive(Debug, Clone)]
@@ -67,7 +69,7 @@ impl PptxParser {
 
     /// Parse PPTX from in-memory byte data.
     pub fn parse_bytes(data: &[u8]) -> PptxResult<Presentation> {
-        Self::parse_bytes_with_metadata(data).map(|(presentation, _, _)| presentation)
+        Self::parse_bytes_with_metadata(data).map(|(presentation, _, _, _)| presentation)
     }
 
     pub(crate) fn parse_bytes_with_metadata(
@@ -76,6 +78,7 @@ impl PptxParser {
         Presentation,
         NotesCommentsInventory,
         Vec<crate::model::timing::ParsedTimingInventory>,
+        Vec<PresentationExtensionMetadata>,
     )> {
         let cursor = Cursor::new(data);
         let mut archive = ZipArchive::new(cursor)?;
@@ -105,6 +108,7 @@ impl PptxParser {
             PptxError::MissingFile("ppt/presentation.xml — not a valid PPTX".to_string())
         })?;
         let (slide_size, slide_refs, default_text_style) = Self::parse_presentation_xml(&pres_xml)?;
+        let presentation_extensions = presentation_extension_parser::parse(&pres_xml);
         presentation.slide_size = slide_size;
         presentation.default_text_style = default_text_style;
 
@@ -353,7 +357,12 @@ impl PptxParser {
         }
 
         // 7. Build presentation (already populated)
-        Ok((presentation, notes_comments, slide_timings))
+        Ok((
+            presentation,
+            notes_comments,
+            slide_timings,
+            presentation_extensions,
+        ))
     }
 
     /// Read a ZIP entry

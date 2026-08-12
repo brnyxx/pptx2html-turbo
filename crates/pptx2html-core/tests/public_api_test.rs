@@ -22,6 +22,41 @@ use pptx2html_core::{
     convert_file, convert_file_with_metadata, convert_file_with_options, get_info,
     get_info_from_bytes,
 };
+
+#[test]
+fn presentation_extensions_are_preserved_as_typed_metadata() {
+    let presentation = r#"<?xml version="1.0" encoding="UTF-8"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ xmlns:demo="urn:pptx2html:demo">
+  <p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>
+  <p:sldSz cx="9144000" cy="6858000"/>
+  <p:extLst>
+    <p:ext uri="{DEMO-EXTENSION}"><demo:payload enabled="1">EXTENSION_SENTINEL</demo:payload></p:ext>
+  </p:extLst>
+</p:presentation>"#;
+    let bytes = fixtures::MinimalPptx::new("<p:sp/>")
+        .with_presentation_xml(presentation)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("extension fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "PRESENTATION_EXTENSION_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].support_tier.as_str(), "fallback");
+    assert_eq!(diagnostics[0].stage.unwrap().as_str(), "parsed");
+    let raw = diagnostics[0]
+        .raw_reference
+        .as_deref()
+        .expect("extension raw reference");
+    assert!(raw.contains("uri={DEMO-EXTENSION}"));
+    assert!(raw.contains("EXTENSION_SENTINEL"));
+}
 use tempfile::tempdir;
 
 #[test]

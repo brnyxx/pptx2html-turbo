@@ -416,8 +416,12 @@ pub const CAPABILITY_TRANSITIONS: (SupportTier, Option<CapabilityStage>, &str, &
     "p:transition",
     "direct",
 );
-pub const CAPABILITY_EXTENSIONS: (SupportTier, Option<CapabilityStage>, &str, &str) =
-    (SupportTier::Unparsed, None, "p:extLst", "unparsed");
+pub const CAPABILITY_EXTENSIONS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:extLst",
+    "fallback",
+);
 pub const CAPABILITY_ALTERNATE_CONTENT: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Fallback,
     Some(CapabilityStage::Parsed),

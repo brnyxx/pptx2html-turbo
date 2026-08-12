@@ -48,7 +48,9 @@ pub use notes_comments::{
 };
 pub use pattern::PatternPreset;
 pub use presentation::{ClrMap, FontScheme, Presentation};
-pub use preserved::{ConversionDiagnostic, DiagnosticLocation, FallbackKind};
+pub use preserved::{
+    ConversionDiagnostic, DiagnosticLocation, FallbackKind, PresentationExtensionMetadata,
+};
 pub use slide::{
     AutoFit, Bullet, BulletAutoNum, BulletChar, BulletSize, ChartBubbleSizeRepresents, ChartData,
     ChartDataLabelPosition, ChartDataLabelSettings, ChartGrouping, ChartMarkerSpec, ChartOfPieType,

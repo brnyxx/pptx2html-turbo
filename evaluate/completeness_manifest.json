@@ -2854,15 +2854,15 @@
       },
       "current": {
         "semantic": {
-          "tier": "unparsed",
-          "stage": "not-applicable"
+          "tier": "fallback",
+          "stage": "parsed"
         },
         "visual": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         },
         "behavioral": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         }
       },
@@ -2887,18 +2887,18 @@
             "kind": "rust-symbol",
             "token": "CAPABILITY_EXTENSIONS",
             "dimension": "semantic",
-            "support_tier": "unparsed",
-            "stage": "not-applicable",
+            "support_tier": "fallback",
+            "stage": "parsed",
             "binding_token": "p:extLst",
-            "disposition_token": "unparsed"
+            "disposition_token": "fallback"
           }
         ],
-        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "focused_test": "crates/pptx2html-core/tests/public_api_test.rs",
         "completion_scenarios": [
           "fallback-unknown-extension"
         ],
         "documentation_anchor": "capability-extensions",
-        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+        "focused_test_case": "presentation_extensions_are_preserved_as_typed_metadata"
       }
     },
     {

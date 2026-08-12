@@ -346,6 +346,15 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "extensions",
+            (("", ""),),
+            presentation_tail=(
+                '<p:extLst><p:ext uri="{DEMO-EXTENSION}">'
+                '<demo:payload xmlns:demo="urn:pptx2html:demo" enabled="1">'
+                'EXTENSION_SENTINEL</demo:payload></p:ext></p:extLst>'
+            ),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (

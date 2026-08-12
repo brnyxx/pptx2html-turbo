@@ -40,6 +40,7 @@ class Deck:
     types: tuple[ContentType, ...] = ()
     backgrounds: tuple[str, ...] = ()
     slide_part_names: tuple[str, ...] = ()
+    presentation_tail: str = ""
 
 
 def slide_part_names(deck: Deck) -> tuple[str, ...]:
@@ -361,7 +362,7 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
             (("rId1", REL + "officeDocument", "ppt/presentation.xml", None),)
         ),
         "ppt/presentation.xml": (
-            f'<?xml version="1.0"?><p:presentation {NS}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster"/></p:sldMasterIdLst><p:sldIdLst>{slide_ids}</p:sldIdLst><p:sldSz cx="9144000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle/></p:presentation>'
+            f'<?xml version="1.0"?><p:presentation {NS}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster"/></p:sldMasterIdLst><p:sldIdLst>{slide_ids}</p:sldIdLst><p:sldSz cx="9144000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle/>{deck.presentation_tail}</p:presentation>'
         ).encode(),
         "ppt/_rels/presentation.xml.rels": relationships_xml(presentation_rels),
         "ppt/presProps.xml": f'<?xml version="1.0"?><p:presentationPr {NS}/>'.encode(),

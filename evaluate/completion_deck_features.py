@@ -77,6 +77,13 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "extensions",
+        "extensions",
+        '<p:ext uri="{DEMO-EXTENSION}">',
+        part="ppt/presentation.xml",
+    ),
+    _f(
+        24,
         "handout-master",
         "handout-master",
         "<p:handoutMaster",

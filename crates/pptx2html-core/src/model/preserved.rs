@@ -1,6 +1,12 @@
 use super::geometry::{CustomGeometry, Position, Size};
 use super::{CapabilityStage, FeatureFamily, SupportTier};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresentationExtensionMetadata {
+    pub uri: String,
+    pub raw_xml: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DiagnosticLocation {
     pub slide_index: Option<usize>,
