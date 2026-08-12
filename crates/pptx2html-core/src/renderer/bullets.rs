@@ -379,7 +379,7 @@ impl HtmlRenderer {
         let mut para_style = String::with_capacity(128);
         let _ = write!(para_style, "text-align: {align}");
         if para.rtl {
-            para_style.push_str("; direction: rtl; unicode-bidi: bidi-override");
+            para_style.push_str("; direction: rtl; unicode-bidi: isolate");
         }
 
         // Line spacing (explicit > inherited), with optional reduction from normAutofit

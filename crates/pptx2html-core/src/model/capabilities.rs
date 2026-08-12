@@ -247,10 +247,10 @@ pub const CAPABILITY_TEXT_BODY: (SupportTier, Option<CapabilityStage>, &str, &st
     "direct",
 );
 pub const CAPABILITY_RTL_TEXT: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Approximate,
+    Some(CapabilityStage::Parsed),
+    "a:pPr",
+    "direct",
 );
 pub const CAPABILITY_BULLETS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Approximate,

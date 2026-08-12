@@ -24,6 +24,7 @@ class FeatureLike(Protocol):
 
 
 SCENARIO_CANONICAL: Final = {
+    "rtl-text": "rtl-text",
     "adjustment-basic": "preset-shape",
     "adjustment-arrows": "preset-shape",
     "adjustment-remaining": "preset-shape",

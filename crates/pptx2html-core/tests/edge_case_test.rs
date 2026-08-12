@@ -3408,7 +3408,7 @@ fn test_rtl_paragraph_is_parsed_and_rendered() {
         <a:bodyPr/>
         <a:p>
           <a:pPr rtl="1"/>
-          <a:r><a:t>مرحبا بالعالم</a:t></a:r>
+          <a:r><a:t>مرحبا PowerPoint 2026 بالعالم</a:t></a:r>
         </a:p>
       </p:txBody>
     </p:sp>"#;
@@ -3430,8 +3430,12 @@ fn test_rtl_paragraph_is_parsed_and_rendered() {
         "Expected RTL direction in HTML: {html}"
     );
     assert!(
-        html.contains("unicode-bidi: bidi-override"),
-        "Expected bidi override in HTML: {html}"
+        html.contains("unicode-bidi: isolate"),
+        "Expected isolated Unicode bidi layout in HTML: {html}"
+    );
+    assert!(
+        !html.contains("unicode-bidi: bidi-override"),
+        "RTL paragraphs must preserve mixed-script Unicode bidi ordering: {html}"
     );
 }
 

@@ -299,6 +299,20 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "rtl-text",
+            (
+                (
+                    '<p:sp><p:nvSpPr><p:cNvPr id="2" name="RTL mixed-script text"/>'
+                    '<p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm>'
+                    '<a:off x="914400" y="914400"/><a:ext cx="7315200" cy="1828800"/>'
+                    '</a:xfrm><a:prstGeom prst="rect"/></p:spPr><p:txBody><a:bodyPr/>'
+                    '<a:lstStyle/><a:p><a:pPr rtl="1"/><a:r><a:rPr lang="ar-SA"/>'
+                    '<a:t>مرحبا PowerPoint 2026 بالعالم</a:t></a:r></a:p></p:txBody></p:sp>',
+                    "",
+                ),
+            ),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (

@@ -48,7 +48,7 @@ See [`README.md`](./README.md) for the intended release-note workflow and how th
 ## Generated PPTX capability registry
 
 <!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->
-<!-- manifest-sha256: 8c42380808bcee5f767f9c7ef377322c21a43fcf68ac95fb6be44ff0152cd77c -->
+<!-- manifest-sha256: 80a022addd42ee1ae9c74931a66e6ccadfd7b9e024bbc5c36102778fe2728c8b -->
 | Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |
 |---|---|---|---|---|
 | <a id="capability-presentation"></a>`presentation` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c07e2810b8d5e13a63436f7b11c3ee961e11b15f61bdc50a1ca260c0738e4a4f` | `29665c44b1b28428449e05099e8b3f5d22f1e577d8eaaf700a7f1c9a1b347de5` |
@@ -69,7 +69,7 @@ See [`README.md`](./README.md) for the intended release-note workflow and how th
 | <a id="capability-group-shape"></a>`group-shape` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `393472e96359637a79aa7a838f6c16db5b9d71b24cb648fefea81e3a646a41fb` | `e5f16afa6c7699ece99d11402306f0119f415730b8889499312d6be6083db36e` |
 | <a id="capability-picture"></a>`picture` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `dffb48ca4b06c68069e0b407c9934ceaceb8dabf447bedac71f10b581a2ac645` | `7199c2265f56c189e0b25a8f38529f37da9174155adb2c46b2e236d3105947f8` |
 | <a id="capability-text-body"></a>`text-body` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `3179eda0c97d469d36443ad0ae40f908c4d9ffaf0808c9ee704a71910119e6d4` | `083e42ef74c2c0f2c2f854b2438bea7c57c58b65f0eb7872434727244c8a54f9` |
-| <a id="capability-rtl-text"></a>`rtl-text` | unparsed/not-applicable<br>unparsed/not-applicable<br>unparsed/not-applicable | fallback/parsed<br>fallback/rendered<br>fallback/not-applicable | `f5c277fa895683dba7711e9263132502dc77fc0fcb85c33f5796aa4301663d75` | `d79d518b8f1ac1f2ff4687ca7edb1638d6516c44e6ca3ce351faffa8e150d009` |
+| <a id="capability-rtl-text"></a>`rtl-text` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `fbb1190906b43337ab3fd9e33bfc218617750ab41ac88aa65e0d458a4315f542` | `00e7947e6402506a10694288ebc34504577074e467be4ff65ec677d0f7313295` |
 | <a id="capability-bullets"></a>`bullets` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `ed157a688196eea774392c88ae5db59cb6cfc0f7167532360488ca899ebdff3d` | `7083d9593322381b21f9ac938277da2637c57b8e9663fe7baf886efe289ff341` |
 | <a id="capability-picture-bullets"></a>`picture-bullets` | fallback/parsed<br>fallback/rendered<br>fallback/not-applicable | fallback/parsed<br>fallback/rendered<br>fallback/not-applicable | `7d1c21ce2540da7b56a5a48196f9f4d69d56c985e23afd6772a5b96d1de5508f` | `d4d97387d415bb350ee62522151319c7190d7a60f9fc6a33ad16fd2953d680d0` |
 | <a id="capability-fills"></a>`fills` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `f7a7e6203cadf6138eda6a0262ea7f8413a200044cbaa8be71445d6ee0d08e7b` | `27f0d1439c068d3dcdc802df5c98749ad63a526753bf4e411cd97c0a5025cac2` |

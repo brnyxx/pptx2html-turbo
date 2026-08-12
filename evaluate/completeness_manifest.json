@@ -1204,34 +1204,36 @@
     {
       "id": "rtl-text",
       "family": "drawingml-text",
-      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
-      "source_status": "unavailable",
-      "ooxml": {},
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.textparagraphpropertiestype.righttoleft?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:pPr"
+      },
       "fallback_policy": {
         "kind": "text-placeholder",
         "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
       },
       "current": {
         "semantic": {
-          "tier": "unparsed",
-          "stage": "not-applicable"
+          "tier": "approximate",
+          "stage": "parsed"
         },
         "visual": {
-          "tier": "unparsed",
-          "stage": "not-applicable"
+          "tier": "approximate",
+          "stage": "rendered"
         },
         "behavioral": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         }
       },
       "target": {
         "semantic": {
-          "tier": "fallback",
+          "tier": "approximate",
           "stage": "parsed"
         },
         "visual": {
-          "tier": "fallback",
+          "tier": "approximate",
           "stage": "rendered"
         },
         "behavioral": {
@@ -1246,22 +1248,22 @@
             "kind": "rust-symbol",
             "token": "CAPABILITY_RTL_TEXT",
             "dimension": "semantic",
-            "support_tier": "unparsed",
-            "stage": "not-applicable",
-            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
-            "disposition_token": "unparsed"
+            "support_tier": "approximate",
+            "stage": "parsed",
+            "binding_token": "a:pPr",
+            "disposition_token": "direct"
           }
         ],
-        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "focused_test": "crates/pptx2html-core/tests/edge_case_test.rs",
         "scenario_exemption": {
-          "reason": "deferred-after-task-23",
+          "reason": "rtl-deck-not-yet-in-completion-corpus",
           "dispositions": [
             "current",
             "target"
           ]
         },
         "documentation_anchor": "capability-rtl-text",
-        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+        "focused_test_case": "test_rtl_paragraph_is_parsed_and_rendered"
       }
     },
     {
