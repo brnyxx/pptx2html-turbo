@@ -128,6 +128,45 @@ fn theme_and_non_shape_advanced_effects_emit_specialized_raw_fallbacks() {
 }
 
 #[test]
+fn leading_zero_shape_id_keeps_one_layer_and_one_truthful_diagnostic() {
+    let shape = EFFECT_SHAPE.replace("id=\"2\"", "id=\"0017\"");
+    let result = convert_bytes_with_metadata(&MinimalPptx::new(&shape).build())
+        .expect("convert leading-zero shape identity");
+
+    assert_eq!(result.html.matches("class=\"shape-reflection\"").count(), 1);
+    let reflection_diagnostics = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.code.as_str(),
+                "DRAWINGML_REFLECTION_APPROXIMATE" | "DRAWINGML_REFLECTION_FALLBACK"
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(reflection_diagnostics.len(), 1);
+    assert_eq!(
+        reflection_diagnostics[0].code,
+        "DRAWINGML_REFLECTION_APPROXIMATE"
+    );
+    assert_eq!(
+        reflection_diagnostics[0]
+            .location
+            .relationship_id
+            .as_deref(),
+        Some("shape-17-effect-0000")
+    );
+    assert_eq!(
+        reflection_diagnostics[0].support_tier,
+        SupportTier::Approximate
+    );
+    assert_eq!(
+        reflection_diagnostics[0].stage,
+        Some(CapabilityStage::Rendered)
+    );
+}
+
+#[test]
 fn hostile_reflection_values_are_clamped_to_finite_bounded_css() {
     let shape = EFFECT_SHAPE
         .replace("blurRad=\"40000\"", "blurRad=\"999999999999999999999\"")

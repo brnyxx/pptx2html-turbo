@@ -139,7 +139,9 @@ fn track_shape_state(
         return;
     }
     if local == "cNvPr" && stack.last().is_some_and(|parent| parent == "nvSpPr") {
-        *current_shape_id = embedded_parser::attribute_value(element, "id");
+        *current_shape_id = embedded_parser::attribute_value(element, "id")
+            .and_then(|value| value.parse::<u32>().ok())
+            .map(|value| value.to_string());
     } else if local == "off" && stack.iter().any(|name| name == "spPr") {
         *position = Some(Position {
             x: crate::model::Emu::parse_emu(
