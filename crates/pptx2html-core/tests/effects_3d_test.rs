@@ -169,6 +169,144 @@ fn theme_and_non_shape_advanced_effects_emit_specialized_raw_fallbacks() {
 }
 
 #[test]
+fn typed_effects_require_drawingml_descendants_owner_paths_and_unqualified_attributes() {
+    let shape = r#"
+<p:sp xmlns:evil="urn:evil">
+  <p:nvSpPr><p:cNvPr id="31" evil:id="999" name="namespace adversary"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="914400"/></a:xfrm>
+    <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+    <a:effectLst><a:reflection evil:blurRad="999999999" blurRad="12700" stA="50000"/></a:effectLst>
+    <a:scene3d>
+      <evil:camera prst="evilCamera"><evil:rot lat="900" lon="901" rev="902"/></evil:camera>
+      <a:camera evil:prst="evilAttrCamera" prst="perspectiveFront"><evil:rot lat="800"/><a:rot evil:lat="700" lat="100" lon="200" rev="300"/></a:camera>
+      <evil:camera prst="evilAfterCamera"><evil:rot lat="801"/></evil:camera>
+      <evil:lightRig rig="evilLight" dir="b"><a:rot lat="600"/></evil:lightRig>
+      <a:lightRig evil:rig="evilAttrLight" rig="threePt" dir="t"><evil:rot lat="500"/><a:rot lat="400" lon="500" rev="600"/></a:lightRig>
+      <evil:lightRig rig="evilAfterLight"><evil:rot lat="501"/></evil:lightRig>
+      <a:cont><a:camera prst="wrongOwnerCamera"/><a:lightRig rig="wrongOwnerLight"/></a:cont>
+    </a:scene3d>
+    <a:sp3d evil:prstMaterial="evilMaterial" prstMaterial="warmMatte" extrusionH="120000">
+      <evil:bevelT prst="evilTop" w="999" h="999"/>
+      <a:cont><a:bevelT prst="wrongOwnerTop" w="888" h="888"/></a:cont>
+      <a:bevelT evil:prst="evilAttrTop" prst="circle" evil:w="777" w="25400" h="12700"/>
+      <evil:bevelT prst="evilAfterTop" w="666"/>
+      <evil:bevelB prst="evilBottom"/>
+      <a:bevelB prst="angle" w="12700" h="6350"/>
+      <evil:bevelB prst="evilAfterBottom"/>
+    </a:sp3d>
+  </p:spPr>
+</p:sp>
+"#;
+    let result = convert_bytes_with_metadata(&MinimalPptx::new(shape).build())
+        .expect("convert descendant and attribute namespace adversary");
+
+    assert_eq!(result.html.matches("class=\"shape-reflection\"").count(), 1);
+    let reflection = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "DRAWINGML_REFLECTION_APPROXIMATE")
+        .expect("direct valid reflection remains rendered");
+    let reflection_metadata = reflection
+        .raw_reference
+        .as_deref()
+        .expect("reflection metadata");
+    assert!(reflection_metadata.contains("\"blur_radius_emu\":\"12700\""));
+    assert!(!reflection_metadata.contains("\"blur_radius_emu\":\"999999999\""));
+    let reflection_start = result
+        .html
+        .find("class=\"shape-reflection\"")
+        .expect("reflection layer");
+    assert!(result.html[reflection_start..].contains("filter: blur(1.00pt)"));
+
+    let scene = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.location.qualified_element_name.as_deref() == Some("a:scene3d")
+        })
+        .and_then(|diagnostic| diagnostic.raw_reference.as_deref())
+        .and_then(|metadata| {
+            metadata
+                .split_once(",\"raw_xml_limit_bytes\"")
+                .map(|pair| pair.0)
+        })
+        .expect("typed scene metadata");
+    for expected in [
+        "\"camera_preset\":\"perspectiveFront\"",
+        "\"camera_latitude\":\"100\"",
+        "\"light_rig\":\"threePt\"",
+        "\"light_latitude\":\"400\"",
+    ] {
+        assert!(scene.contains(expected), "missing {expected}");
+    }
+    for rejected in [
+        "evilCamera",
+        "evilAttrCamera",
+        "evilAfterCamera",
+        "wrongOwnerCamera",
+        "evilLight",
+        "evilAttrLight",
+        "evilAfterLight",
+        "wrongOwnerLight",
+        "\"camera_latitude\":\"700\"",
+    ] {
+        assert!(
+            !scene.contains(rejected),
+            "trusted foreign value {rejected}"
+        );
+    }
+
+    let shape_3d = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.location.qualified_element_name.as_deref() == Some("a:sp3d"))
+        .and_then(|diagnostic| diagnostic.raw_reference.as_deref())
+        .and_then(|metadata| {
+            metadata
+                .split_once(",\"raw_xml_limit_bytes\"")
+                .map(|pair| pair.0)
+        })
+        .expect("typed shape 3D metadata");
+    for expected in [
+        "\"material\":\"warmMatte\"",
+        "\"top_bevel_preset\":\"circle\"",
+        "\"top_bevel_width_emu\":\"25400\"",
+        "\"bottom_bevel_preset\":\"angle\"",
+    ] {
+        assert!(shape_3d.contains(expected), "missing {expected}");
+    }
+    for rejected in [
+        "evilMaterial",
+        "evilTop",
+        "evilAttrTop",
+        "evilAfterTop",
+        "wrongOwnerTop",
+        "evilBottom",
+        "evilAfterBottom",
+        "\"top_bevel_width_emu\":\"777\"",
+    ] {
+        assert!(
+            !shape_3d.contains(rejected),
+            "trusted foreign value {rejected}"
+        );
+    }
+
+    for qualified_name in [
+        "evil:camera",
+        "evil:rot",
+        "evil:lightRig",
+        "evil:bevelT",
+        "evil:bevelB",
+    ] {
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "OOXML_ELEMENT_UNSUPPORTED"
+                && diagnostic.location.qualified_element_name.as_deref() == Some(qualified_name)
+        }));
+    }
+}
+
+#[test]
 fn leading_zero_shape_id_keeps_one_layer_and_one_truthful_diagnostic() {
     let shape = EFFECT_SHAPE.replace("id=\"2\"", "id=\"0017\"");
     let result = convert_bytes_with_metadata(&MinimalPptx::new(&shape).build())

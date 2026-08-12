@@ -5,7 +5,7 @@ use quick_xml::name::ResolveResult;
 use quick_xml::reader::NsReader;
 
 use super::preserved_parser::{append_empty_element, append_end_element, append_start_element};
-use super::{embedded_parser, xml_utils};
+use super::xml_utils;
 use crate::model::{
     CapabilityStage, ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily,
     Position, Size, SupportTier,
@@ -31,7 +31,17 @@ pub(crate) fn collect(part_name: &str, xml: &str, diagnostics: &mut Vec<Conversi
                 let local = xml_utils::local_name(element.name().as_ref()).to_owned();
                 if let Some(active) = capture.as_mut() {
                     append_start_element(&element, &local, &mut active.raw_xml);
-                    active.properties.observe(&local, &element);
+                    active.properties.observe(
+                        active.kind,
+                        &active.path,
+                        &local,
+                        &namespace,
+                        &element,
+                    );
+                    active.path.push(Ancestor {
+                        local: local.clone(),
+                        namespace: Namespace::from_resolved(&namespace),
+                    });
                     active.depth += 1;
                 } else if is_drawingml(&namespace)
                     && let Some(kind) = EffectKind::from_local(&local)
@@ -45,6 +55,10 @@ pub(crate) fn collect(part_name: &str, xml: &str, diagnostics: &mut Vec<Conversi
                         depth: 1,
                         raw_xml,
                         properties: EffectProperties::from_root(kind, &element),
+                        path: vec![Ancestor {
+                            local: local.clone(),
+                            namespace: Namespace::Drawing,
+                        }],
                         position,
                         size,
                         encounter,
@@ -68,7 +82,13 @@ pub(crate) fn collect(part_name: &str, xml: &str, diagnostics: &mut Vec<Conversi
                 let local = xml_utils::local_name(element.name().as_ref()).to_owned();
                 if let Some(active) = capture.as_mut() {
                     append_empty_element(&element, &local, &mut active.raw_xml);
-                    active.properties.observe(&local, &element);
+                    active.properties.observe(
+                        active.kind,
+                        &active.path,
+                        &local,
+                        &namespace,
+                        &element,
+                    );
                 } else if is_drawingml(&namespace)
                     && let Some(kind) = EffectKind::from_local(&local)
                 {
@@ -83,6 +103,7 @@ pub(crate) fn collect(part_name: &str, xml: &str, diagnostics: &mut Vec<Conversi
                             depth: 0,
                             raw_xml,
                             properties: EffectProperties::from_root(kind, &element),
+                            path: Vec::new(),
                             position,
                             size,
                             encounter,
@@ -118,6 +139,9 @@ pub(crate) fn collect(part_name: &str, xml: &str, diagnostics: &mut Vec<Conversi
                 if let Some(active) = capture.as_mut() {
                     append_end_element(&element, &local, &mut active.raw_xml);
                     active.depth = active.depth.saturating_sub(1);
+                    if active.depth > 0 {
+                        active.path.pop();
+                    }
                     if active.depth == 0
                         && let Some(active) = capture.take()
                     {
@@ -183,7 +207,7 @@ fn track_shape_state(
             parent.local == "nvSpPr" && parent.namespace == Namespace::Presentation
         })
     {
-        *current_shape_id = embedded_parser::attribute_value(element, "id")
+        *current_shape_id = attribute(element, "id")
             .and_then(|value| value.parse::<u32>().ok())
             .map(|value| value.to_string());
     } else if local == "off"
@@ -191,24 +215,16 @@ fn track_shape_state(
         && valid_direct_shape_ancestors(stack)
     {
         *position = Some(Position {
-            x: crate::model::Emu::parse_emu(
-                &embedded_parser::attribute_value(element, "x").unwrap_or_default(),
-            ),
-            y: crate::model::Emu::parse_emu(
-                &embedded_parser::attribute_value(element, "y").unwrap_or_default(),
-            ),
+            x: crate::model::Emu::parse_emu(&attribute(element, "x").unwrap_or_default()),
+            y: crate::model::Emu::parse_emu(&attribute(element, "y").unwrap_or_default()),
         });
     } else if local == "ext"
         && Namespace::from_resolved(namespace) == Namespace::Drawing
         && valid_direct_shape_ancestors(stack)
     {
         *size = Some(Size {
-            width: crate::model::Emu::parse_emu(
-                &embedded_parser::attribute_value(element, "cx").unwrap_or_default(),
-            ),
-            height: crate::model::Emu::parse_emu(
-                &embedded_parser::attribute_value(element, "cy").unwrap_or_default(),
-            ),
+            width: crate::model::Emu::parse_emu(&attribute(element, "cx").unwrap_or_default()),
+            height: crate::model::Emu::parse_emu(&attribute(element, "cy").unwrap_or_default()),
         });
     }
 }
@@ -322,6 +338,7 @@ struct Capture {
     depth: usize,
     raw_xml: String,
     properties: EffectProperties,
+    path: Vec<Ancestor>,
     position: Option<Position>,
     size: Option<Size>,
     encounter: usize,
@@ -401,33 +418,43 @@ impl EffectProperties {
         self.rotate_with_shape = attribute(element, "rotWithShape");
     }
 
-    fn observe(&mut self, local: &str, element: &BytesStart<'_>) {
-        match local {
-            "camera" => {
+    fn observe(
+        &mut self,
+        kind: EffectKind,
+        path: &[Ancestor],
+        local: &str,
+        namespace: &ResolveResult<'_>,
+        element: &BytesStart<'_>,
+    ) {
+        if !is_drawingml(namespace) {
+            return;
+        }
+        match (kind, local) {
+            (EffectKind::Scene3d, "camera") if path_is(path, &["scene3d"]) => {
                 self.camera_preset = attribute(element, "prst");
                 self.camera_fov = attribute(element, "fov");
                 self.camera_zoom = attribute(element, "zoom");
             }
-            "lightRig" => {
+            (EffectKind::Scene3d, "lightRig") if path_is(path, &["scene3d"]) => {
                 self.light_rig = attribute(element, "rig");
                 self.light_direction = attribute(element, "dir");
             }
-            "rot" if self.light_rig.is_some() => {
-                self.light_latitude = attribute(element, "lat");
-                self.light_longitude = attribute(element, "lon");
-                self.light_revolution = attribute(element, "rev");
-            }
-            "rot" => {
+            (EffectKind::Scene3d, "rot") if path_is(path, &["scene3d", "camera"]) => {
                 self.camera_latitude = attribute(element, "lat");
                 self.camera_longitude = attribute(element, "lon");
                 self.camera_revolution = attribute(element, "rev");
             }
-            "bevelT" => {
+            (EffectKind::Scene3d, "rot") if path_is(path, &["scene3d", "lightRig"]) => {
+                self.light_latitude = attribute(element, "lat");
+                self.light_longitude = attribute(element, "lon");
+                self.light_revolution = attribute(element, "rev");
+            }
+            (EffectKind::Shape3d, "bevelT") if path_is(path, &["sp3d"]) => {
                 self.top_bevel_preset = attribute(element, "prst");
                 self.top_bevel_width_emu = attribute(element, "w");
                 self.top_bevel_height_emu = attribute(element, "h");
             }
-            "bevelB" => {
+            (EffectKind::Shape3d, "bevelB") if path_is(path, &["sp3d"]) => {
                 self.bottom_bevel_preset = attribute(element, "prst");
                 self.bottom_bevel_width_emu = attribute(element, "w");
                 self.bottom_bevel_height_emu = attribute(element, "h");
@@ -489,6 +516,13 @@ impl EffectProperties {
     }
 }
 
+fn path_is(path: &[Ancestor], expected: &[&str]) -> bool {
+    path.len() == expected.len()
+        && path.iter().zip(expected).all(|(ancestor, expected)| {
+            ancestor.namespace == Namespace::Drawing && ancestor.local == *expected
+        })
+}
+
 fn write_bounded_typed_field(json: &mut String, name: &str, value: &str) {
     let end = floor_char_boundary(value, TYPED_VALUE_LIMIT_BYTES);
     write_json_string_field(json, name, &value[..end]);
@@ -503,7 +537,10 @@ fn write_bounded_typed_field(json: &mut String, name: &str, value: &str) {
 }
 
 fn attribute(element: &BytesStart<'_>, name: &str) -> Option<String> {
-    embedded_parser::attribute_value(element, name)
+    element.attributes().flatten().find_map(|attribute| {
+        (attribute.key.as_ref() == name.as_bytes())
+            .then(|| String::from_utf8_lossy(&attribute.value).into_owned())
+    })
 }
 
 fn diagnostic(part_name: &str, capture: Capture) -> ConversionDiagnostic {

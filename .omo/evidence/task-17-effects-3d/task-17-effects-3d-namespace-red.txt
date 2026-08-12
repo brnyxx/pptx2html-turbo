@@ -1,0 +1,24 @@
+$ cargo test -p pptx2html-core --test effects_3d_test typed_effects_require_drawingml_descendants_owner_paths_and_unqualified_attributes -- --exact
+
+   Compiling pptx2html-core v1.1.0 (/Users/adminstrator/Desktop/hyungjoo-drb/personal/pptx2html-turbo-task-17/crates/pptx2html-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.07s
+     Running tests/effects_3d_test.rs (target/debug/deps/effects_3d_test-1fde52a6391f535d)
+
+running 1 test
+test typed_effects_require_drawingml_descendants_owner_paths_and_unqualified_attributes ... FAILED
+
+failures:
+
+---- typed_effects_require_drawingml_descendants_owner_paths_and_unqualified_attributes stdout ----
+
+thread 'typed_effects_require_drawingml_descendants_owner_paths_and_unqualified_attributes' (205758378) panicked at crates/pptx2html-core/tests/effects_3d_test.rs:210:5:
+assertion failed: reflection_metadata.contains("\"blur_radius_emu\":\"12700\"")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    typed_effects_require_drawingml_descendants_owner_paths_and_unqualified_attributes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p pptx2html-core --test effects_3d_test`

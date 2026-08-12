@@ -1,17 +1,17 @@
-   Compiling pptx2html-core v1.1.0 (/Users/adminstrator/Desktop/hyungjoo-drb/personal/pptx2html-turbo-task-17/crates/pptx2html-core)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.38s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
      Running tests/effects_3d_test.rs (target/debug/deps/effects_3d_test-1fde52a6391f535d)
 
-running 10 tests
+running 11 tests
 test fixtures::fixture_api_contract::minimal_fixture_custom_xml_options_build_a_package ... ok
 test fixtures::fixture_api_contract::minimal_fixture_relationship_and_extra_file_options_build_a_package ... ok
 test spoofed_shape_ancestors_never_claim_a_rendered_reflection ... ok
 test hostile_reflection_values_are_clamped_to_finite_bounded_css ... ok
+test typed_effects_require_drawingml_descendants_owner_paths_and_unqualified_attributes ... ok
 test leading_zero_shape_id_keeps_one_layer_and_one_truthful_diagnostic ... ok
-test fixtures::fixture_api_contract::feature_fixture_builders_create_and_validate_a_package ... ok
 test theme_and_non_shape_advanced_effects_emit_specialized_raw_fallbacks ... ok
 test renders_bounded_reflection_and_truthful_stable_diagnostics ... ok
+test fixtures::fixture_api_contract::feature_fixture_builders_create_and_validate_a_package ... ok
 test huge_effect_dag_has_bounded_raw_payload_with_loss_metadata ... ok
 test effect_encounter_order_is_numeric_past_four_digits ... ok
 
-test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
