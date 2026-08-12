@@ -1,4 +1,19 @@
-from typing import Optional
+from typing import Literal, Optional
+
+SupportTier = Literal["exact", "approximate", "fallback", "unparsed"]
+CapabilityStage = Literal["parsed", "resolved", "rendered", "fidelity-tested"]
+FeatureFamily = Literal["shapes", "text", "tables", "images", "layout", "charts", "media", "unsupported"]
+FallbackKind = Literal[
+    "smartart-placeholder",
+    "ole-placeholder",
+    "math-placeholder",
+    "custom-geometry-placeholder",
+    "preserved-part",
+    "ignored-relationship",
+    "unknown-element",
+    "table-style-definition-unavailable",
+    "action-metadata",
+]
 
 class PresentationInfo:
     """Presentation metadata."""
@@ -15,9 +30,42 @@ class UnresolvedElement:
     raw_xml: Optional[str]
     data_model: Optional[str]
 
+class DiagnosticPosition:
+    """Position in integer OOXML EMUs."""
+    x: int
+    y: int
+
+class DiagnosticSize:
+    """Size in integer OOXML EMUs."""
+    width: int
+    height: int
+
+class DiagnosticLocation:
+    """Typed source location for a conversion diagnostic."""
+    slide_index: Optional[int]
+    part_name: Optional[str]
+    relationship_id: Optional[str]
+    relationship_type: Optional[str]
+    qualified_element_name: Optional[str]
+    position: Optional[DiagnosticPosition]
+    size: Optional[DiagnosticSize]
+
+class ConversionDiagnostic:
+    """Read-only conversion diagnostic."""
+    code: str
+    family: FeatureFamily
+    support_tier: SupportTier
+    stage: Optional[CapabilityStage]
+    location: DiagnosticLocation
+    raw_reference: Optional[str]
+    fallback_kind: FallbackKind
+    reason: str
+
 class ConversionResult:
     """Result of PPTX conversion with metadata."""
     html: str
+    diagnostics: list[ConversionDiagnostic]
+    diagnostics_json: str
     unresolved_elements: list[UnresolvedElement]
     slide_count: int
 

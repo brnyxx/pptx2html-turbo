@@ -1,8 +1,10 @@
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use log::info;
 
+use pptx2html_core::model::{ConversionDiagnostic, SupportTier};
 use pptx2html_core::{ConversionOptions, ExternalAsset};
 
 /// PPTX to HTML converter — preserves original layout
@@ -39,6 +41,14 @@ struct Cli {
     /// Whole-slide zoom factor (e.g. 2.0 = 2x). Keeps coordinates and ratios unchanged.
     #[arg(long, default_value_t = 1.0)]
     scale: f64,
+
+    /// Write the canonical conversion diagnostics JSON array to this path
+    #[arg(long, visible_alias = "diagnostics-json", value_name = "PATH")]
+    diagnostics: Option<PathBuf>,
+
+    /// Exit 2 after writing outputs when fallback diagnostics are present
+    #[arg(long)]
+    fail_on_fallback: bool,
 }
 
 /// Parse a slide selection string like "1,3,5-8" into a sorted list of 1-based indices
@@ -93,9 +103,204 @@ fn write_external_assets(
     Ok(())
 }
 
+fn report_diagnostics(diagnostics: &[ConversionDiagnostic]) -> bool {
+    if diagnostics.is_empty() {
+        return false;
+    }
+    let mut counts = BTreeMap::<&str, usize>::new();
+    let mut has_fallback = false;
+    for diagnostic in diagnostics {
+        *counts.entry(&diagnostic.code).or_default() += 1;
+        has_fallback |= matches!(
+            diagnostic.support_tier,
+            SupportTier::Fallback | SupportTier::Unparsed
+        );
+    }
+    let summary = counts
+        .into_iter()
+        .map(|(code, count)| format!("{code}={count}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    eprintln!("Conversion diagnostics ({}): {summary}", diagnostics.len());
+    has_fallback
+}
+
+fn stable_resolved_path(path: &Path) -> Result<PathBuf, String> {
+    stable_resolved_path_inner(path, 0)
+}
+
+fn stable_resolved_path_inner(path: &Path, symlink_depth: usize) -> Result<PathBuf, String> {
+    const MAX_SYMLINK_DEPTH: usize = 40;
+    if symlink_depth > MAX_SYMLINK_DEPTH {
+        return Err(format!(
+            "failed to resolve path {}: too many symbolic links",
+            path.display()
+        ));
+    }
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|error| format!("failed to resolve path {}: {error}", path.display()))?
+            .join(path)
+    };
+
+    let mut ancestor = absolute.as_path();
+    loop {
+        match std::fs::canonicalize(ancestor) {
+            Ok(resolved_ancestor) => {
+                let suffix = absolute.strip_prefix(ancestor).map_err(|error| {
+                    format!("failed to resolve path {}: {error}", path.display())
+                })?;
+                return Ok(normalize_path(&resolved_ancestor.join(suffix)));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(ancestor).is_ok_and(|metadata| metadata.is_symlink()) {
+                    let target = std::fs::read_link(ancestor).map_err(|error| {
+                        format!("failed to resolve symlink {}: {error}", ancestor.display())
+                    })?;
+                    let target = if target.is_absolute() {
+                        target
+                    } else {
+                        ancestor.parent().unwrap_or(Path::new("/")).join(target)
+                    };
+                    let resolved_target = stable_resolved_path_inner(&target, symlink_depth + 1)?;
+                    let suffix = absolute.strip_prefix(ancestor).map_err(|error| {
+                        format!("failed to resolve path {}: {error}", path.display())
+                    })?;
+                    return Ok(normalize_path(&resolved_target.join(suffix)));
+                }
+                ancestor = ancestor.parent().ok_or_else(|| {
+                    format!(
+                        "failed to resolve path {}: no existing ancestor",
+                        path.display()
+                    )
+                })?;
+            }
+            Err(error) => {
+                return Err(format!(
+                    "failed to resolve path {}: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+        }
+    }
+    normalized
+}
+
+#[cfg(unix)]
+fn same_file_identity(left: &Path, right: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    let (Ok(left), Ok(right)) = (std::fs::metadata(left), std::fs::metadata(right)) else {
+        return false;
+    };
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(windows)]
+fn same_file_identity(left: &Path, right: &Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    let (Ok(left), Ok(right)) = (std::fs::metadata(left), std::fs::metadata(right)) else {
+        return false;
+    };
+    matches!(
+        (
+            left.volume_serial_number(),
+            left.file_index(),
+            right.volume_serial_number(),
+            right.file_index(),
+        ),
+        (Some(left_volume), Some(left_index), Some(right_volume), Some(right_index))
+            if left_volume == right_volume && left_index == right_index
+    )
+}
+
+#[cfg(not(any(unix, windows)))]
+fn same_file_identity(_left: &Path, _right: &Path) -> bool {
+    false
+}
+
+fn reject_sidecar_collision(
+    sidecar: Option<&Path>,
+    protected_paths: &[(PathBuf, &'static str)],
+) -> Result<(), String> {
+    let Some(sidecar) = sidecar else {
+        return Ok(());
+    };
+    let resolved_sidecar = stable_resolved_path(sidecar)?;
+    for (protected_path, kind) in protected_paths {
+        let resolved_protected = stable_resolved_path(protected_path)?;
+        if resolved_sidecar == resolved_protected || same_file_identity(sidecar, protected_path) {
+            return Err(format!(
+                "diagnostics path {} has the same resolved path as {kind} {}",
+                sidecar.display(),
+                protected_path.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn write_diagnostics_sidecar(path: Option<&Path>, json: &str) -> Result<(), String> {
+    let Some(path) = path else {
+        return Ok(());
+    };
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "failed to create diagnostics directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    std::fs::write(path, json)
+        .map_err(|error| format!("failed to write diagnostics {}: {error}", path.display()))
+}
+
+fn finish_diagnostics(
+    diagnostics: &[ConversionDiagnostic],
+    diagnostics_json: &str,
+    sidecar: Option<&Path>,
+    fail_on_fallback: bool,
+) -> Result<bool, String> {
+    write_diagnostics_sidecar(sidecar, diagnostics_json)?;
+    let has_fallback = report_diagnostics(diagnostics);
+    Ok(fail_on_fallback && has_fallback)
+}
+
 fn main() {
     env_logger::init();
     let cli = Cli::parse();
+
+    if let Err(error) = reject_sidecar_collision(
+        cli.diagnostics.as_deref(),
+        &[(cli.input.clone(), "input PPTX")],
+    ) {
+        eprintln!("Invalid diagnostics path: {error}");
+        std::process::exit(1);
+    }
 
     // --info: print metadata and exit
     if cli.info {
@@ -141,12 +346,10 @@ fn main() {
 
     if cli.format == "multi" {
         // Multi-file output: one HTML per slide
-        let output_dir = cli.output.unwrap_or(cli.input.with_extension(""));
-        if let Err(e) = std::fs::create_dir_all(&output_dir) {
-            eprintln!("Failed to create output directory: {e}");
-            std::process::exit(1);
-        }
-
+        let output_dir = cli
+            .output
+            .clone()
+            .unwrap_or_else(|| cli.input.with_extension(""));
         // Determine which slides to render
         let info = match pptx2html_core::get_info(&cli.input) {
             Ok(info) => info,
@@ -160,6 +363,45 @@ fn main() {
             Some(indices) => indices.clone(),
             None => (1..=info.slide_count).collect(),
         };
+        let html_outputs = indices_to_render
+            .iter()
+            .map(|idx| output_dir.join(format!("slide-{idx}.html")))
+            .collect::<Vec<_>>();
+        let html_protected_paths = html_outputs
+            .iter()
+            .cloned()
+            .map(|path| (path, "HTML output"))
+            .collect::<Vec<_>>();
+        if let Err(error) =
+            reject_sidecar_collision(cli.diagnostics.as_deref(), &html_protected_paths)
+        {
+            eprintln!("Invalid diagnostics path: {error}");
+            std::process::exit(1);
+        }
+        let aggregate = match pptx2html_core::convert_file_with_options_metadata(&cli.input, &opts)
+        {
+            Ok(result) => result,
+            Err(error) => {
+                eprintln!("Conversion failed: {error}");
+                std::process::exit(1);
+            }
+        };
+
+        let mut protected_paths = html_protected_paths;
+        protected_paths.extend(aggregate.external_assets.iter().map(|asset| {
+            (
+                output_dir.join(&asset.relative_path),
+                "emitted external asset",
+            )
+        }));
+        if let Err(error) = reject_sidecar_collision(cli.diagnostics.as_deref(), &protected_paths) {
+            eprintln!("Invalid diagnostics path: {error}");
+            std::process::exit(1);
+        }
+        if let Err(e) = std::fs::create_dir_all(&output_dir) {
+            eprintln!("Failed to create output directory: {e}");
+            std::process::exit(1);
+        }
 
         for &idx in &indices_to_render {
             let per_slide_opts = ConversionOptions {
@@ -188,36 +430,86 @@ fn main() {
                 }
             }
         }
+        let diagnostics_json = aggregate.diagnostics_json();
+        let strict_failure = match finish_diagnostics(
+            &aggregate.diagnostics,
+            &diagnostics_json,
+            cli.diagnostics.as_deref(),
+            cli.fail_on_fallback,
+        ) {
+            Ok(strict_failure) => strict_failure,
+            Err(error) => {
+                eprintln!("Failed to write diagnostics: {error}");
+                std::process::exit(1);
+            }
+        };
         println!(
             "Conversion complete: {} slides → {}",
             indices_to_render.len(),
             output_dir.display()
         );
+        if strict_failure {
+            std::process::exit(2);
+        }
     } else {
         // Single-file output
         let output = cli
             .output
+            .clone()
             .unwrap_or_else(|| cli.input.with_extension("html"));
+        if let Err(error) = reject_sidecar_collision(
+            cli.diagnostics.as_deref(),
+            &[(output.clone(), "HTML output")],
+        ) {
+            eprintln!("Invalid diagnostics path: {error}");
+            std::process::exit(1);
+        }
 
         match pptx2html_core::convert_file_with_options_metadata(&cli.input, &opts) {
             Ok(result) => {
+                let asset_base = output.parent().unwrap_or(Path::new("."));
+                let mut protected_paths = vec![(output.clone(), "HTML output")];
+                protected_paths.extend(result.external_assets.iter().map(|asset| {
+                    (
+                        asset_base.join(&asset.relative_path),
+                        "emitted external asset",
+                    )
+                }));
+                if let Err(error) =
+                    reject_sidecar_collision(cli.diagnostics.as_deref(), &protected_paths)
+                {
+                    eprintln!("Invalid diagnostics path: {error}");
+                    std::process::exit(1);
+                }
                 if let Err(e) = std::fs::write(&output, &result.html) {
                     eprintln!("Failed to write output file: {e}");
                     std::process::exit(1);
                 }
-                let asset_base = output
-                    .parent()
-                    .unwrap_or(std::path::Path::new("."))
-                    .to_path_buf();
-                if let Err(e) = write_external_assets(&asset_base, &result.external_assets) {
+                if let Err(e) = write_external_assets(asset_base, &result.external_assets) {
                     eprintln!("Failed to write external assets: {e}");
                     std::process::exit(1);
                 }
+                let diagnostics_json = result.diagnostics_json();
+                let strict_failure = match finish_diagnostics(
+                    &result.diagnostics,
+                    &diagnostics_json,
+                    cli.diagnostics.as_deref(),
+                    cli.fail_on_fallback,
+                ) {
+                    Ok(strict_failure) => strict_failure,
+                    Err(error) => {
+                        eprintln!("Failed to write diagnostics: {error}");
+                        std::process::exit(1);
+                    }
+                };
                 println!(
                     "Conversion complete: {} -> {}",
                     cli.input.display(),
                     output.display()
                 );
+                if strict_failure {
+                    std::process::exit(2);
+                }
             }
             Err(e) => {
                 eprintln!("Conversion failed: {e}");

@@ -41,6 +41,7 @@ const info = get_presentation_info(data);
 console.log(info.slideCount, info.widthPx, info.heightPx, info.title);
 
 const withMetadata = convert_with_metadata(data);
+console.log(JSON.parse(withMetadata.diagnostics));
 console.log(withMetadata.unresolvedElements);
 
 const filteredWithMetadata = convert_with_options_metadata(
@@ -58,8 +59,9 @@ const filteredWithMetadata = convert_with_options_metadata(
 - `init()` — initialize the WASM module
 - `convert(data)` — convert PPTX bytes to HTML
 - `convert_with_options(data, embedImages, includeHidden, slideIndices, scale)`
-- `convert_with_metadata(data)` — convert and return unresolved-element metadata
+- `convert_with_metadata(data)` — convert and return canonical diagnostics JSON plus unresolved-element metadata
 - `convert_with_options_metadata(data, embedImages, includeHidden, slideIndices, scale)`
+- Metadata results expose `diagnostics` (canonical ordered JSON), `diagnosticsJson`, and the backward-compatible `unresolvedElements` JSON
 - `get_presentation_info(data)` — typed presentation metadata
 - `get_info(data)` / `get_slide_count(data)` — backward-compatible helpers
 

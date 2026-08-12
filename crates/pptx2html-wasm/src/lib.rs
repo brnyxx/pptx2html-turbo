@@ -107,6 +107,7 @@ pub fn get_presentation_info(data: &[u8]) -> Result<PresentationInfo, JsError> {
 #[wasm_bindgen]
 pub struct ConversionResult {
     html: String,
+    diagnostics_json: String,
     unresolved_json: String,
     slide_count: usize,
 }
@@ -117,6 +118,18 @@ impl ConversionResult {
     #[wasm_bindgen(getter)]
     pub fn html(&self) -> String {
         self.html.clone()
+    }
+
+    /// Canonical core conversion diagnostics JSON.
+    #[wasm_bindgen(getter, js_name = "diagnosticsJson")]
+    pub fn diagnostics_json(&self) -> String {
+        self.diagnostics_json.clone()
+    }
+
+    /// Canonical core conversion diagnostics JSON (compatibly named projection).
+    #[wasm_bindgen(getter)]
+    pub fn diagnostics(&self) -> String {
+        self.diagnostics_json.clone()
     }
 
     /// JSON array of unresolved elements (SmartArt, OLE, Math).
@@ -175,8 +188,10 @@ pub fn convert_with_options(
 #[wasm_bindgen]
 pub fn convert_with_metadata(data: &[u8]) -> Result<ConversionResult, JsError> {
     let result = pptx2html_core::convert_bytes_with_metadata(data).map_err(to_js_error)?;
+    let diagnostics_json = result.diagnostics_json();
     Ok(ConversionResult {
         html: result.html,
+        diagnostics_json,
         unresolved_json: serialize_unresolved(&result.unresolved_elements),
         slide_count: result.slide_count,
     })
@@ -210,8 +225,10 @@ pub fn convert_with_options_metadata(
     };
     let result =
         pptx2html_core::convert_bytes_with_options_metadata(data, &opts).map_err(to_js_error)?;
+    let diagnostics_json = result.diagnostics_json();
     Ok(ConversionResult {
         html: result.html,
+        diagnostics_json,
         unresolved_json: serialize_unresolved(&result.unresolved_elements),
         slide_count: result.slide_count,
     })
@@ -410,6 +427,8 @@ mod tests {
         let metadata = convert_with_metadata(&data).expect("metadata conversion should succeed");
         assert!(metadata.html().contains("Slide One"));
         assert_eq!(metadata.slide_count(), 2);
+        assert_eq!(metadata.diagnostics_json(), "[]");
+        assert_eq!(metadata.diagnostics(), "[]");
         assert_eq!(metadata.unresolved_elements(), "[]");
 
         let filtered = convert_with_options_metadata(&data, true, false, &[2], 1.0)
@@ -458,10 +477,13 @@ mod tests {
 
         let result = ConversionResult {
             html: "<html/>".to_string(),
+            diagnostics_json: "[]".to_string(),
             unresolved_json: "[{\"slideIndex\":1}]".to_string(),
             slide_count: 1,
         };
         assert_eq!(result.html(), "<html/>");
+        assert_eq!(result.diagnostics_json(), "[]");
+        assert_eq!(result.diagnostics(), "[]");
         assert_eq!(result.unresolved_elements(), "[{\"slideIndex\":1}]");
         assert_eq!(result.slide_count(), 1);
 

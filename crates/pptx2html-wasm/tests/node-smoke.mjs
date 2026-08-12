@@ -26,3 +26,17 @@ const invalidData = new Uint8Array([0, 1, 2, 3]);
 
 assert.throws(() => convert(invalidData), /invalid|zip|PPTX|archive/i);
 assert.throws(() => get_info(invalidData), /invalid|zip|PPTX|archive/i);
+
+const fixturePath = process.argv[2];
+if (fixturePath) {
+  const fixture = new Uint8Array(await readFile(fixturePath));
+  const result = convert_with_metadata(fixture);
+  const marker = '<script type="application/json" id="pptx2html-diagnostics">';
+  const embedded = result.html.split(marker, 2)[1].split('</script>', 1)[0];
+  assert.equal(result.diagnosticsJson, embedded);
+  assert.equal(result.diagnostics, embedded);
+  assert.ok(Array.isArray(JSON.parse(result.diagnosticsJson)));
+  assert.ok(!result.diagnosticsJson.includes('</script>'));
+  assert.equal(result.unresolvedElements.startsWith('['), true);
+  process.stdout.write(result.diagnosticsJson);
+}

@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 
 use pptx2html_core::ConversionOptions;
 use pptx2html_core::model::slide::UnresolvedType;
+use pptx2html_core::model::{ConversionDiagnostic, DiagnosticLocation};
 
 /// Convert a PPTX file to HTML string
 #[pyfunction]
@@ -76,9 +77,12 @@ fn convert_with_metadata(
     };
     let result = pptx2html_core::convert_file_with_options_metadata(Path::new(path), &opts)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let diagnostics_json = result.diagnostics_json();
 
     Ok(PyConversionResult {
         html: result.html,
+        diagnostics: map_diagnostics(result.diagnostics),
+        diagnostics_json,
         unresolved_elements: map_unresolved_elements(result.unresolved_elements),
         slide_count: result.slide_count,
     })
@@ -113,12 +117,50 @@ fn convert_bytes_with_metadata(
     };
     let result = pptx2html_core::convert_bytes_with_options_metadata(data, &opts)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let diagnostics_json = result.diagnostics_json();
 
     Ok(PyConversionResult {
         html: result.html,
+        diagnostics: map_diagnostics(result.diagnostics),
+        diagnostics_json,
         unresolved_elements: map_unresolved_elements(result.unresolved_elements),
         slide_count: result.slide_count,
     })
+}
+
+fn map_diagnostics(diagnostics: Vec<ConversionDiagnostic>) -> Vec<PyConversionDiagnostic> {
+    diagnostics.into_iter().map(map_diagnostic).collect()
+}
+
+fn map_diagnostic(diagnostic: ConversionDiagnostic) -> PyConversionDiagnostic {
+    PyConversionDiagnostic {
+        code: diagnostic.code,
+        family: diagnostic.family.as_str().to_owned(),
+        support_tier: diagnostic.support_tier.as_str().to_owned(),
+        stage: diagnostic.stage.map(|stage| stage.as_str().to_owned()),
+        location: map_diagnostic_location(diagnostic.location),
+        raw_reference: diagnostic.raw_reference,
+        fallback_kind: diagnostic.fallback_kind.as_str().to_owned(),
+        reason: diagnostic.reason,
+    }
+}
+
+fn map_diagnostic_location(location: DiagnosticLocation) -> PyDiagnosticLocation {
+    PyDiagnosticLocation {
+        slide_index: location.slide_index,
+        part_name: location.part_name,
+        relationship_id: location.relationship_id,
+        relationship_type: location.relationship_type,
+        qualified_element_name: location.qualified_element_name,
+        position: location.position.map(|position| PyDiagnosticPosition {
+            x: position.x.0,
+            y: position.y.0,
+        }),
+        size: location.size.map(|size| PyDiagnosticSize {
+            width: size.width.0,
+            height: size.height.0,
+        }),
+    }
 }
 
 fn map_unresolved_elements(
@@ -192,6 +234,10 @@ struct PyConversionResult {
     #[pyo3(get)]
     html: String,
     #[pyo3(get)]
+    diagnostics: Vec<PyConversionDiagnostic>,
+    #[pyo3(get)]
+    diagnostics_json: String,
+    #[pyo3(get)]
     unresolved_elements: Vec<PyUnresolvedElement>,
     #[pyo3(get)]
     slide_count: usize,
@@ -201,11 +247,74 @@ struct PyConversionResult {
 impl PyConversionResult {
     fn __repr__(&self) -> String {
         format!(
-            "ConversionResult(slide_count={}, unresolved_elements={})",
+            "ConversionResult(slide_count={}, diagnostics={}, unresolved_elements={})",
             self.slide_count,
+            self.diagnostics.len(),
             self.unresolved_elements.len()
         )
     }
+}
+
+/// Position of a conversion diagnostic in integer OOXML EMUs.
+#[pyclass(name = "DiagnosticPosition", frozen)]
+#[derive(Debug, Clone)]
+struct PyDiagnosticPosition {
+    #[pyo3(get)]
+    x: i64,
+    #[pyo3(get)]
+    y: i64,
+}
+
+/// Size of a conversion diagnostic in integer OOXML EMUs.
+#[pyclass(name = "DiagnosticSize", frozen)]
+#[derive(Debug, Clone)]
+struct PyDiagnosticSize {
+    #[pyo3(get)]
+    width: i64,
+    #[pyo3(get)]
+    height: i64,
+}
+
+/// Typed source location for a conversion diagnostic.
+#[pyclass(name = "DiagnosticLocation", frozen)]
+#[derive(Debug, Clone)]
+struct PyDiagnosticLocation {
+    #[pyo3(get)]
+    slide_index: Option<usize>,
+    #[pyo3(get)]
+    part_name: Option<String>,
+    #[pyo3(get)]
+    relationship_id: Option<String>,
+    #[pyo3(get)]
+    relationship_type: Option<String>,
+    #[pyo3(get)]
+    qualified_element_name: Option<String>,
+    #[pyo3(get)]
+    position: Option<PyDiagnosticPosition>,
+    #[pyo3(get)]
+    size: Option<PyDiagnosticSize>,
+}
+
+/// Typed, read-only conversion diagnostic.
+#[pyclass(name = "ConversionDiagnostic", frozen)]
+#[derive(Debug, Clone)]
+struct PyConversionDiagnostic {
+    #[pyo3(get)]
+    code: String,
+    #[pyo3(get)]
+    family: String,
+    #[pyo3(get)]
+    support_tier: String,
+    #[pyo3(get)]
+    stage: Option<String>,
+    #[pyo3(get)]
+    location: PyDiagnosticLocation,
+    #[pyo3(get)]
+    raw_reference: Option<String>,
+    #[pyo3(get)]
+    fallback_kind: String,
+    #[pyo3(get)]
+    reason: String,
 }
 
 /// Metadata about an unresolved element
@@ -245,6 +354,10 @@ fn pptx2html(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_info, m)?)?;
     m.add_class::<PresentationInfo>()?;
     m.add_class::<PyConversionResult>()?;
+    m.add_class::<PyConversionDiagnostic>()?;
+    m.add_class::<PyDiagnosticLocation>()?;
+    m.add_class::<PyDiagnosticPosition>()?;
+    m.add_class::<PyDiagnosticSize>()?;
     m.add_class::<PyUnresolvedElement>()?;
     Ok(())
 }
@@ -385,6 +498,8 @@ mod tests {
 
         let result = PyConversionResult {
             html: "<html/>".to_string(),
+            diagnostics: Vec::new(),
+            diagnostics_json: "[]".to_string(),
             unresolved_elements: vec![PyUnresolvedElement {
                 slide_index: 0,
                 element_type: "math".to_string(),
@@ -396,7 +511,7 @@ mod tests {
         };
         assert_eq!(
             result.__repr__(),
-            "ConversionResult(slide_count=1, unresolved_elements=1)"
+            "ConversionResult(slide_count=1, diagnostics=0, unresolved_elements=1)"
         );
 
         pyo3::prepare_freethreaded_python();
@@ -416,6 +531,10 @@ mod tests {
             assert!(module.getattr("get_info").is_ok());
             assert!(module.getattr("PresentationInfo").is_ok());
             assert!(module.getattr("ConversionResult").is_ok());
+            assert!(module.getattr("ConversionDiagnostic").is_ok());
+            assert!(module.getattr("DiagnosticLocation").is_ok());
+            assert!(module.getattr("DiagnosticPosition").is_ok());
+            assert!(module.getattr("DiagnosticSize").is_ok());
             assert!(module.getattr("UnresolvedElement").is_ok());
 
             assert_eq!(
@@ -433,7 +552,7 @@ mod tests {
             );
             assert_eq!(
                 py_result.bind(py).repr().expect("repr").to_string(),
-                "ConversionResult(slide_count=1, unresolved_elements=1)"
+                "ConversionResult(slide_count=1, diagnostics=0, unresolved_elements=1)"
             );
             assert_eq!(
                 py_result

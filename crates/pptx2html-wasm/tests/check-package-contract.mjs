@@ -19,6 +19,11 @@ assert.equal(packageJson.exports['.'].types, './pptx2html_wasm.d.ts');
 assert.equal(packageJson.homepage, 'https://github.com/kim62210/pptx2html-turbo');
 assert.equal(packageJson.bugs.url, 'https://github.com/kim62210/pptx2html-turbo/issues');
 
+const declarations = await readFile(path.join(packageDir, 'pptx2html_wasm.d.ts'), 'utf8');
+assert.match(declarations, /readonly diagnosticsJson: string/);
+assert.match(declarations, /readonly diagnostics: string/);
+assert.match(declarations, /readonly unresolvedElements: string/);
+
 for (const fileName of [
   'README.md',
   'LICENSE',

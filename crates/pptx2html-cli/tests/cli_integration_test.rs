@@ -1,11 +1,11 @@
 use std::fs;
-use std::io::Write;
+use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
 fn unique_temp_path(name: &str) -> PathBuf {
     let nanos = SystemTime::now()
@@ -19,6 +19,36 @@ fn write_temp_file(name: &str, bytes: &[u8]) -> PathBuf {
     let path = unique_temp_path(name).with_extension("pptx");
     fs::write(&path, bytes).expect("write temp pptx");
     path
+}
+
+fn mutate_slides(bytes: &[u8], mutate: impl Fn(&str) -> String) -> Vec<u8> {
+    let mut archive = ZipArchive::new(Cursor::new(bytes)).expect("fixture opens");
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Stored)
+        .last_modified_time(DateTime::default());
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("fixture entry opens");
+        let name = entry.name().to_owned();
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).expect("fixture entry reads");
+        if name.starts_with("ppt/slides/slide") && name.ends_with(".xml") {
+            let xml = String::from_utf8(data).expect("slide XML is UTF-8");
+            data = mutate(&xml).into_bytes();
+        }
+        writer.start_file(name, options).expect("entry starts");
+        writer.write_all(&data).expect("entry writes");
+    }
+    writer.finish().expect("fixture finishes").into_inner()
+}
+
+fn fallback_fixture(bytes: &[u8]) -> Vec<u8> {
+    mutate_slides(bytes, |xml| {
+        xml.replace(
+            "</p:spTree>",
+            "<future:widget xmlns:future=\"urn:example:future\" id=\"fallback\"/></p:spTree>",
+        )
+    })
 }
 
 #[test]
@@ -59,6 +89,97 @@ fn single_file_conversion_writes_requested_output() {
 
     fs::remove_file(input).ok();
     fs::remove_file(output_path).ok();
+}
+
+#[test]
+fn diagnostics_sidecar_and_strict_exit_preserve_outputs() {
+    let input = write_temp_file(
+        "diagnostics-strict",
+        &fallback_fixture(include_bytes!("fixtures/single-slide.pptx")),
+    );
+    let output_path = unique_temp_path("diagnostics-output").with_extension("html");
+    let sidecar = unique_temp_path("diagnostics-sidecar").with_extension("json");
+
+    let default = Command::new(env!("CARGO_BIN_EXE_pptx2html"))
+        .arg(&input)
+        .arg("--output")
+        .arg(&output_path)
+        .arg("--diagnostics")
+        .arg(&sidecar)
+        .output()
+        .expect("run default CLI");
+    assert!(default.status.success(), "{default:?}");
+    let first_json = fs::read_to_string(&sidecar).expect("sidecar exists");
+    assert!(first_json.starts_with("[{\"code\":"), "{first_json}");
+    let html = fs::read_to_string(&output_path).expect("HTML exists");
+    let marker = "<script type=\"application/json\" id=\"pptx2html-diagnostics\">";
+    let embedded = html
+        .split_once(marker)
+        .and_then(|(_, remainder)| remainder.split_once("</script>"))
+        .map(|(payload, _)| payload)
+        .expect("embedded diagnostics exist");
+    assert_eq!(first_json, embedded);
+    let default_stdout = String::from_utf8(default.stdout).unwrap();
+    let default_stderr = String::from_utf8(default.stderr).unwrap();
+    assert!(
+        default_stdout.starts_with("Conversion complete:"),
+        "{default_stdout}"
+    );
+    assert!(!default_stdout.contains("OOXML_ELEMENT_UNSUPPORTED"));
+    assert!(
+        default_stderr.contains("Conversion diagnostics (1): OOXML_ELEMENT_UNSUPPORTED=1"),
+        "{default_stderr}"
+    );
+
+    let strict = Command::new(env!("CARGO_BIN_EXE_pptx2html"))
+        .arg(&input)
+        .arg("--output")
+        .arg(&output_path)
+        .arg("--diagnostics")
+        .arg(&sidecar)
+        .arg("--fail-on-fallback")
+        .output()
+        .expect("run strict CLI");
+    assert_eq!(strict.status.code(), Some(2), "{strict:?}");
+    assert!(
+        output_path.exists(),
+        "HTML must be written before strict exit"
+    );
+    assert_eq!(fs::read_to_string(&sidecar).unwrap(), first_json);
+
+    fs::remove_file(input).ok();
+    fs::remove_file(output_path).ok();
+    fs::remove_file(sidecar).ok();
+}
+
+#[test]
+fn diagnostics_rejects_input_alias_without_changing_input_or_html() {
+    let dir = unique_temp_path("diagnostics-input-collision");
+    fs::create_dir_all(dir.join("alias")).unwrap();
+    let input = dir.join("input.pptx");
+    let output_path = dir.join("output.html");
+    let input_bytes = include_bytes!("fixtures/single-slide.pptx");
+    fs::write(&input, input_bytes).unwrap();
+    fs::write(&output_path, b"existing html").unwrap();
+    let sidecar_alias = dir.join("alias").join("..").join("input.pptx");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pptx2html"))
+        .arg(&input)
+        .arg("--output")
+        .arg(&output_path)
+        .arg("--diagnostics")
+        .arg(&sidecar_alias)
+        .output()
+        .expect("run input collision CLI");
+
+    assert!(!output.status.success(), "{output:?}");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("input PPTX"), "{stderr}");
+    assert!(stderr.contains("same resolved path"), "{stderr}");
+    assert_eq!(fs::read(&input).unwrap(), input_bytes);
+    assert_eq!(fs::read(&output_path).unwrap(), b"existing html");
+
+    fs::remove_dir_all(dir).ok();
 }
 
 #[test]
@@ -349,6 +470,39 @@ fn single_file_conversion_reports_external_asset_write_failures() {
     fs::remove_file(output_dir.join("images")).ok();
     fs::remove_file(output_path).ok();
     fs::remove_dir_all(output_dir).ok();
+}
+
+#[cfg(unix)]
+#[test]
+fn diagnostics_rejects_input_hard_link_without_changing_input_or_html() {
+    let dir = unique_temp_path("diagnostics-input-hard-link");
+    fs::create_dir_all(&dir).unwrap();
+    let input = dir.join("input.pptx");
+    let output_path = dir.join("output.html");
+    let diagnostics_sidecar = dir.join("diagnostics.json");
+    fs::write(&input, include_bytes!("fixtures/single-slide.pptx")).unwrap();
+    fs::write(&output_path, b"existing html").unwrap();
+    fs::hard_link(&input, &diagnostics_sidecar).unwrap();
+    let input_before = fs::read(&input).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pptx2html"))
+        .arg(&input)
+        .arg("--output")
+        .arg(&output_path)
+        .arg("--diagnostics")
+        .arg(&diagnostics_sidecar)
+        .output()
+        .expect("run hard link collision CLI");
+
+    assert!(!output.status.success(), "{output:?}");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("input PPTX"), "{stderr}");
+    assert!(stderr.contains("same resolved path"), "{stderr}");
+    assert_eq!(fs::read(&input).unwrap(), input_before);
+    assert_eq!(fs::read(&output_path).unwrap(), b"existing html");
+    assert!(!dir.join("diagnostics.html").exists());
+
+    fs::remove_dir_all(dir).ok();
 }
 
 fn build_titled_single_slide_pptx() -> Vec<u8> {

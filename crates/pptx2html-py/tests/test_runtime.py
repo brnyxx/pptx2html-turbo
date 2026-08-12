@@ -11,6 +11,10 @@ class PythonBindingRuntimeTests(unittest.TestCase):
     def test_runtime_exports_match_public_stub_names(self) -> None:
         self.assertTrue(hasattr(pptx2html, "PresentationInfo"))
         self.assertTrue(hasattr(pptx2html, "ConversionResult"))
+        self.assertTrue(hasattr(pptx2html, "ConversionDiagnostic"))
+        self.assertTrue(hasattr(pptx2html, "DiagnosticLocation"))
+        self.assertTrue(hasattr(pptx2html, "DiagnosticPosition"))
+        self.assertTrue(hasattr(pptx2html, "DiagnosticSize"))
         self.assertTrue(hasattr(pptx2html, "UnresolvedElement"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -23,7 +27,62 @@ class PythonBindingRuntimeTests(unittest.TestCase):
             self.assertEqual(type(info).__name__, "PresentationInfo")
             self.assertEqual(type(result).__name__, "ConversionResult")
             self.assertEqual(result.slide_count, 1)
+            self.assertIsInstance(result.diagnostics, list)
+            self.assertEqual(result.diagnostics_json, "[]")
             self.assertIsInstance(result.unresolved_elements, list)
+
+    def test_typed_diagnostics_match_canonical_json(self) -> None:
+        import json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "fallback.pptx"
+            self._write_minimal_pptx(path, fallback=True)
+            result = pptx2html.convert_with_metadata(str(path))
+            raw = json.loads(result.diagnostics_json)
+
+            self.assertGreater(len(result.diagnostics), 0)
+            typed = []
+            for diagnostic in result.diagnostics:
+                position = diagnostic.location.position
+                size = diagnostic.location.size
+                typed.append(
+                    {
+                        "code": diagnostic.code,
+                        "family": diagnostic.family,
+                        "support_tier": diagnostic.support_tier,
+                        "stage": diagnostic.stage,
+                        "location": {
+                            "slide_index": diagnostic.location.slide_index,
+                            "part_name": diagnostic.location.part_name,
+                            "relationship_id": diagnostic.location.relationship_id,
+                            "relationship_type": diagnostic.location.relationship_type,
+                            "qualified_element_name": diagnostic.location.qualified_element_name,
+                            "position": None
+                            if position is None
+                            else {"x": position.x, "y": position.y},
+                            "size": None
+                            if size is None
+                            else {"width": size.width, "height": size.height},
+                        },
+                        "raw_reference": diagnostic.raw_reference,
+                        "fallback_kind": diagnostic.fallback_kind,
+                        "reason": diagnostic.reason,
+                    }
+                )
+
+            self.assertEqual(typed, raw)
+            marker = '<script type="application/json" id="pptx2html-diagnostics">'
+            embedded = result.html.split(marker, 1)[1].split("</script>", 1)[0]
+            self.assertEqual(result.diagnostics_json, embedded)
+            self.assertNotIn("private.example", result.diagnostics_json)
+            self.assertTrue(
+                any(
+                    item.location.relationship_id == "rIdSecret"
+                    for item in result.diagnostics
+                )
+            )
+            with self.assertRaises(AttributeError):
+                result.diagnostics[0].code = "changed"
 
     def test_missing_file_raises_runtime_error(self) -> None:
         with self.assertRaises(RuntimeError):
@@ -81,7 +140,9 @@ class PythonBindingRuntimeTests(unittest.TestCase):
             self.assertIn("Slide Two", html)
             self.assertNotIn("Slide One", html)
 
-    def _write_minimal_pptx(self, path: Path, slides: list[str] | None = None) -> None:
+    def _write_minimal_pptx(
+        self, path: Path, slides: list[str] | None = None, fallback: bool = False
+    ) -> None:
         slide_texts = slides or ["Slide One"]
         with zipfile.ZipFile(path, "w") as archive:
             archive.writestr(
@@ -97,10 +158,12 @@ class PythonBindingRuntimeTests(unittest.TestCase):
                 self._presentation_rels(len(slide_texts)),
             )
             for index, text in enumerate(slide_texts, start=1):
-                archive.writestr(f"ppt/slides/slide{index}.xml", self._slide_xml(text))
+                archive.writestr(
+                    f"ppt/slides/slide{index}.xml", self._slide_xml(text, fallback)
+                )
                 archive.writestr(
                     f"ppt/slides/_rels/slide{index}.xml.rels",
-                    self._empty_relationships(),
+                    self._unsafe_relationships() if fallback else self._empty_relationships(),
                 )
             archive.writestr("ppt/theme/theme1.xml", self._theme_xml())
 
@@ -152,7 +215,12 @@ class PythonBindingRuntimeTests(unittest.TestCase):
   <Relationship Id=\"rId{slide_count + 1}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme\" Target=\"theme/theme1.xml\"/>
 </Relationships>"""
 
-    def _slide_xml(self, text: str) -> str:
+    def _slide_xml(self, text: str, fallback: bool = False) -> str:
+        unsupported = (
+            '<future:widget xmlns="urn:example:future" id="fallback"/>'
+            if fallback
+            else ""
+        )
         return f"""<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>
 <p:sld xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"
        xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"
@@ -182,6 +250,7 @@ class PythonBindingRuntimeTests(unittest.TestCase):
           </a:p>
         </p:txBody>
       </p:sp>
+      {unsupported}
     </p:spTree>
   </p:cSld>
 </p:sld>"""
@@ -189,6 +258,12 @@ class PythonBindingRuntimeTests(unittest.TestCase):
     def _empty_relationships(self) -> str:
         return """<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>
 <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>"""
+
+    def _unsafe_relationships(self) -> str:
+        return """<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">
+  <Relationship Id=\"rIdSecret\" Type=\"urn:example:future\" Target=\"https://private.example/token\" TargetMode=\"External\"/>
+</Relationships>"""
 
     def _theme_xml(self) -> str:
         return """<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>
