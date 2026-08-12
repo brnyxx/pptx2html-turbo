@@ -27,6 +27,7 @@ struct Frame {
     node_id: Option<String>,
     delay_ms: Option<u32>,
     bounded: bool,
+    click_encounter: Option<usize>,
 }
 
 struct SourceCapture {
@@ -76,6 +77,7 @@ pub(crate) fn parse(xml: &str) -> PptxResult<ParsedTimingInventory> {
     let mut unsupported = None::<UnsupportedCandidate>;
     let mut last_group = None::<usize>;
     let mut order = 0usize;
+    let mut click_encounter = 0usize;
     let mut previous_position = 0usize;
 
     loop {
@@ -139,21 +141,22 @@ pub(crate) fn parse(xml: &str) -> PptxResult<ParsedTimingInventory> {
                     && effect.is_none()
                     && unsupported.is_none()
                 {
-                    let (trigger, group_id, delay_ms) = trigger_context(&stack);
+                    let (trigger, group_id, delay_ms, effect_click_encounter) =
+                        trigger_context(&stack);
                     if trigger == Some(AnimationTrigger::Click) {
-                        let group_identity =
-                            group_id.clone().unwrap_or_else(|| format!("group-{order}"));
-                        let identity_prefix = format!("timing-{group_identity}-group-");
+                        let encounter = effect_click_encounter.unwrap_or(click_encounter);
                         if let Some(index) = inventory
                             .groups
                             .iter()
-                            .position(|group| group.identity.starts_with(&identity_prefix))
+                            .position(|group| group.source_order == encounter)
                         {
                             last_group = Some(index);
                         } else {
+                            let group_identity =
+                                group_id.clone().unwrap_or_else(|| "anonymous".to_owned());
                             inventory.groups.push(TimingGroup {
-                                identity: format!("{identity_prefix}{}", inventory.groups.len()),
-                                source_order: order,
+                                identity: format!("timing-{group_identity}-group-{encounter}"),
+                                source_order: encounter,
                                 effects: Vec::new(),
                             });
                             last_group = Some(inventory.groups.len() - 1);
@@ -195,17 +198,27 @@ pub(crate) fn parse(xml: &str) -> PptxResult<ParsedTimingInventory> {
                 if pml {
                     capture_candidate_values(&local, &element, &mut effect, &mut unsupported);
                 }
+                let node_type = if pml {
+                    attr(&element, "nodeType")
+                } else {
+                    None
+                };
+                let frame_click_encounter =
+                    if local == "cTn" && node_type.as_deref() == Some("clickEffect") {
+                        let encounter = click_encounter;
+                        click_encounter += 1;
+                        Some(encounter)
+                    } else {
+                        None
+                    };
                 stack.push(Frame {
                     local,
                     pml,
-                    node_type: if pml {
-                        attr(&element, "nodeType")
-                    } else {
-                        None
-                    },
+                    node_type,
                     node_id: if pml { attr(&element, "id") } else { None },
                     delay_ms: Some(0),
                     bounded: !unsupported_time_node("cTn", &element),
+                    click_encounter: frame_click_encounter,
                 });
             }
             Event::Empty(element) => {
@@ -537,7 +550,14 @@ fn capture_start_delay(local: &str, element: &BytesStart<'_>, stack: &mut [Frame
     }
 }
 
-fn trigger_context(stack: &[Frame]) -> (Option<AnimationTrigger>, Option<String>, Option<u32>) {
+fn trigger_context(
+    stack: &[Frame],
+) -> (
+    Option<AnimationTrigger>,
+    Option<String>,
+    Option<u32>,
+    Option<usize>,
+) {
     let bounded = stack
         .iter()
         .filter(|frame| frame.pml && frame.local == "cTn")
@@ -562,10 +582,11 @@ fn trigger_context(stack: &[Frame]) -> (Option<AnimationTrigger>, Option<String>
                 trigger,
                 frame.node_id.clone(),
                 bounded.then_some(delay_ms).flatten(),
+                frame.click_encounter,
             );
         }
     }
-    (None, None, None)
+    (None, None, None, None)
 }
 
 fn push_fallback(

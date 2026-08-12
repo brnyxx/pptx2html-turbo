@@ -127,8 +127,8 @@ fn extract_relationship_id(xml: &str) -> Option<String> {
 
 pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) {
     diagnostics.sort_by(|left, right| {
-        diagnostic_sort_key(left)
-            .cmp(&diagnostic_sort_key(right))
+        timing_source_order(left, right)
+            .unwrap_or_else(|| diagnostic_sort_key(left).cmp(&diagnostic_sort_key(right)))
             .then_with(|| super::action_diagnostics::compare(left, right))
     });
     diagnostics.dedup_by(|left, right| {
@@ -137,6 +137,32 @@ pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) 
                 && !right.code.starts_with("ACTION_")
                 && diagnostic_deduplication_key(left) == diagnostic_deduplication_key(right))
     });
+}
+
+fn timing_source_order(
+    left: &ConversionDiagnostic,
+    right: &ConversionDiagnostic,
+) -> Option<std::cmp::Ordering> {
+    if left.code != "PRESENTATIONML_TIMING_FALLBACK"
+        || right.code != "PRESENTATIONML_TIMING_FALLBACK"
+        || left.location.part_name != right.location.part_name
+        || left.location.slide_index != right.location.slide_index
+    {
+        return None;
+    }
+    let left_order = left
+        .location
+        .relationship_id
+        .as_deref()?
+        .parse::<usize>()
+        .ok()?;
+    let right_order = right
+        .location
+        .relationship_id
+        .as_deref()?
+        .parse::<usize>()
+        .ok()?;
+    Some(left_order.cmp(&right_order))
 }
 
 type DiagnosticKey<'a> = (

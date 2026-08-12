@@ -84,6 +84,21 @@ class TimingBrowserTests(unittest.TestCase):
             page.wait_for_url("**#slide-2")
             self.assertFalse(any(event["name"].startswith("pptx2html:timing-group") for event in page.evaluate("window.__timingEvents")))
             page.evaluate(
+                """() => {
+                  for (const href of ['https://example.test/', 'mailto:timing@example.test']) {
+                    const anchor = document.createElement('a');
+                    anchor.href = href;
+                    anchor.dataset.action = 'external';
+                    anchor.className = 'shape-action-surface';
+                    anchor.addEventListener('click', event => event.preventDefault());
+                    document.querySelector('#slide-1').append(anchor);
+                    anchor.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+                    anchor.remove();
+                  }
+                }"""
+            )
+            self.assertFalse(any(event["name"].startswith("pptx2html:timing-group") for event in page.evaluate("window.__timingEvents")))
+            page.evaluate(
                 """async () => {
                   const reset = window.__waitExact(
                     'pptx2html:transition-complete', 'slide-transition-0', 1);

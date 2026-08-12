@@ -165,6 +165,37 @@ fn adversarial_ancestors_namespaces_targets_groups_and_identities_fall_back_safe
     );
     assert!(concurrent_result.html.contains("timing-16-effect-1"));
 
+    let duplicate_ids = TAIL.replace(
+        "id=\"20\" nodeType=\"clickEffect\"",
+        "id=\"10\" nodeType=\"clickEffect\"",
+    );
+    let duplicate_result = convert_bytes_with_metadata(&package_with_tail(&duplicate_ids))
+        .expect("duplicate click IDs convert");
+    assert!(duplicate_result.html.contains("timing-10-group-0"));
+    assert!(duplicate_result.html.contains("timing-10-group-1"));
+
+    let ordered_unknown = TAIL.replace(
+        "<x:animMotion path=\"M 0 0 L 1 1\">",
+        "<x:zFuture/><x:aFuture/><x:animMotion path=\"M 0 0 L 1 1\">",
+    );
+    let ordered_result = convert_bytes_with_metadata(&package_with_tail(&ordered_unknown))
+        .expect("ordered unknown nodes convert");
+    let timing_names = ordered_result
+        .diagnostics
+        .iter()
+        .filter(|item| item.code == "PRESENTATIONML_TIMING_FALLBACK")
+        .filter_map(|item| item.location.qualified_element_name.as_deref())
+        .collect::<Vec<_>>();
+    let z = timing_names
+        .iter()
+        .position(|name| *name == "x:zFuture")
+        .expect("z fallback");
+    let a = timing_names
+        .iter()
+        .position(|name| *name == "x:aFuture")
+        .expect("a fallback");
+    assert!(z < a);
+
     let hostile_id = TAIL.replace("id=\"10\"", "id=\"10&quot;&lt;/script&gt;\"");
     let hostile_result = convert_bytes_with_metadata(&package_with_tail(&hostile_id))
         .expect("hostile identity converts");

@@ -1,0 +1,38 @@
+[
+  {
+    "code": "PRESENTATIONML_TIMING_FALLBACK",
+    "fallback_kind": "unknown-element",
+    "family": "unsupported",
+    "location": {
+      "part_name": "ppt/slides/slide1.xml",
+      "position": null,
+      "qualified_element_name": "p:animMotion",
+      "relationship_id": "4",
+      "relationship_type": null,
+      "size": null,
+      "slide_index": 0
+    },
+    "raw_reference": "<p:animMotion origin=\"layout\" path=\"M 0 0 L 1 1\"><p:cBhvr><p:cTn id=\"30\" dur=\"1000\"/><p:tgtEl><p:spTgt spid=\"4\"/></p:tgtEl></p:cBhvr></p:animMotion>",
+    "reason": "timing node is outside the supported subset",
+    "stage": "parsed",
+    "support_tier": "fallback"
+  },
+  {
+    "code": "PRESENTATIONML_TIMING_FALLBACK",
+    "fallback_kind": "unknown-element",
+    "family": "unsupported",
+    "location": {
+      "part_name": "ppt/slides/slide2.xml",
+      "position": null,
+      "qualified_element_name": "p:animMotion",
+      "relationship_id": "4",
+      "relationship_type": null,
+      "size": null,
+      "slide_index": 1
+    },
+    "raw_reference": "<p:animMotion origin=\"layout\" path=\"M 0 0 L 1 1\"><p:cBhvr><p:cTn id=\"30\" dur=\"1000\"/><p:tgtEl><p:spTgt spid=\"4\"/></p:tgtEl></p:cBhvr></p:animMotion>",
+    "reason": "timing node is outside the supported subset",
+    "stage": "parsed",
+    "support_tier": "fallback"
+  }
+]

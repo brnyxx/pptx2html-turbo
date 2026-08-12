@@ -1,0 +1,130 @@
+[
+  {
+    "identity": "timing-10-group-0",
+    "name": "pptx2html:timing-group",
+    "phase": "start",
+    "slide": 1
+  },
+  {
+    "delay": 25,
+    "effect": "fade-in",
+    "group": "timing-10-group-0",
+    "identity": "timing-11-effect-0",
+    "name": "pptx2html:timing-effect",
+    "phase": "start",
+    "shape": 2,
+    "slide": 1
+  },
+  {
+    "delay": 0,
+    "effect": "appear",
+    "group": "timing-10-group-0",
+    "identity": "timing-13-effect-1",
+    "name": "pptx2html:timing-effect",
+    "phase": "start",
+    "shape": 3,
+    "slide": 1
+  },
+  {
+    "delay": 0,
+    "effect": "appear",
+    "group": "timing-10-group-0",
+    "identity": "timing-13-effect-1",
+    "name": "pptx2html:timing-effect",
+    "phase": "complete",
+    "shape": 3,
+    "slide": 1
+  },
+  {
+    "delay": 25,
+    "effect": "fade-in",
+    "group": "timing-10-group-0",
+    "identity": "timing-11-effect-0",
+    "name": "pptx2html:timing-effect",
+    "phase": "complete",
+    "shape": 2,
+    "slide": 1
+  },
+  {
+    "delay": 0,
+    "effect": "fade-out",
+    "group": "timing-10-group-0",
+    "identity": "timing-15-effect-2",
+    "name": "pptx2html:timing-effect",
+    "phase": "start",
+    "shape": 3,
+    "slide": 1
+  },
+  {
+    "delay": 0,
+    "effect": "fade-out",
+    "group": "timing-10-group-0",
+    "identity": "timing-15-effect-2",
+    "name": "pptx2html:timing-effect",
+    "phase": "complete",
+    "shape": 3,
+    "slide": 1
+  },
+  {
+    "identity": "timing-10-group-0",
+    "name": "pptx2html:timing-group-complete",
+    "slide": 1
+  },
+  {
+    "identity": "timing-20-group-1",
+    "name": "pptx2html:timing-group",
+    "phase": "start",
+    "slide": 1
+  },
+  {
+    "delay": 0,
+    "effect": "fade-out",
+    "group": "timing-20-group-1",
+    "identity": "timing-21-effect-3",
+    "name": "pptx2html:timing-effect",
+    "phase": "start",
+    "shape": 2,
+    "slide": 1
+  },
+  {
+    "delay": 0,
+    "effect": "fade-out",
+    "group": "timing-20-group-1",
+    "identity": "timing-21-effect-3",
+    "name": "pptx2html:timing-effect",
+    "phase": "complete",
+    "shape": 2,
+    "slide": 1
+  },
+  {
+    "identity": "timing-20-group-1",
+    "name": "pptx2html:timing-group-complete",
+    "slide": 1
+  },
+  {
+    "identity": "slide-transition-0",
+    "name": "pptx2html:transition",
+    "phase": "start",
+    "slide": 2,
+    "transition": "cut"
+  },
+  {
+    "identity": "slide-transition-0",
+    "name": "pptx2html:transition-complete",
+    "slide": 2,
+    "transition": "cut"
+  },
+  {
+    "identity": "slide-transition-0",
+    "name": "pptx2html:transition",
+    "phase": "start",
+    "slide": 1,
+    "transition": "fade"
+  },
+  {
+    "identity": "slide-transition-0",
+    "name": "pptx2html:transition-complete",
+    "slide": 1,
+    "transition": "fade"
+  }
+]
