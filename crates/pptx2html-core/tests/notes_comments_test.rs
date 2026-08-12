@@ -9,10 +9,11 @@ use pptx2html_core::{
 };
 use support::{
     complete_package, duplicate_authors_package, duplicate_relationship_package,
-    empty_second_root_annotation_package, invalid_notes_master_package, missing_author_package,
-    missing_notes_master_part_package, missing_notes_master_relationship_package,
-    missing_notes_master_relationship_part_package, missing_required_comment_attributes_package,
-    modern_replies_package, multiple_modern_extensions_package, multiple_root_annotation_package,
+    empty_second_root_annotation_package, empty_single_root_annotation_package,
+    invalid_notes_master_package, missing_author_package, missing_notes_master_part_package,
+    missing_notes_master_relationship_package, missing_notes_master_relationship_part_package,
+    missing_required_comment_attributes_package, modern_replies_package,
+    multiple_modern_extensions_package, multiple_root_annotation_package,
     multiple_root_notes_master_package, rich_annotation_text_package, selected_slides_package,
     spoof_package, spoof_relationship_package,
 };
@@ -255,6 +256,16 @@ fn annotation_xml_rejects_empty_second_document_roots() {
     assert_eq!(code_count(&result, "NOTES_SLIDE_METADATA"), 1);
     assert!(!raw_contains(&result, "FIRST_COMMENT_ROOT"));
     assert!(!raw_contains(&result, "FIRST_NOTES_ROOT"));
+}
+
+#[test]
+fn annotation_xml_accepts_empty_single_document_roots() {
+    let result = convert_bytes_with_metadata(&empty_single_root_annotation_package())
+        .expect("empty annotation roots convert");
+
+    assert_eq!(code_count(&result, "ANNOTATION_PART_MALFORMED"), 0);
+    assert_eq!(code_count(&result, "LEGACY_COMMENT_METADATA"), 0);
+    assert_eq!(code_count(&result, "NOTES_SLIDE_METADATA"), 1);
 }
 
 #[test]

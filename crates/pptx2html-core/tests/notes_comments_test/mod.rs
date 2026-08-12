@@ -126,6 +126,15 @@ pub fn empty_second_root_annotation_package() -> Vec<u8> {
     )
 }
 
+pub fn empty_single_root_annotation_package() -> Vec<u8> {
+    base_with_parts(
+        format!(r#"<p:cmLst xmlns:p="{PML}"/>"#),
+        modern_comments(),
+        format!(r#"<p:notes xmlns:p="{PML}"/>"#),
+        false,
+    )
+}
+
 pub fn rich_annotation_text_package() -> Vec<u8> {
     base_with_parts(
         format!(

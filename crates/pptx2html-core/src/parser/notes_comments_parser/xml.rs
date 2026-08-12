@@ -45,7 +45,12 @@ pub(super) fn notes_text(xml: &str) -> (String, Option<String>) {
             Ok((namespace, Event::Empty(element))) => {
                 let node = node(namespace, &element);
                 if stack.is_empty() {
-                    multiple_roots = true;
+                    if root_closed {
+                        multiple_roots = true;
+                    } else if node == (PML.to_vec(), "notes".to_owned()) {
+                        valid_root = true;
+                        root_closed = true;
+                    }
                 }
                 if node == (DML.to_vec(), "br".to_owned()) && notes_paragraph(&stack) {
                     text.push('\n');

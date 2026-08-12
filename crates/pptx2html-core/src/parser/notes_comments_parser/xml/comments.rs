@@ -98,7 +98,16 @@ fn comments(xml: &str, kind: CommentKind) -> (Vec<CommentRecord>, Option<String>
             Ok((resolved, Event::Empty(element))) => {
                 let current_node = node(resolved, &element);
                 if stack.is_empty() {
-                    malformed.get_or_insert("Comment XML has multiple roots".to_owned());
+                    if root_closed {
+                        malformed.get_or_insert("Comment XML has multiple roots".to_owned());
+                    } else if current_node == (namespace.to_vec(), "cmLst".to_owned()) {
+                        valid_root = true;
+                        root_closed = true;
+                    } else {
+                        malformed.get_or_insert(
+                            "Comment root namespace or element is invalid".to_owned(),
+                        );
+                    }
                 }
                 if kind == CommentKind::Modern
                     && current_node == (DML.to_vec(), "br".to_owned())
