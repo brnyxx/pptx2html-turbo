@@ -183,6 +183,14 @@ fn parse_slide_impl<R: Read + Seek>(
                 if text.handle_start(&local, e, &mut current_shape, table.in_cell) {
                     continue;
                 }
+                if drawingml && in_nv_pr && matches!(local.as_str(), "audioFile" | "videoFile") {
+                    assign_shape_media(
+                        &mut current_shape,
+                        &local,
+                        resolved_relationship_attribute(&reader, e, "link"),
+                    );
+                    continue;
+                }
                 if drawingml
                     && (text.in_run_properties
                         || table.in_run_properties
@@ -464,6 +472,14 @@ fn parse_slide_impl<R: Read + Seek>(
                     continue;
                 }
                 if text.handle_empty(&local, e, &mut current_shape, table.in_cell) {
+                    continue;
+                }
+                if drawingml && in_nv_pr && matches!(local.as_str(), "audioFile" | "videoFile") {
+                    assign_shape_media(
+                        &mut current_shape,
+                        &local,
+                        resolved_relationship_attribute(&reader, e, "link"),
+                    );
                     continue;
                 }
                 if drawingml
@@ -1208,12 +1224,20 @@ fn resolved_relationship_id(
     reader: &NsReader<&[u8]>,
     element: &quick_xml::events::BytesStart<'_>,
 ) -> Result<Option<String>, ()> {
-    let mut id = None;
+    resolved_relationship_attribute(reader, element, "id")
+}
+
+fn resolved_relationship_attribute(
+    reader: &NsReader<&[u8]>,
+    element: &quick_xml::events::BytesStart<'_>,
+    local_name: &str,
+) -> Result<Option<String>, ()> {
+    let mut value = None;
     for attribute in element.attributes().flatten() {
-        if xml_utils::local_name(attribute.key.as_ref()) != "id" {
+        if xml_utils::local_name(attribute.key.as_ref()) != local_name {
             continue;
         }
-        if id.is_some() {
+        if value.is_some() {
             return Err(());
         }
         let official = matches!(
@@ -1225,9 +1249,26 @@ fn resolved_relationship_id(
         if !official {
             return Err(());
         }
-        id = Some(attribute.unescape_value().map_err(|_| ())?.into_owned());
+        value = Some(attribute.unescape_value().map_err(|_| ())?.into_owned());
     }
-    Ok(id)
+    Ok(value)
+}
+
+fn assign_shape_media(
+    shape: &mut Option<ShapeBuilder>,
+    local_name: &str,
+    relationship_id: Result<Option<String>, ()>,
+) {
+    let Some(shape) = shape.as_mut() else {
+        return;
+    };
+    let kind = if local_name == "audioFile" {
+        MediaKind::Audio
+    } else {
+        MediaKind::Video
+    };
+    let relationship_id = relationship_id.ok().flatten().unwrap_or_default();
+    shape.media = Some(MediaData::unresolved(kind, relationship_id));
 }
 
 fn parse_connector_ref(
@@ -1311,6 +1352,8 @@ pub(crate) struct ShapeBuilder {
     pub(crate) chart_direct_spec: Option<ChartSpec>,
     pub(crate) chart_preview_image: Option<Vec<u8>>,
     pub(crate) chart_preview_mime: Option<String>,
+    // Shape-owned DrawingML media reference.
+    pub(crate) media: Option<MediaData>,
     // Unsupported content type (SmartArt, OLE, Math)
     pub(crate) unsupported_content: Option<String>,
     // Typed classification for unresolved element
@@ -1430,6 +1473,7 @@ impl ShapeBuilder {
             id: self.id,
             name: self.name,
             actions: self.actions,
+            media: self.media,
             position: self.position,
             size: self.size,
             rotation: self.rotation,

@@ -41,10 +41,7 @@ pub use hierarchy::{
     PlaceholderType, RunDefaults, ShapeStyleRef, SlideLayout, SlideMaster, SpacingValue, StyleRef,
     TxStyles,
 };
-pub use notes_comments::{
-    AnnotationIssue, AnnotationIssueCode, CommentAuthor, CommentKind, NotesCommentsInventory,
-    SlideComment, SlideNote,
-};
+pub use media::{MediaData, MediaFailure, MediaKind};
 pub use pattern::PatternPreset;
 pub use presentation::{ClrMap, FontScheme, Presentation};
 pub use preserved::{ConversionDiagnostic, DiagnosticLocation, FallbackKind};

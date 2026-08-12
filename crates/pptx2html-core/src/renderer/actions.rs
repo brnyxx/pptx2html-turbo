@@ -118,6 +118,7 @@ pub(super) fn render_run_wrapper(
 pub(super) fn render_shape_surface(
     actions: &ActionSet,
     shape_id: u32,
+    owns_media: bool,
     ctx: &RenderCtx<'_>,
     html: &mut String,
 ) {
@@ -140,9 +141,15 @@ pub(super) fn render_shape_surface(
             escape_html(href)
         );
     } else {
+        let media_class = if owns_media {
+            " media-action-surface"
+        } else {
+            ""
+        };
+        let label = if owns_media { "play media" } else { "shape" };
         let _ = write!(
             html,
-            "<button class=\"shape-action-surface\" type=\"button\" aria-label=\"shape {shape_id}\"{attributes}></button>"
+            "<button class=\"shape-action-surface{media_class}\" type=\"button\" aria-label=\"{label} {shape_id}\"{attributes}></button>"
         );
     }
 }

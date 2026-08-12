@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::name::ResolveResult;
+use quick_xml::reader::NsReader;
 use zip::ZipArchive;
 
 use super::graphic_frame_parser::{read_archive_bytes, resolve_relationship_path};
@@ -23,11 +24,16 @@ pub(crate) struct ContentTypes {
 
 impl ContentTypes {
     pub(crate) fn parse(xml: &str) -> Self {
-        let mut reader = Reader::from_str(xml);
+        let mut reader = NsReader::from_str(xml);
         let mut content_types = Self::default();
         loop {
-            match reader.read_event() {
-                Ok(Event::Empty(element)) | Ok(Event::Start(element)) => {
+            match reader.read_resolved_event() {
+                Ok((
+                    ResolveResult::Bound(namespace),
+                    Event::Empty(element) | Event::Start(element),
+                )) if namespace.as_ref()
+                    == b"http://schemas.openxmlformats.org/package/2006/content-types" =>
+                {
                     match xml_utils::local_name(element.name().as_ref()) {
                         "Default" => {
                             if let (Some(extension), Some(content_type)) = (
@@ -53,14 +59,14 @@ impl ContentTypes {
                         _ => {}
                     }
                 }
-                Ok(Event::Eof) | Err(_) => break,
+                Ok((_, Event::Eof)) | Err(_) => break,
                 _ => {}
             }
         }
         content_types
     }
 
-    fn for_part(&self, part_name: &str) -> Option<&str> {
+    pub(crate) fn for_part(&self, part_name: &str) -> Option<&str> {
         self.overrides
             .get(part_name)
             .map(String::as_str)

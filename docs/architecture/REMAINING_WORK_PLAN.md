@@ -160,15 +160,16 @@ These items directly block promotion from `approximate` to `exact`.
 2. Add one ring/filled family (`doughnut` or `area`) while keeping stable fallback for unsupported variants.
 3. Add one axis-rich family (`scatter` or `area` with marker support) and extend fallback coverage for unsupported structures.
 
-### P2.2 Notes / comments / media / animation fallback contracts
+### P2.2 Notes / comments / animation fallback contracts
 
-**Current state:** unparsed
+**Current state:** unparsed; bounded shape-owned media is approximate
 
-**Goal:** Preserve these domains with explicit fallback semantics instead of silent omission.
+**Goal:** Preserve the remaining domains with explicit fallback semantics instead of silent omission.
+
+The media slice supports only safe internal official relationships carrying PCM WAV or AVC MP4 assets up to 16 MiB. It uses native browser controls and click-gesture playback without autoplay; every other media case remains a typed poster or placeholder fallback. Browser and native PowerPoint equivalence remain `[교차검증 필요]`.
 
 **Likely work:**
 - Notes/comment model capture.
-- Media relationship preservation.
 - Animation/timing metadata sideband.
 
 ---

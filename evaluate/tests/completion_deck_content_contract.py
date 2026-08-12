@@ -59,6 +59,8 @@ def _expected(name: str) -> str:
         return "image/svg+xml"
     if name.endswith(".wav"):
         return "audio/wav"
+    if name.endswith(".mp4"):
+        return "video/mp4"
     if name.endswith(".bin"):
         return "application/octet-stream"
     return "application/xml"

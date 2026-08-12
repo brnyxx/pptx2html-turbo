@@ -298,6 +298,13 @@ impl PptxParser {
                         &slide_order,
                         &mut archive,
                     )?;
+                    media_parser::resolve_slide(
+                        &mut slide,
+                        &full_path,
+                        &slide_relationships,
+                        &content_types,
+                        &mut archive,
+                    );
                     picture_bullet_parser::resolve_slide(
                         &mut slide,
                         &slide_relationships,

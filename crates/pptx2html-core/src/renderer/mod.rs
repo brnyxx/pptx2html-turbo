@@ -172,6 +172,8 @@ impl<'a> RenderCtx<'a> {
             "image/gif" => "gif",
             "image/svg+xml" => "svg",
             "image/webp" => "webp",
+            "audio/wav" => "wav",
+            "video/mp4" => "mp4",
             _ => "png",
         };
 
@@ -913,7 +915,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
             html,
             "<div class=\"shape\"{timing_attributes} style=\"{style_buf}\">"
         );
-        actions::render_shape_surface(&shape.actions, shape.id, ctx, html);
+        actions::render_shape_surface(&shape.actions, shape.id, shape.media.is_some(), ctx, html);
         Self::render_reflection_from_diagnostics(shape, &resolved_fill, pos, size, ctx, html);
 
         // Table
@@ -938,6 +940,14 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         if let ShapeType::Chart(ref chart_data) = shape.shape_type {
             charts::render_chart(chart_data, ctx, w, h, html);
             return;
+        }
+
+        if let Some(shape_media) = shape.media.as_ref() {
+            let poster = match &shape.shape_type {
+                ShapeType::Picture(picture) => Some(picture),
+                _ => None,
+            };
+            media::render(shape_media, poster, shape.id, ctx, html);
         }
 
         // SVG preset shape rendering
@@ -1336,7 +1346,8 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         // Image
-        if let ShapeType::Picture(pic) = &shape.shape_type
+        if shape.media.is_none()
+            && let ShapeType::Picture(pic) = &shape.shape_type
             && !pic.data.is_empty()
         {
             let mime = if pic.content_type.is_empty() {

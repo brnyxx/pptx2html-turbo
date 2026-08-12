@@ -73,13 +73,7 @@ SPECIFIC_RELS: Final = {
     "media": (
         (SR, "rIdAudio", REL + "audio", "../media/audio.wav", None),
         (SR, "rIdPoster", REL + "image", "../media/poster.png", None),
-        (
-            SR,
-            "rIdVideo",
-            REL + "video",
-            "https://example.invalid/video.mp4",
-            "External",
-        ),
+        (SR, "rIdVideo", REL + "video", "../media/video.mp4", None),
         (SR, "rIdUnsupported", REL + "audio", "../media/unsupported.bin", None),
     ),
     "charts": (
