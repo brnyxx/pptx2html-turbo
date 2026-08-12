@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::name::ResolveResult;
+use quick_xml::reader::NsReader;
 
 use super::xml_utils;
 use crate::error::PptxResult;
@@ -62,53 +63,87 @@ impl TargetMode {
 }
 
 pub fn parse_relationship_records(xml: &str) -> PptxResult<Vec<Relationship>> {
-    let mut reader = Reader::from_str(xml);
+    let mut reader = NsReader::from_str(xml);
     let mut relationships = Vec::new();
+    let mut depth = 0_usize;
+    let mut official_root = false;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
-                let name = e.name();
-                if xml_utils::local_name(name.as_ref()) != "Relationship" {
-                    continue;
+        match reader.read_resolved_event() {
+            Ok((namespace, Event::Start(ref e))) => {
+                if depth == 0 {
+                    official_root = official_package_element(&namespace, e, "Relationships");
+                } else if depth == 1
+                    && official_root
+                    && official_package_element(&namespace, e, "Relationship")
+                    && let Some(relationship) = parse_relationship(e)?
+                {
+                    relationships.push(relationship);
                 }
-                let mut id = String::new();
-                let mut relationship_type = String::new();
-                let mut target = String::new();
-                let mut target_mode = TargetMode::Internal;
-                for attr in e.attributes().flatten() {
-                    let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                    let value = attr.unescape_value()?.into_owned();
-                    match key {
-                        "Id" => id = value,
-                        "Type" => relationship_type = value,
-                        "Target" => target = value,
-                        "TargetMode" if value == "External" => {
-                            target_mode = TargetMode::External;
-                        }
-                        "TargetMode" if value == "Internal" => {
-                            target_mode = TargetMode::Internal;
-                        }
-                        "TargetMode" => target_mode = TargetMode::Other(value),
-                        _ => {}
-                    }
-                }
-                if !id.is_empty() {
-                    relationships.push(Relationship {
-                        id,
-                        relationship_type,
-                        target,
-                        target_mode,
-                    });
+                depth += 1;
+            }
+            Ok((namespace, Event::Empty(ref e))) => {
+                if depth == 1
+                    && official_root
+                    && official_package_element(&namespace, e, "Relationship")
+                    && let Some(relationship) = parse_relationship(e)?
+                {
+                    relationships.push(relationship);
                 }
             }
-            Ok(Event::Eof) => break,
+            Ok((_, Event::End(_))) => depth = depth.saturating_sub(1),
+            Ok((_, Event::Eof)) => break,
             Err(e) => return Err(crate::error::PptxError::Xml(e)),
             _ => {}
         }
     }
 
     Ok(relationships)
+}
+
+fn official_package_element(
+    namespace: &ResolveResult<'_>,
+    element: &quick_xml::events::BytesStart<'_>,
+    local_name: &str,
+) -> bool {
+    matches!(namespace, ResolveResult::Bound(value) if value.as_ref() == b"http://schemas.openxmlformats.org/package/2006/relationships")
+        && xml_utils::local_name(element.name().as_ref()) == local_name
+}
+
+fn parse_relationship(
+    element: &quick_xml::events::BytesStart<'_>,
+) -> PptxResult<Option<Relationship>> {
+    let mut id = None;
+    let mut relationship_type = None;
+    let mut target = None;
+    let mut target_mode = TargetMode::Internal;
+    for attribute in element.attributes().flatten() {
+        let Ok(key) = std::str::from_utf8(attribute.key.as_ref()) else {
+            return Ok(None);
+        };
+        if key.contains(':') {
+            return Ok(None);
+        }
+        let value = attribute.unescape_value()?.into_owned();
+        match key {
+            "Id" if id.is_none() => id = Some(value),
+            "Type" if relationship_type.is_none() => relationship_type = Some(value),
+            "Target" if target.is_none() => target = Some(value),
+            "TargetMode" if value == "External" => target_mode = TargetMode::External,
+            "TargetMode" if value == "Internal" => target_mode = TargetMode::Internal,
+            "TargetMode" => target_mode = TargetMode::Other(value),
+            _ => {}
+        }
+    }
+    let (Some(id), Some(relationship_type), Some(target)) = (id, relationship_type, target) else {
+        return Ok(None);
+    };
+    Ok(Some(Relationship {
+        id,
+        relationship_type,
+        target,
+        target_mode,
+    }))
 }
 
 pub(crate) fn resolve_internal_target(
@@ -167,6 +202,19 @@ pub fn target_map(relationships: &[Relationship]) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relationship_elements_and_attributes_are_namespace_safe() {
+        let foreign_root = r#"<x:Relationships xmlns:x="urn:foreign"><x:Relationship Id="rId1" Type="official" Target="secret"/></x:Relationships>"#;
+        assert!(parse_relationship_records(foreign_root).unwrap().is_empty());
+
+        let foreign_attribute = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships" xmlns:x="urn:foreign"><Relationship x:Id="rId1" Type="official" Target="secret"/></Relationships>"#;
+        assert!(
+            parse_relationship_records(foreign_attribute)
+                .unwrap()
+                .is_empty()
+        );
+    }
 
     #[test]
     fn internal_target_is_resolved_relative_to_owner() {

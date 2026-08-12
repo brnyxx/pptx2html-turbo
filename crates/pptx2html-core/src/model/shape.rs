@@ -6,7 +6,6 @@ use super::effects::ShapeEffects;
 use super::fill::Fill;
 use super::geometry::{CustomGeometry, Position, Size};
 use super::hierarchy::{PlaceholderInfo, ShapeStyleRef};
-use super::media::MediaData;
 use super::preserved::UnsupportedData;
 use super::style::Border;
 use super::table::TableData;
@@ -39,8 +38,6 @@ pub struct Shape {
     pub id: u32,
     pub name: String,
     pub actions: ActionSet,
-    /// Shape-owned DrawingML audio or video, when declared in `p:nvPr`.
-    pub media: Option<MediaData>,
     pub shape_type: ShapeType,
     pub position: Position,
     pub size: Size,

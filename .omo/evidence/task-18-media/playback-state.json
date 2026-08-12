@@ -1,0 +1,20 @@
+{
+  "before": {
+    "audioCount": 1,
+    "videoCount": 1,
+    "controls": true,
+    "preload": [
+      "metadata",
+      "metadata"
+    ],
+    "autoplayAttributeCount": 0,
+    "audioPaused": true,
+    "videoPaused": true
+  },
+  "afterClick": {
+    "event": "play",
+    "pausedAtEvent": false,
+    "autoplayAttribute": false,
+    "initiatedBy": "media-action-surface click"
+  }
+}

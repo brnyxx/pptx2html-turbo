@@ -6,23 +6,24 @@ use base64::Engine;
 use super::{RenderCtx, UnresolvedCollector};
 use crate::model::{
     CapabilityStage, ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily,
-    MediaData, MediaKind, PictureData, Presentation, SupportTier,
+    ImageFill, MediaData, MediaKind, Presentation, SupportTier,
 };
 
 pub(super) fn render(
     media: &MediaData,
-    poster: Option<&PictureData>,
+    poster: Option<&ImageFill>,
     shape_id: u32,
     ctx: &RenderCtx<'_>,
     html: &mut String,
 ) {
     if let Some(failure) = media.failure {
+        let metadata = metadata_attributes(media);
         let has_poster = poster.is_some_and(|image| !image.data.is_empty());
         if has_poster && let Some(image) = poster {
             let src = image_source(image, ctx);
             let _ = writeln!(
                 html,
-                "<img class=\"shape-image media-fallback media-poster\" data-media-kind=\"{}\" data-media-fallback=\"{}\" src=\"{src}\" alt=\"Unsupported {}\">",
+                "<img class=\"shape-image media-fallback media-poster\" data-media-kind=\"{}\" data-media-fallback=\"{}\"{metadata} src=\"{src}\" alt=\"Unsupported {}\">",
                 media.kind.as_str(),
                 failure.as_str(),
                 media.kind.as_str(),
@@ -30,7 +31,7 @@ pub(super) fn render(
         } else {
             let _ = writeln!(
                 html,
-                "<div class=\"media-fallback media-placeholder\" data-media-kind=\"{}\" data-media-fallback=\"{}\" role=\"img\" aria-label=\"Unsupported {}\">[{} unavailable]</div>",
+                "<div class=\"media-fallback media-placeholder\" data-media-kind=\"{}\" data-media-fallback=\"{}\"{metadata} role=\"img\" aria-label=\"Unsupported {}\">[{} unavailable]</div>",
                 media.kind.as_str(),
                 failure.as_str(),
                 media.kind.as_str(),
@@ -41,8 +42,9 @@ pub(super) fn render(
         return;
     }
 
-    let Some(content_type) = media.content_type.as_deref() else {
-        return;
+    let content_type = match media.kind {
+        MediaKind::Audio => "audio/wav",
+        MediaKind::Video => "video/mp4",
     };
     let source = if ctx.embed_images {
         let encoded = base64::engine::general_purpose::STANDARD.encode(&media.data);
@@ -52,9 +54,10 @@ pub(super) fn render(
     };
     match media.kind {
         MediaKind::Audio => {
+            let metadata = metadata_attributes(media);
             let _ = writeln!(
                 html,
-                "<audio class=\"shape-media shape-audio\" controls preload=\"metadata\" src=\"{source}\"></audio>"
+                "<audio class=\"shape-media shape-audio\" controls preload=\"metadata\"{metadata} src=\"{source}\"></audio>"
             );
         }
         MediaKind::Video => {
@@ -62,15 +65,36 @@ pub(super) fn render(
                 .filter(|image| !image.data.is_empty())
                 .map(|image| format!(" poster=\"{}\"", image_source(image, ctx)))
                 .unwrap_or_default();
+            let metadata = metadata_attributes(media);
             let _ = writeln!(
                 html,
-                "<video class=\"shape-media shape-video\" controls preload=\"metadata\"{poster_attribute} src=\"{source}\"></video>"
+                "<video class=\"shape-media shape-video\" controls preload=\"metadata\"{metadata}{poster_attribute} src=\"{source}\"></video>"
             );
         }
     }
 }
 
-fn image_source(image: &PictureData, ctx: &RenderCtx<'_>) -> String {
+fn metadata_attributes(media: &MediaData) -> String {
+    let mut attributes = String::new();
+    if let Some(value) = media.trim_start {
+        let _ = write!(attributes, " data-media-trim-start=\"{value}\"");
+    }
+    if let Some(value) = media.trim_end {
+        let _ = write!(attributes, " data-media-trim-end=\"{value}\"");
+    }
+    if let Some(value) = media.loop_requested {
+        let _ = write!(attributes, " data-media-loop=\"{value}\"");
+    }
+    if let Some(value) = media.volume {
+        let _ = write!(attributes, " data-media-volume=\"{value}\"");
+    }
+    if let Some(value) = media.autoplay_requested {
+        let _ = write!(attributes, " data-media-autoplay-requested=\"{value}\"");
+    }
+    attributes
+}
+
+fn image_source(image: &ImageFill, ctx: &RenderCtx<'_>) -> String {
     let mime = if image.content_type.is_empty() {
         "image/png"
     } else {

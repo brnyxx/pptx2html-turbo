@@ -36,20 +36,18 @@ impl ContentTypes {
                 {
                     match xml_utils::local_name(element.name().as_ref()) {
                         "Default" => {
-                            if let (Some(extension), Some(content_type)) = (
-                                xml_utils::attr_str(&element, "Extension"),
-                                xml_utils::attr_str(&element, "ContentType"),
-                            ) {
+                            if let Some((extension, content_type)) =
+                                unqualified_content_type_attributes(&element, "Extension")
+                            {
                                 content_types
                                     .defaults
                                     .insert(extension.to_ascii_lowercase(), content_type);
                             }
                         }
                         "Override" => {
-                            if let (Some(part_name), Some(content_type)) = (
-                                xml_utils::attr_str(&element, "PartName"),
-                                xml_utils::attr_str(&element, "ContentType"),
-                            ) {
+                            if let Some((part_name, content_type)) =
+                                unqualified_content_type_attributes(&element, "PartName")
+                            {
                                 content_types.overrides.insert(
                                     part_name.trim_start_matches('/').to_owned(),
                                     content_type,
@@ -75,6 +73,27 @@ impl ContentTypes {
                 self.defaults.get(&extension).map(String::as_str)
             })
     }
+}
+
+fn unqualified_content_type_attributes(
+    element: &quick_xml::events::BytesStart<'_>,
+    key_name: &str,
+) -> Option<(String, String)> {
+    let mut key_value = None;
+    let mut content_type = None;
+    for attribute in element.attributes().flatten() {
+        let key = std::str::from_utf8(attribute.key.as_ref()).ok()?;
+        if key.contains(':') {
+            return None;
+        }
+        let value = attribute.unescape_value().ok()?.into_owned();
+        match key {
+            key if key == key_name && key_value.is_none() => key_value = Some(value),
+            "ContentType" if content_type.is_none() => content_type = Some(value),
+            _ => {}
+        }
+    }
+    Some((key_value?, content_type?))
 }
 
 pub(crate) fn resolve_slide<R: Read + Seek>(
@@ -219,4 +238,27 @@ fn supported_mime(mime: &str) -> bool {
         mime,
         "image/png" | "image/jpeg" | "image/gif" | "image/webp"
     )
+}
+
+#[cfg(test)]
+mod content_type_tests {
+    use super::ContentTypes;
+
+    #[test]
+    fn requires_official_elements_and_unqualified_attributes() {
+        let foreign_element = ContentTypes::parse(
+            r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types" xmlns:x="urn:foreign"><x:Default Extension="wav" ContentType="audio/wav"/></Types>"#,
+        );
+        assert!(foreign_element.for_part("ppt/media/a.wav").is_none());
+
+        let foreign_attribute = ContentTypes::parse(
+            r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types" xmlns:x="urn:foreign"><Default x:Extension="wav" ContentType="audio/wav"/></Types>"#,
+        );
+        assert!(foreign_attribute.for_part("ppt/media/a.wav").is_none());
+
+        let official = ContentTypes::parse(
+            r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="wav" ContentType="audio/wav"/></Types>"#,
+        );
+        assert_eq!(official.for_part("ppt/media/a.wav"), Some("audio/wav"));
+    }
 }

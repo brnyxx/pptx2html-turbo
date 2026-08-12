@@ -1,7 +1,6 @@
 mod fixtures;
 
-use pptx2html_core::model::{MediaFailure, MediaKind};
-use pptx2html_core::{convert_bytes_with_metadata, parser::PptxParser};
+use pptx2html_core::convert_bytes_with_metadata;
 
 use fixtures::MinimalPptx;
 
@@ -46,16 +45,119 @@ fn package(kind: &str, rel_type: &str, target: &str, mode: Option<&str>, data: &
 }
 
 #[test]
+fn foreign_relationship_and_foreign_nv_pr_never_authorize_media() {
+    let foreign_relationship = r#"<x:Relationships xmlns:x="urn:foreign"><x:Relationship Id="rIdMedia" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" Target="../media/media.wav"/></x:Relationships>"#;
+    let pptx = MinimalPptx::new(&shape("audio", "rIdMedia", true))
+        .with_slide_rels(foreign_relationship)
+        .with_extra_file("ppt/media/media.wav", &wav())
+        .build();
+    let result = convert_bytes_with_metadata(&pptx).expect("foreign relationship converts inertly");
+    assert!(!result.html.contains("<audio"));
+    assert!(!result.html.contains("data:audio/wav"));
+
+    let foreign_owner = shape("audio", "rIdMedia", true)
+        .replace("<p:nvPr>", "<x:nvPr xmlns:x=\"urn:foreign\">")
+        .replace("</p:nvPr>", "</x:nvPr>");
+    let rels = format!(
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdMedia" Type="{AUDIO_REL}" Target="../media/media.wav"/></Relationships>"#
+    );
+    let pptx = MinimalPptx::new(&foreign_owner)
+        .with_slide_rels(&rels)
+        .with_extra_file("ppt/media/media.wav", &wav())
+        .build();
+    let result = convert_bytes_with_metadata(&pptx).expect("foreign nvPr converts inertly");
+    assert!(!result.html.contains("<audio"));
+    assert!(!result.html.contains("data:audio/wav"));
+}
+
+#[test]
+fn requested_metadata_is_preserved_but_autoplay_is_never_invented() {
+    let media = shape("audio", "rIdMedia", true).replace(
+        "<a:audioFile r:link=\"rIdMedia\"/>",
+        "<a:audioFile r:link=\"rIdMedia\" trimStart=\"125\" trimEnd=\"875\" loop=\"1\" vol=\"42000\" autoplay=\"1\"/>",
+    );
+    let rels = format!(
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdMedia" Type="{AUDIO_REL}" Target="../media/media.wav"/></Relationships>"#
+    );
+    let pptx = MinimalPptx::new(&media)
+        .with_slide_rels(&rels)
+        .with_extra_file("ppt/media/media.wav", &wav())
+        .build();
+    let result = convert_bytes_with_metadata(&pptx).expect("metadata converts");
+    assert!(result.html.contains("data-media-trim-start=\"125\""));
+    assert!(result.html.contains("data-media-trim-end=\"875\""));
+    assert!(result.html.contains("data-media-loop=\"true\""));
+    assert!(result.html.contains("data-media-volume=\"42000\""));
+    assert!(
+        result
+            .html
+            .contains("data-media-autoplay-requested=\"true\"")
+    );
+    assert!(!result.html.contains(" autoplay"));
+}
+
+#[test]
+fn official_timing_media_node_metadata_is_preserved_without_execution() {
+    let timing = r#"<p:timing><p:tnLst><p:video><p:cMediaNode vol="33000"><p:cTn repeatCount="indefinite"/><p:tgtEl><p:spTgt spid="2"/></p:tgtEl><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cMediaNode></p:video></p:tnLst></p:timing>"#;
+    let body = format!("{}{timing}", shape("video", "rIdMedia", false));
+    let rels = format!(
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdMedia" Type="{VIDEO_REL}" Target="../media/media.mp4"/></Relationships>"#
+    );
+    let pptx = MinimalPptx::new(&body)
+        .with_slide_rels(&rels)
+        .with_extra_file(
+            "ppt/media/media.mp4",
+            include_bytes!("../../../evaluate/completion_decks/README.md"),
+        )
+        .build();
+    let result = convert_bytes_with_metadata(&pptx).expect("timing metadata remains observable");
+    assert!(result.html.contains("data-media-volume=\"33000\""));
+    assert!(result.html.contains("data-media-loop=\"true\""));
+    assert!(!result.html.contains(" autoplay"));
+}
+
+#[test]
+fn fake_mp4_substrings_and_foreign_content_type_attributes_are_rejected() {
+    let fake = b"\0\0\0\x18ftypavc1avcCxxxx";
+    let rels = format!(
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdMedia" Type="{VIDEO_REL}" Target="../media/media.mp4"/></Relationships>"#
+    );
+    let pptx = MinimalPptx::new(&shape("video", "rIdMedia", false))
+        .with_slide_rels(&rels)
+        .with_extra_file("ppt/media/media.mp4", fake)
+        .build();
+    let result = convert_bytes_with_metadata(&pptx).expect("fake mp4 converts as fallback");
+    assert!(!result.html.contains("<video"));
+    assert!(
+        result
+            .html
+            .contains("data-media-fallback=\"unsupported-codec\"")
+    );
+}
+
+#[test]
+fn poster_requires_safe_internal_official_image_relationship() {
+    let body = shape("audio", "rIdMedia", false).replace(
+        "<p:blipFill/>",
+        "<p:blipFill><a:blip r:embed=\"rIdPoster\"/></p:blipFill>",
+    );
+    let rels = format!(
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdMedia" Type="{AUDIO_REL}" Target="../media/media.wav"/><Relationship Id="rIdPoster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://user:secret@example.invalid/poster.png?token=secret" TargetMode="External"/></Relationships>"#
+    );
+    let pptx = MinimalPptx::new(&body)
+        .with_slide_rels(&rels)
+        .with_extra_file("ppt/media/media.wav", &wav())
+        .build();
+    let result = convert_bytes_with_metadata(&pptx).expect("unsafe poster stays inert");
+    assert!(result.html.contains("<audio"));
+    assert!(!result.html.contains(" poster="));
+    assert!(!result.html.contains("example.invalid"));
+    assert!(!result.html.contains("token=secret"));
+}
+
+#[test]
 fn internal_official_pcm_wav_renders_native_controls_and_media_action() {
     let pptx = package("audio", AUDIO_REL, "../media/media.wav", None, &wav());
-    let presentation = PptxParser::parse_bytes(&pptx).expect("fixture parses");
-    let media = presentation.slides[0].shapes[0]
-        .media
-        .as_ref()
-        .expect("typed media");
-    assert_eq!(media.kind, MediaKind::Audio);
-    assert!(media.failure.is_none());
-
     let result = convert_bytes_with_metadata(&pptx).expect("fixture converts");
     assert!(
         result
@@ -77,13 +179,6 @@ fn external_media_is_never_loaded_and_has_typed_placeholder_fallback() {
         Some("External"),
         b"not used",
     );
-    let presentation = PptxParser::parse_bytes(&pptx).expect("fixture parses");
-    let media = presentation.slides[0].shapes[0]
-        .media
-        .as_ref()
-        .expect("typed media");
-    assert_eq!(media.failure, Some(MediaFailure::ExternalTarget));
-
     let result = convert_bytes_with_metadata(&pptx).expect("fixture converts");
     assert!(
         result
@@ -104,25 +199,22 @@ fn wrong_relationship_type_and_unsafe_owner_relative_path_fall_back() {
         (
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
             "../media/media.wav",
-            MediaFailure::WrongRelationshipType,
+            "wrong-relationship-type",
         ),
-        (AUDIO_REL, "../../../escape.wav", MediaFailure::UnsafeTarget),
+        (AUDIO_REL, "../../../escape.wav", "unsafe-target"),
     ] {
         let pptx = package("audio", relationship_type, target, None, &wav());
-        let presentation = PptxParser::parse_bytes(&pptx).expect("fixture parses");
-        assert_eq!(
-            presentation.slides[0].shapes[0]
-                .media
-                .as_ref()
-                .and_then(|media| media.failure),
-            Some(expected)
-        );
         let result = convert_bytes_with_metadata(&pptx).expect("fixture converts");
         assert!(!result.html.contains("<audio"));
         assert!(
             result
                 .html
                 .contains("class=\"media-fallback media-placeholder\"")
+        );
+        assert!(
+            result
+                .html
+                .contains(&format!("data-media-fallback=\"{expected}\""))
         );
     }
 }

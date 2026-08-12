@@ -1,0 +1,16 @@
+{
+  "fallbackCount": 1,
+  "posterCount": 1,
+  "placeholderCount": 0,
+  "fallbacks": [
+    {
+      "kind": "audio",
+      "reason": "unsupported-content-type",
+      "sourceScheme": "data",
+      "label": "Unsupported audio"
+    }
+  ],
+  "externalHttpLinks": [],
+  "externalMediaSources": [],
+  "externalHttpRequests": []
+}
