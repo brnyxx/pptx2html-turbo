@@ -6,6 +6,7 @@ mod action_relationship;
 mod chart_parser;
 mod custom_geometry;
 mod custom_guide;
+mod effect_diagnostics;
 mod embedded_parser;
 mod fill_parser;
 mod graphic_frame_parser;

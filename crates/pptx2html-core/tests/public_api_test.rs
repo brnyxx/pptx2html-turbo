@@ -22,6 +22,16 @@ use pptx2html_core::{
 };
 use tempfile::tempdir;
 
+#[test]
+fn previous_shape_effects_struct_literal_remains_source_compatible() {
+    let effects = ShapeEffects {
+        outer_shadow: None,
+        glow: None,
+    };
+    assert!(effects.outer_shadow.is_none());
+    assert!(effects.glow.is_none());
+}
+
 fn basic_text_shape(text: &str) -> String {
     format!(
         r#"<p:sp>

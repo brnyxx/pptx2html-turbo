@@ -8,8 +8,8 @@ use zip::ZipArchive;
 
 use super::slide_parser::ShapeBuilder;
 use super::{
-    embedded_parser, media_parser, notes_comments_parser, picture_bullet_diagnostics,
-    table_style_package_diagnostics, timing_parser, xml_utils,
+    effect_diagnostics, embedded_parser, media_parser, notes_comments_parser,
+    picture_bullet_diagnostics, table_style_package_diagnostics, timing_parser, xml_utils,
 };
 use crate::error::PptxResult;
 use crate::model::slide::{UnresolvedType, UnsupportedData};
@@ -61,6 +61,7 @@ fn collect_xml_diagnostics(
 ) -> PptxResult<()> {
     let xml = read_text_entry(archive, name)?;
     timing_parser::collect_diagnostics(name, &xml, diagnostics);
+    effect_diagnostics::collect(name, &xml, diagnostics);
     picture_bullet_diagnostics::collect(archive, name, &xml, diagnostics)?;
     let mut reader = NsReader::from_str(&xml);
     let mut buffer = Vec::new();

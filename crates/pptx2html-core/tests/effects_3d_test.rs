@@ -1,9 +1,8 @@
 mod fixtures;
 
 use fixtures::MinimalPptx;
-use pptx2html_core::model::effects::PreservedEffectKind;
+use pptx2html_core::convert_bytes_with_metadata;
 use pptx2html_core::model::{CapabilityStage, FallbackKind, SupportTier};
-use pptx2html_core::{convert_bytes_with_metadata, parser::PptxParser};
 
 const EFFECT_SHAPE: &str = r#"
 <p:sp>
@@ -19,64 +18,6 @@ const EFFECT_SHAPE: &str = r#"
   </p:spPr>
 </p:sp>
 "#;
-
-#[test]
-fn parses_typed_reflection_and_preserves_ordered_advanced_effect_xml() {
-    let bytes = MinimalPptx::new(EFFECT_SHAPE).build();
-    let presentation = PptxParser::parse_bytes(&bytes).expect("parse effects fixture");
-    let effects = &presentation.slides[0].shapes[0].effects;
-
-    let reflection = effects.reflection.as_ref().expect("typed reflection");
-    assert_eq!(reflection.blur_radius, Some(40000.0 / 12700.0));
-    assert_eq!(reflection.start_alpha, Some(0.5));
-    assert_eq!(reflection.distance, Some(2.0));
-    assert_eq!(reflection.direction, Some(90.0));
-    assert_eq!(reflection.rotate_with_shape, Some(true));
-
-    let scene = effects.scene_3d.as_ref().expect("typed scene3d");
-    assert_eq!(scene.camera_preset.as_deref(), Some("perspectiveFront"));
-    assert_eq!(scene.light_rig.as_deref(), Some("threePt"));
-    assert_eq!(scene.light_direction.as_deref(), Some("t"));
-
-    let shape_3d = effects.shape_3d.as_ref().expect("typed sp3d");
-    assert_eq!(shape_3d.extrusion_height, Some(120000.0 / 12700.0));
-    assert_eq!(shape_3d.preset_material.as_deref(), Some("warmMatte"));
-    assert_eq!(
-        shape_3d
-            .top_bevel
-            .as_ref()
-            .and_then(|bevel| bevel.preset.as_deref()),
-        Some("circle")
-    );
-
-    assert_eq!(
-        effects
-            .preserved
-            .iter()
-            .map(|effect| effect.kind)
-            .collect::<Vec<_>>(),
-        vec![
-            PreservedEffectKind::Scene3d,
-            PreservedEffectKind::EffectDag,
-            PreservedEffectKind::Shape3d,
-        ]
-    );
-    assert!(
-        effects.preserved[0]
-            .raw_xml
-            .contains("<a:camera prst=\"perspectiveFront\"/>")
-    );
-    assert!(effects.preserved[1].raw_xml.contains("name=\"first\""));
-    assert!(
-        effects.preserved[1].raw_xml.find("name=\"first\"")
-            < effects.preserved[1].raw_xml.find("name=\"second\"")
-    );
-    assert!(
-        effects.preserved[2]
-            .raw_xml
-            .contains("prstMaterial=\"warmMatte\"")
-    );
-}
 
 #[test]
 fn renders_bounded_reflection_and_truthful_stable_diagnostics() {
@@ -138,6 +79,51 @@ fn renders_bounded_reflection_and_truthful_stable_diagnostics() {
                 .as_deref()
                 .is_some_and(|raw| raw.starts_with("<a:"))
             && diagnostic.reason.contains("not rendered as Office 3D")
+    }));
+}
+
+#[test]
+fn theme_and_non_shape_advanced_effects_emit_specialized_raw_fallbacks() {
+    let theme = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="AdversarialTheme">
+  <a:themeElements>
+    <a:clrScheme name="colors"><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1></a:clrScheme>
+    <a:fontScheme name="fonts"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
+    <a:fmtScheme name="fmt"><a:fillStyleLst/><a:lnStyleLst/><a:effectStyleLst>
+      <a:effectStyle><a:effectLst><a:reflection blurRad="12700" stA="40000"/></a:effectLst><a:scene3d><a:camera prst="orthographicFront"/></a:scene3d></a:effectStyle>
+    </a:effectStyleLst><a:bgFillStyleLst/></a:fmtScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="7" name="theme effect"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr><p:style><a:lnRef idx="0"/><a:fillRef idx="0"/><a:effectRef idx="1"/><a:fontRef idx="minor"/></p:style></p:sp>"#;
+    let result =
+        convert_bytes_with_metadata(&MinimalPptx::new(shape).with_full_theme(theme).build())
+            .expect("convert adversarial theme effects");
+
+    let theme_effects = result
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "DRAWINGML_THEME_EFFECT_FALLBACK")
+        .collect::<Vec<_>>();
+    assert_eq!(theme_effects.len(), 2);
+    assert_eq!(
+        theme_effects
+            .iter()
+            .filter_map(|diagnostic| diagnostic.location.qualified_element_name.as_deref())
+            .collect::<Vec<_>>(),
+        vec!["a:reflection", "a:scene3d"]
+    );
+    assert!(theme_effects.iter().all(|diagnostic| {
+        diagnostic.support_tier == SupportTier::Fallback
+            && diagnostic.stage == Some(CapabilityStage::Parsed)
+            && diagnostic
+                .raw_reference
+                .as_deref()
+                .is_some_and(|raw| raw.starts_with("<a:"))
+            && diagnostic.reason.contains("theme effect style")
+    }));
+    assert!(result.diagnostics.iter().all(|diagnostic| {
+        diagnostic.location.qualified_element_name.as_deref() != Some("a:reflection")
+            || diagnostic.code != "OOXML_ELEMENT_UNSUPPORTED"
     }));
 }
 

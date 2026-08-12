@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 
-use quick_xml::events::{BytesEnd, BytesStart};
+use quick_xml::events::BytesStart;
 use zip::ZipArchive;
 
 use super::graphic_frame_parser::{mime_from_extension, resolve_relationship_path};
 use super::pattern_fill_parser::PatternSaxState;
-use super::preserved_parser::{append_empty_element, append_end_element, append_start_element};
 use super::slide_parser::ShapeBuilder;
 #[cfg(test)]
 use super::table_parser::TableCellBuilder;
@@ -55,21 +54,6 @@ pub(crate) struct FillSaxState {
     background_gradient_type: GradientType,
     background_stop_position: f64,
     pattern: PatternSaxState,
-    effect_capture: Option<EffectCapture>,
-}
-
-struct EffectCapture {
-    kind: EffectCaptureKind,
-    depth: usize,
-    raw_xml: String,
-}
-
-#[derive(Clone, Copy)]
-enum EffectCaptureKind {
-    Reflection,
-    Scene3d,
-    Shape3d,
-    EffectDag,
 }
 
 pub(crate) struct ColorTargets<'a> {
@@ -129,7 +113,6 @@ impl Default for FillSaxState {
             background_gradient_type: GradientType::Linear,
             background_stop_position: 0.0,
             pattern: PatternSaxState::default(),
-            effect_capture: None,
         }
     }
 }
@@ -230,15 +213,6 @@ impl FillSaxState {
         table: &mut TableSaxState,
         slide: &mut Slide,
     ) -> bool {
-        if let Some(capture) = self.effect_capture.as_mut() {
-            update_effect_child(capture.kind, local, element, shape);
-            append_empty_element(element, local, &mut capture.raw_xml);
-            return true;
-        }
-        if in_shape_properties && begin_empty_effect_capture(local, element, shape) {
-            return true;
-        }
-
         match local {
             "pattFill" => {
                 if self.pattern.start(
@@ -376,24 +350,6 @@ impl FillSaxState {
         text: &TextSaxState,
         table: &TableSaxState,
     ) -> bool {
-        if let Some(capture) = self.effect_capture.as_mut() {
-            update_effect_child(capture.kind, local, element, shape);
-            append_start_element(element, local, &mut capture.raw_xml);
-            capture.depth += 1;
-            return true;
-        }
-        if in_shape_properties && let Some(kind) = effect_capture_kind(local) {
-            initialize_typed_effect(kind, element, shape);
-            let mut raw_xml = String::new();
-            append_start_element(element, local, &mut raw_xml);
-            self.effect_capture = Some(EffectCapture {
-                kind,
-                depth: 1,
-                raw_xml,
-            });
-            return true;
-        }
-
         match local {
             "pattFill" => {
                 if !self.pattern.start(
@@ -539,20 +495,8 @@ impl FillSaxState {
     pub(crate) fn handle_end<R: Read + Seek>(
         &mut self,
         local: &str,
-        element: &BytesEnd<'_>,
         targets: FillEndTargets<'_, R>,
     ) -> bool {
-        if let Some(capture) = self.effect_capture.as_mut() {
-            append_end_element(element, local, &mut capture.raw_xml);
-            capture.depth = capture.depth.saturating_sub(1);
-            if capture.depth == 0
-                && let Some(capture) = self.effect_capture.take()
-            {
-                finish_effect_capture(capture, targets.shape);
-            }
-            return true;
-        }
-
         match local {
             "fgClr" | "bgClr" if self.pattern.is_active() => {
                 self.pattern.finish_color_role(local);
@@ -974,166 +918,6 @@ pub(crate) fn dispatch_color(
             stops,
         );
     }
-}
-
-fn effect_capture_kind(local: &str) -> Option<EffectCaptureKind> {
-    match local {
-        "reflection" => Some(EffectCaptureKind::Reflection),
-        "scene3d" => Some(EffectCaptureKind::Scene3d),
-        "sp3d" => Some(EffectCaptureKind::Shape3d),
-        "effectDag" => Some(EffectCaptureKind::EffectDag),
-        _ => None,
-    }
-}
-
-fn begin_empty_effect_capture(
-    local: &str,
-    element: &BytesStart<'_>,
-    shape: &mut Option<ShapeBuilder>,
-) -> bool {
-    let Some(kind) = effect_capture_kind(local) else {
-        return false;
-    };
-    initialize_typed_effect(kind, element, shape);
-    let mut raw_xml = String::new();
-    append_empty_element(element, local, &mut raw_xml);
-    finish_effect_capture(
-        EffectCapture {
-            kind,
-            depth: 0,
-            raw_xml,
-        },
-        shape,
-    );
-    true
-}
-
-fn initialize_typed_effect(
-    kind: EffectCaptureKind,
-    element: &BytesStart<'_>,
-    shape: &mut Option<ShapeBuilder>,
-) {
-    let Some(shape) = shape.as_mut() else {
-        return;
-    };
-    match kind {
-        EffectCaptureKind::Reflection => {
-            shape.shape_reflection = Some(ReflectionEffect {
-                blur_radius: effect_emu_attribute(element, "blurRad"),
-                start_alpha: effect_percentage_attribute(element, "stA"),
-                end_alpha: effect_percentage_attribute(element, "endA"),
-                start_position: effect_percentage_attribute(element, "stPos"),
-                end_position: effect_percentage_attribute(element, "endPos"),
-                distance: effect_emu_attribute(element, "dist"),
-                direction: effect_angle_attribute(element, "dir"),
-                scale_x: effect_percentage_attribute(element, "sx"),
-                scale_y: effect_percentage_attribute(element, "sy"),
-                skew_x: effect_angle_attribute(element, "kx"),
-                skew_y: effect_angle_attribute(element, "ky"),
-                alignment: xml_utils::attr_str(element, "algn"),
-                rotate_with_shape: boolean_attribute(element, "rotWithShape"),
-                raw_xml: String::new(),
-            });
-        }
-        EffectCaptureKind::Scene3d => shape.scene_3d = Some(Scene3d::default()),
-        EffectCaptureKind::Shape3d => {
-            shape.shape_3d = Some(Shape3d {
-                extrusion_height: effect_emu_attribute(element, "extrusionH"),
-                contour_width: effect_emu_attribute(element, "contourW"),
-                preset_material: xml_utils::attr_str(element, "prstMaterial"),
-                ..Default::default()
-            });
-        }
-        EffectCaptureKind::EffectDag => {}
-    }
-}
-
-fn update_effect_child(
-    kind: EffectCaptureKind,
-    local: &str,
-    element: &BytesStart<'_>,
-    shape: &mut Option<ShapeBuilder>,
-) {
-    let Some(shape) = shape.as_mut() else {
-        return;
-    };
-    match (kind, local) {
-        (EffectCaptureKind::Scene3d, "camera") => {
-            if let Some(scene) = shape.scene_3d.as_mut() {
-                scene.camera_preset = xml_utils::attr_str(element, "prst");
-            }
-        }
-        (EffectCaptureKind::Scene3d, "lightRig") => {
-            if let Some(scene) = shape.scene_3d.as_mut() {
-                scene.light_rig = xml_utils::attr_str(element, "rig");
-                scene.light_direction = xml_utils::attr_str(element, "dir");
-            }
-        }
-        (EffectCaptureKind::Shape3d, "bevelT" | "bevelB") => {
-            let bevel = Bevel3d {
-                width: effect_emu_attribute(element, "w"),
-                height: effect_emu_attribute(element, "h"),
-                preset: xml_utils::attr_str(element, "prst"),
-            };
-            if let Some(shape_3d) = shape.shape_3d.as_mut() {
-                if local == "bevelT" {
-                    shape_3d.top_bevel = Some(bevel);
-                } else {
-                    shape_3d.bottom_bevel = Some(bevel);
-                }
-            }
-        }
-        _ => {}
-    }
-}
-
-fn finish_effect_capture(capture: EffectCapture, shape: &mut Option<ShapeBuilder>) {
-    let Some(shape) = shape.as_mut() else {
-        return;
-    };
-    match capture.kind {
-        EffectCaptureKind::Reflection => {
-            if let Some(reflection) = shape.shape_reflection.as_mut() {
-                reflection.raw_xml = capture.raw_xml;
-            }
-        }
-        EffectCaptureKind::Scene3d => shape.preserved_effects.push(PreservedEffect {
-            kind: PreservedEffectKind::Scene3d,
-            raw_xml: capture.raw_xml,
-        }),
-        EffectCaptureKind::Shape3d => shape.preserved_effects.push(PreservedEffect {
-            kind: PreservedEffectKind::Shape3d,
-            raw_xml: capture.raw_xml,
-        }),
-        EffectCaptureKind::EffectDag => shape.preserved_effects.push(PreservedEffect {
-            kind: PreservedEffectKind::EffectDag,
-            raw_xml: capture.raw_xml,
-        }),
-    }
-}
-
-fn effect_number_attribute(element: &BytesStart<'_>, name: &str) -> Option<f64> {
-    xml_utils::attr_str(element, name)?.parse::<f64>().ok()
-}
-
-fn effect_emu_attribute(element: &BytesStart<'_>, name: &str) -> Option<f64> {
-    effect_number_attribute(element, name).map(|value| value / 12_700.0)
-}
-
-fn effect_percentage_attribute(element: &BytesStart<'_>, name: &str) -> Option<f64> {
-    effect_number_attribute(element, name).map(|value| value / 100_000.0)
-}
-
-fn effect_angle_attribute(element: &BytesStart<'_>, name: &str) -> Option<f64> {
-    effect_number_attribute(element, name).map(|value| value / 60_000.0)
-}
-
-fn boolean_attribute(element: &BytesStart<'_>, name: &str) -> Option<bool> {
-    xml_utils::attr_str(element, name).and_then(|value| match value.as_str() {
-        "1" | "true" => Some(true),
-        "0" | "false" => Some(false),
-        _ => None,
-    })
 }
 
 pub(crate) fn parse_outer_shadow(element: &BytesStart<'_>) -> (f64, f64, f64) {

@@ -867,14 +867,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
 
         let _ = writeln!(html, "<div class=\"shape\" style=\"{style_buf}\">");
         actions::render_shape_surface(&shape.actions, shape.id, ctx, html);
-        Self::render_reflection_and_record_advanced_effects(
-            shape,
-            &resolved_fill,
-            pos,
-            size,
-            ctx,
-            html,
-        );
+        Self::render_reflection_from_diagnostics(shape, &resolved_fill, pos, size, ctx, html);
 
         // Table
         if let ShapeType::Table(ref table) = shape.shape_type {
@@ -1943,7 +1936,6 @@ fn scale_svg_effect_blur(effects: &ShapeEffects, factor: f64) -> ShapeEffects {
             color: glow.color.clone(),
             alpha: glow.alpha,
         }),
-        ..effects.clone()
     }
 }
 
@@ -2733,7 +2725,6 @@ mod tests {
                     color: Color::rgb("ABCDEF"),
                     alpha: 1.0,
                 }),
-                ..Default::default()
             },
             ..Default::default()
         };

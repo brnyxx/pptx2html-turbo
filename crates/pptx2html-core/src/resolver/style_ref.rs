@@ -143,7 +143,6 @@ pub fn resolve_effect_ref(
     Some(ShapeEffects {
         outer_shadow: effect_style.outer_shadow.clone(),
         glow: effect_style.glow.clone(),
-        ..Default::default()
     })
 }
 

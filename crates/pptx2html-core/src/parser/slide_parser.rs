@@ -802,7 +802,6 @@ fn parse_slide_impl<R: Read + Seek>(
                 }
                 if fill.handle_end(
                     &local,
-                    e,
                     FillEndTargets {
                         shape: &mut current_shape,
                         text: &mut text,
@@ -1321,10 +1320,6 @@ pub(crate) struct ShapeBuilder {
     // Shape-level effects
     pub(crate) shape_outer_shadow: Option<OuterShadow>,
     pub(crate) shape_glow: Option<GlowEffect>,
-    pub(crate) shape_reflection: Option<ReflectionEffect>,
-    pub(crate) scene_3d: Option<Scene3d>,
-    pub(crate) shape_3d: Option<Shape3d>,
-    pub(crate) preserved_effects: Vec<PreservedEffect>,
     // Custom geometry
     custom_geometry: Option<CustomGeometry>,
     // Connection shape (cxnSp) — defaults to line if no preset geometry
@@ -1429,10 +1424,6 @@ impl ShapeBuilder {
         let effects = ShapeEffects {
             outer_shadow: self.shape_outer_shadow,
             glow: self.shape_glow,
-            reflection: self.shape_reflection,
-            scene_3d: self.scene_3d,
-            shape_3d: self.shape_3d,
-            preserved: self.preserved_effects,
         };
 
         Shape {
