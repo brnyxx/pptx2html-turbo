@@ -66,12 +66,16 @@ impl PptxParser {
 
     /// Parse PPTX from in-memory byte data.
     pub fn parse_bytes(data: &[u8]) -> PptxResult<Presentation> {
-        Self::parse_bytes_with_annotations(data).map(|(presentation, _)| presentation)
+        Self::parse_bytes_with_metadata(data).map(|(presentation, _, _)| presentation)
     }
 
-    pub(crate) fn parse_bytes_with_annotations(
+    pub(crate) fn parse_bytes_with_metadata(
         data: &[u8],
-    ) -> PptxResult<(Presentation, NotesCommentsInventory)> {
+    ) -> PptxResult<(
+        Presentation,
+        NotesCommentsInventory,
+        Vec<crate::model::timing::ParsedTimingInventory>,
+    )> {
         let cursor = Cursor::new(data);
         let mut archive = ZipArchive::new(cursor)?;
 
@@ -261,6 +265,7 @@ impl PptxParser {
             })
             .collect();
         info!("Parsing {total_slides} slide(s)");
+        let mut slide_timings = Vec::new();
         for (slide_num, slide_ref) in slide_refs.iter().enumerate() {
             info!("Parsing slide {} of {total_slides}", slide_num + 1);
             if let Some(slide_path) = pres_rels.get(&slide_ref.rel_id) {
@@ -300,7 +305,6 @@ impl PptxParser {
                         &mut archive,
                     );
                     resolve_table_style_references(&mut slide.shapes, &table_styles);
-                    slide.timing = timing_parser::parse(&slide_xml)?;
                     slide.hidden = slide_ref.hidden;
 
                     // Find which layout this slide references
@@ -319,13 +323,14 @@ impl PptxParser {
                             slide_num + 1,
                         );
                     }
+                    slide_timings.push(timing_parser::parse(&slide_xml)?);
                     presentation.slides.push(slide);
                 }
             }
         }
 
         // 7. Build presentation (already populated)
-        Ok((presentation, notes_comments))
+        Ok((presentation, notes_comments, slide_timings))
     }
 
     /// Read a ZIP entry

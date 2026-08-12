@@ -32,6 +32,7 @@ use crate::ConversionResult;
 use crate::ExternalAsset;
 use crate::error::PptxResult;
 use crate::model::presentation::{ClrMap, ColorScheme};
+use crate::model::timing::ParsedTimingInventory;
 use crate::model::*;
 use crate::resolver::inheritance;
 use crate::resolver::placeholder;
@@ -61,6 +62,7 @@ struct UnresolvedCollector {
 struct RenderCtx<'a> {
     pres: &'a Presentation,
     slide: Option<&'a Slide>,
+    timing: Option<&'a ParsedTimingInventory>,
     scheme: Option<&'a ColorScheme>,
     clr_map: Option<&'a ClrMap>,
     embed_images: bool,
@@ -193,6 +195,18 @@ impl<'a> RenderCtx<'a> {
             .push(entry);
     }
 
+    fn with_timing(&self, timing: Option<&'a ParsedTimingInventory>) -> RenderCtx<'a> {
+        RenderCtx {
+            pres: self.pres,
+            slide: self.slide,
+            timing,
+            scheme: self.scheme,
+            clr_map: self.clr_map,
+            embed_images: self.embed_images,
+            collector: self.collector,
+        }
+    }
+
     /// Create a slide-scoped context with resolved ClrMap and per-master theme
     fn for_slide(
         &self,
@@ -206,6 +220,7 @@ impl<'a> RenderCtx<'a> {
         RenderCtx {
             pres: self.pres,
             slide: self.slide,
+            timing: self.timing,
             scheme,
             clr_map: slide_clr_map.or(self.clr_map),
             embed_images: self.embed_images,
@@ -235,28 +250,25 @@ impl HtmlRenderer {
         pres: &Presentation,
         opts: &ConversionOptions,
     ) -> PptxResult<ConversionResult> {
-        Self::render_with_options_diagnostics(pres, opts, Vec::new())
+        Self::render_with_options_diagnostics(
+            pres,
+            opts,
+            Vec::new(),
+            &NotesCommentsInventory::default(),
+            &[],
+        )
     }
 
     pub(crate) fn render_with_options_diagnostics(
         pres: &Presentation,
         opts: &ConversionOptions,
         diagnostics: Vec<ConversionDiagnostic>,
-    ) -> PptxResult<ConversionResult> {
-        Self::render_with_options_annotations(
-            pres,
-            opts,
-            diagnostics,
-            &NotesCommentsInventory::default(),
-        )
-    }
-
-    pub(crate) fn render_with_options_annotations(
-        pres: &Presentation,
-        opts: &ConversionOptions,
-        diagnostics: Vec<ConversionDiagnostic>,
         notes_comments: &NotesCommentsInventory,
+        source_timings: &[ParsedTimingInventory],
     ) -> PptxResult<ConversionResult> {
+        let mut diagnostics = diagnostics;
+        let timings = timing::resolve(pres, source_timings, &mut diagnostics);
+        timing::suppress_generic_diagnostics(&timings, &mut diagnostics);
         let slide_w = pres.slide_size.width.to_px();
         let slide_h = pres.slide_size.height.to_px();
         let slide_scale = opts.effective_scale();
@@ -278,6 +290,7 @@ impl HtmlRenderer {
         let ctx = RenderCtx {
             pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: if pres.clr_map.is_empty() {
                 None
@@ -304,7 +317,7 @@ impl HtmlRenderer {
         html.push_str("<style>\n");
         html.push_str(&Self::global_css(slide_w, slide_h));
         let has_actions = actions::presentation_has_actions(pres);
-        let has_timing = timing::presentation_has_timing(pres);
+        let has_timing = timing::presentation_has_timing(&timings);
         if has_actions {
             html.push_str(actions::CSS);
         }
@@ -322,13 +335,14 @@ impl HtmlRenderer {
                 continue;
             }
             collector.borrow_mut().current_slide_index = i;
+            let timed_ctx = ctx.with_timing(timings.get(i));
             Self::render_slide(
                 slide,
                 one_based,
                 slide_w,
                 slide_h,
                 slide_scale,
-                &ctx,
+                &timed_ctx,
                 &mut html,
             );
             slide_count += 1;
@@ -337,7 +351,7 @@ impl HtmlRenderer {
         html.push_str("</div>\n");
         if has_timing {
             html.push_str("<script type=\"application/json\" id=\"pptx2html-timing\">");
-            html.push_str(&timing::metadata(pres));
+            html.push_str(&timing::metadata(&timings));
             html.push_str("</script>\n");
         }
         media::append_diagnostics(pres, &collector);
@@ -878,14 +892,13 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
             style_buf.push_str("; overflow: hidden");
         }
 
-        let timing_attributes = ctx.slide.map_or_else(String::new, |slide| {
-            if slide.timing.initially_hidden(shape.id) {
+        let timing_attributes = ctx.timing.map_or_else(String::new, |timing| {
+            if timing.initially_hidden(shape.id) {
                 format!(
                     " data-pptx-shape-id=\"{}\" data-timing-initial=\"hidden\"",
                     shape.id
                 )
-            } else if slide
-                .timing
+            } else if timing
                 .groups
                 .iter()
                 .flat_map(|group| &group.effects)
@@ -2361,6 +2374,7 @@ mod tests {
         let ctx_embed = RenderCtx {
             pres: &pres_embed,
             slide: None,
+            timing: None,
             scheme: pres_embed.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,
@@ -2390,6 +2404,7 @@ mod tests {
         let ctx_external = RenderCtx {
             pres: &pres_external,
             slide: None,
+            timing: None,
             scheme: pres_external.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: false,
@@ -2409,6 +2424,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,
@@ -2649,6 +2665,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,
@@ -2720,6 +2737,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: Some(&clr_map),
             embed_images: true,
@@ -2766,6 +2784,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: Some(&clr_map),
             embed_images: true,
@@ -2823,6 +2842,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: Some(&clr_map),
             embed_images: true,
@@ -2841,6 +2861,7 @@ mod tests {
         let ctx_external = RenderCtx {
             pres: &pres_external,
             slide: None,
+            timing: None,
             scheme: pres_external.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: false,
@@ -2877,6 +2898,7 @@ mod tests {
         let ctx_embed = RenderCtx {
             pres: &pres_embed,
             slide: None,
+            timing: None,
             scheme: pres_embed.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,
@@ -3012,6 +3034,7 @@ mod tests {
         let slide_ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: Some(&clr_map),
             embed_images: false,
@@ -3130,6 +3153,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,
@@ -3174,6 +3198,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,
@@ -3336,6 +3361,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,
@@ -3373,6 +3399,7 @@ mod tests {
         let ctx = RenderCtx {
             pres: &pres,
             slide: None,
+            timing: None,
             scheme: pres.primary_theme().map(|t| &t.color_scheme),
             clr_map: None,
             embed_images: true,

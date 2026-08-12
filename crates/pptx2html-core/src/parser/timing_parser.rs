@@ -5,13 +5,16 @@ use quick_xml::name::ResolveResult;
 use quick_xml::reader::NsReader;
 
 use crate::error::{PptxError, PptxResult};
+use crate::model::timing::{
+    AnimationEffect, AnimationTrigger, ParsedTimingInventory, SlideTransition, TimingEffect,
+    TimingFallback, TimingGroup, TimingSource, TimingSourceKind, TransitionKind,
+};
 use crate::model::{
-    AnimationEffect, AnimationTrigger, CapabilityStage, ConversionDiagnostic, DiagnosticLocation,
-    FallbackKind, FeatureFamily, SlideTransition, SupportTier, TimingEffect, TimingFallback,
-    TimingGroup, TimingInventory, TimingSource, TimingSourceKind, TransitionKind,
+    CapabilityStage, ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily,
+    SupportTier,
 };
 
-use super::{preserved_parser::slide_index_from_part, xml_utils};
+use super::xml_utils;
 
 const PML: &[u8] = b"http://schemas.openxmlformats.org/presentationml/2006/main";
 const MAX_DURATION_MS: u32 = 10_000;
@@ -22,6 +25,8 @@ struct Frame {
     pml: bool,
     node_type: Option<String>,
     node_id: Option<String>,
+    delay_ms: Option<u32>,
+    bounded: bool,
 }
 
 struct SourceCapture {
@@ -37,6 +42,7 @@ struct EffectCandidate {
     qualified_name: String,
     depth: usize,
     trigger: Option<AnimationTrigger>,
+    delay_ms: Option<u32>,
     transition: Option<String>,
     filter: Option<String>,
     timing_id: Option<String>,
@@ -45,6 +51,7 @@ struct EffectCandidate {
     set_value: Option<String>,
     bounded: bool,
     source_order: usize,
+    start: usize,
 }
 
 struct UnsupportedCandidate {
@@ -52,11 +59,12 @@ struct UnsupportedCandidate {
     depth: usize,
     timing_id: Option<String>,
     source_order: usize,
+    start: usize,
 }
 
-pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
+pub(crate) fn parse(xml: &str) -> PptxResult<ParsedTimingInventory> {
     let mut reader = NsReader::from_str(xml);
-    let mut inventory = TimingInventory::default();
+    let mut inventory = ParsedTimingInventory::default();
     let mut stack = Vec::<Frame>::new();
     let mut source = None::<SourceCapture>;
     let mut transition_speed = None::<String>;
@@ -122,30 +130,41 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
                 {
                     shape_ids.insert(id);
                 }
+                if pml {
+                    capture_start_delay(&local, &element, &mut stack);
+                }
                 if pml
                     && inside_timing(&stack)
                     && matches!(local.as_str(), "animEffect" | "set")
                     && effect.is_none()
+                    && unsupported.is_none()
                 {
-                    let (trigger, group_id) = trigger_context(&stack);
+                    let (trigger, group_id, delay_ms) = trigger_context(&stack);
                     if trigger == Some(AnimationTrigger::Click) {
                         let group_identity =
                             group_id.clone().unwrap_or_else(|| format!("group-{order}"));
-                        inventory.groups.push(TimingGroup {
-                            identity: format!(
-                                "timing-{group_identity}-group-{}",
-                                inventory.groups.len()
-                            ),
-                            source_order: order,
-                            effects: Vec::new(),
-                        });
-                        last_group = Some(inventory.groups.len() - 1);
+                        let identity_prefix = format!("timing-{group_identity}-group-");
+                        if let Some(index) = inventory
+                            .groups
+                            .iter()
+                            .position(|group| group.identity.starts_with(&identity_prefix))
+                        {
+                            last_group = Some(index);
+                        } else {
+                            inventory.groups.push(TimingGroup {
+                                identity: format!("{identity_prefix}{}", inventory.groups.len()),
+                                source_order: order,
+                                effects: Vec::new(),
+                            });
+                            last_group = Some(inventory.groups.len() - 1);
+                        }
                     }
                     effect = Some(EffectCandidate {
                         local: local.clone(),
                         qualified_name: qualified.clone(),
                         depth,
                         trigger,
+                        delay_ms,
                         transition: attr(&element, "transition"),
                         filter: attr(&element, "filter"),
                         timing_id: None,
@@ -154,11 +173,14 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
                         set_value: None,
                         bounded: true,
                         source_order: order,
+                        start: event_start,
                     });
                     order += 1;
                 } else if pml
                     && inside_timing(&stack)
-                    && is_unsupported_command(&local)
+                    && (unsupported_time_node(&local, &element)
+                        || is_unsupported_command(&local)
+                        || (is_unknown_timing_node(&local) && effect.is_none()))
                     && unsupported.is_none()
                 {
                     unsupported = Some(UnsupportedCandidate {
@@ -166,10 +188,13 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
                         depth,
                         timing_id: None,
                         source_order: order,
+                        start: event_start,
                     });
                     order += 1;
                 }
-                capture_candidate_values(&local, &element, &mut effect, &mut unsupported);
+                if pml {
+                    capture_candidate_values(&local, &element, &mut effect, &mut unsupported);
+                }
                 stack.push(Frame {
                     local,
                     pml,
@@ -179,6 +204,8 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
                         None
                     },
                     node_id: if pml { attr(&element, "id") } else { None },
+                    delay_ms: Some(0),
+                    bounded: !unsupported_time_node("cTn", &element),
                 });
             }
             Event::Empty(element) => {
@@ -226,14 +253,25 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
                         _ => transition_unsupported = true,
                     }
                 }
-                capture_candidate_values(&local, &element, &mut effect, &mut unsupported);
-                if pml && inside_timing(&stack) && is_unsupported_command(&local) {
+                if pml {
+                    capture_start_delay(&local, &element, &mut stack);
+                    capture_candidate_values(&local, &element, &mut effect, &mut unsupported);
+                }
+                if pml
+                    && inside_timing(&stack)
+                    && (is_unsupported_command(&local) || is_unknown_timing_node(&local))
+                    && unsupported.is_none()
+                    && effect.is_none()
+                {
                     push_fallback(
                         &mut inventory,
                         None,
                         qualified,
+                        xml.get(event_start..previous_position)
+                            .unwrap_or_default()
+                            .to_owned(),
                         order,
-                        "animation command is outside the supported subset",
+                        "timing node is outside the supported subset",
                     );
                     order += 1;
                 }
@@ -241,29 +279,41 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
             Event::End(element) => {
                 let local = xml_utils::local_name(element.name().as_ref()).to_owned();
                 let depth = stack.len();
-                if effect
-                    .as_ref()
-                    .is_some_and(|candidate| candidate.depth == depth && candidate.local == local)
+                if pml
+                    && effect.as_ref().is_some_and(|candidate| {
+                        candidate.depth == depth && candidate.local == local
+                    })
                     && let Some(candidate) = effect.take()
                 {
-                    finish_effect(candidate, &shape_ids, last_group, &mut inventory);
+                    let raw_xml = xml
+                        .get(candidate.start..previous_position)
+                        .unwrap_or_default()
+                        .to_owned();
+                    finish_effect(candidate, raw_xml, &shape_ids, last_group, &mut inventory);
                 }
-                if unsupported
-                    .as_ref()
-                    .is_some_and(|candidate| candidate.depth == depth)
+                if pml
+                    && unsupported
+                        .as_ref()
+                        .is_some_and(|candidate| candidate.depth == depth)
                     && let Some(candidate) = unsupported.take()
                 {
+                    let raw_xml = xml
+                        .get(candidate.start..previous_position)
+                        .unwrap_or_default()
+                        .to_owned();
                     push_fallback(
                         &mut inventory,
                         candidate.timing_id,
                         candidate.qualified_name,
+                        raw_xml,
                         candidate.source_order,
-                        "animation command is outside the supported subset",
+                        "timing node is outside the supported subset",
                     );
                 }
-                if source
-                    .as_ref()
-                    .is_some_and(|capture| capture.depth == depth && capture.local == local)
+                if pml
+                    && source
+                        .as_ref()
+                        .is_some_and(|capture| capture.depth == depth && capture.local == local)
                     && let Some(capture) = source.take()
                 {
                     let raw_xml = xml
@@ -284,12 +334,19 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
     }
 
     inventory.groups.retain(|group| !group.effects.is_empty());
+    let transition_raw = inventory
+        .sources
+        .iter()
+        .find(|item| item.kind == TimingSourceKind::Transition)
+        .map(|item| item.raw_xml.clone())
+        .unwrap_or_default();
     if let (Some(identity), Some(kind)) = (transition_identity.clone(), transition_kind) {
         if transition_unsupported {
             push_fallback(
                 &mut inventory,
                 None,
                 "p:transition".to_owned(),
+                transition_raw.clone(),
                 order,
                 "automatic advance or unsupported transition metadata was preserved but not executed",
             );
@@ -304,6 +361,7 @@ pub(crate) fn parse(xml: &str) -> PptxResult<TimingInventory> {
             &mut inventory,
             None,
             "p:transition".to_owned(),
+            transition_raw,
             order,
             "transition kind is outside the cut/fade subset",
         );
@@ -322,7 +380,7 @@ pub(crate) fn collect_diagnostics(
     for fallback in inventory.fallbacks {
         diagnostics.push(ConversionDiagnostic {
             code: "PRESENTATIONML_TIMING_FALLBACK".to_owned(),
-            family: FeatureFamily::Animation,
+            family: FeatureFamily::Unsupported,
             support_tier: SupportTier::Fallback,
             stage: Some(CapabilityStage::Parsed),
             location: DiagnosticLocation {
@@ -332,8 +390,8 @@ pub(crate) fn collect_diagnostics(
                 relationship_id: Some(fallback.source_order.to_string()),
                 ..Default::default()
             },
-            raw_reference: Some(fallback.identity),
-            fallback_kind: FallbackKind::TimingMetadata,
+            raw_reference: Some(fallback.raw_xml),
+            fallback_kind: FallbackKind::UnknownElement,
             reason: fallback.reason,
         });
     }
@@ -341,9 +399,10 @@ pub(crate) fn collect_diagnostics(
 
 fn finish_effect(
     candidate: EffectCandidate,
+    raw_xml: String,
     shape_ids: &BTreeSet<u32>,
     last_group: Option<usize>,
-    inventory: &mut TimingInventory,
+    inventory: &mut ParsedTimingInventory,
 ) {
     let timing_id = candidate.timing_id.clone();
     let identity = format!(
@@ -352,11 +411,12 @@ fn finish_effect(
         candidate.source_order
     );
     let parsed = parse_effect(&candidate, shape_ids);
-    let Some((trigger, effect, duration_ms, shape_id)) = parsed else {
+    let Some((trigger, effect, duration_ms, delay_ms, shape_id)) = parsed else {
         push_fallback(
             inventory,
             timing_id,
             candidate.qualified_name,
+            raw_xml,
             candidate.source_order,
             "effect requires a click/with-previous/after-previous trigger, a resolved slide-shape target, a supported effect, and a finite duration from 1 through 10000 ms",
         );
@@ -372,6 +432,7 @@ fn finish_effect(
             inventory,
             timing_id,
             candidate.qualified_name,
+            raw_xml,
             candidate.source_order,
             "with-previous or after-previous effect has no preceding click group",
         );
@@ -383,15 +444,18 @@ fn finish_effect(
         trigger,
         effect,
         duration_ms,
+        delay_ms,
         shape_id,
+        raw_xml,
     });
 }
 
 fn parse_effect(
     candidate: &EffectCandidate,
-    shape_ids: &BTreeSet<u32>,
-) -> Option<(AnimationTrigger, AnimationEffect, u32, u32)> {
+    _shape_ids: &BTreeSet<u32>,
+) -> Option<(AnimationTrigger, AnimationEffect, u32, u32, u32)> {
     let trigger = candidate.trigger?;
+    let delay_ms = candidate.delay_ms?;
     if !candidate.bounded {
         return None;
     }
@@ -400,9 +464,6 @@ fn parse_effect(
         return None;
     }
     let shape_id = candidate.target.as_deref()?.parse::<u32>().ok()?;
-    if !shape_ids.contains(&shape_id) {
-        return None;
-    }
     let effect = if candidate.local == "set" {
         match candidate.set_value.as_deref() {
             Some("visible") | Some("true") => AnimationEffect::Appear,
@@ -418,7 +479,7 @@ fn parse_effect(
             _ => return None,
         }
     };
-    Some((trigger, effect, duration_ms, shape_id))
+    Some((trigger, effect, duration_ms, delay_ms, shape_id))
 }
 
 fn capture_candidate_values(
@@ -453,7 +514,39 @@ fn capture_candidate_values(
     }
 }
 
-fn trigger_context(stack: &[Frame]) -> (Option<AnimationTrigger>, Option<String>) {
+fn capture_start_delay(local: &str, element: &BytesStart<'_>, stack: &mut [Frame]) {
+    if local != "cond"
+        || !stack
+            .iter()
+            .any(|frame| frame.pml && frame.local == "stCondLst")
+    {
+        return;
+    }
+    let delay_ms = attr(element, "delay")
+        .as_deref()
+        .unwrap_or("0")
+        .parse::<u32>()
+        .ok()
+        .filter(|delay| *delay <= MAX_DURATION_MS);
+    if let Some(frame) = stack
+        .iter_mut()
+        .rev()
+        .find(|frame| frame.pml && frame.local == "cTn")
+    {
+        frame.delay_ms = delay_ms;
+    }
+}
+
+fn trigger_context(stack: &[Frame]) -> (Option<AnimationTrigger>, Option<String>, Option<u32>) {
+    let bounded = stack
+        .iter()
+        .filter(|frame| frame.pml && frame.local == "cTn")
+        .all(|frame| frame.bounded);
+    let delay_ms = stack
+        .iter()
+        .filter(|frame| frame.pml && frame.local == "cTn")
+        .try_fold(0u32, |total, frame| total.checked_add(frame.delay_ms?))
+        .filter(|delay| *delay <= MAX_DURATION_MS);
     for frame in stack.iter().rev() {
         if frame.local != "cTn" || !frame.pml {
             continue;
@@ -465,16 +558,21 @@ fn trigger_context(stack: &[Frame]) -> (Option<AnimationTrigger>, Option<String>
             _ => None,
         };
         if trigger.is_some() {
-            return (trigger, frame.node_id.clone());
+            return (
+                trigger,
+                frame.node_id.clone(),
+                bounded.then_some(delay_ms).flatten(),
+            );
         }
     }
-    (None, None)
+    (None, None, None)
 }
 
 fn push_fallback(
-    inventory: &mut TimingInventory,
+    inventory: &mut ParsedTimingInventory,
     timing_id: Option<String>,
     qualified_name: String,
+    raw_xml: String,
     source_order: usize,
     reason: &str,
 ) {
@@ -486,6 +584,7 @@ fn push_fallback(
         ),
         source_order,
         qualified_name,
+        raw_xml,
         reason: reason.to_owned(),
     });
 }
@@ -514,11 +613,48 @@ fn inside_shape_tree(stack: &[Frame]) -> bool {
         .iter()
         .any(|frame| frame.pml && frame.local == "spTree")
 }
+fn unsupported_time_node(local: &str, element: &BytesStart<'_>) -> bool {
+    local == "cTn"
+        && (attr(element, "repeatCount").is_some()
+            || attr(element, "repeatDur").is_some()
+            || attr(element, "autoRev").is_some_and(|value| value == "1" || value == "true"))
+}
+fn is_unknown_timing_node(local: &str) -> bool {
+    !matches!(
+        local,
+        "timing"
+            | "tnLst"
+            | "par"
+            | "seq"
+            | "cTn"
+            | "childTnLst"
+            | "subTnLst"
+            | "stCondLst"
+            | "endCondLst"
+            | "condLst"
+            | "cond"
+            | "tgtEl"
+            | "spTgt"
+            | "animEffect"
+            | "set"
+            | "cBhvr"
+            | "to"
+            | "strVal"
+            | "boolVal"
+    ) && !is_unsupported_command(local)
+}
 fn is_unsupported_command(local: &str) -> bool {
     matches!(
         local,
         "anim" | "animClr" | "animMotion" | "animRot" | "animScale" | "cmd" | "audio" | "video"
     )
+}
+fn slide_index_from_part(name: &str) -> Option<usize> {
+    name.strip_prefix("ppt/slides/slide")?
+        .strip_suffix(".xml")?
+        .parse::<usize>()
+        .ok()?
+        .checked_sub(1)
 }
 fn transition_duration(speed: Option<&str>) -> u32 {
     match speed {

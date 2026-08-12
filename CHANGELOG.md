@@ -8,7 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Preserve ordered slide transition/timing XML and approximately execute only bounded cut/fade and click/with-previous/after-previous appear, disappear, or fade behavior on resolved slide shapes
 - Keep automatic advance, loops, unbounded effects, unsupported commands, and unresolved targets inert with typed `PRESENTATIONML_TIMING_FALLBACK` diagnostics
-- Add public slide timing types, `Slide::timing`, `FeatureFamily::Animation`, and `FallbackKind::TimingMetadata`; exhaustive matches and slide struct literals require a next-semver-major source migration while package versions remain unchanged
+- Preserve finite start-condition delays up to 10000 ms and exact raw unsupported timing nodes in typed fallback diagnostics
+- Keep timing inventory private to conversion so the 1.1.0 public `Slide`, capability enums, and existing `TimingInventory` API remain source-compatible
 
 ### Breaking API notice - next semver-major only
 

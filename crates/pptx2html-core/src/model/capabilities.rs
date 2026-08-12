@@ -59,7 +59,6 @@ pub enum FeatureFamily {
     Layout,
     Charts,
     Media,
-    Animation,
     Unsupported,
 }
 
@@ -73,7 +72,6 @@ impl FeatureFamily {
             Self::Layout => "layout",
             Self::Charts => "charts",
             Self::Media => "media",
-            Self::Animation => "animation",
             Self::Unsupported => "unsupported",
         }
     }
@@ -211,7 +209,6 @@ mod tests {
         assert_eq!(FeatureFamily::Layout.to_string(), "layout");
         assert_eq!(FeatureFamily::Charts.to_string(), "charts");
         assert_eq!(FeatureFamily::Media.to_string(), "media");
-        assert_eq!(FeatureFamily::Animation.to_string(), "animation");
         assert_eq!(FeatureFamily::Unsupported.to_string(), "unsupported");
     }
 

@@ -2,7 +2,6 @@ use super::fill::Fill;
 #[cfg(test)]
 use super::geometry::CustomGeometry;
 use super::hierarchy::ClrMapOverride;
-use super::timing::TimingInventory;
 
 pub use super::bullet::{
     Bullet, BulletAutoNum, BulletChar, BulletSize, PictureBullet, PictureBulletFailure,
@@ -29,7 +28,6 @@ pub struct Slide {
     pub clr_map_ovr: Option<ClrMapOverride>,
     pub show_master_sp: bool,
     pub hidden: bool,
-    pub timing: TimingInventory,
 }
 
 impl Default for Slide {
@@ -41,7 +39,6 @@ impl Default for Slide {
             clr_map_ovr: None,
             show_master_sp: true,
             hidden: false,
-            timing: TimingInventory::default(),
         }
     }
 }
@@ -113,7 +110,6 @@ mod tests {
         assert!(slide.clr_map_ovr.is_none());
         assert!(slide.show_master_sp);
         assert!(!slide.hidden);
-        assert!(slide.timing.sources.is_empty());
 
         let body = TextBody::default();
         assert!(body.paragraphs.is_empty());

@@ -1,25 +1,43 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 
 class TimingBrowserTests(unittest.TestCase):
     def test_completion_timing_uses_exact_events_and_keeps_fallback_visible(self) -> None:
+        from playwright.sync_api import sync_playwright
+
+        root = Path(__file__).resolve().parents[2]
+        temporary = tempfile.TemporaryDirectory(prefix="pptx-timing-browser-")
+        self.addCleanup(temporary.cleanup)
         html_value = os.environ.get("PPTX_TIMING_HTML")
         if html_value is None:
-            self.skipTest("PPTX_TIMING_HTML is not set")
-        html_path = Path(html_value).resolve()
+            work = Path(temporary.name)
+            decks = work / "decks"
+            html_path = work / "timing.html"
+            subprocess.run(
+                ["python3", "-m", "evaluate.create_completion_decks", "--output-dir", str(decks)],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["cargo", "run", "-q", "-p", "pptx2html-cli", "--", str(decks / "timing-transitions.pptx"), "-o", str(html_path)],
+                cwd=root,
+                check=True,
+            )
+        else:
+            html_path = Path(html_value).resolve()
         self.assertTrue(html_path.is_file())
 
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError:
-            self.skipTest("Playwright is unavailable")
-
         screenshot_dir = Path(
-            os.environ.get("PPTX_TIMING_SCREENSHOTS", "/tmp/pptx-timing-browser")
+            os.environ.get(
+                "PPTX_TIMING_SCREENSHOTS", ".omo/evidence/task-19-timing"
+            )
         )
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         with sync_playwright() as playwright:
@@ -29,6 +47,7 @@ class TimingBrowserTests(unittest.TestCase):
             page.evaluate(
                 """() => {
                   window.__timingEvents = [];
+                  window.__timingClicks = 0;
                   const names = [
                     'pptx2html:timing-group',
                     'pptx2html:timing-effect',
@@ -36,6 +55,10 @@ class TimingBrowserTests(unittest.TestCase):
                     'pptx2html:transition',
                     'pptx2html:transition-complete'
                   ];
+                  document.querySelector('#slide-1').addEventListener(
+                    'click', event => {
+                      if (event.target === document.querySelector('#slide-1')) window.__timingClicks++;
+                    });
                   for (const name of names) {
                     document.addEventListener(name, event =>
                       window.__timingEvents.push({name, ...event.detail}));
@@ -57,6 +80,18 @@ class TimingBrowserTests(unittest.TestCase):
                 }"""
             )
             self.assertEqual(page.evaluate("window.__timingEvents"), [])
+            page.locator("#slide-1 .shape-action-surface").click()
+            page.wait_for_url("**#slide-2")
+            self.assertFalse(any(event["name"].startswith("pptx2html:timing-group") for event in page.evaluate("window.__timingEvents")))
+            page.evaluate(
+                """async () => {
+                  const reset = window.__waitExact(
+                    'pptx2html:transition-complete', 'slide-transition-0', 1);
+                  location.hash = 'slide-1';
+                  await reset;
+                }"""
+            )
+            page.evaluate("window.__timingEvents=[]")
             page.screenshot(path=str(screenshot_dir / "initial.png"), full_page=True)
 
             initial = page.eval_on_selector_all(
@@ -102,6 +137,10 @@ class TimingBrowserTests(unittest.TestCase):
             page.screenshot(
                 path=str(screenshot_dir / "group-2-complete.png"), full_page=True
             )
+            event_count = page.evaluate("window.__timingEvents.length")
+            page.evaluate("document.querySelector('#slide-1').click()")
+            self.assertEqual(page.evaluate("window.__timingEvents.length"), event_count)
+            self.assertEqual(page.evaluate("window.__timingClicks"), 3)
             page.evaluate(
                 """async () => {
                   const cut = window.__waitExact(
@@ -118,12 +157,24 @@ class TimingBrowserTests(unittest.TestCase):
                 path=str(screenshot_dir / "fade-complete.png"), full_page=True
             )
             events = page.evaluate("window.__timingEvents")
+            fallback_json = page.eval_on_selector(
+                "#pptx2html-diagnostics",
+                "node => JSON.parse(node.textContent).filter(item => item.code === 'PRESENTATIONML_TIMING_FALLBACK')",
+            )
+            (screenshot_dir / "fallback.json").write_text(
+                json.dumps(fallback_json, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            (screenshot_dir / "events.json").write_text(
+                json.dumps(events, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             browser.close()
 
         self.assertEqual(
             [
                 (event["name"], event.get("phase"), event["identity"])
-                for event in events[:8]
+                for event in events
             ],
             [
                 ("pptx2html:timing-group", "start", "timing-10-group-0"),
@@ -134,10 +185,22 @@ class TimingBrowserTests(unittest.TestCase):
                 ("pptx2html:timing-effect", "start", "timing-15-effect-2"),
                 ("pptx2html:timing-effect", "complete", "timing-15-effect-2"),
                 ("pptx2html:timing-group-complete", None, "timing-10-group-0"),
+                ("pptx2html:timing-group", "start", "timing-20-group-1"),
+                ("pptx2html:timing-effect", "start", "timing-21-effect-3"),
+                ("pptx2html:timing-effect", "complete", "timing-21-effect-3"),
+                ("pptx2html:timing-group-complete", None, "timing-20-group-1"),
+                ("pptx2html:transition", "start", "slide-transition-0"),
+                ("pptx2html:transition-complete", None, "slide-transition-0"),
+                ("pptx2html:transition", "start", "slide-transition-0"),
+                ("pptx2html:transition-complete", None, "slide-transition-0"),
             ],
         )
-        self.assertEqual(events[-1]["name"], "pptx2html:transition-complete")
+        self.assertEqual(events[1]["delay"], 25)
         self.assertEqual(events[-1]["transition"], "fade")
+        self.assertTrue(fallback_json)
+        self.assertTrue(
+            any("<p:animMotion" in item["raw_reference"] for item in fallback_json)
+        )
 
 
 if __name__ == "__main__":
