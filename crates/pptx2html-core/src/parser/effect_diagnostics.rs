@@ -570,7 +570,7 @@ fn diagnostic(part_name: &str, capture: Capture) -> ConversionDiagnostic {
             "DRAWINGML_REFLECTION_APPROXIMATE",
             SupportTier::Approximate,
             CapabilityStage::Rendered,
-            FallbackKind::StyleApproximation,
+            FallbackKind::PreservedPart,
             format!(
                 "Reflection was rendered with bounded browser blur, transform, and mask primitives; this approximation does not claim PowerPoint fidelity{truncation}"
             ),
@@ -580,7 +580,7 @@ fn diagnostic(part_name: &str, capture: Capture) -> ConversionDiagnostic {
             "DRAWINGML_THEME_EFFECT_FALLBACK",
             SupportTier::Fallback,
             CapabilityStage::Parsed,
-            FallbackKind::PreservedEffectMetadata,
+            FallbackKind::PreservedPart,
             format!(
                 "{} in a theme effect style was preserved as typed and raw metadata; inherited rendering was not invented{truncation}",
                 kind.qualified_name()
@@ -591,7 +591,7 @@ fn diagnostic(part_name: &str, capture: Capture) -> ConversionDiagnostic {
             "DRAWINGML_REFLECTION_FALLBACK",
             SupportTier::Fallback,
             CapabilityStage::Parsed,
-            FallbackKind::PreservedEffectMetadata,
+            FallbackKind::PreservedPart,
             format!(
                 "Reflection outside a namespace-validated directly renderable slide shape was preserved as typed and raw metadata{truncation}"
             ),
@@ -601,7 +601,7 @@ fn diagnostic(part_name: &str, capture: Capture) -> ConversionDiagnostic {
             "DRAWINGML_3D_FALLBACK",
             SupportTier::Fallback,
             CapabilityStage::Parsed,
-            FallbackKind::PreservedEffectMetadata,
+            FallbackKind::PreservedPart,
             format!(
                 "{} was preserved in source order as typed and raw metadata and not rendered as Office 3D{truncation}",
                 kind.qualified_name()

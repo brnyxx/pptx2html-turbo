@@ -401,7 +401,7 @@ fn annotations_follow_slide_selection_and_hidden_slide_policy() {
 }
 
 #[test]
-fn public_presentation_literal_remains_source_compatible() {
+fn public_presentation_literal_uses_documented_next_major_field() {
     let presentation = Presentation {
         slides: Vec::new(),
         slide_size: Size::default(),
@@ -411,6 +411,7 @@ fn public_presentation_literal_remains_source_compatible() {
         layouts: Vec::new(),
         default_text_style: None,
         clr_map: ClrMap::default(),
+        embedded_inventory: Default::default(),
     };
 
     assert!(presentation.slides.is_empty());

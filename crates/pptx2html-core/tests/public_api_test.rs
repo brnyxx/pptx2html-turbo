@@ -1,6 +1,7 @@
 mod fixtures;
 
 use std::fs;
+use std::process::Command;
 
 use fixtures::MinimalPptx;
 use pptx2html_core::model::bullet::BulletChar as FeatureBulletChar;
@@ -13,7 +14,8 @@ use pptx2html_core::model::slide::{Shape as SlideModuleShape, TextBody as SlideM
 use pptx2html_core::model::table::TableCell as FeatureTableCell;
 use pptx2html_core::model::text::TextBody as FeatureTextBody;
 use pptx2html_core::model::{
-    AutoFit, ChartSpec, Fill, Shape, ShapeEffects, TableCell, TextBody, TextMargins, VerticalAlign,
+    AutoFit, ChartSpec, FallbackKind, Fill, Shape, ShapeEffects, TableCell, TextBody, TextMargins,
+    VerticalAlign,
 };
 use pptx2html_core::{
     ConversionOptions, convert_bytes, convert_bytes_with_metadata, convert_bytes_with_options,
@@ -151,7 +153,103 @@ fn should_include_slide_honors_hidden_indices_and_ranges() {
 }
 
 #[test]
+fn exhaustive_presentation_literal_external_crate_contract_is_explicit() {
+    let directory = tempdir().expect("external crate tempdir");
+    let core_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    fs::create_dir(directory.path().join("src")).expect("create external source directory");
+    fs::write(
+        directory.path().join("Cargo.toml"),
+        format!(
+            r#"[package]
+name = "presentation-literal-compat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pptx2html-core = {{ path = {:?} }}
+"#,
+            core_path
+        ),
+    )
+    .expect("write external manifest");
+    let legacy_literal = r#"use pptx2html_core::model::presentation::Theme;
+use pptx2html_core::model::{ClrMap, ListStyle, Presentation, Size, Slide, SlideLayout, SlideMaster};
+fn main() {
+    let _ = Presentation {
+        slides: Vec::<Slide>::new(),
+        slide_size: Size::default(),
+        title: None,
+        themes: Vec::<Theme>::new(),
+        masters: Vec::<SlideMaster>::new(),
+        layouts: Vec::<SlideLayout>::new(),
+        default_text_style: None::<ListStyle>,
+        clr_map: ClrMap::default(),
+    };
+}
+"#;
+    fs::write(directory.path().join("src/main.rs"), legacy_literal)
+        .expect("write legacy external literal");
+    let target = directory.path().join("target");
+    let legacy = Command::new("cargo")
+        .args(["check", "--offline"])
+        .current_dir(directory.path())
+        .env("CARGO_TARGET_DIR", &target)
+        .output()
+        .expect("compile legacy external crate");
+    let legacy_stderr = String::from_utf8_lossy(&legacy.stderr);
+    assert!(
+        !legacy.status.success(),
+        "legacy exhaustive literal unexpectedly compiled"
+    );
+    assert!(
+        legacy_stderr.contains("missing field `embedded_inventory`"),
+        "unexpected compatibility failure: {legacy_stderr}"
+    );
+
+    let updated_literal = legacy_literal.replace(
+        "        clr_map: ClrMap::default(),\n",
+        "        clr_map: ClrMap::default(),\n        embedded_inventory: Default::default(),\n",
+    );
+    fs::write(directory.path().join("src/main.rs"), updated_literal)
+        .expect("write updated external literal");
+    let updated = Command::new("cargo")
+        .args(["check", "--offline"])
+        .current_dir(directory.path())
+        .env("CARGO_TARGET_DIR", target)
+        .output()
+        .expect("compile updated external crate");
+    assert!(
+        updated.status.success(),
+        "updated exhaustive literal failed: {}",
+        String::from_utf8_lossy(&updated.stderr)
+    );
+}
+
+fn legacy_fallback_kind_name(kind: FallbackKind) -> &'static str {
+    match kind {
+        FallbackKind::SmartArtPlaceholder => "smartart-placeholder",
+        FallbackKind::OlePlaceholder => "ole-placeholder",
+        FallbackKind::MathPlaceholder => "math-placeholder",
+        FallbackKind::CustomGeometryPlaceholder => "custom-geometry-placeholder",
+        FallbackKind::PreservedPart => "preserved-part",
+        FallbackKind::IgnoredRelationship => "ignored-relationship",
+        FallbackKind::UnknownElement => "unknown-element",
+        FallbackKind::TableStyleDefinitionUnavailable => "table-style-definition-unavailable",
+        FallbackKind::ActionMetadata => "action-metadata",
+    }
+}
+
+#[test]
+fn legacy_exhaustive_fallback_kind_consumers_remain_source_compatible() {
+    assert_eq!(
+        legacy_fallback_kind_name(FallbackKind::PreservedPart),
+        "preserved-part"
+    );
+}
+
+#[test]
 fn public_model_paths_and_defaults_remain_compatible() {
+    let inventory_marker = pptx2html_core::model::embedded::EmbeddedInventory;
     let root_shape = Shape::default();
     let slide_shape = SlideModuleShape::default();
     let root_body = TextBody::default();
@@ -161,6 +259,12 @@ fn public_model_paths_and_defaults_remain_compatible() {
     let cell = TableCell::default();
     let margins = TextMargins::default();
     let chart = ChartSpec::default();
+    let legacy_chart_data = pptx2html_core::model::ChartData {
+        rel_id: "rIdChart".to_owned(),
+        preview_image: None,
+        preview_mime: None,
+        direct_spec: None,
+    };
     let feature_shape = FeatureShape::default();
     let feature_body = FeatureTextBody::default();
     let feature_cell = FeatureTableCell::default();
@@ -192,6 +296,7 @@ fn public_model_paths_and_defaults_remain_compatible() {
     assert!(matches!(cell.vertical_align, VerticalAlign::Top));
     assert!(matches!(root_body.auto_fit, AutoFit::None));
     assert!(chart.series.is_empty());
+    assert_eq!(legacy_chart_data.rel_id, "rIdChart");
     assert_eq!(feature_shape.id, root_shape.id);
     assert!(feature_body.paragraphs.is_empty());
     assert_eq!(feature_cell.margin_left, cell.margin_left);
@@ -200,4 +305,8 @@ fn public_model_paths_and_defaults_remain_compatible() {
     assert!(feature_effects.outer_shadow.is_none());
     assert_eq!(feature_bullet.char, "-");
     assert_eq!(unresolved, FeatureUnresolvedType::SmartArt);
+    assert_eq!(
+        inventory_marker,
+        pptx2html_core::model::embedded::EmbeddedInventory
+    );
 }

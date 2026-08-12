@@ -8,6 +8,10 @@ mod charts;
 mod custom_geometry_diagnostic;
 mod embedded_fallback;
 mod fallback;
+
+pub(crate) fn diagnostics_json(diagnostics: &[ConversionDiagnostic]) -> String {
+    fallback::diagnostics_json(diagnostics)
+}
 mod fills;
 mod geometry;
 mod media;
@@ -50,6 +54,7 @@ struct UnresolvedCollector {
     external_assets: Vec<ExternalAsset>,
     font_resolution_entries: Vec<FontResolutionEntry>,
     provenance_entries: Vec<RenderedProvenanceEntry>,
+    embedded_occurrences: HashMap<String, usize>,
     counter: usize,
     current_slide_index: usize,
     gradient_counter: usize,
@@ -281,6 +286,7 @@ impl HtmlRenderer {
             external_assets: Vec::new(),
             font_resolution_entries: Vec::new(),
             provenance_entries: Vec::new(),
+            embedded_occurrences: HashMap::new(),
             counter: 0,
             current_slide_index: 0,
             gradient_counter: 0,
@@ -915,7 +921,11 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
             html,
             "<div class=\"shape\"{timing_attributes} style=\"{style_buf}\">"
         );
-        actions::render_shape_surface(&shape.actions, shape.id, shape.media.is_some(), ctx, html);
+        let mut shape_media = match &shape.shape_type {
+            ShapeType::Picture(picture) => MediaData::decode_marker(&picture.content_type),
+            _ => None,
+        };
+        actions::render_shape_surface(&shape.actions, shape.id, shape_media.is_some(), ctx, html);
         Self::render_reflection_from_diagnostics(shape, &resolved_fill, pos, size, ctx, html);
 
         // Table
@@ -933,18 +943,23 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         if let ShapeType::Unsupported(ref data) = shape.shape_type {
-            fallback::render_unsupported(data, pos, size, ctx, html);
+            if !embedded_fallback::render_unsupported(shape.id, data, pos, size, ctx, html) {
+                fallback::render_unsupported(data, pos, size, ctx, html);
+            }
             return;
         }
 
         if let ShapeType::Chart(ref chart_data) = shape.shape_type {
-            charts::render_chart(chart_data, ctx, w, h, pos, size, html);
+            charts::render_chart(chart_data, ctx, w, h, html);
             return;
         }
 
-        if let Some(shape_media) = shape.media.as_ref() {
-            let poster = match &shape.shape_type {
-                ShapeType::Picture(picture) => Some(picture),
+        if let Some(shape_media) = shape_media.as_mut()
+            && let ShapeType::Picture(picture) = &shape.shape_type
+        {
+            shape_media.data.clone_from(&picture.data);
+            let poster = match &shape.fill {
+                Fill::Image(image) => Some(image),
                 _ => None,
             };
             media::render(shape_media, poster, shape.id, ctx, html);
@@ -1346,7 +1361,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         // Image
-        if shape.media.is_none()
+        if shape_media.is_none()
             && let ShapeType::Picture(pic) = &shape.shape_type
             && !pic.data.is_empty()
         {
@@ -2248,6 +2263,7 @@ mod tests {
             external_assets: Vec::new(),
             font_resolution_entries: Vec::new(),
             provenance_entries: Vec::new(),
+            embedded_occurrences: HashMap::new(),
             counter: 0,
             current_slide_index: 0,
             gradient_counter: 0,
@@ -2885,7 +2901,6 @@ mod tests {
                 preview_image: Some(vec![1, 2, 3, 4]),
                 preview_mime: Some("image/png".to_string()),
                 direct_spec: None,
-                ..Default::default()
             }),
             size: Size {
                 width: Emu(914_400),
@@ -2923,7 +2938,6 @@ mod tests {
                 preview_image: None,
                 preview_mime: None,
                 direct_spec: Some(spec),
-                ..Default::default()
             }),
             size: Size {
                 width: Emu(1_828_800),
@@ -3425,7 +3439,6 @@ mod tests {
                 preview_image: None,
                 preview_mime: None,
                 direct_spec: Some(spec),
-                ..Default::default()
             }),
             size: Size {
                 width: Emu(1_828_800),

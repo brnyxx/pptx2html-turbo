@@ -55,8 +55,6 @@ pub enum FallbackKind {
     UnknownElement,
     TableStyleDefinitionUnavailable,
     ActionMetadata,
-    StyleApproximation,
-    PreservedEffectMetadata,
 }
 
 impl FallbackKind {
@@ -71,8 +69,6 @@ impl FallbackKind {
             Self::UnknownElement => "unknown-element",
             Self::TableStyleDefinitionUnavailable => "table-style-definition-unavailable",
             Self::ActionMetadata => "action-metadata",
-            Self::StyleApproximation => "style-approximation",
-            Self::PreservedEffectMetadata => "preserved-effect-metadata",
         }
     }
 }

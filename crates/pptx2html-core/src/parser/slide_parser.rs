@@ -22,8 +22,8 @@ use super::fill_parser::{
     dispatch_color as dispatch_parsed_color, ensure_style_ref,
 };
 use super::graphic_frame_parser::{
-    GraphicFrameEnd, GraphicFrameSaxState, finish_frame, mime_from_extension,
-    resolve_relationship_path as resolve_rel_path,
+    ElementContext, ElementNamespace, GraphicFrameEnd, GraphicFrameSaxState, finish_frame,
+    mime_from_extension, resolve_relationship_path as resolve_rel_path,
 };
 #[cfg(test)]
 use super::graphic_frame_parser::{
@@ -62,7 +62,24 @@ pub fn parse_slide<R: Read + Seek>(
     rels: &HashMap<String, String>,
     archive: &mut ZipArchive<R>,
 ) -> PptxResult<Slide> {
-    parse_slide_impl(xml, rels, None, archive)
+    let records = rels
+        .iter()
+        .map(|(id, target)| super::relationships::Relationship {
+            id: id.clone(),
+            relationship_type: if target.contains("charts/") {
+                super::graphic_frame_parser::CHART_RELATIONSHIP.to_owned()
+            } else {
+                String::new()
+            },
+            target: target.clone(),
+            target_mode: super::relationships::TargetMode::Internal,
+        })
+        .collect::<Vec<_>>();
+    let content_types =
+        super::graphic_frame_parser::read_archive_entry(archive, "[Content_Types].xml")
+            .map(|xml| super::picture_bullet_parser::ContentTypes::parse(&xml))
+            .unwrap_or_default();
+    parse_slide_impl(xml, rels, &records, &content_types, None, archive)
 }
 
 pub(crate) fn parse_slide_with_actions<R: Read + Seek>(
@@ -78,12 +95,25 @@ pub(crate) fn parse_slide_with_actions<R: Read + Seek>(
         relationships,
         slide_order,
     };
-    parse_slide_impl(xml, &rels, Some(&context), archive)
+    let content_types =
+        super::graphic_frame_parser::read_archive_entry(archive, "[Content_Types].xml")
+            .map(|xml| super::picture_bullet_parser::ContentTypes::parse(&xml))
+            .unwrap_or_default();
+    parse_slide_impl(
+        xml,
+        &rels,
+        relationships,
+        &content_types,
+        Some(&context),
+        archive,
+    )
 }
 
 fn parse_slide_impl<R: Read + Seek>(
     xml: &str,
     rels: &HashMap<String, String>,
+    relationship_records: &[super::relationships::Relationship],
+    content_types: &super::picture_bullet_parser::ContentTypes,
     action_context: Option<&ActionContext<'_>>,
     archive: &mut ZipArchive<R>,
 ) -> PptxResult<Slide> {
@@ -91,6 +121,7 @@ fn parse_slide_impl<R: Read + Seek>(
     let mut slide = Slide::default();
     let mut depth: Vec<String> = Vec::new();
     let mut presentationml_depth: Vec<bool> = Vec::new();
+    let mut namespace_depth: Vec<ElementNamespace> = Vec::new();
 
     let mut current_shape: Option<ShapeBuilder> = None;
     let mut text = TextSaxState::default();
@@ -142,8 +173,16 @@ fn parse_slide_impl<R: Read + Seek>(
                         if namespace.as_ref()
                             == b"http://schemas.openxmlformats.org/drawingml/2006/main"
                 );
+                let element_namespace = graphic_element_namespace(&resolved_namespace);
+                let chart_relationship_id = matches!(
+                    element_namespace,
+                    ElementNamespace::ClassicChart | ElementNamespace::ChartEx
+                )
+                .then(|| resolved_relationship_id(&reader, e).ok().flatten())
+                .flatten();
                 depth.push(local.clone());
                 presentationml_depth.push(is_presentationml(&resolved_namespace));
+                namespace_depth.push(element_namespace);
 
                 if local == "cNvPr"
                     && is_presentationml(&resolved_namespace)
@@ -172,7 +211,17 @@ fn parse_slide_impl<R: Read + Seek>(
                 }
 
                 preserved.capture_start(e, &local);
-                if graphic_frame.handle_start(&local, e, &mut current_shape, &mut preserved) {
+                if graphic_frame.handle_start(
+                    &local,
+                    ElementContext {
+                        namespace: element_namespace,
+                        parent: parent_element(&depth, &namespace_depth, true),
+                    },
+                    e,
+                    chart_relationship_id,
+                    &mut current_shape,
+                    &mut preserved,
+                ) {
                     continue;
                 }
                 if (local != "tableStyleId" || drawingml)
@@ -181,6 +230,19 @@ fn parse_slide_impl<R: Read + Seek>(
                     continue;
                 }
                 if text.handle_start(&local, e, &mut current_shape, table.in_cell) {
+                    continue;
+                }
+                if drawingml
+                    && matches!(local.as_str(), "audioFile" | "videoFile")
+                    && current_shape.as_ref().is_some_and(|shape| shape.is_picture)
+                    && exact_media_owner_stack(&depth, &presentationml_depth, true)
+                {
+                    assign_shape_media(
+                        &mut current_shape,
+                        &local,
+                        resolved_relationship_attribute(&reader, e, "link"),
+                        e,
+                    );
                     continue;
                 }
                 if drawingml
@@ -239,7 +301,7 @@ fn parse_slide_impl<R: Read + Seek>(
                         }
                     }
                     // Non-visual properties (contains placeholder)
-                    "nvPr" if current_shape.is_some() => {
+                    "nvPr" if current_shape.is_some() && is_presentationml(&resolved_namespace) => {
                         in_nv_pr = true;
                     }
                     // Shape properties
@@ -261,15 +323,12 @@ fn parse_slide_impl<R: Read + Seek>(
                         in_av_lst = true;
                     }
                     // Image reference (Start variant — blip with child elements)
-                    "blip" => {
-                        for attr in e.attributes().flatten() {
-                            let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                            if key.ends_with("embed") {
-                                let rel_id = String::from_utf8_lossy(&attr.value).to_string();
-                                if let Some(sb) = current_shape.as_mut() {
-                                    sb.image_rel_id = Some(rel_id);
-                                }
-                            }
+                    "blip" if drawingml => {
+                        if let Ok(Some(rel_id)) =
+                            resolved_relationship_attribute(&reader, e, "embed")
+                            && let Some(sb) = current_shape.as_mut()
+                        {
+                            sb.image_rel_id = Some(rel_id);
                         }
                     }
                     // ── Preset geometry (<a:prstGeom>) — Start variant ──
@@ -433,6 +492,13 @@ fn parse_slide_impl<R: Read + Seek>(
                         if namespace.as_ref()
                             == b"http://schemas.openxmlformats.org/drawingml/2006/main"
                 );
+                let element_namespace = graphic_element_namespace(&resolved_namespace);
+                let chart_relationship_id = matches!(
+                    element_namespace,
+                    ElementNamespace::ClassicChart | ElementNamespace::ChartEx
+                )
+                .then(|| resolved_relationship_id(&reader, e).ok().flatten())
+                .flatten();
 
                 if local == "cNvPr"
                     && is_presentationml(&resolved_namespace)
@@ -457,13 +523,36 @@ fn parse_slide_impl<R: Read + Seek>(
                 }
 
                 preserved.capture_empty(e, &local);
-                if graphic_frame.handle_start(&local, e, &mut current_shape, &mut preserved) {
+                if graphic_frame.handle_start(
+                    &local,
+                    ElementContext {
+                        namespace: element_namespace,
+                        parent: parent_element(&depth, &namespace_depth, false),
+                    },
+                    e,
+                    chart_relationship_id,
+                    &mut current_shape,
+                    &mut preserved,
+                ) {
                     continue;
                 }
                 if (local != "tableStyleId" || drawingml) && table.handle_empty(&local, e) {
                     continue;
                 }
                 if text.handle_empty(&local, e, &mut current_shape, table.in_cell) {
+                    continue;
+                }
+                if drawingml
+                    && matches!(local.as_str(), "audioFile" | "videoFile")
+                    && current_shape.as_ref().is_some_and(|shape| shape.is_picture)
+                    && exact_media_owner_stack(&depth, &presentationml_depth, false)
+                {
+                    assign_shape_media(
+                        &mut current_shape,
+                        &local,
+                        resolved_relationship_attribute(&reader, e, "link"),
+                        e,
+                    );
                     continue;
                 }
                 if drawingml
@@ -609,15 +698,12 @@ fn parse_slide_impl<R: Read + Seek>(
                             .placeholder = Some(super::master_parser::parse_placeholder_attrs(e));
                     }
                     // Image reference (Empty variant)
-                    "blip" => {
-                        for attr in e.attributes().flatten() {
-                            let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-                            if key.ends_with("embed") {
-                                let rel_id = String::from_utf8_lossy(&attr.value).to_string();
-                                if let Some(sb) = current_shape.as_mut() {
-                                    sb.image_rel_id = Some(rel_id);
-                                }
-                            }
+                    "blip" if drawingml => {
+                        if let Ok(Some(rel_id)) =
+                            resolved_relationship_attribute(&reader, e, "embed")
+                            && let Some(sb) = current_shape.as_mut()
+                        {
+                            sb.image_rel_id = Some(rel_id);
                         }
                     }
                     // ── Adjust value guide (<a:gd>) inside avLst ──
@@ -789,9 +875,12 @@ fn parse_slide_impl<R: Read + Seek>(
             }
             Ok(Event::End(ref e)) => {
                 let local = xml_utils::local_name(e.name().as_ref()).to_string();
-                let presentationml = is_presentationml(&reader.resolve_element(e.name()).0);
+                let resolved_namespace = reader.resolve_element(e.name()).0;
+                let presentationml = is_presentationml(&resolved_namespace);
+                let element_namespace = graphic_element_namespace(&resolved_namespace);
                 depth.pop();
                 presentationml_depth.pop();
+                namespace_depth.pop();
 
                 preserved.capture_end(e, &local);
                 if table.handle_end(&local, &mut fill.current_color) {
@@ -827,7 +916,12 @@ fn parse_slide_impl<R: Read + Seek>(
                     continue;
                 }
                 if matches!(
-                    graphic_frame.handle_end(&local, &mut current_shape, &mut preserved,),
+                    graphic_frame.handle_end(
+                        &local,
+                        element_namespace,
+                        &mut current_shape,
+                        &mut preserved,
+                    ),
                     GraphicFrameEnd::FinishFrame
                 ) {
                     if let Some(shape) = finish_frame(
@@ -835,6 +929,8 @@ fn parse_slide_impl<R: Read + Seek>(
                         &mut current_shape,
                         &mut table.builder,
                         rels,
+                        relationship_records,
+                        content_types,
                         archive,
                     ) {
                         if let Some(group) = grp_stack.last_mut() {
@@ -963,7 +1059,7 @@ fn parse_slide_impl<R: Read + Seek>(
                     // ── New state end events ──
                     "avLst" | "gdLst" => in_av_lst = false,
                     // End of non-visual properties
-                    "nvPr" => {
+                    "nvPr" if presentationml => {
                         in_nv_pr = false;
                     }
                     "cNvPr"
@@ -1003,6 +1099,7 @@ fn parse_slide_impl<R: Read + Seek>(
                             let mut shape = sb.build();
                             // Load image data for picture shapes
                             if let ShapeType::Picture(pic) = &mut shape.shape_type
+                                && MediaData::decode_marker(&pic.content_type).is_none()
                                 && let Some(target) = rels.get(&pic.rel_id)
                             {
                                 // Resolve relative paths (e.g., "../media/image1.png")
@@ -1036,7 +1133,153 @@ fn parse_slide_impl<R: Read + Seek>(
         }
     }
 
+    apply_media_timing_metadata(xml, &mut slide);
     Ok(slide)
+}
+
+#[derive(Default)]
+struct RequestedMediaMetadata {
+    volume: Option<u32>,
+    loop_requested: Option<bool>,
+    autoplay_requested: Option<bool>,
+    trim_start: Option<u64>,
+    trim_end: Option<u64>,
+    shape_id: Option<u32>,
+}
+
+fn apply_media_timing_metadata(xml: &str, slide: &mut Slide) {
+    let mut reader = NsReader::from_str(xml);
+    let mut current: Option<(usize, RequestedMediaMetadata)> = None;
+    let mut depth = 0_usize;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref element)) => {
+                depth += 1;
+                let namespace = reader.resolve_element(element.name()).0;
+                let element_name = element.name();
+                let local = xml_utils::local_name(element_name.as_ref());
+                if local == "cMediaNode" && is_presentationml(&namespace) {
+                    let metadata = RequestedMediaMetadata {
+                        volume: unqualified_attr(element, "vol")
+                            .and_then(|value| value.parse().ok()),
+                        ..Default::default()
+                    };
+                    current = Some((depth, metadata));
+                } else if let Some((_, metadata)) = current.as_mut()
+                    && is_presentationml(&namespace)
+                {
+                    if local == "cTn" {
+                        metadata.loop_requested = unqualified_attr(element, "repeatCount")
+                            .map(|value| value == "indefinite");
+                    } else if matches!(local, "cond" | "stCond") {
+                        metadata.autoplay_requested =
+                            unqualified_attr(element, "delay").map(|value| value == "0");
+                    } else if local == "spTgt" {
+                        metadata.shape_id =
+                            unqualified_attr(element, "spid").and_then(|value| value.parse().ok());
+                    }
+                    metadata.trim_start = metadata.trim_start.or_else(|| {
+                        unqualified_attr(element, "trimStart")
+                            .or_else(|| unqualified_attr(element, "trimSt"))
+                            .and_then(|value| value.parse().ok())
+                    });
+                    metadata.trim_end = metadata.trim_end.or_else(|| {
+                        unqualified_attr(element, "trimEnd").and_then(|value| value.parse().ok())
+                    });
+                }
+            }
+            Ok(Event::Empty(ref element)) => {
+                let namespace = reader.resolve_element(element.name()).0;
+                let element_name = element.name();
+                let local = xml_utils::local_name(element_name.as_ref());
+                if let Some((_, metadata)) = current.as_mut()
+                    && is_presentationml(&namespace)
+                {
+                    if local == "cTn" {
+                        metadata.loop_requested = unqualified_attr(element, "repeatCount")
+                            .map(|value| value == "indefinite");
+                    } else if matches!(local, "cond" | "stCond") {
+                        metadata.autoplay_requested =
+                            unqualified_attr(element, "delay").map(|value| value == "0");
+                    } else if local == "spTgt" {
+                        metadata.shape_id =
+                            unqualified_attr(element, "spid").and_then(|value| value.parse().ok());
+                    }
+                    metadata.trim_start = metadata.trim_start.or_else(|| {
+                        unqualified_attr(element, "trimStart")
+                            .or_else(|| unqualified_attr(element, "trimSt"))
+                            .and_then(|value| value.parse().ok())
+                    });
+                    metadata.trim_end = metadata.trim_end.or_else(|| {
+                        unqualified_attr(element, "trimEnd").and_then(|value| value.parse().ok())
+                    });
+                }
+            }
+            Ok(Event::End(_)) => {
+                if current.as_ref().is_some_and(|(start, _)| *start == depth)
+                    && let Some((_, metadata)) = current.take()
+                {
+                    apply_requested_metadata(&mut slide.shapes, &metadata);
+                }
+                depth = depth.saturating_sub(1);
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+}
+
+fn unqualified_attr(element: &quick_xml::events::BytesStart<'_>, name: &str) -> Option<String> {
+    element.attributes().flatten().find_map(|attribute| {
+        let key = std::str::from_utf8(attribute.key.as_ref()).ok()?;
+        (key == name)
+            .then(|| {
+                attribute
+                    .unescape_value()
+                    .ok()
+                    .map(|value| value.into_owned())
+            })
+            .flatten()
+    })
+}
+
+fn apply_requested_metadata(shapes: &mut [Shape], metadata: &RequestedMediaMetadata) {
+    for shape in shapes {
+        if Some(shape.id) == metadata.shape_id
+            && let ShapeType::Picture(picture) = &mut shape.shape_type
+            && let Some(mut media) = MediaData::decode_marker(&picture.content_type)
+        {
+            media.volume = metadata.volume.or(media.volume);
+            media.loop_requested = metadata.loop_requested.or(media.loop_requested);
+            media.autoplay_requested = metadata.autoplay_requested.or(media.autoplay_requested);
+            media.trim_start = metadata.trim_start.or(media.trim_start);
+            media.trim_end = metadata.trim_end.or(media.trim_end);
+            picture.content_type = media.encode_marker();
+        }
+        if let ShapeType::Group(children, _) = &mut shape.shape_type {
+            apply_requested_metadata(children, metadata);
+        }
+    }
+}
+
+fn exact_media_owner_stack(
+    depth: &[String],
+    presentationml_depth: &[bool],
+    includes_media_element: bool,
+) -> bool {
+    let suffix_len = if includes_media_element { 4 } else { 3 };
+    if depth.len() < suffix_len || presentationml_depth.len() != depth.len() {
+        return false;
+    }
+    let start = depth.len() - suffix_len;
+    let valid_picture_parent = start > 0
+        && matches!(depth[start - 1].as_str(), "spTree" | "grpSp")
+        && presentationml_depth[start - 1];
+    valid_picture_parent
+        && depth[start..start + 3] == ["pic", "nvPicPr", "nvPr"]
+        && presentationml_depth[start..start + 3]
+            .iter()
+            .all(|official| *official)
 }
 
 fn depth_contains(depth: &[String], tag: &str) -> bool {
@@ -1084,12 +1327,33 @@ struct ActiveActionOwner {
 }
 
 fn is_presentationml(namespace: &ResolveResult<'_>) -> bool {
-    matches!(
-        namespace,
-        ResolveResult::Bound(value)
-            if value.as_ref()
-                == b"http://schemas.openxmlformats.org/presentationml/2006/main"
-    )
+    matches!(namespace, ResolveResult::Bound(value) if value.as_ref() == b"http://schemas.openxmlformats.org/presentationml/2006/main")
+}
+
+fn graphic_element_namespace(namespace: &ResolveResult<'_>) -> ElementNamespace {
+    let ResolveResult::Bound(value) = namespace else {
+        return ElementNamespace::Other;
+    };
+    match value.as_ref() {
+        b"http://schemas.openxmlformats.org/presentationml/2006/main" => {
+            ElementNamespace::Presentation
+        }
+        b"http://schemas.openxmlformats.org/drawingml/2006/main" => ElementNamespace::Drawing,
+        b"http://schemas.openxmlformats.org/drawingml/2006/chart" => ElementNamespace::ClassicChart,
+        b"http://schemas.microsoft.com/office/drawing/2014/chartex" => ElementNamespace::ChartEx,
+        _ => ElementNamespace::Other,
+    }
+}
+
+fn parent_element<'a>(
+    depth: &'a [String],
+    namespaces: &[ElementNamespace],
+    current_is_on_stack: bool,
+) -> Option<(&'a str, ElementNamespace)> {
+    let index = depth
+        .len()
+        .checked_sub(if current_is_on_stack { 2 } else { 1 })?;
+    Some((depth.get(index)?.as_str(), *namespaces.get(index)?))
 }
 
 fn owner_for_parent(
@@ -1208,12 +1472,20 @@ fn resolved_relationship_id(
     reader: &NsReader<&[u8]>,
     element: &quick_xml::events::BytesStart<'_>,
 ) -> Result<Option<String>, ()> {
-    let mut id = None;
+    resolved_relationship_attribute(reader, element, "id")
+}
+
+fn resolved_relationship_attribute(
+    reader: &NsReader<&[u8]>,
+    element: &quick_xml::events::BytesStart<'_>,
+    local_name: &str,
+) -> Result<Option<String>, ()> {
+    let mut value = None;
     for attribute in element.attributes().flatten() {
-        if xml_utils::local_name(attribute.key.as_ref()) != "id" {
+        if xml_utils::local_name(attribute.key.as_ref()) != local_name {
             continue;
         }
-        if id.is_some() {
+        if value.is_some() {
             return Err(());
         }
         let official = matches!(
@@ -1225,9 +1497,56 @@ fn resolved_relationship_id(
         if !official {
             return Err(());
         }
-        id = Some(attribute.unescape_value().map_err(|_| ())?.into_owned());
+        value = Some(attribute.unescape_value().map_err(|_| ())?.into_owned());
     }
-    Ok(id)
+    Ok(value)
+}
+
+fn assign_shape_media(
+    shape: &mut Option<ShapeBuilder>,
+    local_name: &str,
+    relationship_id: Result<Option<String>, ()>,
+    element: &quick_xml::events::BytesStart<'_>,
+) {
+    let Some(shape) = shape.as_mut() else {
+        return;
+    };
+    let kind = if local_name == "audioFile" {
+        MediaKind::Audio
+    } else {
+        MediaKind::Video
+    };
+    let relationship_id = relationship_id.ok().flatten().unwrap_or_default();
+    let mut media = MediaData::unresolved(kind, relationship_id);
+    media.trim_start = media_number(element, &["trimStart", "trimSt"]);
+    media.trim_end = media_number(element, &["trimEnd"]);
+    media.loop_requested = media_bool(element, &["loop"]);
+    media.volume = media_number(element, &["vol"]);
+    media.autoplay_requested = media_bool(element, &["autoplay", "autoPlay"]);
+    shape.media = Some(media);
+}
+
+fn media_number<T: std::str::FromStr>(
+    element: &quick_xml::events::BytesStart<'_>,
+    names: &[&str],
+) -> Option<T> {
+    names
+        .iter()
+        .find_map(|name| unqualified_attr(element, name))?
+        .parse()
+        .ok()
+}
+
+fn media_bool(element: &quick_xml::events::BytesStart<'_>, names: &[&str]) -> Option<bool> {
+    match names
+        .iter()
+        .find_map(|name| unqualified_attr(element, name))?
+        .as_str()
+    {
+        "1" | "true" => Some(true),
+        "0" | "false" => Some(false),
+        _ => None,
+    }
 }
 
 fn parse_connector_ref(
@@ -1308,12 +1627,12 @@ pub(crate) struct ShapeBuilder {
     // Chart detection
     pub(crate) is_chart: bool,
     pub(crate) chart_rel_id: Option<String>,
+    pub(crate) chart_relationship_type: Option<String>,
     pub(crate) chart_direct_spec: Option<ChartSpec>,
     pub(crate) chart_preview_image: Option<Vec<u8>>,
     pub(crate) chart_preview_mime: Option<String>,
-    pub(crate) chart_raw_xml: Option<String>,
-    pub(crate) chart_fallback_reason: Option<crate::model::ChartFallbackReason>,
-    pub(crate) chart_qualified_name: Option<String>,
+    // Shape-owned DrawingML media reference.
+    pub(crate) media: Option<MediaData>,
     // Unsupported content type (SmartArt, OLE, Math)
     pub(crate) unsupported_content: Option<String>,
     // Typed classification for unresolved element
@@ -1346,17 +1665,15 @@ impl ShapeBuilder {
                 preview_image: self.chart_preview_image,
                 preview_mime: self.chart_preview_mime,
                 direct_spec: self.chart_direct_spec,
-                fallback: self.chart_fallback_reason.map(|reason| {
-                    Box::new(crate::model::ChartFallbackData {
-                        reason,
-                        raw_xml: self.chart_raw_xml.map(String::into_boxed_str),
-                        qualified_name: self.chart_qualified_name.map(String::into_boxed_str),
-                    })
-                }),
             })
         } else if self.is_picture {
             ShapeType::Picture(PictureData {
                 rel_id: self.image_rel_id.unwrap_or_default(),
+                content_type: self
+                    .media
+                    .as_ref()
+                    .map(MediaData::encode_marker)
+                    .unwrap_or_default(),
                 crop: self.crop,
                 ..Default::default()
             })
@@ -3452,7 +3769,7 @@ mod tests {
         <p:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="914400"/></p:xfrm>
         <a:graphic>
           <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
-            <chart r:id="rIdChart"/>
+            <c:chart r:id="rIdChart"/>
           </a:graphicData>
         </a:graphic>
       </p:graphicFrame>
@@ -3506,10 +3823,20 @@ mod tests {
   <Relationship Id="rIdSkip" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="../embeddings/ignored.bin"/>
   <Relationship Id="rIdPreview" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/chart-preview.png"/>
 </Relationships>"#;
+        let chart_preview = [
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0,
+            0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde, 0, 0, 0, 12, b'I', b'D',
+            b'A', b'T', 8, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0, 0, 3, 1, 1, 0, 0x18, 0xdd, 0x8d, 0xb1,
+            0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        ];
         let mut archive = archive_with_entries(&[
+            (
+                "[Content_Types].xml",
+                br#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="png" ContentType="image/png"/></Types>"#,
+            ),
             ("ppt/charts/chart1.xml", chart_xml.as_bytes()),
             ("ppt/charts/_rels/chart1.xml.rels", chart_rels.as_bytes()),
-            ("ppt/media/chart-preview.png", b"preview".as_slice()),
+            ("ppt/media/chart-preview.png", chart_preview.as_slice()),
             ("ppt/media/image1.png", b"image-bytes".as_slice()),
         ]);
 
@@ -3530,7 +3857,10 @@ mod tests {
             chart.direct_spec.is_some(),
             "expected parsed direct chart spec"
         );
-        assert_eq!(chart.preview_image.as_deref(), Some(b"preview".as_slice()));
+        assert_eq!(
+            chart.preview_image.as_deref(),
+            Some(chart_preview.as_slice())
+        );
         assert_eq!(chart.preview_mime.as_deref(), Some("image/png"));
 
         let picture = slide

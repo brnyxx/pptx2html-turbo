@@ -8,7 +8,7 @@ use zip::ZipArchive;
 
 use super::slide_parser::ShapeBuilder;
 use super::{
-    effect_diagnostics, embedded_parser, media_parser, notes_comments_parser,
+    chart_diagnostics, effect_diagnostics, embedded_parser, media_parser, notes_comments_parser,
     picture_bullet_diagnostics, table_style_package_diagnostics, timing_parser, xml_utils,
 };
 use crate::error::PptxResult;
@@ -22,6 +22,10 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
     let mut diagnostics = Vec::new();
     let table_styles_part =
         table_style_package_diagnostics::collect_diagnostics(&mut archive, &mut diagnostics)?;
+    let content_types = read_text_entry(&mut archive, "[Content_Types].xml")
+        .map(|xml| super::picture_bullet_parser::ContentTypes::parse(&xml))
+        .unwrap_or_default();
+    chart_diagnostics::collect(&mut archive, &content_types, &mut diagnostics)?;
     let mut names = (0..archive.len())
         .filter_map(|index| {
             archive
@@ -32,10 +36,14 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         .collect::<Vec<_>>();
     names.sort();
 
+    let unknown_parts = embedded_parser::UnknownPartInventory::collect(&names, &mut diagnostics);
+
     for name in names {
         notes_comments_parser::collect_part_diagnostics(&name, &mut diagnostics);
         media_parser::collect_part_diagnostics(&name, &mut diagnostics);
-        embedded_parser::collect_part_diagnostics(&name, &mut diagnostics);
+        if unknown_parts.contains(&name) {
+            continue;
+        }
         if name.ends_with(".rels") {
             embedded_parser::collect_relationship_diagnostics(
                 &mut archive,
@@ -156,6 +164,7 @@ fn known_element(namespace: ResolveResult<'_>, local_name: &str) -> bool {
         b"http://schemas.openxmlformats.org/drawingml/2006/chart" => {
             known_chart_element(local_name)
         }
+        b"http://schemas.microsoft.com/office/drawing/2014/chartex" => local_name == "chart",
         b"http://schemas.openxmlformats.org/drawingml/2006/diagram" => local_name == "relIds",
         b"http://schemas.openxmlformats.org/officeDocument/2006/math" => {
             matches!(local_name, "oMath" | "oMathPara" | "r" | "t")

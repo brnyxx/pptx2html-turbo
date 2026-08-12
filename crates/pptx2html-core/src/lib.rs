@@ -147,6 +147,13 @@ impl ConversionResult {
     pub fn diagnostics(&self) -> &[ConversionDiagnostic] {
         &self.diagnostics
     }
+
+    /// Serializes the authoritative diagnostics using the same canonical,
+    /// script-safe schema embedded in [`Self::html`] by the core renderer.
+    /// Empty diagnostics serialize as `[]`.
+    pub fn diagnostics_json(&self) -> String {
+        renderer::diagnostics_json(&self.diagnostics)
+    }
 }
 
 #[derive(Debug, Clone)]

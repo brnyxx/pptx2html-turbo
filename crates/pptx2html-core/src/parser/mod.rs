@@ -3,6 +3,7 @@
 
 mod action_parser;
 mod action_relationship;
+mod chart_diagnostics;
 mod chart_parser;
 mod custom_geometry;
 mod custom_guide;
@@ -291,13 +292,22 @@ impl PptxParser {
                         &mut notes_comments,
                     );
 
+                    let (selected_slide_xml, _) =
+                        embedded_parser::select_alternate_content(&slide_xml, &full_path)?;
                     let mut slide = slide_parser::parse_slide_with_actions(
-                        &slide_xml,
+                        &selected_slide_xml,
                         &slide_relationships,
                         &full_path,
                         &slide_order,
                         &mut archive,
                     )?;
+                    embedded_parser::resolve_slide(
+                        &mut slide,
+                        &slide_relationships,
+                        &full_path,
+                        &mut archive,
+                        &mut presentation.embedded_inventory,
+                    );
                     media_parser::resolve_slide(
                         &mut slide,
                         &full_path,
@@ -330,7 +340,7 @@ impl PptxParser {
                             slide_num + 1,
                         );
                     }
-                    slide_timings.push(timing_parser::parse(&slide_xml)?);
+                    slide_timings.push(timing_parser::parse(&selected_slide_xml)?);
                     presentation.slides.push(slide);
                 }
             }

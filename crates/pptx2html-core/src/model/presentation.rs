@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use super::embedded::EmbeddedInventoryStore;
 use super::geometry::Size;
 use super::hierarchy::{FmtScheme, ListStyle, SlideLayout, SlideMaster};
 use super::slide::Slide;
@@ -15,6 +16,9 @@ pub struct Presentation {
     pub layouts: Vec<SlideLayout>,
     pub default_text_style: Option<ListStyle>,
     pub clr_map: ClrMap,
+    /// Typed parser-owned fallback inventory used for deterministic later rendering.
+    #[doc(hidden)]
+    pub embedded_inventory: EmbeddedInventoryStore,
 }
 
 impl Presentation {

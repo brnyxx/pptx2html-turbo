@@ -6,7 +6,8 @@ use std::process::{Command, Stdio};
 
 use fixtures::{FeaturePart, MinimalPptx, PackageBuilder, Relationship, SlideXml};
 use pptx2html_core::model::{
-    Emu, FallbackKind, Position, Presentation, Shape, ShapeType, Size, Slide, UnresolvedType,
+    CapabilityStage, ConversionDiagnostic, DiagnosticLocation, Emu, FallbackKind, FeatureFamily,
+    Position, Presentation, Shape, ShapeType, Size, Slide, SupportTier, UnresolvedType,
     UnsupportedData,
 };
 use pptx2html_core::renderer::HtmlRenderer;
@@ -458,6 +459,7 @@ fn malicious_raw_xml_is_script_safe_and_preserved_in_metadata() {
     assert_eq!(diagnostic.raw_reference.as_deref(), Some(ATTACK));
 
     let payload = script_payload(&result.html);
+    assert_eq!(result.diagnostics_json(), payload);
     assert!(!payload.contains(ATTACK));
     assert_eq!(result.html.matches(SCRIPT_CLOSE).count(), 1);
 
@@ -493,5 +495,41 @@ fn conversion_result_constructor_provides_a_stable_public_construction_path() {
     assert!(result.font_resolution_entries.is_empty());
     assert!(result.provenance_entries.is_empty());
     assert!(result.diagnostics().is_empty());
+    assert_eq!(result.diagnostics_json(), "[]");
     assert!(result.unresolved_elements.is_empty());
+}
+
+#[test]
+fn canonical_json_serializes_authoritative_diagnostics_not_stale_html() {
+    let mut result = ConversionResult::new(
+        concat!(
+            "<html><body>",
+            "<script type=\"application/json\" id=\"pptx2html-diagnostics\">[]</script>",
+            "</body></html>"
+        )
+        .to_owned(),
+        1,
+    );
+    result.diagnostics.push(ConversionDiagnostic {
+        code: "TEST_FALLBACK".to_owned(),
+        family: FeatureFamily::Unsupported,
+        support_tier: SupportTier::Fallback,
+        stage: Some(CapabilityStage::Rendered),
+        location: DiagnosticLocation {
+            slide_index: Some(0),
+            part_name: Some("ppt/slides/slide1.xml".to_owned()),
+            ..Default::default()
+        },
+        raw_reference: Some("</script>\u{2028}\u{2029}".to_owned()),
+        fallback_kind: FallbackKind::UnknownElement,
+        reason: "script-safe".to_owned(),
+    });
+
+    let json = result.diagnostics_json();
+    assert!(json.starts_with("[{\"code\":\"TEST_FALLBACK\""), "{json}");
+    assert!(
+        json.contains("\\u003C/script\\u003E\\u2028\\u2029"),
+        "{json}"
+    );
+    assert!(!json.contains("</script>"), "{json}");
 }

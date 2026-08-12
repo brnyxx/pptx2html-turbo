@@ -46,7 +46,7 @@ fn renders_bounded_reflection_and_truthful_stable_diagnostics() {
         .expect("reflection approximation diagnostic");
     assert_eq!(reflection.support_tier, SupportTier::Approximate);
     assert_eq!(reflection.stage, Some(CapabilityStage::Rendered));
-    assert_eq!(reflection.fallback_kind, FallbackKind::StyleApproximation);
+    assert_eq!(reflection.fallback_kind, FallbackKind::PreservedPart);
     assert!(
         reflection
             .reason
@@ -75,7 +75,7 @@ fn renders_bounded_reflection_and_truthful_stable_diagnostics() {
     assert!(fallbacks.iter().all(|diagnostic| {
         diagnostic.support_tier == SupportTier::Fallback
             && diagnostic.stage == Some(CapabilityStage::Parsed)
-            && diagnostic.fallback_kind == FallbackKind::PreservedEffectMetadata
+            && diagnostic.fallback_kind == FallbackKind::PreservedPart
             && diagnostic.location.slide_index == Some(0)
             && diagnostic.location.part_name.as_deref() == Some("ppt/slides/slide1.xml")
             && diagnostic.location.position.is_some()

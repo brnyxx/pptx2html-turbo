@@ -3,21 +3,15 @@ use std::fmt::Write;
 use base64::Engine;
 
 use super::{
-    CapabilityStage, ChartData, ChartDataLabelPosition, ChartGrouping, ChartScatterStyle,
-    ChartType, ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily, RenderCtx,
-    SupportTier, escape_html,
+    ChartData, ChartDataLabelPosition, ChartGrouping, ChartScatterStyle, ChartType, RenderCtx,
+    escape_html,
 };
-
-const CHART_RELATIONSHIP: &str =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
 
 pub(super) fn render_chart(
     chart_data: &ChartData,
     ctx: &RenderCtx<'_>,
     w: f64,
     h: f64,
-    position: crate::model::Position,
-    size: crate::model::Size,
     html: &mut String,
 ) {
     if let Some(ref spec) = chart_data.direct_spec
@@ -1201,40 +1195,6 @@ pub(super) fn render_chart(
             html.push_str("</div>\n</div>\n</div>\n");
             return;
         }
-    }
-
-    if let Some(fallback) = chart_data.fallback.as_deref() {
-        let mut collector = ctx.collector.borrow_mut();
-        let slide_index = collector.current_slide_index;
-        collector.diagnostics.push(ConversionDiagnostic {
-            code: "DRAWINGML_CHART_FALLBACK".to_owned(),
-            family: FeatureFamily::Charts,
-            support_tier: SupportTier::Fallback,
-            stage: Some(CapabilityStage::Rendered),
-            location: DiagnosticLocation {
-                slide_index: Some(slide_index),
-                part_name: Some(format!("ppt/slides/slide{}.xml", slide_index + 1)),
-                relationship_id: (!chart_data.rel_id.is_empty()).then(|| chart_data.rel_id.clone()),
-                relationship_type: Some(CHART_RELATIONSHIP.to_owned()),
-                qualified_element_name: fallback
-                    .qualified_name
-                    .as_deref()
-                    .map(str::to_owned)
-                    .or_else(|| Some("c:chart".to_owned())),
-                position: Some(position),
-                size: Some(size),
-            },
-            raw_reference: fallback.raw_xml.as_deref().map(str::to_owned),
-            fallback_kind: if chart_data.preview_image.is_some() {
-                FallbackKind::ChartPreview
-            } else {
-                FallbackKind::ChartPlaceholder
-            },
-            reason: format!(
-                "Chart direct rendering rejected: {}",
-                fallback.reason.as_str()
-            ),
-        });
     }
 
     if let Some(ref img_data) = chart_data.preview_image

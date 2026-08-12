@@ -9,8 +9,8 @@ pub use super::bullet::{
 };
 pub use super::chart::{
     ChartBubbleSizeRepresents, ChartData, ChartDataLabelPosition, ChartDataLabelSettings,
-    ChartFallbackData, ChartFallbackReason, ChartGrouping, ChartMarkerSpec, ChartOfPieType,
-    ChartRadarStyle, ChartScatterStyle, ChartSeries, ChartSpec, ChartSplitType, ChartType,
+    ChartGrouping, ChartMarkerSpec, ChartOfPieType, ChartRadarStyle, ChartScatterStyle,
+    ChartSeries, ChartSpec, ChartSplitType, ChartType,
 };
 pub use super::preserved::{UnresolvedElement, UnresolvedType, UnsupportedData};
 pub use super::shape::{ConnectionRef, CropRect, GroupData, PictureData, Shape, ShapeType};
