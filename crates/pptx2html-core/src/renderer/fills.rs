@@ -5,9 +5,45 @@ use base64::Engine;
 use crate::resolver::style_ref;
 
 use super::{
-    ClrMap, ColorScheme, Fill, FmtScheme, GlowEffect, GradientType, HtmlRenderer, OuterShadow,
-    RenderCtx, Shape, ShapeEffects, push_sep,
+    CapabilityStage, ClrMap, ColorScheme, ConversionDiagnostic, DiagnosticLocation, FallbackKind,
+    FeatureFamily, Fill, FmtScheme, GlowEffect, GradientType, HtmlRenderer, OuterShadow, Position,
+    RenderCtx, Shape, ShapeEffects, Size, SupportTier, push_sep,
 };
+
+fn has_explicit_effects(effects: &ShapeEffects) -> bool {
+    effects.outer_shadow.is_some()
+        || effects.glow.is_some()
+        || effects.reflection.is_some()
+        || effects.scene_3d.is_some()
+        || effects.shape_3d.is_some()
+        || !effects.preserved.is_empty()
+}
+
+fn bounded(value: Option<f64>, default: f64, minimum: f64, maximum: f64) -> f64 {
+    value
+        .filter(|value| value.is_finite())
+        .unwrap_or(default)
+        .clamp(minimum, maximum)
+}
+
+fn effect_location(
+    slide_index: usize,
+    shape_id: u32,
+    encounter: usize,
+    qualified_name: &str,
+    position: Position,
+    size: Size,
+) -> DiagnosticLocation {
+    DiagnosticLocation {
+        slide_index: Some(slide_index),
+        part_name: Some(format!("ppt/slides/slide{}.xml", slide_index + 1)),
+        relationship_id: Some(format!("shape-{shape_id}-effect-{encounter:04}")),
+        qualified_element_name: Some(qualified_name.to_owned()),
+        position: Some(position),
+        size: Some(size),
+        ..Default::default()
+    }
+}
 
 impl HtmlRenderer {
     pub(super) fn resolve_shape_effects(
@@ -16,7 +52,7 @@ impl HtmlRenderer {
         scheme: Option<&ColorScheme>,
         clr_map: Option<&ClrMap>,
     ) -> Option<ShapeEffects> {
-        if shape.effects.outer_shadow.is_some() || shape.effects.glow.is_some() {
+        if has_explicit_effects(&shape.effects) {
             Some(shape.effects.clone())
         } else if let (Some(sr), Some(fmt), Some(cs), Some(cm)) =
             (&shape.style_ref, fmt_scheme, scheme, clr_map)
@@ -29,7 +65,7 @@ impl HtmlRenderer {
     }
 
     pub(super) fn explicit_shape_effects(shape: &Shape) -> Option<ShapeEffects> {
-        if shape.effects.outer_shadow.is_some() || shape.effects.glow.is_some() {
+        if has_explicit_effects(&shape.effects) {
             Some(shape.effects.clone())
         } else {
             None
@@ -51,6 +87,7 @@ impl HtmlRenderer {
                 color: glow.color.clone(),
                 alpha: glow.alpha,
             }),
+            ..effects.clone()
         }
     }
 
@@ -115,6 +152,91 @@ impl HtmlRenderer {
             String::new()
         } else {
             format!(" style=\"filter: {}\"", filters.join(" "))
+        }
+    }
+
+    pub(super) fn render_reflection_and_record_advanced_effects(
+        shape: &Shape,
+        resolved_fill: &Fill,
+        position: Position,
+        size: Size,
+        ctx: &RenderCtx<'_>,
+        html: &mut String,
+    ) {
+        let slide_index = ctx.collector.borrow().current_slide_index;
+        if let Some(reflection) = shape.effects.reflection.as_ref() {
+            let mut reflection_fill = String::new();
+            Self::fill_to_css_buf(resolved_fill, ctx, &mut reflection_fill);
+            let blur = bounded(reflection.blur_radius, 0.0, 0.0, 20.0);
+            let opacity = bounded(reflection.start_alpha, 0.5, 0.0, 1.0);
+            let end_opacity = bounded(reflection.end_alpha, 0.0, 0.0, 1.0);
+            let start = bounded(reflection.start_position, 0.0, 0.0, 1.0) * 100.0;
+            let end = bounded(reflection.end_position, 1.0, 0.0, 1.0) * 100.0;
+            let distance = bounded(reflection.distance, 0.0, 0.0, 100.0);
+            let direction = bounded(reflection.direction, 90.0, -360.0, 360.0).to_radians();
+            let offset_x = (distance * direction.cos()).clamp(-100.0, 100.0);
+            let offset_y = (distance * direction.sin()).clamp(-100.0, 100.0);
+            let scale_x = bounded(reflection.scale_x.map(f64::abs), 1.0, 0.1, 2.0);
+            let scale_y = bounded(reflection.scale_y.map(f64::abs), 1.0, 0.1, 2.0);
+            let skew_x = bounded(reflection.skew_x, 0.0, -45.0, 45.0);
+            let skew_y = bounded(reflection.skew_y, 0.0, -45.0, 45.0);
+            let _ = write!(
+                html,
+                "<div class=\"shape-reflection\" aria-hidden=\"true\" \
+                 aria-label=\"Approximate DrawingML reflection\" \
+                 data-support-tier=\"approximate\" style=\"position: absolute; \
+                 pointer-events: none; overflow: hidden; left: {offset_x:.2}pt; \
+                 top: calc(100% + {offset_y:.2}pt); width: 100%; height: 100%; \
+                 transform: scale({scale_x:.3}, -{scale_y:.3}) \
+                 skew({skew_x:.2}deg, {skew_y:.2}deg); transform-origin: center center; \
+                 opacity: {opacity:.3}; filter: blur({blur:.2}pt); {reflection_fill}; \
+                 border-radius: inherit; outline: inherit; \
+                 clip-path: inset(0 round 8%); -webkit-mask-image: linear-gradient(to bottom, \
+                 rgba(0,0,0,1) {start:.2}%, rgba(0,0,0,{end_opacity:.3}) {end:.2}%); \
+                 mask-image: linear-gradient(to bottom, rgba(0,0,0,1) {start:.2}%, \
+                 rgba(0,0,0,{end_opacity:.3}) {end:.2}%);\"></div>"
+            );
+            ctx.collector.borrow_mut().diagnostics.push(ConversionDiagnostic {
+                code: "DRAWINGML_REFLECTION_APPROXIMATE".to_owned(),
+                family: FeatureFamily::Shapes,
+                support_tier: SupportTier::Approximate,
+                stage: Some(CapabilityStage::Rendered),
+                location: effect_location(
+                    slide_index,
+                    shape.id,
+                    0,
+                    "a:reflection",
+                    position,
+                    size,
+                ),
+                raw_reference: Some(reflection.raw_xml.clone()),
+                fallback_kind: FallbackKind::StyleApproximation,
+                reason: "Reflection was rendered with bounded browser blur, transform, and mask primitives; this approximation does not claim PowerPoint fidelity".to_owned(),
+            });
+        }
+
+        let mut collector = ctx.collector.borrow_mut();
+        for (index, effect) in shape.effects.preserved.iter().enumerate() {
+            collector.diagnostics.push(ConversionDiagnostic {
+                code: "DRAWINGML_3D_FALLBACK".to_owned(),
+                family: FeatureFamily::Shapes,
+                support_tier: SupportTier::Fallback,
+                stage: Some(CapabilityStage::Parsed),
+                location: effect_location(
+                    slide_index,
+                    shape.id,
+                    index + 1,
+                    effect.kind.qualified_name(),
+                    position,
+                    size,
+                ),
+                raw_reference: Some(effect.raw_xml.clone()),
+                fallback_kind: FallbackKind::PreservedEffectMetadata,
+                reason: format!(
+                    "{} was preserved in source order as raw metadata and not rendered as Office 3D",
+                    effect.kind.qualified_name()
+                ),
+            });
         }
     }
 

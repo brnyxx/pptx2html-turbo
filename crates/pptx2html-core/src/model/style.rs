@@ -1,6 +1,9 @@
 use super::color::Color;
 
-pub use super::effects::{GlowEffect, OuterShadow, ShapeEffects};
+pub use super::effects::{
+    Bevel3d, GlowEffect, OuterShadow, PreservedEffect, PreservedEffectKind, ReflectionEffect,
+    Scene3d, Shape3d, ShapeEffects,
+};
 pub use super::fill::{
     Fill, GradientFill, GradientStop, GradientType, ImageFill, PatternFill, SolidFill,
 };

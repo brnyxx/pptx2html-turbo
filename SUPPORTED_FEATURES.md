@@ -248,6 +248,7 @@ Notes and comments are metadata only and are never inserted into the visible sli
 |---------|-----------------|--------|
 | Text shadow | `<a:outerShdw>` | Approximate |
 | Shape shadow | `<a:effectLst>` | Approximate |
-| Reflection | `<a:reflection>` | Unparsed |
+| Reflection | `<a:reflection>` | Approximate (bounded CSS mirror/mask; no PowerPoint-fidelity claim) |
 | Glow | `<a:glow>` | Approximate |
-| 3D effects | `<a:sp3d>` | Unparsed |
+| 3D scene and shape effects | `<a:scene3d>`, `<a:sp3d>` | Fallback (typed known fields + ordered raw metadata) |
+| Effect DAG | `<a:effectDag>` | Fallback (ordered raw metadata) |

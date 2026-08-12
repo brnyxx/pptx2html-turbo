@@ -60,6 +60,7 @@ fn fills_and_effects_keep_css_contract() {
             alpha: 1.0,
         }),
         glow: None,
+        ..Default::default()
     };
 
     let html = render_shapes(vec![shape]);

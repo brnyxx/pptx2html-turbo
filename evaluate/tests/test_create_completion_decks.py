@@ -96,6 +96,29 @@ class CompletionDeckTests(unittest.TestCase):
                     assert_content_types(self, archive)
             assert_feature_contract(self, first)
 
+    def test_reflection_3d_fixture_is_visible_and_exercises_ordered_fallbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "out"
+            generate(self, output, CANONICAL_MANIFEST)
+            with zipfile.ZipFile(output / "reflection-3d.pptx") as archive:
+                slide = ElementTree.fromstring(archive.read("ppt/slides/slide1.xml"))
+            shape = slide.find(".//p:sp", NS)
+            self.assertIsNotNone(shape)
+            extent = shape.find("p:spPr/a:xfrm/a:ext", NS)
+            self.assertGreater(int(extent.get("cx", "0")), 0)
+            self.assertGreater(int(extent.get("cy", "0")), 0)
+            self.assertEqual(
+                shape.findtext("p:txBody/a:p/a:r/a:t", default="", namespaces=NS),
+                "REFLECTION_APPROXIMATE_3D_FALLBACK",
+            )
+            dag = shape.find("p:spPr/a:effectDag", NS)
+            self.assertEqual(
+                [node.get("name") for node in dag.findall("a:cont", NS)],
+                ["first", "second"],
+            )
+            self.assertIsNotNone(shape.find("p:spPr/a:scene3d", NS))
+            self.assertIsNotNone(shape.find("p:spPr/a:sp3d", NS))
+
     def test_manifest_rows_match_independent_feature_and_real_adjustment_contracts(
         self,
     ) -> None:

@@ -188,7 +188,7 @@ CANONICAL_ROW_DIGESTS = {
     "fills": "e28c5677404f4ac9ef028942501fdbac27765afad771ab5f0dd875ffc20c98c3",
     "pattern-fill": "576ea4e7e428e6aedea6d61c33951c0aee0ba2ae1d72467c76d6403f9dab6106",
     "effects": "71a99e47a6ac72f1dede1ebac32bdb65063b4dc16b8ef6b4db108dd42bf9508b",
-    "reflection-and-3d": "8f6cc3481390d50fca4350480e244f6906124311515df3e8550a2e47caa3c07d",
+    "reflection-and-3d": "f2c3a30c8a9f42965c74006387c397bda028ccd27f3e0a4f0806fdd8d62875c1",
     "table": "53abe3fd7a64d561fc47169fa974cb8727fe9bb359a18989a53deba227b99af1",
     "table-style": "1fe12e283b9def10d2c526ef1f7899302fb8ae1cce38f1ad5b1ecf7c7eaf361e",
     "image": "571424de743edddfa33bb8b29c186e5e4b62363bb062d46e52669b11b8a3b91e",

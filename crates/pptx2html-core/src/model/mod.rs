@@ -58,9 +58,10 @@ pub use slide::{
     TextRun, UnresolvedElement, UnresolvedType, UnsupportedData, VerticalAlign,
 };
 pub use style::{
-    Alignment, Border, BorderStyle, CompoundLine, DashStyle, Fill, FontStyle, GlowEffect,
+    Alignment, Bevel3d, Border, BorderStyle, CompoundLine, DashStyle, Fill, FontStyle, GlowEffect,
     GradientFill, GradientStop, GradientType, ImageFill, LineAlignment, LineCap, LineEnd,
-    LineEndSize, LineEndType, LineJoin, OuterShadow, PatternFill, ShapeEffects, SolidFill,
+    LineEndSize, LineEndType, LineJoin, OuterShadow, PatternFill, PreservedEffect,
+    PreservedEffectKind, ReflectionEffect, Scene3d, Shape3d, ShapeEffects, SolidFill,
     StrikethroughType, TextCapitalization, TextShadow, TextStyle, UnderlineType,
 };
 pub use table_style::{
