@@ -86,10 +86,10 @@ pub fn modern_replies_package() -> Vec<u8> {
         classic_comments("0", "LEGACY_COMMENT"),
         format!(
             r#"<p188:cmLst xmlns:p188="{P188}" xmlns:a="{DML}">
-<p188:cm id="{{11111111-1111-1111-1111-111111111111}}" authorId="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" created="2026-01-01T00:00:00Z">
+<p188:cm id="{{FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}}" authorId="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" created="2026-01-01T00:00:00Z">
 <p188:txBody><a:p><a:r><a:t>PARENT_COMMENT</a:t></a:r></a:p></p188:txBody>
 <p188:replyLst>
-<p188:cm id="{{22222222-2222-2222-2222-222222222222}}" authorId="{{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}}" created="2026-01-01T00:00:01Z">
+<p188:cm id="{{00000000-0000-0000-0000-000000000000}}" authorId="{{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}}" created="2026-01-01T00:00:01Z">
 <p188:txBody><a:p><a:r><a:t>REPLY_COMMENT</a:t></a:r></a:p></p188:txBody>
 </p188:cm>
 </p188:replyLst>
@@ -108,6 +108,21 @@ pub fn multiple_root_annotation_package() -> Vec<u8> {
         modern_comments(),
         format!(
             r#"<p:notes xmlns:p="{PML}" xmlns:a="{DML}"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>FIRST_NOTES_ROOT</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:notes><p:notes xmlns:p="{PML}" xmlns:a="{DML}"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>SECOND_NOTES_ROOT</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:notes>"#,
+        ),
+        false,
+    )
+}
+
+pub fn multiple_root_authors_package() -> Vec<u8> {
+    base_with_authors(
+        classic_comments("0", "LEGACY_COMMENT"),
+        modern_comments(),
+        notes_slide(),
+        format!(
+            r#"<p:cmAuthorLst xmlns:p="{PML}"><p:cmAuthor id="0" name="Classic Author" initials="CA"/></p:cmAuthorLst><p:cmAuthorLst xmlns:p="{PML}"/>"#,
+        ),
+        format!(
+            r#"<p188:authorLst xmlns:p188="{P188}"><p188:author id="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" name="Modern Author" initials="MA"/></p188:authorLst><p188:authorLst xmlns:p188="{P188}"/>"#,
         ),
         false,
     )
@@ -316,6 +331,24 @@ fn base_with_modern(classic: String, modern: String, unsafe_target: bool) -> Vec
 }
 
 fn base_with_parts(classic: String, modern: String, notes: String, unsafe_target: bool) -> Vec<u8> {
+    base_with_authors(
+        classic,
+        modern,
+        notes,
+        classic_authors(),
+        modern_authors(),
+        unsafe_target,
+    )
+}
+
+fn base_with_authors(
+    classic: String,
+    modern: String,
+    notes: String,
+    classic_author_part: String,
+    modern_author_part: String,
+    unsafe_target: bool,
+) -> Vec<u8> {
     let presentation_rels = format!(
         r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId2" Type="{REL}slide" Target="slides/slide1.xml"/>
@@ -348,9 +381,9 @@ fn base_with_parts(classic: String, modern: String, notes: String, unsafe_target
             format!(r#"<p:notesMaster xmlns:p="{PML}"><p:cSld/></p:notesMaster>"#).as_bytes(),
         )
         .with_extra_file("ppt/comments/comment1.xml", classic.as_bytes())
-        .with_extra_file("ppt/commentAuthors.xml", classic_authors().as_bytes())
+        .with_extra_file("ppt/commentAuthors.xml", classic_author_part.as_bytes())
         .with_extra_file("ppt/comments/modernComment1.xml", modern.as_bytes())
-        .with_extra_file("ppt/authors/author1.xml", modern_authors().as_bytes())
+        .with_extra_file("ppt/authors/author1.xml", modern_author_part.as_bytes())
         .build()
 }
 

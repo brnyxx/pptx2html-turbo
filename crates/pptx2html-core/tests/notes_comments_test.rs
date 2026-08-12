@@ -14,8 +14,9 @@ use support::{
     missing_notes_master_relationship_package, missing_notes_master_relationship_part_package,
     missing_required_comment_attributes_package, modern_replies_package,
     multiple_modern_extensions_package, multiple_root_annotation_package,
-    multiple_root_notes_master_package, rich_annotation_text_package, selected_slides_package,
-    spoof_package, spoof_relationship_package,
+    multiple_root_authors_package, multiple_root_notes_master_package,
+    rich_annotation_text_package, selected_slides_package, spoof_package,
+    spoof_relationship_package,
 };
 
 fn raw_for<'a>(result: &'a pptx2html_core::ConversionResult, code: &str) -> Vec<&'a str> {
@@ -212,21 +213,33 @@ fn modern_replies_preserve_independent_identity_author_time_and_text() {
     let comments = raw_for(&result, "MODERN_COMMENT_METADATA");
 
     assert_eq!(comments.len(), 2);
+    assert!(comments[0].ends_with("text=PARENT_COMMENT"));
+    assert!(comments[1].ends_with("text=REPLY_COMMENT"));
     assert!(comments.iter().any(|raw| {
-        raw.contains("id={11111111-1111-1111-1111-111111111111}\n")
+        raw.contains("id={FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}\n")
             && raw.contains("parent_id=\n")
             && raw.ends_with("text=PARENT_COMMENT")
             && !raw.contains("REPLY_COMMENT")
     }));
     assert!(comments.iter().any(|raw| {
-        raw.contains("id={22222222-2222-2222-2222-222222222222}\n")
-            && raw.contains("parent_id={11111111-1111-1111-1111-111111111111}\n")
+        raw.contains("id={00000000-0000-0000-0000-000000000000}\n")
+            && raw.contains("parent_id={FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}\n")
             && raw.contains("author_id={BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}\n")
             && raw.contains("created=2026-01-01T00:00:01Z\n")
             && raw.ends_with("text=REPLY_COMMENT")
     }));
     assert_eq!(code_count(&result, "COMMENT_AUTHOR_UNRESOLVED"), 1);
     assert!(raw_for(&result, "COMMENT_AUTHOR_UNRESOLVED")[0].ends_with("text=REPLY_COMMENT"));
+}
+
+#[test]
+fn author_xml_rejects_multiple_document_roots() {
+    let result = convert_bytes_with_metadata(&multiple_root_authors_package())
+        .expect("multiple-root author parts degrade");
+
+    assert_eq!(code_count(&result, "ANNOTATION_PART_MALFORMED"), 2);
+    assert_eq!(code_count(&result, "COMMENT_AUTHOR_METADATA"), 0);
+    assert_eq!(code_count(&result, "COMMENT_AUTHOR_UNRESOLVED"), 2);
 }
 
 #[test]

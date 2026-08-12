@@ -38,12 +38,18 @@ fn authors(
     let mut authors = Vec::new();
     let mut depth = 0_usize;
     let mut valid_root = false;
+    let mut root_closed = false;
+    let mut malformed = None;
     loop {
         match reader.read_resolved_event_into(&mut buffer) {
             Ok((resolved, Event::Start(element))) => {
                 let local = local(&element);
                 if depth == 0 {
-                    valid_root = bound(&resolved, namespace) && local == root;
+                    if root_closed {
+                        malformed.get_or_insert("Author XML has multiple roots".to_owned());
+                    } else {
+                        valid_root = bound(&resolved, namespace) && local == root;
+                    }
                 }
                 if valid_root && depth == 1 && bound(&resolved, namespace) && local == child {
                     authors.push(CommentAuthor {
@@ -59,7 +65,16 @@ fn authors(
             Ok((resolved, Event::Empty(element))) => {
                 let local = local(&element);
                 if depth == 0 {
-                    valid_root = bound(&resolved, namespace) && local == root;
+                    if root_closed {
+                        malformed.get_or_insert("Author XML has multiple roots".to_owned());
+                    } else if bound(&resolved, namespace) && local == root {
+                        valid_root = true;
+                        root_closed = true;
+                    } else {
+                        malformed.get_or_insert(
+                            "Author root namespace or element is invalid".to_owned(),
+                        );
+                    }
                 }
                 if valid_root && depth == 1 && bound(&resolved, namespace) && local == child {
                     authors.push(CommentAuthor {
@@ -71,19 +86,25 @@ fn authors(
                     });
                 }
             }
-            Ok((_, Event::End(_))) => depth = depth.saturating_sub(1),
+            Ok((_, Event::End(_))) => {
+                depth = depth.saturating_sub(1);
+                root_closed |= valid_root && depth == 0;
+            }
             Ok((_, Event::Eof)) => break,
             Err(error) => return (authors, Some(error.to_string())),
             _ => {}
         }
         buffer.clear();
     }
-    if valid_root {
+    if valid_root && root_closed && malformed.is_none() {
         (authors, None)
     } else {
         (
             Vec::new(),
-            Some("Author root namespace or element is invalid".to_owned()),
+            Some(
+                malformed
+                    .unwrap_or_else(|| "Author root namespace or element is invalid".to_owned()),
+            ),
         )
     }
 }

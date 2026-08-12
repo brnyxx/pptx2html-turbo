@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 ### Rendering / Public API
 - Preserve slide notes, notes-master associations, legacy comments/authors, and modern comments/authors as typed off-canvas metadata in the existing deterministic diagnostics JSON
 - Retain exact comment text when authors are unresolved with `COMMENT_AUTHOR_UNRESOLVED`, reject unsafe or spoofed annotation relationships before package access, and preserve unknown modern comment extensions as raw fallback XML
-- Add public `Presentation::notes_comments` and typed annotation records; external exhaustive struct literals require a next-semver-major source migration while the manifest version remains unchanged
+- Preserve typed annotation records outside public `Presentation` so existing exhaustive struct literals remain source-compatible
 - Preserve click and mouse-over actions as typed `ActionSet` data across shapes, pictures, connectors, graphic frames, and shape/table text runs
 - Render only strict product-allowlisted `http`, `https`, and `mailto` links, use actual presentation slide order for internal navigation, and keep unsafe or unsupported actions inert with stable diagnostics
 - Preserve group and table graphic-frame action ownership, require exact PresentationML owner stacks, and use stable owner-derived run/table-cell diagnostic identities

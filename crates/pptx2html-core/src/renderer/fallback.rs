@@ -127,15 +127,15 @@ fn extract_relationship_id(xml: &str) -> Option<String> {
 
 pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) {
     diagnostics.sort_by(|left, right| {
-        diagnostic_key(left)
-            .cmp(&diagnostic_key(right))
+        diagnostic_sort_key(left)
+            .cmp(&diagnostic_sort_key(right))
             .then_with(|| super::action_diagnostics::compare(left, right))
     });
     diagnostics.dedup_by(|left, right| {
         super::action_diagnostics::exact_duplicate(left, right)
             || (!left.code.starts_with("ACTION_")
                 && !right.code.starts_with("ACTION_")
-                && diagnostic_key(left) == diagnostic_key(right))
+                && diagnostic_deduplication_key(left) == diagnostic_deduplication_key(right))
     });
 }
 
@@ -147,7 +147,24 @@ type DiagnosticKey<'a> = (
     Option<&'a str>,
 );
 
-fn diagnostic_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
+fn diagnostic_sort_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
+    (
+        diagnostic.location.part_name.as_deref(),
+        diagnostic.location.slide_index,
+        diagnostic.location.qualified_element_name.as_deref(),
+        diagnostic.location.relationship_id.as_deref(),
+        if matches!(
+            diagnostic.code.as_str(),
+            "LEGACY_COMMENT_METADATA" | "MODERN_COMMENT_METADATA"
+        ) {
+            None
+        } else {
+            diagnostic.raw_reference.as_deref()
+        },
+    )
+}
+
+fn diagnostic_deduplication_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
     (
         diagnostic.location.part_name.as_deref(),
         diagnostic.location.slide_index,
