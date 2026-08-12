@@ -3,17 +3,18 @@ mod fixtures;
 mod support;
 
 use fixtures::MinimalPptx;
-use pptx2html_core::model::{ClrMap, NotesCommentsInventory, Presentation, Size};
+use pptx2html_core::model::{ClrMap, Presentation, Size};
 use pptx2html_core::{
     ConversionOptions, convert_bytes_with_metadata, convert_bytes_with_options_metadata,
 };
 use support::{
     complete_package, duplicate_authors_package, duplicate_relationship_package,
-    invalid_notes_master_package, missing_author_package, missing_notes_master_part_package,
-    missing_notes_master_relationship_package, missing_notes_master_relationship_part_package,
-    missing_required_comment_attributes_package, multiple_modern_extensions_package,
-    rich_annotation_text_package, selected_slides_package, spoof_package,
-    spoof_relationship_package,
+    empty_second_root_annotation_package, invalid_notes_master_package, missing_author_package,
+    missing_notes_master_part_package, missing_notes_master_relationship_package,
+    missing_notes_master_relationship_part_package, missing_required_comment_attributes_package,
+    modern_replies_package, multiple_modern_extensions_package, multiple_root_annotation_package,
+    multiple_root_notes_master_package, rich_annotation_text_package, selected_slides_package,
+    spoof_package, spoof_relationship_package,
 };
 
 fn raw_for<'a>(result: &'a pptx2html_core::ConversionResult, code: &str) -> Vec<&'a str> {
@@ -39,6 +40,13 @@ fn raw_contains(result: &pptx2html_core::ConversionResult, sentinel: &str) -> bo
         .iter()
         .filter_map(|diagnostic| diagnostic.raw_reference.as_deref())
         .any(|raw| raw.contains(sentinel))
+}
+
+#[test]
+#[ignore = "manual QA fixture export"]
+fn export_complete_package_for_manual_qa() {
+    let path = std::env::var_os("PPTX2HTML_TASK16_QA_PATH").expect("QA output path");
+    std::fs::write(path, complete_package()).expect("write QA fixture");
 }
 
 fn tiers_for<'a>(result: &'a pptx2html_core::ConversionResult, code: &str) -> Vec<&'a str> {
@@ -197,6 +205,59 @@ fn modern_extensions_are_isolated_to_their_own_comments() {
 }
 
 #[test]
+fn modern_replies_preserve_independent_identity_author_time_and_text() {
+    let result =
+        convert_bytes_with_metadata(&modern_replies_package()).expect("modern replies convert");
+    let comments = raw_for(&result, "MODERN_COMMENT_METADATA");
+
+    assert_eq!(comments.len(), 2);
+    assert!(comments.iter().any(|raw| {
+        raw.contains("id={11111111-1111-1111-1111-111111111111}\n")
+            && raw.contains("parent_id=\n")
+            && raw.ends_with("text=PARENT_COMMENT")
+            && !raw.contains("REPLY_COMMENT")
+    }));
+    assert!(comments.iter().any(|raw| {
+        raw.contains("id={22222222-2222-2222-2222-222222222222}\n")
+            && raw.contains("parent_id={11111111-1111-1111-1111-111111111111}\n")
+            && raw.contains("author_id={BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}\n")
+            && raw.contains("created=2026-01-01T00:00:01Z\n")
+            && raw.ends_with("text=REPLY_COMMENT")
+    }));
+    assert_eq!(code_count(&result, "COMMENT_AUTHOR_UNRESOLVED"), 1);
+    assert!(raw_for(&result, "COMMENT_AUTHOR_UNRESOLVED")[0].ends_with("text=REPLY_COMMENT"));
+}
+
+#[test]
+fn annotation_xml_rejects_multiple_document_roots() {
+    let result = convert_bytes_with_metadata(&multiple_root_annotation_package())
+        .expect("multiple-root package degrades");
+
+    assert_eq!(code_count(&result, "ANNOTATION_PART_MALFORMED"), 2);
+    assert!(!raw_contains(&result, "FIRST_COMMENT_ROOT"));
+    assert!(!raw_contains(&result, "SECOND_COMMENT_ROOT"));
+    assert!(!raw_contains(&result, "FIRST_NOTES_ROOT"));
+    assert!(!raw_contains(&result, "SECOND_NOTES_ROOT"));
+
+    let notes_master = convert_bytes_with_metadata(&multiple_root_notes_master_package())
+        .expect("multiple-root notes master degrades");
+    assert_eq!(code_count(&notes_master, "ANNOTATION_PART_MALFORMED"), 1,);
+    assert!(raw_for(&notes_master, "NOTES_SLIDE_METADATA")[0].contains("notes_master=\n"),);
+}
+
+#[test]
+fn annotation_xml_rejects_empty_second_document_roots() {
+    let result = convert_bytes_with_metadata(&empty_second_root_annotation_package())
+        .expect("empty second roots degrade");
+
+    assert_eq!(code_count(&result, "ANNOTATION_PART_MALFORMED"), 2);
+    assert_eq!(code_count(&result, "LEGACY_COMMENT_METADATA"), 0);
+    assert_eq!(code_count(&result, "NOTES_SLIDE_METADATA"), 1);
+    assert!(!raw_contains(&result, "FIRST_COMMENT_ROOT"));
+    assert!(!raw_contains(&result, "FIRST_NOTES_ROOT"));
+}
+
+#[test]
 fn annotation_text_preserves_paragraphs_breaks_fields_entities_and_cdata() {
     let result = convert_bytes_with_metadata(&rich_annotation_text_package())
         .expect("rich annotation text converts");
@@ -316,7 +377,7 @@ fn annotations_follow_slide_selection_and_hidden_slide_policy() {
 }
 
 #[test]
-fn public_presentation_literal_includes_annotation_inventory() {
+fn public_presentation_literal_remains_source_compatible() {
     let presentation = Presentation {
         slides: Vec::new(),
         slide_size: Size::default(),
@@ -326,9 +387,7 @@ fn public_presentation_literal_includes_annotation_inventory() {
         layouts: Vec::new(),
         default_text_style: None,
         clr_map: ClrMap::default(),
-        notes_comments: NotesCommentsInventory::default(),
     };
 
-    assert!(presentation.notes_comments.notes.is_empty());
-    assert!(presentation.notes_comments.comments.is_empty());
+    assert!(presentation.slides.is_empty());
 }

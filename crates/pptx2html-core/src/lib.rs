@@ -205,9 +205,9 @@ pub fn convert_bytes_with_options_metadata(
     data: &[u8],
     opts: &ConversionOptions,
 ) -> PptxResult<ConversionResult> {
-    let presentation = PptxParser::parse_bytes(data)?;
+    let (presentation, notes_comments) = PptxParser::parse_bytes_with_annotations(data)?;
     let diagnostics = parser::collect_package_diagnostics(data)?;
-    HtmlRenderer::render_with_options_diagnostics(&presentation, opts, diagnostics)
+    HtmlRenderer::render_with_options_annotations(&presentation, opts, diagnostics, &notes_comments)
 }
 
 /// Lightweight presentation metadata (no rendering performed).

@@ -18,13 +18,19 @@ pub(super) fn notes_text(xml: &str) -> (String, Option<String>) {
     let mut stack = Vec::new();
     let mut text = String::new();
     let mut valid_root = false;
+    let mut root_closed = false;
+    let mut multiple_roots = false;
     let mut paragraph_count = 0_usize;
     loop {
         match reader.read_resolved_event_into(&mut buffer) {
             Ok((namespace, Event::Start(element))) => {
                 let node = node(namespace, &element);
                 if stack.is_empty() {
-                    valid_root = node == (PML.to_vec(), "notes".to_owned());
+                    if root_closed {
+                        multiple_roots = true;
+                    } else {
+                        valid_root = node == (PML.to_vec(), "notes".to_owned());
+                    }
                 }
                 if node == (DML.to_vec(), "p".to_owned()) && notes_text_body(&stack) {
                     if paragraph_count > 0 && !text.ends_with('\n') {
@@ -38,6 +44,9 @@ pub(super) fn notes_text(xml: &str) -> (String, Option<String>) {
             }
             Ok((namespace, Event::Empty(element))) => {
                 let node = node(namespace, &element);
+                if stack.is_empty() {
+                    multiple_roots = true;
+                }
                 if node == (DML.to_vec(), "br".to_owned()) && notes_paragraph(&stack) {
                     text.push('\n');
                 }
@@ -51,6 +60,7 @@ pub(super) fn notes_text(xml: &str) -> (String, Option<String>) {
             }
             Ok((_, Event::End(_))) => {
                 stack.pop();
+                root_closed |= valid_root && stack.is_empty();
             }
             Ok((_, Event::Eof)) => break,
             Err(error) => return (text, Some(error.to_string())),
@@ -58,7 +68,7 @@ pub(super) fn notes_text(xml: &str) -> (String, Option<String>) {
         }
         buffer.clear();
     }
-    if valid_root {
+    if valid_root && root_closed && !multiple_roots {
         (text, None)
     } else {
         (
@@ -73,9 +83,13 @@ pub(super) fn notes_master_document_is_exact(xml: &str) -> bool {
     let mut buffer = Vec::new();
     let mut depth = 0_usize;
     let mut valid_root = false;
+    let mut root_closed = false;
     loop {
         match reader.read_resolved_event_into(&mut buffer) {
             Ok((namespace, Event::Start(element))) => {
+                if root_closed {
+                    return false;
+                }
                 if depth == 0 {
                     valid_root =
                         bound(&namespace, PML) && element.local_name().as_ref() == b"notesMaster";
@@ -83,10 +97,18 @@ pub(super) fn notes_master_document_is_exact(xml: &str) -> bool {
                 depth += 1;
             }
             Ok((namespace, Event::Empty(element))) if depth == 0 => {
-                return bound(&namespace, PML) && element.local_name().as_ref() == b"notesMaster";
+                if root_closed {
+                    return false;
+                }
+                valid_root =
+                    bound(&namespace, PML) && element.local_name().as_ref() == b"notesMaster";
+                root_closed = valid_root;
             }
-            Ok((_, Event::End(_))) => depth = depth.saturating_sub(1),
-            Ok((_, Event::Eof)) => return valid_root && depth == 0,
+            Ok((_, Event::End(_))) => {
+                depth = depth.saturating_sub(1);
+                root_closed |= valid_root && depth == 0;
+            }
+            Ok((_, Event::Eof)) => return valid_root && root_closed && depth == 0,
             Err(_) => return false,
             _ => {}
         }

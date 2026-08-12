@@ -81,6 +81,51 @@ pub fn multiple_modern_extensions_package() -> Vec<u8> {
     )
 }
 
+pub fn modern_replies_package() -> Vec<u8> {
+    base_with_modern(
+        classic_comments("0", "LEGACY_COMMENT"),
+        format!(
+            r#"<p188:cmLst xmlns:p188="{P188}" xmlns:a="{DML}">
+<p188:cm id="{{11111111-1111-1111-1111-111111111111}}" authorId="{{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}}" created="2026-01-01T00:00:00Z">
+<p188:txBody><a:p><a:r><a:t>PARENT_COMMENT</a:t></a:r></a:p></p188:txBody>
+<p188:replyLst>
+<p188:cm id="{{22222222-2222-2222-2222-222222222222}}" authorId="{{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}}" created="2026-01-01T00:00:01Z">
+<p188:txBody><a:p><a:r><a:t>REPLY_COMMENT</a:t></a:r></a:p></p188:txBody>
+</p188:cm>
+</p188:replyLst>
+</p188:cm>
+</p188:cmLst>"#,
+        ),
+        false,
+    )
+}
+
+pub fn multiple_root_annotation_package() -> Vec<u8> {
+    base_with_parts(
+        format!(
+            r#"<p:cmLst xmlns:p="{PML}"><p:cm authorId="0" idx="1"><p:text>FIRST_COMMENT_ROOT</p:text></p:cm></p:cmLst><p:cmLst xmlns:p="{PML}"><p:cm authorId="0" idx="2"><p:text>SECOND_COMMENT_ROOT</p:text></p:cm></p:cmLst>"#,
+        ),
+        modern_comments(),
+        format!(
+            r#"<p:notes xmlns:p="{PML}" xmlns:a="{DML}"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>FIRST_NOTES_ROOT</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:notes><p:notes xmlns:p="{PML}" xmlns:a="{DML}"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>SECOND_NOTES_ROOT</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:notes>"#,
+        ),
+        false,
+    )
+}
+
+pub fn empty_second_root_annotation_package() -> Vec<u8> {
+    base_with_parts(
+        format!(
+            r#"<p:cmLst xmlns:p="{PML}"><p:cm authorId="0" idx="1"><p:text>FIRST_COMMENT_ROOT</p:text></p:cm></p:cmLst><p:cmLst xmlns:p="{PML}"/>"#,
+        ),
+        modern_comments(),
+        format!(
+            r#"<p:notes xmlns:p="{PML}" xmlns:a="{DML}"><p:cSld/></p:notes><p:notes xmlns:p="{PML}"/>"#,
+        ),
+        false,
+    )
+}
+
 pub fn rich_annotation_text_package() -> Vec<u8> {
     base_with_parts(
         format!(
@@ -146,6 +191,15 @@ pub fn invalid_notes_master_package() -> Vec<u8> {
     notes_master_contract_package(
         Some(&notes_rels()),
         Some(&format!(r#"<p:notes xmlns:p="{PML}"><p:cSld/></p:notes>"#)),
+    )
+}
+
+pub fn multiple_root_notes_master_package() -> Vec<u8> {
+    notes_master_contract_package(
+        Some(&notes_rels()),
+        Some(&format!(
+            r#"<p:notesMaster xmlns:p="{PML}"><p:cSld/></p:notesMaster><p:notesMaster xmlns:p="{PML}"><p:cSld/></p:notesMaster>"#,
+        )),
     )
 }
 

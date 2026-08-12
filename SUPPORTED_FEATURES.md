@@ -204,7 +204,7 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Feature | ECMA-376 / MS-PPTX element or part | Status |
 |---------|------------------------------------|--------|
 | Slide notes text and one-based slide association | Notes Slide `<p:notes>` / `<a:t>` | parsed off-canvas fallback metadata |
-| Notes-master association | Notes Slide relationship to Notes Master part | exact parsed metadata |
+| Notes-master association | Notes Slide relationship to Notes Master part | parsed off-canvas fallback metadata |
 | Legacy comments and authors | `<p:cmLst>/<p:cm>/<p:text>`, `<p:cmAuthorLst>` | parsed off-canvas fallback metadata |
 | Modern comments and authors | `p188:cmLst/p188:cm/p188:txBody`, Author part | parsed off-canvas fallback metadata |
 | Missing comment author | unresolved `authorId` | fallback with exact `COMMENT_AUTHOR_UNRESOLVED`; text retained |

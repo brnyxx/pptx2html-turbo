@@ -43,7 +43,8 @@ use zip::ZipArchive;
 
 use crate::error::{PptxError, PptxResult};
 use crate::model::{
-    Emu, ListStyle, Presentation, Shape, ShapeType, Size, TableStyle, TableStyleSourceKind,
+    Emu, ListStyle, NotesCommentsInventory, Presentation, Shape, ShapeType, Size, TableStyle,
+    TableStyleSourceKind,
 };
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,12 @@ impl PptxParser {
 
     /// Parse PPTX from in-memory byte data.
     pub fn parse_bytes(data: &[u8]) -> PptxResult<Presentation> {
+        Self::parse_bytes_with_annotations(data).map(|(presentation, _)| presentation)
+    }
+
+    pub(crate) fn parse_bytes_with_annotations(
+        data: &[u8],
+    ) -> PptxResult<(Presentation, NotesCommentsInventory)> {
         let cursor = Cursor::new(data);
         let mut archive = ZipArchive::new(cursor)?;
 
@@ -85,6 +92,7 @@ impl PptxParser {
         }
 
         let mut presentation = Presentation::default();
+        let mut notes_comments = NotesCommentsInventory::default();
 
         // 1. Parse slide size, slide rel IDs, and default text style from presentation.xml
         let pres_xml = Self::read_entry(&mut archive, "ppt/presentation.xml").map_err(|_| {
@@ -108,7 +116,7 @@ impl PptxParser {
             &mut archive,
             &pres_relationships,
             pres_relationships_exact,
-            &mut presentation.notes_comments,
+            &mut notes_comments,
         );
 
         let table_styles = match table_style_package_diagnostics::select(&pres_relationships).target
@@ -274,7 +282,7 @@ impl PptxParser {
                         &slide_relationships,
                         slide_relationships_exact,
                         &comment_authors,
-                        &mut presentation.notes_comments,
+                        &mut notes_comments,
                     );
 
                     let mut slide = slide_parser::parse_slide_with_actions(
@@ -315,7 +323,7 @@ impl PptxParser {
         }
 
         // 7. Build presentation (already populated)
-        Ok(presentation)
+        Ok((presentation, notes_comments))
     }
 
     /// Read a ZIP entry

@@ -7,6 +7,7 @@ use crate::model::CommentKind;
 #[derive(Debug)]
 pub(in crate::parser::notes_comments_parser) struct CommentRecord {
     pub id: String,
+    pub parent_id: Option<String>,
     pub author_id: String,
     pub created_at: Option<String>,
     pub text: String,
@@ -33,56 +34,62 @@ fn comments(xml: &str, kind: CommentKind) -> (Vec<CommentRecord>, Option<String>
     let mut reader = NsReader::from_str(xml);
     let mut buffer = Vec::new();
     let mut stack = Vec::new();
+    let mut active = Vec::new();
     let mut records = Vec::new();
-    let mut current: Option<CommentRecord> = None;
     let mut valid_root = false;
-    let mut extension_start = None;
-    let mut paragraph_count = 0_usize;
+    let mut root_closed = false;
     let mut malformed = None;
+    let mut extension_start = None;
+    let mut comment_order = 0_usize;
     loop {
         let event_start = reader.buffer_position() as usize;
         match reader.read_resolved_event_into(&mut buffer) {
             Ok((resolved, Event::Start(element))) => {
                 let current_node = node(resolved, &element);
                 if stack.is_empty() {
-                    valid_root = current_node == (namespace.to_vec(), "cmLst".to_owned());
+                    if root_closed {
+                        malformed.get_or_insert("Comment XML has multiple roots".to_owned());
+                    } else {
+                        valid_root = current_node == (namespace.to_vec(), "cmLst".to_owned());
+                    }
                 }
-                if valid_root
-                    && stack.len() == 1
-                    && current_node == (namespace.to_vec(), "cm".to_owned())
-                {
-                    match record(&element, kind) {
-                        Ok(record) => current = Some(record),
+                if starts_comment(&stack, &current_node, namespace, kind) {
+                    let parent_id = active
+                        .last()
+                        .map(|comment: &ActiveComment| comment.record.id.clone());
+                    match record(&element, kind, parent_id) {
+                        Ok(record) => {
+                            active.push(ActiveComment::new(record, comment_order));
+                            comment_order += 1;
+                        }
                         Err(reason) => {
                             malformed.get_or_insert(reason);
-                            current = None;
                         }
                     }
-                    paragraph_count = 0;
-                }
-                if kind == CommentKind::Modern
-                    && current.is_some()
+                } else if kind == CommentKind::Modern
                     && current_node == (DML.to_vec(), "p".to_owned())
-                    && modern_text_body(&stack)
+                    && active.last().is_some_and(|comment| comment.in_text_body)
                 {
-                    if let Some(record) = current.as_mut()
-                        && paragraph_count > 0
-                        && !record.text.ends_with('\n')
-                    {
-                        record.text.push('\n');
+                    if let Some(comment) = active.last_mut() {
+                        comment.start_paragraph();
                     }
-                    paragraph_count += 1;
                 } else if kind == CommentKind::Modern
                     && current_node == (DML.to_vec(), "br".to_owned())
-                    && modern_paragraph(&stack)
-                    && let Some(record) = current.as_mut()
+                    && active.last().is_some_and(|comment| comment.in_paragraph)
+                    && let Some(comment) = active.last_mut()
                 {
-                    record.text.push('\n');
+                    comment.record.text.push('\n');
                 }
                 if kind == CommentKind::Modern
-                    && current.is_some()
-                    && stack.len() == 2
+                    && current_node == (P188.to_vec(), "txBody".to_owned())
+                    && stack.last().is_some_and(is_modern_comment)
+                    && let Some(comment) = active.last_mut()
+                {
+                    comment.in_text_body = true;
+                }
+                if kind == CommentKind::Modern
                     && current_node == (P188.to_vec(), "extLst".to_owned())
+                    && stack.last().is_some_and(is_modern_comment)
                 {
                     extension_start = Some(event_start);
                 }
@@ -90,99 +97,153 @@ fn comments(xml: &str, kind: CommentKind) -> (Vec<CommentRecord>, Option<String>
             }
             Ok((resolved, Event::Empty(element))) => {
                 let current_node = node(resolved, &element);
+                if stack.is_empty() {
+                    malformed.get_or_insert("Comment XML has multiple roots".to_owned());
+                }
                 if kind == CommentKind::Modern
                     && current_node == (DML.to_vec(), "br".to_owned())
-                    && modern_paragraph(&stack)
-                    && let Some(record) = current.as_mut()
+                    && active.last().is_some_and(|comment| comment.in_paragraph)
+                    && let Some(comment) = active.last_mut()
                 {
-                    record.text.push('\n');
+                    comment.record.text.push('\n');
                 }
                 if kind == CommentKind::Modern
-                    && current.is_some()
-                    && stack.len() == 2
                     && current_node == (P188.to_vec(), "extLst".to_owned())
+                    && stack.last().is_some_and(is_modern_comment)
+                    && let Some(comment) = active.last_mut()
                 {
                     let event_end = reader.buffer_position() as usize;
-                    if let Some(record) = current.as_mut() {
-                        record.raw_extension_xml =
-                            xml.get(event_start..event_end).map(str::to_owned);
-                    }
+                    comment.record.raw_extension_xml =
+                        xml.get(event_start..event_end).map(str::to_owned);
                 }
             }
-            Ok((_, Event::Text(value))) if text_context(&stack, kind) => {
-                if let Some(record) = current.as_mut() {
+            Ok((_, Event::Text(value)))
+                if active.last().is_some() && text_context(&stack, kind) =>
+            {
+                if let Some(comment) = active.last_mut() {
                     match value.unescape() {
-                        Ok(value) => record.text.push_str(&value),
-                        Err(error) => return (records, Some(error.to_string())),
+                        Ok(value) => comment.record.text.push_str(&value),
+                        Err(error) => return (Vec::new(), Some(error.to_string())),
                     }
                 }
             }
-            Ok((_, Event::CData(value))) if text_context(&stack, kind) => {
-                if let Some(record) = current.as_mut() {
-                    record
+            Ok((_, Event::CData(value)))
+                if active.last().is_some() && text_context(&stack, kind) =>
+            {
+                if let Some(comment) = active.last_mut() {
+                    comment
+                        .record
                         .text
                         .push_str(&String::from_utf8_lossy(value.as_ref()));
                 }
             }
-            Ok((_, Event::End(element))) => {
-                let ending_extension = kind == CommentKind::Modern
-                    && current.is_some()
-                    && stack.len() == 3
-                    && stack
-                        .last()
-                        .is_some_and(|node| node.0.as_slice() == P188 && node.1 == "extLst");
-                let ending_comment = String::from_utf8_lossy(element.local_name().as_ref()) == "cm"
-                    && stack.len() == 2;
-                if ending_extension {
-                    let event_end = reader.buffer_position() as usize;
-                    if let (Some(start), Some(record)) = (extension_start, current.as_mut()) {
-                        record.raw_extension_xml = xml.get(start..event_end).map(str::to_owned);
+            Ok((_, Event::End(_))) => {
+                let ending = stack.last().cloned();
+                if kind == CommentKind::Modern
+                    && ending
+                        .as_ref()
+                        .is_some_and(|node| node.0.as_slice() == P188 && node.1 == "extLst")
+                {
+                    if let (Some(start), Some(comment)) = (extension_start, active.last_mut()) {
+                        let event_end = reader.buffer_position() as usize;
+                        comment.record.raw_extension_xml =
+                            xml.get(start..event_end).map(str::to_owned);
                     }
                     extension_start = None;
                 }
-                stack.pop();
-                if ending_comment && let Some(record) = current.take() {
-                    records.push(record);
-                    extension_start = None;
+                if ending
+                    .as_ref()
+                    .is_some_and(|node| node.0.as_slice() == DML && node.1 == "p")
+                    && let Some(comment) = active.last_mut()
+                {
+                    comment.in_paragraph = false;
                 }
+                if ending
+                    .as_ref()
+                    .is_some_and(|node| node.0.as_slice() == P188 && node.1 == "txBody")
+                    && let Some(comment) = active.last_mut()
+                {
+                    comment.in_text_body = false;
+                }
+                if ending
+                    .as_ref()
+                    .is_some_and(|node| node.0.as_slice() == namespace && node.1 == "cm")
+                    && let Some(comment) = active.pop()
+                {
+                    records.push((comment.order, comment.record));
+                }
+                stack.pop();
+                root_closed |= valid_root && stack.is_empty();
             }
             Ok((_, Event::Eof)) => break,
-            Err(error) => return (records, Some(error.to_string())),
+            Err(error) => return (Vec::new(), Some(error.to_string())),
             _ => {}
         }
         buffer.clear();
     }
-    if valid_root {
-        (records, malformed)
-    } else {
-        (
+    if !valid_root || !root_closed {
+        return (
             Vec::new(),
             Some("Comment root namespace or element is invalid".to_owned()),
-        )
+        );
+    }
+    if let Some(reason) = malformed {
+        return (Vec::new(), Some(reason));
+    }
+    records.sort_by_key(|(order, _)| *order);
+    (
+        records.into_iter().map(|(_, record)| record).collect(),
+        None,
+    )
+}
+
+#[derive(Debug)]
+struct ActiveComment {
+    record: CommentRecord,
+    in_text_body: bool,
+    in_paragraph: bool,
+    paragraph_count: usize,
+    order: usize,
+}
+
+impl ActiveComment {
+    fn new(record: CommentRecord, order: usize) -> Self {
+        Self {
+            record,
+            in_text_body: false,
+            in_paragraph: false,
+            paragraph_count: 0,
+            order,
+        }
+    }
+
+    fn start_paragraph(&mut self) {
+        if self.paragraph_count > 0 && !self.record.text.ends_with('\n') {
+            self.record.text.push('\n');
+        }
+        self.paragraph_count += 1;
+        self.in_paragraph = true;
     }
 }
 
-fn record(element: &BytesStart<'_>, kind: CommentKind) -> Result<CommentRecord, String> {
-    let id_attribute = match kind {
-        CommentKind::Legacy => "idx",
-        CommentKind::Modern => "id",
-    };
-    let id = optional_attr(element, id_attribute)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("Comment is missing required {id_attribute}"))?;
-    let author_id = optional_attr(element, "authorId")
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Comment is missing required authorId".to_owned())?;
-    Ok(CommentRecord {
-        id,
-        author_id,
-        created_at: match kind {
-            CommentKind::Legacy => optional_attr(element, "dt"),
-            CommentKind::Modern => optional_attr(element, "created"),
-        },
-        text: String::new(),
-        raw_extension_xml: None,
-    })
+fn starts_comment(
+    stack: &[(Vec<u8>, String)],
+    current_node: &(Vec<u8>, String),
+    namespace: &[u8],
+    kind: CommentKind,
+) -> bool {
+    if current_node.0.as_slice() != namespace || current_node.1 != "cm" {
+        return false;
+    }
+    stack.len() == 1
+        || kind == CommentKind::Modern
+            && stack
+                .last()
+                .is_some_and(|node| node.0.as_slice() == P188 && node.1 == "replyLst")
+}
+
+fn is_modern_comment(node: &(Vec<u8>, String)) -> bool {
+    node.0.as_slice() == P188 && node.1 == "cm"
 }
 
 fn text_context(stack: &[(Vec<u8>, String)], kind: CommentKind) -> bool {
@@ -200,10 +261,30 @@ fn text_context(stack: &[(Vec<u8>, String)], kind: CommentKind) -> bool {
     }
 }
 
-fn modern_text_body(stack: &[(Vec<u8>, String)]) -> bool {
-    tail_matches(stack, &[(P188, "txBody")])
-}
-
-fn modern_paragraph(stack: &[(Vec<u8>, String)]) -> bool {
-    tail_matches(stack, &[(P188, "txBody"), (DML, "p")])
+fn record(
+    element: &BytesStart<'_>,
+    kind: CommentKind,
+    parent_id: Option<String>,
+) -> Result<CommentRecord, String> {
+    let id_attribute = match kind {
+        CommentKind::Legacy => "idx",
+        CommentKind::Modern => "id",
+    };
+    let id = optional_attr(element, id_attribute)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("Comment is missing required {id_attribute}"))?;
+    let author_id = optional_attr(element, "authorId")
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "Comment is missing required authorId".to_owned())?;
+    Ok(CommentRecord {
+        id,
+        parent_id,
+        author_id,
+        created_at: match kind {
+            CommentKind::Legacy => optional_attr(element, "dt"),
+            CommentKind::Modern => optional_attr(element, "created"),
+        },
+        text: String::new(),
+        raw_extension_xml: None,
+    })
 }

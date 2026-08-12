@@ -1,0 +1,40 @@
+{
+  "browserVersion": "151.0.7922.34",
+  "codeCounts": {
+    "COMMENT_AUTHOR_METADATA": 2,
+    "LEGACY_COMMENT_METADATA": 1,
+    "MODERN_COMMENT_EXTENSION_FALLBACK": 1,
+    "MODERN_COMMENT_METADATA": 1,
+    "NOTES_SLIDE_METADATA": 1,
+    "OOXML_ELEMENT_UNSUPPORTED": 15,
+    "OOXML_RELATIONSHIP_UNSUPPORTED": 4
+  },
+  "consoleErrors": [],
+  "diagnosticsCount": 25,
+  "metadataSentinelOccurrences": {
+    "LEGACY_COMMENT": 1,
+    "MODERN_COMMENT": 1,
+    "NOTES_SENTINEL": 1
+  },
+  "pageErrors": [],
+  "resolvedAuthors": {
+    "Classic Author": 1,
+    "Modern Author": 1
+  },
+  "screenshot": ".omo/evidence/task-16-notes-comments/browser-metadata-960x720.png",
+  "screenshotDimensions": {
+    "height": 720,
+    "width": 960
+  },
+  "screenshotPngSignatureValid": true,
+  "slideAssociation": {
+    "expectedSlideNumber": 1,
+    "rawReferenceOccurrences": 3
+  },
+  "slideCount": 1,
+  "visibleSentinelOccurrences": {
+    "LEGACY_COMMENT": 0,
+    "MODERN_COMMENT": 0,
+    "NOTES_SENTINEL": 0
+  }
+}

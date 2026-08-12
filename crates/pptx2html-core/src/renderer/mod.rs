@@ -242,6 +242,20 @@ impl HtmlRenderer {
         opts: &ConversionOptions,
         diagnostics: Vec<ConversionDiagnostic>,
     ) -> PptxResult<ConversionResult> {
+        Self::render_with_options_annotations(
+            pres,
+            opts,
+            diagnostics,
+            &NotesCommentsInventory::default(),
+        )
+    }
+
+    pub(crate) fn render_with_options_annotations(
+        pres: &Presentation,
+        opts: &ConversionOptions,
+        diagnostics: Vec<ConversionDiagnostic>,
+        notes_comments: &NotesCommentsInventory,
+    ) -> PptxResult<ConversionResult> {
         let slide_w = pres.slide_size.width.to_px();
         let slide_h = pres.slide_size.height.to_px();
         let slide_scale = opts.effective_scale();
@@ -326,7 +340,7 @@ impl HtmlRenderer {
                 .enumerate()
                 .all(|(index, slide)| opts.should_include_slide(index + 1, slide.hidden));
         notes_comments::append(
-            &pres.notes_comments,
+            notes_comments,
             &mut coll.diagnostics,
             |slide_number| {
                 pres.slides

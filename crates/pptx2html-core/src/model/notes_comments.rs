@@ -39,6 +39,7 @@ pub struct SlideComment {
     pub part_name: String,
     pub relationship_id: String,
     pub id: String,
+    pub parent_id: Option<String>,
     pub author_id: String,
     pub author: Option<CommentAuthor>,
     pub created_at: Option<String>,

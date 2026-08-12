@@ -1,0 +1,27 @@
+Task 16 physical missing-author-part QA
+
+Fixture:
+- Path: /tmp/pptx2html-task16-qa/missing-author-part.pptx
+- SHA-256: 390f3d3d7403f1ff8c124b6d8a3ec0cb5d640311258602368543daf43de3f58a
+- Construction: exported the complete deterministic package, then deleted
+  ppt/authors/author1.xml from the ZIP.
+- `unzip -l` listed 13 package entries and did not list
+  ppt/authors/author1.xml.
+
+Real CLI conversion:
+- Command: cargo run --quiet -p pptx2html-cli -- /tmp/pptx2html-task16-qa/missing-author-part.pptx --output /tmp/pptx2html-task16-qa/missing-author-part.html
+- Exit code: 0
+- HTML SHA-256: aa19d8500682c40cb8d151bfd442394b46f6a8a55623b52887fe6d73ace994a0
+
+Parsed diagnostic proof:
+- ANNOTATION_PART_MISSING: 1
+- Missing part: ppt/authors/author1.xml
+- Relationship ID: rIdModernAuthors
+- Relationship type: http://schemas.microsoft.com/office/2018/10/relationships/authors
+- Reason: Annotation part is missing
+- COMMENT_AUTHOR_UNRESOLVED: 1
+- MODERN_COMMENT_METADATA: 1
+- Modern comment author and author_part fields were empty.
+- Modern comment text remained `MODERN_COMMENT`.
+- `MODERN_COMMENT` did not occur before the diagnostics script and therefore
+  did not leak into the visible slide canvas.

@@ -64,6 +64,7 @@ pub(super) fn collect_comments(
             part_name: part.to_owned(),
             relationship_id: relation.id.clone(),
             id: record.id,
+            parent_id: record.parent_id,
             author_id: record.author_id,
             author,
             created_at: record.created_at,
