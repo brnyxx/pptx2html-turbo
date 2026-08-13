@@ -129,6 +129,7 @@ fn known_package_part(part_name: &str) -> bool {
         "ppt/notesSlides/",
         "ppt/notesMasters/",
         "ppt/handoutMasters/",
+        "ppt/slideUpdateInfo/",
         "ppt/theme/",
         "ppt/charts/",
         "ppt/diagrams/",
@@ -1045,6 +1046,7 @@ pub(crate) fn known_relationship_type(value: &str) -> bool {
             | "slide"
             | "slideMaster"
             | "slideLayout"
+            | "slideUpdateInfo"
             | "theme"
             | "themeOverride"
             | "image"

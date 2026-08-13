@@ -464,10 +464,10 @@ pub const CAPABILITY_THEME_OVERRIDE: (SupportTier, Option<CapabilityStage>, &str
     "fallback",
 );
 pub const CAPABILITY_SLIDE_SYNCHRONIZATION: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:sldSyncPr",
+    "fallback",
 );
 pub const CAPABILITY_CONTENT_PART: (SupportTier, Option<CapabilityStage>, &str, &str) =
     (SupportTier::Unparsed, None, "p:contentPart", "unparsed");

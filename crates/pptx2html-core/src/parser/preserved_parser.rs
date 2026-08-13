@@ -41,6 +41,7 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
     let unknown_parts = embedded_parser::UnknownPartInventory::collect(&names, &mut diagnostics);
     diagnostics.extend(custom_xml_diagnostics(&mut archive, &names)?);
     diagnostics.extend(theme_override_diagnostics(&mut archive, &names)?);
+    diagnostics.extend(slide_synchronization_diagnostics(&mut archive, &names)?);
 
     for name in names {
         notes_comments_parser::collect_part_diagnostics(&name, &mut diagnostics);
@@ -77,6 +78,94 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         }
     }
     Ok(diagnostics)
+}
+
+fn slide_synchronization_diagnostics(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    names: &[String],
+) -> PptxResult<Vec<ConversionDiagnostic>> {
+    const SLIDE_UPDATE_INFO: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideUpdateInfo";
+    let mut diagnostics = Vec::new();
+    for rels_part in names.iter().filter(|name| name.ends_with(".rels")) {
+        let relationships_xml = read_text_entry(archive, rels_part)?;
+        let relationships = super::relationships::parse_relationship_records(&relationships_xml)?;
+        let owner = relationship_source_part(rels_part);
+        for relationship in relationships
+            .iter()
+            .filter(|relationship| relationship.relationship_type == SLIDE_UPDATE_INFO)
+        {
+            if relationship.target_mode.as_str() != "Internal" {
+                continue;
+            }
+            let Some(part) = resolve_relationship_target(&owner, &relationship.target) else {
+                continue;
+            };
+            let Ok(mut file) = archive.by_name(&part) else {
+                continue;
+            };
+            let mut xml = String::new();
+            if file.read_to_string(&mut xml).is_err() {
+                continue;
+            }
+            let Some((server_slide_id, server_modified, client_inserted)) =
+                parse_slide_synchronization(&xml)
+            else {
+                continue;
+            };
+            diagnostics.push(ConversionDiagnostic {
+                code: "SLIDE_SYNCHRONIZATION_METADATA".to_owned(),
+                family: FeatureFamily::Layout,
+                support_tier: SupportTier::Fallback,
+                stage: Some(CapabilityStage::Parsed),
+                location: DiagnosticLocation {
+                    part_name: Some(part.clone()),
+                    relationship_id: Some(relationship.id.clone()),
+                    relationship_type: Some(relationship.relationship_type.clone()),
+                    qualified_element_name: Some("p:sldSyncPr".to_owned()),
+                    ..Default::default()
+                },
+                raw_reference: Some(format!(
+                    "owner={owner}\npart={part}\nrelationship_id={}\nserver_slide_id={server_slide_id}\nserver_modified={server_modified}\nclient_inserted={client_inserted}",
+                    relationship.id
+                )),
+                fallback_kind: FallbackKind::PreservedPart,
+                reason: "Slide synchronization metadata was preserved without server updates"
+                    .to_owned(),
+            });
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn parse_slide_synchronization(xml: &str) -> Option<(String, String, String)> {
+    const PML: &[u8] = b"http://schemas.openxmlformats.org/presentationml/2006/main";
+    let mut reader = NsReader::from_str(xml);
+    let mut buffer = Vec::new();
+    loop {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element) | Event::Empty(element))) => {
+                if !matches!(namespace, ResolveResult::Bound(value) if value.as_ref() == PML)
+                    || element.local_name().as_ref() != b"sldSyncPr"
+                {
+                    return None;
+                }
+                let server_slide_id = xml_attribute(&element, "serverSldId");
+                let server_modified = xml_attribute(&element, "serverSldModifiedTime");
+                let client_inserted = xml_attribute(&element, "clientInsertedTime");
+                if server_slide_id.is_empty()
+                    || server_modified.is_empty()
+                    || client_inserted.is_empty()
+                {
+                    return None;
+                }
+                return Some((server_slide_id, server_modified, client_inserted));
+            }
+            Ok((_, Event::Eof)) | Err(_) => return None,
+            _ => {}
+        }
+        buffer.clear();
+    }
 }
 
 fn theme_override_diagnostics(

@@ -303,6 +303,48 @@ fn layout_theme_override_is_preserved_as_typed_metadata() {
 }
 
 #[test]
+fn slide_synchronization_is_preserved_as_typed_metadata() {
+    let slide_relationships = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdSync" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideUpdateInfo" Target="../slideUpdateInfo/slideUpdateInfo1.xml"/>
+</Relationships>"#;
+    let synchronization = br#"<?xml version="1.0" encoding="UTF-8"?>
+<p:sldSyncPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ serverSldId="server-slide-42"
+ serverSldModifiedTime="2026-08-12T10:30:00Z"
+ clientInsertedTime="2026-08-12T10:31:00Z"/>"#;
+    let bytes = MinimalPptx::new("<p:sp/>")
+        .with_slide_rels(slide_relationships)
+        .with_extra_file("ppt/slideUpdateInfo/slideUpdateInfo1.xml", synchronization)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("slide sync fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "SLIDE_SYNCHRONIZATION_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].support_tier.as_str(), "fallback");
+    assert_eq!(diagnostics[0].stage.unwrap().as_str(), "parsed");
+    let raw = diagnostics[0]
+        .raw_reference
+        .as_deref()
+        .expect("slide sync raw reference");
+    assert!(raw.contains("owner=ppt/slides/slide1.xml"));
+    assert!(raw.contains("part=ppt/slideUpdateInfo/slideUpdateInfo1.xml"));
+    assert!(raw.contains("server_slide_id=server-slide-42"));
+    assert!(raw.contains("server_modified=2026-08-12T10:30:00Z"));
+    assert!(raw.contains("client_inserted=2026-08-12T10:31:00Z"));
+    assert!(result.diagnostics().iter().all(|diagnostic| {
+        diagnostic.code != "OOXML_PART_UNSUPPORTED"
+            || diagnostic.location.part_name.as_deref()
+                != Some("ppt/slideUpdateInfo/slideUpdateInfo1.xml")
+    }));
+}
+
+#[test]
 fn previous_shape_effects_struct_literal_remains_source_compatible() {
     let effects = ShapeEffects {
         outer_shadow: None,

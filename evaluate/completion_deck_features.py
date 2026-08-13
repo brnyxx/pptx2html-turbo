@@ -77,6 +77,14 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "slide-synchronization",
+        "slide-synchronization",
+        "<p:sldSyncPr",
+        part="ppt/slideUpdateInfo/slideUpdateInfo1.xml",
+        relationship_disposition="internal",
+    ),
+    _f(
+        24,
         "theme-override",
         "theme-override",
         "<a:themeOverride",

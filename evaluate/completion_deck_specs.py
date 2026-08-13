@@ -471,6 +471,35 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "slide-synchronization",
+            (("", ""),),
+            slide_rels=(
+                (
+                    "rIdSync",
+                    REL + "slideUpdateInfo",
+                    "../slideUpdateInfo/slideUpdateInfo1.xml",
+                    None,
+                ),
+            ),
+            parts=(
+                (
+                    "ppt/slideUpdateInfo/slideUpdateInfo1.xml",
+                    (
+                        f'<?xml version="1.0"?><p:sldSyncPr {NS} '
+                        'serverSldId="server-slide-42" '
+                        'serverSldModifiedTime="2026-08-12T10:30:00Z" '
+                        'clientInsertedTime="2026-08-12T10:31:00Z"/>'
+                    ).encode(),
+                ),
+            ),
+            types=(
+                (
+                    "/ppt/slideUpdateInfo/slideUpdateInfo1.xml",
+                    "application/vnd.openxmlformats-officedocument.presentationml.slideUpdateInfo+xml",
+                ),
+            ),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (
