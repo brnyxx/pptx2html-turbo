@@ -376,6 +376,24 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             types=(("/ppt/bibliography/sources.xml", "application/xml"),),
         ),
         Deck(
+            "additional-characteristics",
+            (("", ""),),
+            parts=(
+                (
+                    "ppt/additionalCharacteristics.xml",
+                    (
+                        '<?xml version="1.0"?><ac:AdditionalCharacteristics '
+                        'xmlns:ac="http://schemas.openxmlformats.org/officeDocument/2006/additionalCharacteristics">'
+                        '<ac:Characteristic name="supports3D" relation="ge" val="1" '
+                        'vocabulary="urn:pptx2html:capabilities"/>'
+                        '<ac:Characteristic name="rendererVersion" relation="eq" val="1.1.0"/>'
+                        '</ac:AdditionalCharacteristics>'
+                    ).encode(),
+                ),
+            ),
+            types=(("/ppt/additionalCharacteristics.xml", "application/xml"),),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (

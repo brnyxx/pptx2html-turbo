@@ -440,10 +440,10 @@ pub const CAPABILITY_ADDITIONAL_CHARACTERISTICS: (
     &str,
     &str,
 ) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "ac:AdditionalCharacteristics",
+    "fallback",
 );
 pub const CAPABILITY_CUSTOM_XML: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Unparsed,

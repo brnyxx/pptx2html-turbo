@@ -115,6 +115,7 @@ fn known_package_part(part_name: &str) -> bool {
                 | "ppt/viewProps.xml"
                 | "ppt/tableStyles.xml"
                 | "ppt/commentAuthors.xml"
+                | "ppt/additionalCharacteristics.xml"
         )
     {
         return true;

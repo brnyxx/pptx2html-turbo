@@ -77,6 +77,13 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "additional-characteristics",
+        "additional-characteristics",
+        "<ac:AdditionalCharacteristics",
+        part="ppt/additionalCharacteristics.xml",
+    ),
+    _f(
+        24,
         "bibliography",
         "bibliography",
         "<b:Sources",

@@ -44,6 +44,11 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         media_parser::collect_part_diagnostics(&name, &mut diagnostics);
         if name.starts_with("ppt/") && name.ends_with(".xml") {
             let xml = read_text_entry(&mut archive, &name)?;
+            let characteristics = additional_characteristics_diagnostics(&name, &xml);
+            if !characteristics.is_empty() {
+                diagnostics.extend(characteristics);
+                continue;
+            }
             let bibliography = bibliography_diagnostics(&name, &xml);
             if !bibliography.is_empty() {
                 diagnostics.extend(bibliography);
@@ -69,6 +74,84 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         }
     }
     Ok(diagnostics)
+}
+
+fn additional_characteristics_diagnostics(part_name: &str, xml: &str) -> Vec<ConversionDiagnostic> {
+    const ADDITIONAL_CHARACTERISTICS: &[u8] =
+        b"http://schemas.openxmlformats.org/officeDocument/2006/additionalCharacteristics";
+    let mut reader = NsReader::from_str(xml);
+    let mut buffer = Vec::new();
+    let mut depth = 0_usize;
+    let mut diagnostics = Vec::new();
+    loop {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element))) => {
+                let is_characteristics = matches!(
+                    namespace,
+                    ResolveResult::Bound(value) if value.as_ref() == ADDITIONAL_CHARACTERISTICS
+                );
+                let local = element.local_name();
+                if depth == 0
+                    && (!is_characteristics || local.as_ref() != b"AdditionalCharacteristics")
+                {
+                    return Vec::new();
+                }
+                depth += 1;
+            }
+            Ok((namespace, Event::Empty(element))) => {
+                let is_characteristics = matches!(
+                    namespace,
+                    ResolveResult::Bound(value) if value.as_ref() == ADDITIONAL_CHARACTERISTICS
+                );
+                if depth == 0 {
+                    return Vec::new();
+                }
+                if depth == 1
+                    && is_characteristics
+                    && element.local_name().as_ref() == b"Characteristic"
+                {
+                    diagnostics.push(characteristic_diagnostic(part_name, &element));
+                }
+            }
+            Ok((_, Event::End(_))) => depth = depth.saturating_sub(1),
+            Ok((_, Event::Eof)) | Err(_) => break,
+            _ => {}
+        }
+        buffer.clear();
+    }
+    diagnostics
+}
+
+fn characteristic_diagnostic(part_name: &str, element: &BytesStart<'_>) -> ConversionDiagnostic {
+    let attribute = |name: &str| {
+        element
+            .attributes()
+            .flatten()
+            .find(|attribute| attribute.key.as_ref() == name.as_bytes())
+            .and_then(|attribute| attribute.unescape_value().ok())
+            .map(|value| value.into_owned())
+            .unwrap_or_default()
+    };
+    ConversionDiagnostic {
+        code: "ADDITIONAL_CHARACTERISTIC_METADATA".to_owned(),
+        family: FeatureFamily::Unsupported,
+        support_tier: SupportTier::Fallback,
+        stage: Some(CapabilityStage::Parsed),
+        location: DiagnosticLocation {
+            part_name: Some(part_name.to_owned()),
+            qualified_element_name: Some("ac:Characteristic".to_owned()),
+            ..Default::default()
+        },
+        raw_reference: Some(format!(
+            "name={}\nrelation={}\nvalue={}\nvocabulary={}",
+            attribute("name"),
+            attribute("relation"),
+            attribute("val"),
+            attribute("vocabulary")
+        )),
+        fallback_kind: FallbackKind::PreservedPart,
+        reason: "Additional package characteristic was preserved as typed metadata".to_owned(),
+    }
 }
 
 fn bibliography_diagnostics(part_name: &str, xml: &str) -> Vec<ConversionDiagnostic> {

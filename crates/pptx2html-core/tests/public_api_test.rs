@@ -98,6 +98,56 @@ fn bibliography_sources_are_preserved_as_typed_metadata() {
             || diagnostic.location.part_name.as_deref() != Some("ppt/bibliography/sources.xml")
     }));
 }
+
+#[test]
+fn additional_characteristics_are_preserved_as_typed_metadata() {
+    let characteristics = br#"<?xml version="1.0" encoding="UTF-8"?>
+<ac:AdditionalCharacteristics
+ xmlns:ac="http://schemas.openxmlformats.org/officeDocument/2006/additionalCharacteristics">
+  <ac:Characteristic name="supports3D" relation="ge" val="1"
+    vocabulary="urn:pptx2html:capabilities"/>
+  <ac:Characteristic name="rendererVersion" relation="eq" val="1.1.0"/>
+</ac:AdditionalCharacteristics>"#;
+    let bytes = MinimalPptx::new("<p:sp/>")
+        .with_extra_file("ppt/additionalCharacteristics.xml", characteristics)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("characteristics fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "ADDITIONAL_CHARACTERISTIC_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 2);
+    let raw: Vec<_> = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.raw_reference.as_deref())
+        .collect();
+    let supports_3d = raw
+        .iter()
+        .find(|value| value.contains("name=supports3D"))
+        .expect("supports3D characteristic");
+    assert!(supports_3d.contains("relation=ge"));
+    assert!(supports_3d.contains("value=1"));
+    assert!(supports_3d.contains("vocabulary=urn:pptx2html:capabilities"));
+    let renderer = raw
+        .iter()
+        .find(|value| value.contains("name=rendererVersion"))
+        .expect("renderer version characteristic");
+    assert!(renderer.contains("relation=eq"));
+    assert!(renderer.contains("value=1.1.0"));
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic.support_tier.as_str() == "fallback"
+            && diagnostic
+                .stage
+                .is_some_and(|stage| stage.as_str() == "parsed")
+    }));
+    assert!(result.diagnostics().iter().all(|diagnostic| {
+        diagnostic.code != "OOXML_PART_UNSUPPORTED"
+            || diagnostic.location.part_name.as_deref() != Some("ppt/additionalCharacteristics.xml")
+    }));
+}
 use tempfile::tempdir;
 
 #[test]
