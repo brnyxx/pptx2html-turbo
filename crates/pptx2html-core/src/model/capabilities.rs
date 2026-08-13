@@ -452,10 +452,10 @@ pub const CAPABILITY_CUSTOM_XML: (SupportTier, Option<CapabilityStage>, &str, &s
     "fallback",
 );
 pub const CAPABILITY_THUMBNAIL: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+    "fallback",
 );
 pub const CAPABILITY_THEME_OVERRIDE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Unparsed,

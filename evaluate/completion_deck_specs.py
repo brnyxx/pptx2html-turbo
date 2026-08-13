@@ -425,6 +425,20 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "thumbnail",
+            (("", ""),),
+            root_rels=(
+                (
+                    "rIdThumb",
+                    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+                    "docProps/thumbnail.png",
+                    None,
+                ),
+            ),
+            parts=(("docProps/thumbnail.png", png_bytes()),),
+            types=(("/docProps/thumbnail.png", "image/png"),),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (

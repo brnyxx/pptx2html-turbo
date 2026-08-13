@@ -1033,9 +1033,11 @@ fn embedded_relationship_kind(value: &str) -> Option<&str> {
 pub(crate) fn known_relationship_type(value: &str) -> bool {
     const CORE: &str =
         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    const THUMBNAIL: &str =
+        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
     const CHARTEX: &str = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
     let Some(kind) = value.strip_prefix(OFFICE_REL) else {
-        return matches!(value, CORE | CHARTEX);
+        return matches!(value, CORE | THUMBNAIL | CHARTEX);
     };
     matches!(
         kind,

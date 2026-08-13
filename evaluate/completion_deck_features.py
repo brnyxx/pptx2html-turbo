@@ -77,6 +77,14 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "thumbnail",
+        "thumbnail",
+        "thumbnail",
+        part="_rels/.rels",
+        relationship_disposition="internal",
+    ),
+    _f(
+        24,
         "custom-xml",
         "custom-xml",
         "<demo:project",

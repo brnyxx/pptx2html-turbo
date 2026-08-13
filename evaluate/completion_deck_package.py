@@ -41,6 +41,7 @@ class Deck:
     backgrounds: tuple[str, ...] = ()
     slide_part_names: tuple[str, ...] = ()
     presentation_tail: str = ""
+    root_rels: tuple[Relationship, ...] = ()
 
 
 def slide_part_names(deck: Deck) -> tuple[str, ...]:
@@ -359,7 +360,10 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
     parts = {
         "[Content_Types].xml": _content_types(deck),
         "_rels/.rels": relationships_xml(
-            (("rId1", REL + "officeDocument", "ppt/presentation.xml", None),)
+            (
+                ("rId1", REL + "officeDocument", "ppt/presentation.xml", None),
+                *deck.root_rels,
+            )
         ),
         "ppt/presentation.xml": (
             f'<?xml version="1.0"?><p:presentation {NS}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster"/></p:sldMasterIdLst><p:sldIdLst>{slide_ids}</p:sldIdLst><p:sldSz cx="9144000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle/>{deck.presentation_tail}</p:presentation>'

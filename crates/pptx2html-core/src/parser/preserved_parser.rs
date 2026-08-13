@@ -26,6 +26,7 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
     let content_types = read_text_entry(&mut archive, "[Content_Types].xml")
         .map(|xml| super::picture_bullet_parser::ContentTypes::parse(&xml))
         .unwrap_or_default();
+    diagnostics.extend(thumbnail_diagnostics(&mut archive, &content_types)?);
     chart_diagnostics::collect(&mut archive, &content_types, &mut diagnostics)?;
     let mut names = (0..archive.len())
         .filter_map(|index| {
@@ -75,6 +76,72 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         }
     }
     Ok(diagnostics)
+}
+
+fn thumbnail_diagnostics(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    content_types: &super::picture_bullet_parser::ContentTypes,
+) -> PptxResult<Vec<ConversionDiagnostic>> {
+    const THUMBNAIL: &str =
+        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
+    let relationships_xml = read_text_entry(archive, "_rels/.rels")?;
+    let relationships = super::relationships::parse_relationship_records(&relationships_xml)?;
+    let mut diagnostics = Vec::new();
+    for relationship in relationships
+        .iter()
+        .filter(|relationship| relationship.relationship_type == THUMBNAIL)
+    {
+        if relationship.target_mode.as_str() != "Internal"
+            || relationship.target.starts_with('/')
+            || relationship
+                .target
+                .split('/')
+                .any(|segment| segment == "..")
+        {
+            continue;
+        }
+        let part = relationship.target.trim_start_matches("./");
+        let Ok(mut file) = archive.by_name(part) else {
+            continue;
+        };
+        let byte_length = file.size();
+        let mut prefix = [0_u8; 16];
+        let read = file.read(&mut prefix).unwrap_or(0);
+        let signature = thumbnail_signature(&prefix[..read]);
+        diagnostics.push(ConversionDiagnostic {
+            code: "PACKAGE_THUMBNAIL_METADATA".to_owned(),
+            family: FeatureFamily::Images,
+            support_tier: SupportTier::Fallback,
+            stage: Some(CapabilityStage::Parsed),
+            location: DiagnosticLocation {
+                part_name: Some(part.to_owned()),
+                relationship_id: Some(relationship.id.clone()),
+                relationship_type: Some(relationship.relationship_type.clone()),
+                ..Default::default()
+            },
+            raw_reference: Some(format!(
+                "part={part}\nrelationship_id={}\ncontent_type={}\nbyte_length={byte_length}\nsignature={signature}",
+                relationship.id,
+                content_types.for_part(part).unwrap_or_default()
+            )),
+            fallback_kind: FallbackKind::PreservedPart,
+            reason: "Package thumbnail metadata was preserved without embedding thumbnail bytes"
+                .to_owned(),
+        });
+    }
+    Ok(diagnostics)
+}
+
+fn thumbnail_signature(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(&[137, 80, 78, 71, 13, 10, 26, 10]) {
+        "png"
+    } else if bytes.starts_with(&[255, 216, 255]) {
+        "jpeg"
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        "gif"
+    } else {
+        "unknown"
+    }
 }
 
 fn custom_xml_diagnostics(

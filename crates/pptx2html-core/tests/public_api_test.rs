@@ -1,6 +1,7 @@
 mod fixtures;
 
 use std::fs;
+use std::io::{Cursor, Read, Write};
 use std::process::Command;
 
 use fixtures::MinimalPptx;
@@ -188,6 +189,73 @@ fn custom_xml_data_and_properties_are_preserved_as_typed_metadata() {
     assert!(raw.contains("CUSTOM_XML_SENTINEL"));
 }
 use tempfile::tempdir;
+use zip::write::SimpleFileOptions;
+use zip::{ZipArchive, ZipWriter};
+
+fn with_thumbnail(bytes: &[u8]) -> Vec<u8> {
+    let mut source = ZipArchive::new(Cursor::new(bytes)).expect("fixture zip");
+    let cursor = Cursor::new(Vec::new());
+    let mut target = ZipWriter::new(cursor);
+    let options = SimpleFileOptions::default();
+    for index in 0..source.len() {
+        let mut file = source.by_index(index).expect("fixture entry");
+        let mut data = Vec::new();
+        file.read_to_end(&mut data).expect("read fixture entry");
+        target
+            .start_file(file.name(), options)
+            .expect("copy fixture entry");
+        if file.name() == "_rels/.rels" {
+            let relationships = br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+  <Relationship Id="rIdThumb" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="docProps/thumbnail.png"/>
+</Relationships>"#;
+            target
+                .write_all(relationships)
+                .expect("write thumbnail root relationships");
+        } else {
+            target.write_all(&data).expect("copy fixture data");
+        }
+    }
+    target
+        .start_file("docProps/thumbnail.png", options)
+        .expect("thumbnail entry");
+    target
+        .write_all(&[137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])
+        .expect("thumbnail data");
+    target
+        .finish()
+        .expect("finish thumbnail fixture")
+        .into_inner()
+}
+
+#[test]
+fn package_thumbnail_is_preserved_as_typed_metadata() {
+    let bytes = with_thumbnail(&MinimalPptx::new("<p:sp/>").build());
+    let result = convert_bytes_with_metadata(&bytes).expect("thumbnail fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "PACKAGE_THUMBNAIL_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].support_tier.as_str(), "fallback");
+    assert_eq!(diagnostics[0].stage.unwrap().as_str(), "parsed");
+    let raw = diagnostics[0]
+        .raw_reference
+        .as_deref()
+        .expect("thumbnail raw reference");
+    assert!(raw.contains("part=docProps/thumbnail.png"));
+    assert!(raw.contains("relationship_id=rIdThumb"));
+    assert!(raw.contains("content_type=image/png"));
+    assert!(raw.contains("byte_length=12"));
+    assert!(raw.contains("signature=png"));
+    assert!(result.diagnostics().iter().all(|diagnostic| {
+        diagnostic.code != "OOXML_RELATIONSHIP_UNSUPPORTED"
+            || diagnostic.location.relationship_id.as_deref() != Some("rIdThumb")
+    }));
+}
 
 #[test]
 fn previous_shape_effects_struct_literal_remains_source_compatible() {
