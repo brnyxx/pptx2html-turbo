@@ -471,6 +471,54 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "control-persistence",
+            (('<p:control r:id="rIdControl"/>', ""),),
+            slide_rels=(
+                (
+                    "rIdControl",
+                    REL + "control",
+                    "../embeddings/control1.xml",
+                    None,
+                ),
+            ),
+            parts=(
+                (
+                    "ppt/embeddings/control1.xml",
+                    (
+                        '<?xml version="1.0"?>'
+                        '<ax:ocx xmlns:ax="http://schemas.microsoft.com/office/2006/activeX" '
+                        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+                        'ax:classid="{FDD0D569-5B7A-4E3D-820C-5C487DB7796C}" '
+                        'ax:persistence="persistStream" r:id="rIdBinary"/>'
+                    ).encode(),
+                ),
+                (
+                    "ppt/embeddings/_rels/control1.xml.rels",
+                    (
+                        '<?xml version="1.0"?>'
+                        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                        '<Relationship Id="rIdBinary" '
+                        'Type="http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary" '
+                        'Target="ActiveXControl1.bin"/></Relationships>'
+                    ).encode(),
+                ),
+                (
+                    "ppt/embeddings/ActiveXControl1.bin",
+                    b"INERT_ACTIVEX_CONTROL_PERSISTENCE",
+                ),
+            ),
+            types=(
+                (
+                    "/ppt/embeddings/control1.xml",
+                    "application/vnd.ms-office.activeX+xml",
+                ),
+                (
+                    "/ppt/embeddings/ActiveXControl1.bin",
+                    "application/vnd.ms-office.activeX",
+                ),
+            ),
+        ),
+        Deck(
             "content-part",
             (('<p:contentPart r:id="rIdContent"/>', ""),),
             slide_rels=(

@@ -44,6 +44,9 @@ ABSENT_AUTHOR: Final = AbsenceRule(
 
 
 LOCATORS: Final = {
+    "embedded-control-persistence": _l(
+        "<ax:ocx", "ppt/embeddings/control1.xml"
+    ),
     "slide-synchronization": _l(
         "<p:sldSyncPr", "ppt/slideUpdateInfo/slideUpdateInfo1.xml"
     ),

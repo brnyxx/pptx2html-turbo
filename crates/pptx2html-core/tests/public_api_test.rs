@@ -395,6 +395,75 @@ fn content_parts_are_preserved_as_typed_metadata() {
 }
 
 #[test]
+fn embedded_control_persistence_is_preserved_as_typed_metadata() {
+    const CONTROL_BINARY: &[u8] = b"CONTROL_PERSISTENCE_SECRET";
+    let slide_relationships = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdControl" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/control" Target="../embeddings/control1.xml"/>
+</Relationships>"#;
+    let control = br#"<?xml version="1.0" encoding="UTF-8"?>
+<ax:ocx xmlns:ax="http://schemas.microsoft.com/office/2006/activeX"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ ax:classid="{FDD0D569-5B7A-4E3D-820C-5C487DB7796C}"
+ ax:persistence="persistStream"
+ r:id="rIdBinary"/>"#;
+    let control_relationships = br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdBinary" Type="http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary" Target="ActiveXControl1.bin"/>
+</Relationships>"#;
+    let content_types = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/embeddings/control1.xml" ContentType="application/vnd.ms-office.activeX+xml"/>
+  <Override PartName="/ppt/embeddings/ActiveXControl1.bin" ContentType="application/vnd.ms-office.activeX"/>
+</Types>"#;
+    let bytes = MinimalPptx::new(r#"<p:control r:id="rIdControl"/>"#)
+        .with_slide_rels(slide_relationships)
+        .with_content_types(content_types)
+        .with_extra_file("ppt/embeddings/control1.xml", control)
+        .with_extra_file(
+            "ppt/embeddings/_rels/control1.xml.rels",
+            control_relationships,
+        )
+        .with_extra_file("ppt/embeddings/ActiveXControl1.bin", CONTROL_BINARY)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("control fixture converts");
+    let diagnostic = result
+        .diagnostics()
+        .iter()
+        .find(|diagnostic| diagnostic.code == "EMBEDDED_CONTROL_PERSISTENCE_METADATA")
+        .expect("control persistence metadata");
+
+    assert_eq!(diagnostic.support_tier.as_str(), "fallback");
+    assert_eq!(diagnostic.stage.unwrap().as_str(), "parsed");
+    assert_eq!(diagnostic.location.slide_index, Some(0));
+    assert_eq!(
+        diagnostic.location.part_name.as_deref(),
+        Some("ppt/embeddings/control1.xml")
+    );
+    assert_eq!(
+        diagnostic.location.relationship_id.as_deref(),
+        Some("rIdControl")
+    );
+    let raw = diagnostic
+        .raw_reference
+        .as_deref()
+        .expect("control raw reference");
+    assert!(raw.contains("owner=ppt/slides/slide1.xml"));
+    assert!(raw.contains("part=ppt/embeddings/control1.xml"));
+    assert!(raw.contains("persistence=persistStream"));
+    assert!(raw.contains("class_id={FDD0D569-5B7A-4E3D-820C-5C487DB7796C}"));
+    assert!(raw.contains("binary_part=ppt/embeddings/ActiveXControl1.bin"));
+    assert!(raw.contains(&format!("binary_byte_length={}", CONTROL_BINARY.len())));
+    assert!(!raw.contains("CONTROL_PERSISTENCE_SECRET"));
+    assert!(!result.html.contains("CONTROL_PERSISTENCE_SECRET"));
+}
+
+#[test]
 fn previous_shape_effects_struct_literal_remains_source_compatible() {
     let effects = ShapeEffects {
         outer_shadow: None,

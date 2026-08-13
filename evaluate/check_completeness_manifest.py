@@ -80,6 +80,7 @@ KNOWN_QUALIFIED_NAMES = frozenset(
         "p:cmAuthorLst",
         "p:cmLst",
         "p:contentPart",
+        "p:control",
         "p:cxnSp",
         "p:extLst",
         "p:grpSp",
@@ -103,6 +104,7 @@ KNOWN_RELATIONSHIP_TYPES = frozenset(
     {
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/control",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
@@ -226,7 +228,7 @@ CANONICAL_ROW_DIGESTS = {
     "slide-synchronization": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
     "content-part": "85352f439b6d6e9391b4c988ce1bd158910530ad86f16af86d6ee313d90b7892",
     "embedded-package": "a3fb955e22e44cbe131c1146b3033ffeb4cb0c8fc08a9cba9991a2dba37c9c7b",
-    "embedded-control-persistence": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
+    "embedded-control-persistence": "303ace433c02a98b4a25196dfd1b02d5f4175e224dae0dae503a8a48765e521a",
     "user-defined-tags": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
 }
 

@@ -7,6 +7,7 @@ from typing import Final
 
 
 SCENARIO_CANONICAL: Final = {
+    "embedded-control-persistence": "embedded-control-persistence",
     "slide-synchronization": "slide-synchronization",
     "content-part": "content-part",
     "theme-override": "theme-override",

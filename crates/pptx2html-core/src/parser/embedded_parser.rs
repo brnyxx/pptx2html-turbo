@@ -23,6 +23,8 @@ use crate::model::{
 };
 
 const OFFICE_REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+const ACTIVEX_BINARY_REL: &str =
+    "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary";
 const MC: &[u8] = b"http://schemas.openxmlformats.org/markup-compatibility/2006";
 const SUPPORTED_REQUIREMENT_NAMESPACES: &[&str] = &[
     "http://schemas.openxmlformats.org/presentationml/2006/main",
@@ -185,6 +187,12 @@ pub(crate) fn collect_relationship_diagnostics(
                 diagnostics.push(diagnostic);
             }
         }
+        if relationship.relationship_type == format!("{OFFICE_REL}control")
+            && let Some(diagnostic) =
+                embedded_control_diagnostic(archive, &source_part, relationship)
+        {
+            diagnostics.push(diagnostic);
+        }
     }
 
     // The package diagnostic collector already visits every .rels part. Slide-owned
@@ -214,6 +222,99 @@ pub(crate) fn collect_relationship_diagnostics(
         }
     }
     Ok(())
+}
+
+fn embedded_control_diagnostic(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    source_part: &str,
+    relationship: &Relationship,
+) -> Option<ConversionDiagnostic> {
+    if !matches!(relationship.target_mode, TargetMode::Internal) {
+        return None;
+    }
+    let part_name = resolve_target(source_part, &relationship.target)?;
+    if declared_content_type(archive, &part_name)?.as_str()
+        != "application/vnd.ms-office.activeX+xml"
+    {
+        return None;
+    }
+    let control_xml = read_text_entry(archive, &part_name).ok()?;
+    let (class_id, persistence, binary_relationship_id) = parse_active_x_root(&control_xml)?;
+    let (directory, file) = part_name.rsplit_once('/')?;
+    let rels_path = format!("{directory}/_rels/{file}.rels");
+    let relationships_xml = read_text_entry(archive, &rels_path).ok()?;
+    let binary_relationship = relationships::parse_relationship_records(&relationships_xml)
+        .ok()?
+        .into_iter()
+        .find(|candidate| {
+            candidate.id == binary_relationship_id
+                && candidate.relationship_type == ACTIVEX_BINARY_REL
+                && matches!(candidate.target_mode, TargetMode::Internal)
+        })?;
+    let binary_part = resolve_target(&part_name, &binary_relationship.target)?;
+    if declared_content_type(archive, &binary_part)?.as_str() != "application/vnd.ms-office.activeX"
+    {
+        return None;
+    }
+    let binary_byte_length = archive.by_name(&binary_part).ok()?.size();
+    Some(ConversionDiagnostic {
+        code: "EMBEDDED_CONTROL_PERSISTENCE_METADATA".to_owned(),
+        family: FeatureFamily::Unsupported,
+        support_tier: SupportTier::Fallback,
+        stage: Some(crate::model::CapabilityStage::Parsed),
+        location: DiagnosticLocation {
+            slide_index: slide_index_from_part(source_part),
+            part_name: Some(part_name.clone()),
+            relationship_id: Some(relationship.id.clone()),
+            relationship_type: Some(relationship.relationship_type.clone()),
+            qualified_element_name: Some("ax:ocx".to_owned()),
+            ..Default::default()
+        },
+        raw_reference: Some(format!(
+            "owner={source_part}\npart={part_name}\nrelationship_id={}\nclass_id={class_id}\npersistence={persistence}\nbinary_relationship_id={binary_relationship_id}\nbinary_part={binary_part}\nbinary_byte_length={binary_byte_length}",
+            relationship.id
+        )),
+        fallback_kind: FallbackKind::PreservedPart,
+        reason: "Embedded control persistence metadata was preserved without activating or exposing its payload".to_owned(),
+    })
+}
+
+fn parse_active_x_root(xml: &str) -> Option<(String, String, String)> {
+    const ACTIVEX: &[u8] = b"http://schemas.microsoft.com/office/2006/activeX";
+    const REL: &[u8] = b"http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    let mut reader = NsReader::from_str(xml);
+    loop {
+        match reader.read_resolved_event() {
+            Ok((
+                ResolveResult::Bound(namespace),
+                Event::Start(ref element) | Event::Empty(ref element),
+            )) if namespace.as_ref() == ACTIVEX && element.local_name().as_ref() == b"ocx" => {
+                let mut class_id = None;
+                let mut persistence = None;
+                let mut relationship_id = None;
+                for attribute in element.attributes().flatten() {
+                    let local_name = attribute.key.local_name();
+                    let value = attribute.unescape_value().ok()?.into_owned();
+                    match local_name.as_ref() {
+                        b"classid" => class_id = Some(value),
+                        b"persistence" => persistence = Some(value),
+                        b"id"
+                            if matches!(
+                                reader.resolve_attribute(attribute.key).0,
+                                ResolveResult::Bound(value) if value.as_ref() == REL
+                            ) =>
+                        {
+                            relationship_id = Some(value)
+                        }
+                        _ => {}
+                    }
+                }
+                return Some((class_id?, persistence?, relationship_id?));
+            }
+            Ok((_, Event::Eof)) | Err(_) => return None,
+            _ => {}
+        }
+    }
 }
 
 fn embedded_package_diagnostic<R: Read + Seek>(
@@ -1078,7 +1179,7 @@ pub(crate) fn known_relationship_type(value: &str) -> bool {
         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
     const CHARTEX: &str = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
     let Some(kind) = value.strip_prefix(OFFICE_REL) else {
-        return matches!(value, CORE | THUMBNAIL | CHARTEX);
+        return matches!(value, CORE | THUMBNAIL | CHARTEX | ACTIVEX_BINARY_REL);
     };
     matches!(
         kind,
@@ -1088,6 +1189,7 @@ pub(crate) fn known_relationship_type(value: &str) -> bool {
             | "slideLayout"
             | "slideUpdateInfo"
             | "customXml"
+            | "control"
             | "theme"
             | "themeOverride"
             | "image"

@@ -10,6 +10,22 @@ from evaluate.tests.completion_deck_common_rel_contract import COMMON_RELS
 from evaluate.tests.completion_deck_feature_contract import NS, REL, RULES, SR
 
 SPECIFIC_RELS: Final = {
+    "control-persistence": (
+        (
+            SR,
+            "rIdControl",
+            REL + "control",
+            "../embeddings/control1.xml",
+            None,
+        ),
+        (
+            "ppt/embeddings/_rels/control1.xml.rels",
+            "rIdBinary",
+            "http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary",
+            "ActiveXControl1.bin",
+            None,
+        ),
+    ),
     "picture-bullets": ((SR, "rIdImage", REL + "image", "../media/bullet.png", None),),
     "actions": (
         (SR, "rIdExternal", REL + "hyperlink", "https://example.com/", "External"),
@@ -165,6 +181,9 @@ def assert_package_graph(
                 )
                 or kind.startswith(
                     "http://schemas.microsoft.com/office/2018/10/relationships/"
+                )
+                or kind.startswith(
+                    "http://schemas.microsoft.com/office/2006/relationships/"
                 ),
                 rel_part,
             )

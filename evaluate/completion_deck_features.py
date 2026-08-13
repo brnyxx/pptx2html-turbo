@@ -77,6 +77,14 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "control-persistence",
+        "embedded-control-persistence",
+        "<ax:ocx",
+        part="ppt/embeddings/control1.xml",
+        relationship_disposition="internal",
+    ),
+    _f(
+        24,
         "slide-synchronization",
         "slide-synchronization",
         "<p:sldSyncPr",

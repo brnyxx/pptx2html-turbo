@@ -24,6 +24,7 @@ class FeatureLike(Protocol):
 
 
 SCENARIO_CANONICAL: Final = {
+    "embedded-control-persistence": "embedded-control-persistence",
     "content-part": "content-part",
     "slide-synchronization": "slide-synchronization",
     "theme-override": "theme-override",
