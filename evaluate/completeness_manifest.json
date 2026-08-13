@@ -3162,9 +3162,11 @@
     {
       "id": "thumbnail",
       "family": "openxml-part",
-      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
-      "source_status": "unavailable",
-      "ooxml": {},
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.themeoverride?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "a:themeOverride"
+      },
       "fallback_policy": {
         "kind": "metadata-sideband",
         "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
@@ -3234,15 +3236,15 @@
       },
       "current": {
         "semantic": {
-          "tier": "unparsed",
-          "stage": "not-applicable"
+          "tier": "fallback",
+          "stage": "parsed"
         },
         "visual": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         },
         "behavioral": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         }
       },
@@ -3267,22 +3269,22 @@
             "kind": "rust-symbol",
             "token": "CAPABILITY_THEME_OVERRIDE",
             "dimension": "semantic",
-            "support_tier": "unparsed",
-            "stage": "not-applicable",
-            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
-            "disposition_token": "unparsed"
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/themeOverride",
+            "disposition_token": "fallback"
           }
         ],
-        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "focused_test": "crates/pptx2html-core/tests/public_api_test.rs",
         "scenario_exemption": {
-          "reason": "deferred-after-task-23",
+          "reason": "theme-override-visual-application-deferred",
           "dispositions": [
             "current",
             "target"
           ]
         },
         "documentation_anchor": "capability-theme-override",
-        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+        "focused_test_case": "layout_theme_override_is_preserved_as_typed_metadata"
       }
     },
     {

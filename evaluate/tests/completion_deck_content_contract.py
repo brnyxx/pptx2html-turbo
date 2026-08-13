@@ -21,6 +21,7 @@ EXACT_TYPES: Final = {
     "customXml/item1.xml": "application/xml",
     "customXml/itemProps1.xml": "application/vnd.openxmlformats-officedocument.customXmlProperties+xml",
     "docProps/thumbnail.png": "image/png",
+    "ppt/theme/themeOverride1.xml": "application/vnd.openxmlformats-officedocument.themeOverride+xml",
     "ppt/theme/notesTheme1.xml": "application/vnd.openxmlformats-officedocument.theme+xml",
     "ppt/comments/comment1.xml": PRESENTATION + "comments+xml",
     "ppt/commentAuthors.xml": PRESENTATION + "commentAuthors+xml",

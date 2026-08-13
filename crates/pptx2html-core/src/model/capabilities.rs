@@ -458,10 +458,10 @@ pub const CAPABILITY_THUMBNAIL: (SupportTier, Option<CapabilityStage>, &str, &st
     "fallback",
 );
 pub const CAPABILITY_THEME_OVERRIDE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/themeOverride",
+    "fallback",
 );
 pub const CAPABILITY_SLIDE_SYNCHRONIZATION: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Unparsed,

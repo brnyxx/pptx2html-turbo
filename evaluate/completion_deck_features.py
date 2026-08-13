@@ -77,6 +77,14 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "theme-override",
+        "theme-override",
+        "<a:themeOverride",
+        part="ppt/theme/themeOverride1.xml",
+        relationship_disposition="internal",
+    ),
+    _f(
+        24,
         "thumbnail",
         "thumbnail",
         "thumbnail",

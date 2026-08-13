@@ -42,6 +42,7 @@ class Deck:
     slide_part_names: tuple[str, ...] = ()
     presentation_tail: str = ""
     root_rels: tuple[Relationship, ...] = ()
+    layout_rels: tuple[Relationship, ...] = ()
 
 
 def slide_part_names(deck: Deck) -> tuple[str, ...]:
@@ -395,6 +396,7 @@ def _package_parts(deck: Deck) -> dict[str, bytes]:
                     "../slideMasters/slideMaster1.xml",
                     None,
                 ),
+                *deck.layout_rels,
             )
         ),
         "ppt/theme/theme1.xml": theme_xml(),

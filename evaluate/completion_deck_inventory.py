@@ -24,6 +24,7 @@ class FeatureLike(Protocol):
 
 
 SCENARIO_CANONICAL: Final = {
+    "theme-override": "theme-override",
     "thumbnail": "thumbnail",
     "custom-xml": "custom-xml",
     "additional-characteristics": "additional-characteristics",

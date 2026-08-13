@@ -439,6 +439,38 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             types=(("/docProps/thumbnail.png", "image/png"),),
         ),
         Deck(
+            "theme-override",
+            (("", ""),),
+            layout_rels=(
+                (
+                    "rIdThemeOverride",
+                    REL + "themeOverride",
+                    "../theme/themeOverride1.xml",
+                    None,
+                ),
+            ),
+            parts=(
+                (
+                    "ppt/theme/themeOverride1.xml",
+                    (
+                        f'<?xml version="1.0"?><a:themeOverride {NS}>'
+                        '<a:clrScheme name="Layout Override">'
+                        '<a:dk1><a:srgbClr val="101010"/></a:dk1>'
+                        '<a:lt1><a:srgbClr val="F0F0F0"/></a:lt1>'
+                        '<a:accent1><a:srgbClr val="FF0000"/></a:accent1>'
+                        '</a:clrScheme><a:fontScheme name="Override Fonts">'
+                        '<a:majorFont/><a:minorFont/></a:fontScheme></a:themeOverride>'
+                    ).encode(),
+                ),
+            ),
+            types=(
+                (
+                    "/ppt/theme/themeOverride1.xml",
+                    "application/vnd.openxmlformats-officedocument.themeOverride+xml",
+                ),
+            ),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (

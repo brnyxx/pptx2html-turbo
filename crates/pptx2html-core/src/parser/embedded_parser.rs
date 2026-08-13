@@ -1046,6 +1046,7 @@ pub(crate) fn known_relationship_type(value: &str) -> bool {
             | "slideMaster"
             | "slideLayout"
             | "theme"
+            | "themeOverride"
             | "image"
             | "chart"
             | "hyperlink"

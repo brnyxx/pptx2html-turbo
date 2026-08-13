@@ -258,6 +258,51 @@ fn package_thumbnail_is_preserved_as_typed_metadata() {
 }
 
 #[test]
+fn layout_theme_override_is_preserved_as_typed_metadata() {
+    let layout_relationships = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rIdThemeOverride" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/themeOverride" Target="../theme/themeOverride1.xml"/>
+</Relationships>"#;
+    let theme_override = br#"<?xml version="1.0" encoding="UTF-8"?>
+<a:themeOverride xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:clrScheme name="Layout Override">
+    <a:dk1><a:srgbClr val="101010"/></a:dk1>
+    <a:lt1><a:srgbClr val="F0F0F0"/></a:lt1>
+    <a:accent1><a:srgbClr val="FF0000"/></a:accent1>
+  </a:clrScheme>
+  <a:fontScheme name="Override Fonts"><a:majorFont/><a:minorFont/></a:fontScheme>
+</a:themeOverride>"#;
+    let bytes = MinimalPptx::new("<p:sp/>")
+        .with_layout("<p:sldLayout/>")
+        .with_slide_layout_rel()
+        .with_layout_rels(layout_relationships)
+        .with_extra_file("ppt/theme/themeOverride1.xml", theme_override)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("theme override fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "THEME_OVERRIDE_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].support_tier.as_str(), "fallback");
+    assert_eq!(diagnostics[0].stage.unwrap().as_str(), "parsed");
+    let raw = diagnostics[0]
+        .raw_reference
+        .as_deref()
+        .expect("theme override raw reference");
+    assert!(raw.contains("owner=ppt/slideLayouts/slideLayout1.xml"));
+    assert!(raw.contains("part=ppt/theme/themeOverride1.xml"));
+    assert!(raw.contains("relationship_id=rIdThemeOverride"));
+    assert!(raw.contains("color_scheme=Layout Override"));
+    assert!(raw.contains("color_slot_count=3"));
+    assert!(raw.contains("font_scheme=Override Fonts"));
+}
+
+#[test]
 fn previous_shape_effects_struct_literal_remains_source_compatible() {
     let effects = ShapeEffects {
         outer_shadow: None,

@@ -40,6 +40,7 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
 
     let unknown_parts = embedded_parser::UnknownPartInventory::collect(&names, &mut diagnostics);
     diagnostics.extend(custom_xml_diagnostics(&mut archive, &names)?);
+    diagnostics.extend(theme_override_diagnostics(&mut archive, &names)?);
 
     for name in names {
         notes_comments_parser::collect_part_diagnostics(&name, &mut diagnostics);
@@ -76,6 +77,188 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         }
     }
     Ok(diagnostics)
+}
+
+fn theme_override_diagnostics(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    names: &[String],
+) -> PptxResult<Vec<ConversionDiagnostic>> {
+    const THEME_OVERRIDE: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/themeOverride";
+    let mut diagnostics = Vec::new();
+    for rels_part in names.iter().filter(|name| name.ends_with(".rels")) {
+        let relationships_xml = read_text_entry(archive, rels_part)?;
+        let relationships = super::relationships::parse_relationship_records(&relationships_xml)?;
+        let owner = relationship_source_part(rels_part);
+        for relationship in relationships
+            .iter()
+            .filter(|relationship| relationship.relationship_type == THEME_OVERRIDE)
+        {
+            if relationship.target_mode.as_str() != "Internal" {
+                continue;
+            }
+            let Some(part) = resolve_relationship_target(&owner, &relationship.target) else {
+                continue;
+            };
+            let Ok(mut file) = archive.by_name(&part) else {
+                continue;
+            };
+            let mut xml = String::new();
+            if file.read_to_string(&mut xml).is_err() {
+                continue;
+            }
+            let Some(metadata) = parse_theme_override(&xml) else {
+                continue;
+            };
+            diagnostics.push(ConversionDiagnostic {
+                code: "THEME_OVERRIDE_METADATA".to_owned(),
+                family: FeatureFamily::Layout,
+                support_tier: SupportTier::Fallback,
+                stage: Some(CapabilityStage::Parsed),
+                location: DiagnosticLocation {
+                    part_name: Some(part.clone()),
+                    relationship_id: Some(relationship.id.clone()),
+                    relationship_type: Some(relationship.relationship_type.clone()),
+                    qualified_element_name: Some("a:themeOverride".to_owned()),
+                    ..Default::default()
+                },
+                raw_reference: Some(format!(
+                    "owner={owner}\npart={part}\nrelationship_id={}\ncolor_scheme={}\ncolor_slot_count={}\nfont_scheme={}\nformat_scheme={}",
+                    relationship.id,
+                    metadata.0,
+                    metadata.1,
+                    metadata.2,
+                    metadata.3
+                )),
+                fallback_kind: FallbackKind::PreservedPart,
+                reason: "Theme override metadata was preserved without visual application"
+                    .to_owned(),
+            });
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn parse_theme_override(xml: &str) -> Option<(String, usize, String, String)> {
+    const DML: &[u8] = b"http://schemas.openxmlformats.org/drawingml/2006/main";
+    let mut reader = NsReader::from_str(xml);
+    let mut buffer = Vec::new();
+    let mut depth = 0_usize;
+    let mut color_scheme = String::new();
+    let mut color_slot_count = 0_usize;
+    let mut font_scheme = String::new();
+    let mut format_scheme = String::new();
+    loop {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element))) => {
+                let valid_namespace =
+                    matches!(namespace, ResolveResult::Bound(value) if value.as_ref() == DML);
+                let local = String::from_utf8_lossy(element.local_name().as_ref()).into_owned();
+                if depth == 0 && (!valid_namespace || local != "themeOverride") {
+                    return None;
+                }
+                if depth == 1 && valid_namespace {
+                    match local.as_str() {
+                        "clrScheme" => color_scheme = xml_attribute(&element, "name"),
+                        "fontScheme" => font_scheme = xml_attribute(&element, "name"),
+                        "fmtScheme" => format_scheme = xml_attribute(&element, "name"),
+                        _ => {}
+                    }
+                } else if depth == 2
+                    && valid_namespace
+                    && matches!(
+                        local.as_str(),
+                        "dk1"
+                            | "lt1"
+                            | "dk2"
+                            | "lt2"
+                            | "accent1"
+                            | "accent2"
+                            | "accent3"
+                            | "accent4"
+                            | "accent5"
+                            | "accent6"
+                            | "hlink"
+                            | "folHlink"
+                    )
+                {
+                    color_slot_count += 1;
+                }
+                depth += 1;
+            }
+            Ok((namespace, Event::Empty(element))) => {
+                let valid_namespace =
+                    matches!(namespace, ResolveResult::Bound(value) if value.as_ref() == DML);
+                let local = String::from_utf8_lossy(element.local_name().as_ref()).into_owned();
+                if depth == 0 && (!valid_namespace || local != "themeOverride") {
+                    return None;
+                }
+                if depth == 1 && valid_namespace {
+                    match local.as_str() {
+                        "clrScheme" => color_scheme = xml_attribute(&element, "name"),
+                        "fontScheme" => font_scheme = xml_attribute(&element, "name"),
+                        "fmtScheme" => format_scheme = xml_attribute(&element, "name"),
+                        _ => {}
+                    }
+                } else if depth == 2
+                    && valid_namespace
+                    && matches!(
+                        local.as_str(),
+                        "dk1"
+                            | "lt1"
+                            | "dk2"
+                            | "lt2"
+                            | "accent1"
+                            | "accent2"
+                            | "accent3"
+                            | "accent4"
+                            | "accent5"
+                            | "accent6"
+                            | "hlink"
+                            | "folHlink"
+                    )
+                {
+                    color_slot_count += 1;
+                }
+            }
+            Ok((_, Event::End(_))) => depth = depth.saturating_sub(1),
+            Ok((_, Event::Eof)) => break,
+            Err(_) => return None,
+            _ => {}
+        }
+        buffer.clear();
+    }
+    Some((color_scheme, color_slot_count, font_scheme, format_scheme))
+}
+
+fn relationship_source_part(rels_part: &str) -> String {
+    if rels_part == "_rels/.rels" {
+        return "/".to_owned();
+    }
+    let Some((directory, file)) = rels_part.rsplit_once("/_rels/") else {
+        return String::new();
+    };
+    format!("{directory}/{}", file.trim_end_matches(".rels"))
+}
+
+fn resolve_relationship_target(owner: &str, target: &str) -> Option<String> {
+    if owner.is_empty() || target.starts_with('/') {
+        return None;
+    }
+    let mut segments = owner
+        .rsplit_once('/')
+        .map(|(directory, _)| directory.split('/').collect::<Vec<_>>())
+        .unwrap_or_default();
+    for segment in target.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop()?;
+            }
+            value => segments.push(value),
+        }
+    }
+    Some(segments.join("/"))
 }
 
 fn thumbnail_diagnostics(
