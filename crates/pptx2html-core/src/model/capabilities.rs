@@ -429,10 +429,10 @@ pub const CAPABILITY_ALTERNATE_CONTENT: (SupportTier, Option<CapabilityStage>, &
     "fallback",
 );
 pub const CAPABILITY_BIBLIOGRAPHY: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "b:Sources",
+    "fallback",
 );
 pub const CAPABILITY_ADDITIONAL_CHARACTERISTICS: (
     SupportTier,

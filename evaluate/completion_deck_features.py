@@ -77,6 +77,13 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "bibliography",
+        "bibliography",
+        "<b:Sources",
+        part="ppt/bibliography/sources.xml",
+    ),
+    _f(
+        24,
         "extensions",
         "extensions",
         '<p:ext uri="{DEMO-EXTENSION}">',

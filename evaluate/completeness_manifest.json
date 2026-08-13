@@ -1715,9 +1715,11 @@
     {
       "id": "table-style",
       "family": "drawingml-table",
-      "official_source": "https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document",
-      "source_status": "unavailable",
-      "ooxml": {},
+      "official_source": "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.bibliography.sources?view=openxml-3.0.1",
+      "source_status": "verified",
+      "ooxml": {
+        "qualified_name": "b:Sources"
+      },
       "fallback_policy": {
         "kind": "table-placeholder",
         "diagnostic_code": "PPTX_COMPLETENESS_FALLBACK"
@@ -2974,15 +2976,15 @@
       },
       "current": {
         "semantic": {
-          "tier": "unparsed",
-          "stage": "not-applicable"
+          "tier": "fallback",
+          "stage": "parsed"
         },
         "visual": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         },
         "behavioral": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         }
       },
@@ -3007,22 +3009,22 @@
             "kind": "rust-symbol",
             "token": "CAPABILITY_BIBLIOGRAPHY",
             "dimension": "semantic",
-            "support_tier": "unparsed",
-            "stage": "not-applicable",
-            "binding_token": "PPTX_COMPLETENESS_FALLBACK",
-            "disposition_token": "unparsed"
+            "support_tier": "fallback",
+            "stage": "parsed",
+            "binding_token": "b:Sources",
+            "disposition_token": "fallback"
           }
         ],
-        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "focused_test": "crates/pptx2html-core/tests/public_api_test.rs",
         "scenario_exemption": {
-          "reason": "deferred-after-task-23",
+          "reason": "bibliography-metadata-has-no-slide-surface",
           "dispositions": [
             "current",
             "target"
           ]
         },
         "documentation_anchor": "capability-bibliography",
-        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+        "focused_test_case": "bibliography_sources_are_preserved_as_typed_metadata"
       }
     },
     {

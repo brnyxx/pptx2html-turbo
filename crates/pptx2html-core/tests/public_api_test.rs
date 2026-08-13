@@ -57,6 +57,47 @@ fn presentation_extensions_are_preserved_as_typed_metadata() {
     assert!(raw.contains("uri={DEMO-EXTENSION}"));
     assert!(raw.contains("EXTENSION_SENTINEL"));
 }
+
+#[test]
+fn bibliography_sources_are_preserved_as_typed_metadata() {
+    let sources = br#"<?xml version="1.0" encoding="UTF-8"?>
+<b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography"
+ SelectedStyle="\APASixthEditionOfficeOnline.xsl" StyleName="APA">
+  <b:Source>
+    <b:Tag>Doe2026</b:Tag><b:SourceType>JournalArticle</b:SourceType>
+    <b:Title>Deterministic PPTX Conversion</b:Title><b:Year>2026</b:Year>
+    <b:Author><b:Author><b:NameList><b:Person><b:Last>Doe</b:Last>
+      <b:First>Jane</b:First></b:Person></b:NameList></b:Author></b:Author>
+  </b:Source>
+</b:Sources>"#;
+    let bytes = MinimalPptx::new("<p:sp/>")
+        .with_extra_file("ppt/bibliography/sources.xml", sources)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("bibliography fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "BIBLIOGRAPHY_SOURCE_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].support_tier.as_str(), "fallback");
+    assert_eq!(diagnostics[0].stage.unwrap().as_str(), "parsed");
+    let raw = diagnostics[0]
+        .raw_reference
+        .as_deref()
+        .expect("bibliography raw reference");
+    assert!(raw.contains("tag=Doe2026"));
+    assert!(raw.contains("source_type=JournalArticle"));
+    assert!(raw.contains("title=Deterministic PPTX Conversion"));
+    assert!(raw.contains("year=2026"));
+    assert!(raw.contains("author=Jane Doe"));
+    assert!(result.diagnostics().iter().all(|diagnostic| {
+        diagnostic.code != "OOXML_PART_UNSUPPORTED"
+            || diagnostic.location.part_name.as_deref() != Some("ppt/bibliography/sources.xml")
+    }));
+}
 use tempfile::tempdir;
 
 #[test]

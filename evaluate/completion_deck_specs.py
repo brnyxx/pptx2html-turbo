@@ -355,6 +355,27 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "bibliography",
+            (("", ""),),
+            parts=(
+                (
+                    "ppt/bibliography/sources.xml",
+                    (
+                        '<?xml version="1.0"?><b:Sources '
+                        'xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">'
+                        '<b:Source><b:Tag>Doe2026</b:Tag>'
+                        '<b:SourceType>JournalArticle</b:SourceType>'
+                        '<b:Title>Deterministic PPTX Conversion</b:Title><b:Year>2026</b:Year>'
+                        '<b:Author><b:Author><b:NameList><b:Person>'
+                        '<b:Last>Doe</b:Last><b:First>Jane</b:First>'
+                        '</b:Person></b:NameList></b:Author></b:Author>'
+                        '</b:Source></b:Sources>'
+                    ).encode(),
+                ),
+            ),
+            types=(("/ppt/bibliography/sources.xml", "application/xml"),),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (

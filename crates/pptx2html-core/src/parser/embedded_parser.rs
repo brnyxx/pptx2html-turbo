@@ -133,6 +133,7 @@ fn known_package_part(part_name: &str) -> bool {
         "ppt/diagrams/",
         "ppt/media/",
         "ppt/comments/",
+        "ppt/bibliography/",
         "ppt/tags/",
         "ppt/customXml/",
     ]

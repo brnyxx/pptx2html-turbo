@@ -14,7 +14,8 @@ use super::{
 use crate::error::PptxResult;
 use crate::model::slide::{UnresolvedType, UnsupportedData};
 use crate::model::{
-    ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily, SupportTier,
+    CapabilityStage, ConversionDiagnostic, DiagnosticLocation, FallbackKind, FeatureFamily,
+    SupportTier,
 };
 
 pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<ConversionDiagnostic>> {
@@ -41,6 +42,14 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
     for name in names {
         notes_comments_parser::collect_part_diagnostics(&name, &mut diagnostics);
         media_parser::collect_part_diagnostics(&name, &mut diagnostics);
+        if name.starts_with("ppt/") && name.ends_with(".xml") {
+            let xml = read_text_entry(&mut archive, &name)?;
+            let bibliography = bibliography_diagnostics(&name, &xml);
+            if !bibliography.is_empty() {
+                diagnostics.extend(bibliography);
+                continue;
+            }
+        }
         if unknown_parts.contains(&name) {
             continue;
         }
@@ -60,6 +69,109 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         }
     }
     Ok(diagnostics)
+}
+
+fn bibliography_diagnostics(part_name: &str, xml: &str) -> Vec<ConversionDiagnostic> {
+    const BIBLIOGRAPHY: &[u8] =
+        b"http://schemas.openxmlformats.org/officeDocument/2006/bibliography";
+    let mut reader = NsReader::from_str(xml);
+    let mut buffer = Vec::new();
+    let mut depth = 0_usize;
+    let mut source_depth = None;
+    let mut current_field: Option<String> = None;
+    let mut fields = std::collections::BTreeMap::new();
+    let mut diagnostics = Vec::new();
+    loop {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element))) => {
+                let is_bibliography = matches!(
+                    namespace,
+                    ResolveResult::Bound(value) if value.as_ref() == BIBLIOGRAPHY
+                );
+                let local = String::from_utf8_lossy(element.local_name().as_ref()).into_owned();
+                if depth == 0 && (!is_bibliography || local != "Sources") {
+                    return Vec::new();
+                }
+                if is_bibliography && local == "Source" && depth == 1 {
+                    source_depth = Some(depth);
+                    fields.clear();
+                } else if source_depth.is_some()
+                    && is_bibliography
+                    && matches!(
+                        local.as_str(),
+                        "Tag" | "SourceType" | "Title" | "Year" | "First" | "Middle" | "Last"
+                    )
+                {
+                    current_field = Some(local);
+                }
+                depth += 1;
+            }
+            Ok((_, Event::Text(value))) if current_field.is_some() => {
+                if let (Some(field), Ok(value)) = (current_field.as_ref(), value.unescape()) {
+                    fields
+                        .entry(field.clone())
+                        .or_insert_with(String::new)
+                        .push_str(&value);
+                }
+            }
+            Ok((namespace, Event::End(element))) => {
+                let is_bibliography = matches!(
+                    namespace,
+                    ResolveResult::Bound(value) if value.as_ref() == BIBLIOGRAPHY
+                );
+                let local = String::from_utf8_lossy(element.local_name().as_ref()).into_owned();
+                if is_bibliography && current_field.as_deref() == Some(local.as_str()) {
+                    current_field = None;
+                }
+                depth = depth.saturating_sub(1);
+                if is_bibliography && local == "Source" && source_depth == Some(depth) {
+                    diagnostics.push(bibliography_diagnostic(part_name, &fields));
+                    source_depth = None;
+                    fields.clear();
+                }
+            }
+            Ok((_, Event::Eof)) | Err(_) => break,
+            _ => {}
+        }
+        buffer.clear();
+    }
+    diagnostics
+}
+
+fn bibliography_diagnostic(
+    part_name: &str,
+    fields: &std::collections::BTreeMap<String, String>,
+) -> ConversionDiagnostic {
+    let author = ["First", "Middle", "Last"]
+        .into_iter()
+        .filter_map(|field| fields.get(field))
+        .filter(|value| !value.is_empty())
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(" ");
+    ConversionDiagnostic {
+        code: "BIBLIOGRAPHY_SOURCE_METADATA".to_owned(),
+        family: FeatureFamily::Unsupported,
+        support_tier: SupportTier::Fallback,
+        stage: Some(CapabilityStage::Parsed),
+        location: DiagnosticLocation {
+            part_name: Some(part_name.to_owned()),
+            qualified_element_name: Some("b:Source".to_owned()),
+            ..Default::default()
+        },
+        raw_reference: Some(format!(
+            "tag={}\nsource_type={}\ntitle={}\nyear={}\nauthor={author}",
+            fields.get("Tag").map(String::as_str).unwrap_or_default(),
+            fields
+                .get("SourceType")
+                .map(String::as_str)
+                .unwrap_or_default(),
+            fields.get("Title").map(String::as_str).unwrap_or_default(),
+            fields.get("Year").map(String::as_str).unwrap_or_default(),
+        )),
+        fallback_kind: FallbackKind::PreservedPart,
+        reason: "Bibliography source was preserved as typed metadata".to_owned(),
+    }
 }
 
 fn collect_xml_diagnostics(

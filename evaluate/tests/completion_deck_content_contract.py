@@ -16,6 +16,7 @@ EXACT_TYPES: Final = {
     "ppt/notesSlides/notesSlide1.xml": PRESENTATION + "notesSlide+xml",
     "ppt/notesMasters/notesMaster1.xml": PRESENTATION + "notesMaster+xml",
     "ppt/handoutMasters/handoutMaster1.xml": PRESENTATION + "handoutMaster+xml",
+    "ppt/bibliography/sources.xml": "application/xml",
     "ppt/theme/notesTheme1.xml": "application/vnd.openxmlformats-officedocument.theme+xml",
     "ppt/comments/comment1.xml": PRESENTATION + "comments+xml",
     "ppt/commentAuthors.xml": PRESENTATION + "commentAuthors+xml",
