@@ -165,16 +165,24 @@ pub(crate) fn collect_relationship_diagnostics(
             let resolved = matches!(relationship.target_mode, TargetMode::Internal)
                 .then(|| resolve_target(&source_part, &relationship.target))
                 .flatten();
-            if resolved
+            let valid = resolved
                 .as_deref()
-                .is_none_or(|part_name| !valid_embedded_part(archive, kind, part_name))
-            {
+                .is_some_and(|part_name| valid_embedded_part(archive, kind, part_name));
+            if !valid {
                 diagnostics.push(relationship_diagnostic(
                     "OOXML_EMBEDDED_RELATIONSHIP_INVALID",
                     &source_part,
                     relationship,
                     "Embedded relationship must be internal, package-root bounded, present, and match its official content type and namespace",
                 ));
+                continue;
+            }
+            if kind == "package"
+                && let Some(part_name) = resolved.as_deref()
+                && let Some(diagnostic) =
+                    embedded_package_diagnostic(archive, &source_part, part_name, relationship)
+            {
+                diagnostics.push(diagnostic);
             }
         }
     }
@@ -206,6 +214,38 @@ pub(crate) fn collect_relationship_diagnostics(
         }
     }
     Ok(())
+}
+
+fn embedded_package_diagnostic<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    source_part: &str,
+    part_name: &str,
+    relationship: &Relationship,
+) -> Option<ConversionDiagnostic> {
+    let content_type = declared_content_type(archive, part_name)?;
+    let byte_length = archive.by_name(part_name).ok()?.size();
+    Some(ConversionDiagnostic {
+        code: "EMBEDDED_PACKAGE_METADATA".to_owned(),
+        family: FeatureFamily::Unsupported,
+        support_tier: SupportTier::Fallback,
+        stage: Some(crate::model::CapabilityStage::Parsed),
+        location: DiagnosticLocation {
+            slide_index: slide_index_from_part(source_part),
+            part_name: Some(part_name.to_owned()),
+            relationship_id: Some(relationship.id.clone()),
+            relationship_type: Some(relationship.relationship_type.clone()),
+            qualified_element_name: Some("p:oleObj".to_owned()),
+            ..Default::default()
+        },
+        raw_reference: Some(format!(
+            "owner={source_part}\npart={part_name}\nrelationship_id={}\ncontent_type={content_type}\nbyte_length={byte_length}",
+            relationship.id
+        )),
+        fallback_kind: FallbackKind::PreservedPart,
+        reason:
+            "Embedded package metadata was preserved without activating or exposing its payload"
+                .to_owned(),
+    })
 }
 
 pub(crate) fn select_alternate_content(

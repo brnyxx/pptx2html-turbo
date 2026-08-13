@@ -283,6 +283,14 @@ FEATURES = (
     _f(21, "fallback-domains", "fallback-smartart", "<dgm:relIds "),
     _f(21, "fallback-domains", "fallback-ole", '<p:oleObj r:id="rIdOle"'),
     _f(
+        24,
+        "fallback-domains",
+        "embedded-package",
+        '<Relationship Id="rIdPackage"',
+        part="ppt/slides/_rels/slide1.xml.rels",
+        relationship_disposition="internal",
+    ),
+    _f(
         21,
         "fallback-domains",
         "fallback-math",

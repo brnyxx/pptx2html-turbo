@@ -476,10 +476,10 @@ pub const CAPABILITY_CONTENT_PART: (SupportTier, Option<CapabilityStage>, &str, 
     "fallback",
 );
 pub const CAPABILITY_EMBEDDED_PACKAGE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+    "fallback",
 );
 pub const CAPABILITY_EMBEDDED_CONTROL_PERSISTENCE: (
     SupportTier,

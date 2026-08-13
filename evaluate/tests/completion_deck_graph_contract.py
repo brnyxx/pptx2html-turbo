@@ -119,6 +119,13 @@ SPECIFIC_RELS: Final = {
             None,
         ),
         (SR, "rIdOle", REL + "oleObject", "../embeddings/inert.bin", None),
+        (
+            SR,
+            "rIdPackage",
+            REL + "package",
+            "../embeddings/workbook1.xlsx",
+            None,
+        ),
     ),
     "table-styles": (
         (

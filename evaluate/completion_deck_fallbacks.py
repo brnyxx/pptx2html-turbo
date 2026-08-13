@@ -35,6 +35,12 @@ def relationships() -> tuple[Relationship, ...]:
         ),
         ("rIdSmartArtPreview", REL + "image", "../media/smartart-preview.png", None),
         ("rIdOle", REL + "oleObject", "../embeddings/inert.bin", None),
+        (
+            "rIdPackage",
+            REL + "package",
+            "../embeddings/workbook1.xlsx",
+            None,
+        ),
         ("rIdOlePreview", REL + "image", "../media/ole-preview.png", None),
     )
 
@@ -46,6 +52,7 @@ def parts() -> tuple[Part, ...]:
         ("ppt/diagrams/quickStyle1.xml", _style()),
         ("ppt/diagrams/colors1.xml", _colors()),
         ("ppt/embeddings/inert.bin", b"INERT_OLE_DO_NOT_EXECUTE"),
+        ("ppt/embeddings/workbook1.xlsx", b"PK\x03\x04INERT_WORKBOOK_PACKAGE"),
         ("ppt/media/ole-preview.png", PREVIEW_PNG),
         ("ppt/media/smartart-preview.png", PREVIEW_PNG),
     )
@@ -61,6 +68,10 @@ def content_types() -> tuple[ContentType, ...]:
         (
             "/ppt/embeddings/inert.bin",
             "application/vnd.openxmlformats-officedocument.oleObject",
+        ),
+        (
+            "/ppt/embeddings/workbook1.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ),
         ("/ppt/media/ole-preview.png", "image/png"),
         ("/ppt/media/smartart-preview.png", "image/png"),

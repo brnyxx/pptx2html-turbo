@@ -16,7 +16,7 @@ After final feature integration, run `scripts/task-23-final-local-gates.sh` befo
 ## Generated PPTX capability registry
 
 <!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->
-<!-- manifest-sha256: 84add1fcdcb02e1b1c64f125ffbe798ff1b52344d580475e2bd9c5d52ed6a74a -->
+<!-- manifest-sha256: 32b26c043dcd6320877c76dda83c1a5c9aea59081d6d3095eb70392706e34042 -->
 | Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |
 |---|---|---|---|---|
 | <a id="capability-presentation"></a>`presentation` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c07e2810b8d5e13a63436f7b11c3ee961e11b15f61bdc50a1ca260c0738e4a4f` | `29665c44b1b28428449e05099e8b3f5d22f1e577d8eaaf700a7f1c9a1b347de5` |
@@ -72,7 +72,7 @@ After final feature integration, run `scripts/task-23-final-local-gates.sh` befo
 | <a id="capability-theme-override"></a>`theme-override` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `a6c3565ab75b88f7bcd341876512c4752c266a017d1d6d5ba08aa37b5cda995d` | `8dbd8139836a153e1e69009efcb939bd980708c67e19e790aafba14bb2c71dc9` |
 | <a id="capability-slide-synchronization"></a>`slide-synchronization` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `d251deca6b42414d070751e4e079abd3c75abebf6fb296bb9c61d48be6e604d1` | `7108f8d030277f501eccd5e01cfef2389496178cf6128c7ae5248a8b067d1d42` |
 | <a id="capability-content-part"></a>`content-part` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `2f7dce33c2e6808355a43fe0820855450ade1abd9fffe83bf6989965dc3da5d9` | `a6dc798a71b64907ffa02c9c93548a78f91ec78b0fca9852ffa861abd11f649e` |
-| <a id="capability-embedded-package"></a>`embedded-package` | unparsed/not-applicable<br>unparsed/not-applicable<br>unparsed/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `0b5c84956bcda3b455fdd786bfe65bef700d73de90f4c8a2c7696901a6ec38a4` | `ca08db15b3da1ab2f3cd55ff47b6980e3cb9f15e22c1a5c2445255af0891a1e3` |
+| <a id="capability-embedded-package"></a>`embedded-package` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `9c9a08d8fb4442f66df36bc3de23ca6a0d0448bab2260996ed41c262cca6d5c0` | `1027870090ccee53b686f31b5098514211c5799b534f317f604406e734c57627` |
 | <a id="capability-embedded-control-persistence"></a>`embedded-control-persistence` | unparsed/not-applicable<br>unparsed/not-applicable<br>unparsed/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `8be23af6eb9638f4aed07d697c5d8abf50ea26884873e15222d412df81b927fb` | `f0f169936fe00c2e295474e131cc5d56865c4b57f81ba5c93742ed47befec463` |
 | <a id="capability-user-defined-tags"></a>`user-defined-tags` | unparsed/not-applicable<br>unparsed/not-applicable<br>unparsed/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `ad7c41c48ec98943c62f35c56c5700068c2c5c42b33c1b5c6c95eb7c829f8121` | `34cadc54e268123edf5ef9f028f4abeec3cd8a9d39e1be2298669b87cf336f23` |
 <!-- END GENERATED PPTX CAPABILITY MATRIX -->

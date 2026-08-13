@@ -107,6 +107,9 @@ LOCATORS: Final = {
     "chart-placeholder": _l("<c:stockChart>", "ppt/charts/chart3.xml"),
     "fallback-smartart": _l("<dgm:relIds "),
     "fallback-ole": _l('<p:oleObj r:id="rIdOle"'),
+    "embedded-package": _l(
+        '<Relationship Id="rIdPackage"', "ppt/slides/_rels/slide1.xml.rels"
+    ),
     "fallback-math": _l(
         '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
     ),

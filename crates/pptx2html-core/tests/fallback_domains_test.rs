@@ -147,6 +147,56 @@ fn ole_uses_only_allowlisted_preview_and_never_emits_payload() {
 }
 
 #[test]
+fn embedded_packages_are_preserved_as_typed_metadata() {
+    const PACKAGE: &[u8] = b"PK\x03\x04EMBEDDED_WORKBOOK_SECRET";
+    let package = PackageBuilder::new(slide("<p:sp/>"))
+        .with_slide_relationship(Relationship::internal(
+            "rIdPackage",
+            &(REL.to_owned() + "package"),
+            "../embeddings/workbook1.xlsx",
+        ))
+        .with_part(FeaturePart::extra(
+            "ppt/embeddings/workbook1.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            PACKAGE,
+        ))
+        .build()
+        .expect("embedded package fixture");
+
+    let result = convert_bytes_with_metadata(&package).expect("conversion succeeds");
+    let diagnostic = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "EMBEDDED_PACKAGE_METADATA")
+        .expect("embedded package metadata");
+
+    assert_eq!(diagnostic.support_tier.as_str(), "fallback");
+    assert_eq!(diagnostic.stage.unwrap().as_str(), "parsed");
+    assert_eq!(diagnostic.location.slide_index, Some(0));
+    assert_eq!(
+        diagnostic.location.part_name.as_deref(),
+        Some("ppt/embeddings/workbook1.xlsx")
+    );
+    assert_eq!(
+        diagnostic.location.relationship_id.as_deref(),
+        Some("rIdPackage")
+    );
+    let raw = diagnostic
+        .raw_reference
+        .as_deref()
+        .expect("package raw reference");
+    assert!(raw.contains("owner=ppt/slides/slide1.xml"));
+    assert!(raw.contains("part=ppt/embeddings/workbook1.xlsx"));
+    assert!(raw.contains("relationship_id=rIdPackage"));
+    assert!(raw.contains(
+        "content_type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ));
+    assert!(raw.contains(&format!("byte_length={}", PACKAGE.len())));
+    assert!(!raw.contains("EMBEDDED_WORKBOOK_SECRET"));
+    assert!(!result.html.contains("EMBEDDED_WORKBOOK_SECRET"));
+}
+
+#[test]
 fn math_raw_metadata_is_bounded_and_script_safe() {
     let result = convert_bytes_with_metadata(&domain_package()).expect("conversion succeeds");
     assert!(result.html.contains("data-type=\"math\""));

@@ -67,6 +67,7 @@ SCENARIO_CANONICAL: Final = {
     "chart-placeholder": "chart-placeholder-fallback",
     "fallback-smartart": "diagram",
     "fallback-ole": "ole-embedded-object",
+    "embedded-package": "embedded-package",
     "fallback-math": "math",
     "fallback-alternate-content": "alternate-content",
     "fallback-unknown-extension": "extensions",

@@ -23,7 +23,7 @@ REQUIRED_IDS = set(
     notes-slide comments-legacy comments-modern comment-author-missing reflection
     drawingml-3d-fallback media-audio media-video media-unsupported transition-cut transition-fade
     animation-bounded animation-unsupported chart-direct chart-preview-fallback chart-placeholder
-    fallback-smartart fallback-ole fallback-math fallback-alternate-content fallback-unknown-extension""".split()
+    fallback-smartart fallback-ole embedded-package fallback-math fallback-alternate-content fallback-unknown-extension""".split()
 )
 COMMON_PARTS = set(
     """[Content_Types].xml _rels/.rels ppt/presentation.xml ppt/_rels/presentation.xml.rels

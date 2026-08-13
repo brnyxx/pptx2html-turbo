@@ -33,6 +33,7 @@ EXACT_TYPES: Final = {
     "ppt/diagrams/quickStyle1.xml": DRAWING + "diagramStyle+xml",
     "ppt/diagrams/colors1.xml": DRAWING + "diagramColors+xml",
     "ppt/embeddings/inert.bin": "application/vnd.openxmlformats-officedocument.oleObject",
+    "ppt/embeddings/workbook1.xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
 
