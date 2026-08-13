@@ -446,10 +446,10 @@ pub const CAPABILITY_ADDITIONAL_CHARACTERISTICS: (
     "fallback",
 );
 pub const CAPABILITY_CUSTOM_XML: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
-    "unparsed",
+    "fallback",
 );
 pub const CAPABILITY_THUMBNAIL: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Unparsed,

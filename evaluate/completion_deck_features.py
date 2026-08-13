@@ -77,6 +77,13 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "custom-xml",
+        "custom-xml",
+        "<demo:project",
+        part="customXml/item1.xml",
+    ),
+    _f(
+        24,
         "additional-characteristics",
         "additional-characteristics",
         "<ac:AdditionalCharacteristics",

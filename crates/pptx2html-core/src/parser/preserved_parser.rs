@@ -38,6 +38,7 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
     names.sort();
 
     let unknown_parts = embedded_parser::UnknownPartInventory::collect(&names, &mut diagnostics);
+    diagnostics.extend(custom_xml_diagnostics(&mut archive, &names)?);
 
     for name in names {
         notes_comments_parser::collect_part_diagnostics(&name, &mut diagnostics);
@@ -74,6 +75,134 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         }
     }
     Ok(diagnostics)
+}
+
+fn custom_xml_diagnostics(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    names: &[String],
+) -> PptxResult<Vec<ConversionDiagnostic>> {
+    let mut diagnostics = Vec::new();
+    for data_part in names.iter().filter(|name| {
+        name.starts_with("customXml/item") && name.ends_with(".xml") && !name.contains("itemProps")
+    }) {
+        let suffix = data_part
+            .trim_start_matches("customXml/item")
+            .trim_end_matches(".xml");
+        let properties_part = format!("customXml/itemProps{suffix}.xml");
+        let data_xml = read_text_entry(archive, data_part)?;
+        let Some(root) = root_qname(&data_xml) else {
+            continue;
+        };
+        let (item_id, schema_uris) = if names.contains(&properties_part) {
+            let properties_xml = read_text_entry(archive, &properties_part)?;
+            custom_xml_properties(&properties_xml)
+        } else {
+            (String::new(), Vec::new())
+        };
+        diagnostics.push(ConversionDiagnostic {
+            code: "CUSTOM_XML_DATA_METADATA".to_owned(),
+            family: FeatureFamily::Unsupported,
+            support_tier: SupportTier::Fallback,
+            stage: Some(CapabilityStage::Parsed),
+            location: DiagnosticLocation {
+                part_name: Some(data_part.clone()),
+                qualified_element_name: Some(root.clone()),
+                ..Default::default()
+            },
+            raw_reference: Some(format!(
+                "data_part={data_part}\nproperties_part={properties_part}\nitem_id={item_id}\nschema_uri={}\nroot={root}\nraw_xml={}",
+                schema_uris.join(","),
+                bounded_xml(&data_xml)
+            )),
+            fallback_kind: FallbackKind::PreservedPart,
+            reason: "Custom XML data and properties were preserved as bounded typed metadata"
+                .to_owned(),
+        });
+    }
+    Ok(diagnostics)
+}
+
+fn root_qname(xml: &str) -> Option<String> {
+    let mut reader = NsReader::from_str(xml);
+    let mut buffer = Vec::new();
+    loop {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element) | Event::Empty(element))) => {
+                let namespace = match namespace {
+                    ResolveResult::Bound(value) => {
+                        String::from_utf8_lossy(value.as_ref()).into_owned()
+                    }
+                    ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
+                };
+                let local = String::from_utf8_lossy(element.local_name().as_ref()).into_owned();
+                return Some(format!("{{{namespace}}}{local}"));
+            }
+            Ok((_, Event::Eof)) | Err(_) => return None,
+            _ => {}
+        }
+        buffer.clear();
+    }
+}
+
+fn custom_xml_properties(xml: &str) -> (String, Vec<String>) {
+    const CUSTOM_XML: &[u8] = b"http://schemas.openxmlformats.org/officeDocument/2006/customXml";
+    let mut reader = NsReader::from_str(xml);
+    let mut buffer = Vec::new();
+    let mut depth = 0_usize;
+    let mut item_id = String::new();
+    let mut schema_uris = Vec::new();
+    loop {
+        match reader.read_resolved_event_into(&mut buffer) {
+            Ok((namespace, Event::Start(element) | Event::Empty(element))) => {
+                let valid_namespace = matches!(
+                    namespace,
+                    ResolveResult::Bound(value) if value.as_ref() == CUSTOM_XML
+                );
+                let local = element.local_name();
+                if depth == 0 {
+                    if !valid_namespace || local.as_ref() != b"datastoreItem" {
+                        return (String::new(), Vec::new());
+                    }
+                    item_id = xml_attribute(&element, "itemID");
+                } else if valid_namespace && local.as_ref() == b"schemaRef" {
+                    let uri = xml_attribute(&element, "uri");
+                    if !uri.is_empty() {
+                        schema_uris.push(uri);
+                    }
+                }
+                if !element.is_empty() {
+                    depth += 1;
+                }
+            }
+            Ok((_, Event::End(_))) => depth = depth.saturating_sub(1),
+            Ok((_, Event::Eof)) | Err(_) => break,
+            _ => {}
+        }
+        buffer.clear();
+    }
+    (item_id, schema_uris)
+}
+
+fn xml_attribute(element: &BytesStart<'_>, name: &str) -> String {
+    element
+        .attributes()
+        .flatten()
+        .find(|attribute| xml_utils::local_name(attribute.key.as_ref()) == name)
+        .and_then(|attribute| attribute.unescape_value().ok())
+        .map(|value| value.into_owned())
+        .unwrap_or_default()
+}
+
+fn bounded_xml(xml: &str) -> String {
+    const LIMIT: usize = 16 * 1024;
+    if xml.len() <= LIMIT {
+        return xml.to_owned();
+    }
+    let mut end = LIMIT;
+    while !xml.is_char_boundary(end) {
+        end -= 1;
+    }
+    xml[..end].to_owned()
 }
 
 fn additional_characteristics_diagnostics(part_name: &str, xml: &str) -> Vec<ConversionDiagnostic> {

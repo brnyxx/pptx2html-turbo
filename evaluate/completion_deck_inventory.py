@@ -24,6 +24,7 @@ class FeatureLike(Protocol):
 
 
 SCENARIO_CANONICAL: Final = {
+    "custom-xml": "custom-xml",
     "additional-characteristics": "additional-characteristics",
     "bibliography": "bibliography",
     "extensions": "extensions",

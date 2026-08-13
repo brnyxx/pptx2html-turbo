@@ -148,6 +148,45 @@ fn additional_characteristics_are_preserved_as_typed_metadata() {
             || diagnostic.location.part_name.as_deref() != Some("ppt/additionalCharacteristics.xml")
     }));
 }
+
+#[test]
+fn custom_xml_data_and_properties_are_preserved_as_typed_metadata() {
+    let payload = br#"<?xml version="1.0" encoding="UTF-8"?>
+<demo:project xmlns:demo="urn:pptx2html:custom-data" id="alpha">
+  <demo:title>CUSTOM_XML_SENTINEL</demo:title>
+</demo:project>"#;
+    let properties = br#"<?xml version="1.0" encoding="UTF-8"?>
+<ds:datastoreItem
+ xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"
+ ds:itemID="{11111111-2222-3333-4444-555555555555}">
+  <ds:schemaRefs><ds:schemaRef ds:uri="urn:pptx2html:custom-data"/></ds:schemaRefs>
+</ds:datastoreItem>"#;
+    let bytes = MinimalPptx::new("<p:sp/>")
+        .with_extra_file("customXml/item1.xml", payload)
+        .with_extra_file("customXml/itemProps1.xml", properties)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("custom XML fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "CUSTOM_XML_DATA_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].support_tier.as_str(), "fallback");
+    assert_eq!(diagnostics[0].stage.unwrap().as_str(), "parsed");
+    let raw = diagnostics[0]
+        .raw_reference
+        .as_deref()
+        .expect("custom XML raw reference");
+    assert!(raw.contains("data_part=customXml/item1.xml"));
+    assert!(raw.contains("properties_part=customXml/itemProps1.xml"));
+    assert!(raw.contains("item_id={11111111-2222-3333-4444-555555555555}"));
+    assert!(raw.contains("schema_uri=urn:pptx2html:custom-data"));
+    assert!(raw.contains("root={urn:pptx2html:custom-data}project"));
+    assert!(raw.contains("CUSTOM_XML_SENTINEL"));
+}
 use tempfile::tempdir;
 
 #[test]

@@ -394,6 +394,37 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             types=(("/ppt/additionalCharacteristics.xml", "application/xml"),),
         ),
         Deck(
+            "custom-xml",
+            (("", ""),),
+            parts=(
+                (
+                    "customXml/item1.xml",
+                    (
+                        '<?xml version="1.0"?><demo:project '
+                        'xmlns:demo="urn:pptx2html:custom-data" id="alpha">'
+                        '<demo:title>CUSTOM_XML_SENTINEL</demo:title></demo:project>'
+                    ).encode(),
+                ),
+                (
+                    "customXml/itemProps1.xml",
+                    (
+                        '<?xml version="1.0"?><ds:datastoreItem '
+                        'xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml" '
+                        'ds:itemID="{11111111-2222-3333-4444-555555555555}">'
+                        '<ds:schemaRefs><ds:schemaRef ds:uri="urn:pptx2html:custom-data"/>'
+                        '</ds:schemaRefs></ds:datastoreItem>'
+                    ).encode(),
+                ),
+            ),
+            types=(
+                ("/customXml/item1.xml", "application/xml"),
+                (
+                    "/customXml/itemProps1.xml",
+                    "application/vnd.openxmlformats-officedocument.customXmlProperties+xml",
+                ),
+            ),
+        ),
+        Deck(
             "charts",
             ((CHARTS, ""),),
             (

@@ -3106,15 +3106,15 @@
       },
       "current": {
         "semantic": {
-          "tier": "unparsed",
-          "stage": "not-applicable"
+          "tier": "fallback",
+          "stage": "parsed"
         },
         "visual": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         },
         "behavioral": {
-          "tier": "unparsed",
+          "tier": "fallback",
           "stage": "not-applicable"
         }
       },
@@ -3139,22 +3139,22 @@
             "kind": "rust-symbol",
             "token": "CAPABILITY_CUSTOM_XML",
             "dimension": "semantic",
-            "support_tier": "unparsed",
-            "stage": "not-applicable",
+            "support_tier": "fallback",
+            "stage": "parsed",
             "binding_token": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
-            "disposition_token": "unparsed"
+            "disposition_token": "fallback"
           }
         ],
-        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
+        "focused_test": "crates/pptx2html-core/tests/public_api_test.rs",
         "scenario_exemption": {
-          "reason": "deferred-after-task-23",
+          "reason": "custom-xml-metadata-has-no-slide-surface",
           "dispositions": [
             "current",
             "target"
           ]
         },
         "documentation_anchor": "capability-custom-xml",
-        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+        "focused_test_case": "custom_xml_data_and_properties_are_preserved_as_typed_metadata"
       }
     },
     {
