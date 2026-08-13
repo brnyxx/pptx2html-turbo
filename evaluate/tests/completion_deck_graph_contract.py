@@ -10,6 +10,15 @@ from evaluate.tests.completion_deck_common_rel_contract import COMMON_RELS
 from evaluate.tests.completion_deck_feature_contract import NS, REL, RULES, SR
 
 SPECIFIC_RELS: Final = {
+    "user-defined-tags": (
+        (
+            "ppt/_rels/presentation.xml.rels",
+            "rIdTags",
+            REL + "tags",
+            "tags/tag1.xml",
+            None,
+        ),
+    ),
     "control-persistence": (
         (
             SR,

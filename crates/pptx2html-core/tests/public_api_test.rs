@@ -464,6 +464,66 @@ fn embedded_control_persistence_is_preserved_as_typed_metadata() {
 }
 
 #[test]
+fn user_defined_tags_are_preserved_as_typed_metadata() {
+    let presentation_relationships = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+  <Relationship Id="rIdTags" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/tags" Target="tags/tag1.xml"/>
+</Relationships>"#;
+    let tags = br#"<?xml version="1.0" encoding="UTF-8"?>
+<p:tagLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:tag name="Department" val="Research"/>
+  <p:tag name="Classification" val="Internal"/>
+</p:tagLst>"#;
+    let content_types = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/tags/tag1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.tags+xml"/>
+</Types>"#;
+    let bytes = MinimalPptx::new(r#"<p:sp/>"#)
+        .with_presentation_rels(presentation_relationships)
+        .with_content_types(content_types)
+        .with_extra_file("ppt/tags/tag1.xml", tags)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("tags fixture converts");
+    let diagnostic = result
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "USER_DEFINED_TAGS_METADATA")
+        .expect("user-defined tags metadata");
+
+    assert_eq!(diagnostic.support_tier.as_str(), "fallback");
+    assert_eq!(diagnostic.stage.unwrap().as_str(), "parsed");
+    assert_eq!(diagnostic.location.slide_index, None);
+    assert_eq!(
+        diagnostic.location.part_name.as_deref(),
+        Some("ppt/tags/tag1.xml")
+    );
+    assert_eq!(
+        diagnostic.location.relationship_id.as_deref(),
+        Some("rIdTags")
+    );
+    let raw = diagnostic
+        .raw_reference
+        .as_deref()
+        .expect("tags raw reference");
+    assert!(raw.contains("owner=ppt/presentation.xml"));
+    assert!(raw.contains("part=ppt/tags/tag1.xml"));
+    assert!(raw.contains("Classification=Internal"));
+    assert!(raw.contains("Department=Research"));
+    assert!(
+        raw.find("Classification=Internal").expect("classification")
+            < raw.find("Department=Research").expect("department")
+    );
+}
+
+#[test]
 fn previous_shape_effects_struct_literal_remains_source_compatible() {
     let effects = ShapeEffects {
         outer_shadow: None,

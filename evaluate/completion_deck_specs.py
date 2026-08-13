@@ -471,6 +471,36 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "user-defined-tags",
+            (("", ""),),
+            presentation_rels=(
+                (
+                    "rIdTags",
+                    REL + "tags",
+                    "tags/tag1.xml",
+                    None,
+                ),
+            ),
+            parts=(
+                (
+                    "ppt/tags/tag1.xml",
+                    (
+                        '<?xml version="1.0"?>'
+                        '<p:tagLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+                        '<p:tag name="Department" val="Research"/>'
+                        '<p:tag name="Classification" val="Internal"/>'
+                        "</p:tagLst>"
+                    ).encode(),
+                ),
+            ),
+            types=(
+                (
+                    "/ppt/tags/tag1.xml",
+                    "application/vnd.openxmlformats-officedocument.presentationml.tags+xml",
+                ),
+            ),
+        ),
+        Deck(
             "control-persistence",
             (('<p:control r:id="rIdControl"/>', ""),),
             slide_rels=(

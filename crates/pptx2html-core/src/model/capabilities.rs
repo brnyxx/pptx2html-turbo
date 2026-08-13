@@ -493,10 +493,10 @@ pub const CAPABILITY_EMBEDDED_CONTROL_PERSISTENCE: (
     "fallback",
 );
 pub const CAPABILITY_USER_DEFINED_TAGS: (SupportTier, Option<CapabilityStage>, &str, &str) = (
-    SupportTier::Unparsed,
-    None,
-    "PPTX_COMPLETENESS_FALLBACK",
-    "unparsed",
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tags",
+    "fallback",
 );
 // END EXACTNESS CAPABILITY REGISTRATIONS
 

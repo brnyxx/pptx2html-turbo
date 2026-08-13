@@ -24,6 +24,7 @@ class FeatureLike(Protocol):
 
 
 SCENARIO_CANONICAL: Final = {
+    "user-defined-tags": "user-defined-tags",
     "embedded-control-persistence": "embedded-control-persistence",
     "content-part": "content-part",
     "slide-synchronization": "slide-synchronization",

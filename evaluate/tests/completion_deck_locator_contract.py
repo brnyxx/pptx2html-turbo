@@ -44,6 +44,7 @@ ABSENT_AUTHOR: Final = AbsenceRule(
 
 
 LOCATORS: Final = {
+    "user-defined-tags": _l("<p:tagLst", "ppt/tags/tag1.xml"),
     "embedded-control-persistence": _l(
         "<ax:ocx", "ppt/embeddings/control1.xml"
     ),

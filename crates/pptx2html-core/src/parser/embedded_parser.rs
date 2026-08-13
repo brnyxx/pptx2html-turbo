@@ -193,6 +193,12 @@ pub(crate) fn collect_relationship_diagnostics(
         {
             diagnostics.push(diagnostic);
         }
+        if relationship.relationship_type == format!("{OFFICE_REL}tags")
+            && let Some(diagnostic) =
+                user_defined_tags_diagnostic(archive, &source_part, relationship)
+        {
+            diagnostics.push(diagnostic);
+        }
     }
 
     // The package diagnostic collector already visits every .rels part. Slide-owned
@@ -222,6 +228,84 @@ pub(crate) fn collect_relationship_diagnostics(
         }
     }
     Ok(())
+}
+
+fn user_defined_tags_diagnostic(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    source_part: &str,
+    relationship: &Relationship,
+) -> Option<ConversionDiagnostic> {
+    const CONTENT_TYPE: &str =
+        "application/vnd.openxmlformats-officedocument.presentationml.tags+xml";
+    if !matches!(relationship.target_mode, TargetMode::Internal) {
+        return None;
+    }
+    let part_name = resolve_target(source_part, &relationship.target)?;
+    if declared_content_type(archive, &part_name)?.as_str() != CONTENT_TYPE {
+        return None;
+    }
+    let tags_xml = read_text_entry(archive, &part_name).ok()?;
+    let tags = parse_user_defined_tags(&tags_xml)?;
+    let mut raw_reference = format!(
+        "owner={source_part}\npart={part_name}\nrelationship_id={}",
+        relationship.id
+    );
+    for (name, value) in tags {
+        if raw_reference.len() + name.len() + value.len() + 2 > RAW_REFERENCE_LIMIT {
+            break;
+        }
+        raw_reference.push('\n');
+        raw_reference.push_str(&name);
+        raw_reference.push('=');
+        raw_reference.push_str(&value);
+    }
+    Some(ConversionDiagnostic {
+        code: "USER_DEFINED_TAGS_METADATA".to_owned(),
+        family: FeatureFamily::Unsupported,
+        support_tier: SupportTier::Fallback,
+        stage: Some(crate::model::CapabilityStage::Parsed),
+        location: DiagnosticLocation {
+            slide_index: slide_index_from_part(source_part),
+            part_name: Some(part_name),
+            relationship_id: Some(relationship.id.clone()),
+            relationship_type: Some(relationship.relationship_type.clone()),
+            qualified_element_name: Some("p:tagLst".to_owned()),
+            ..Default::default()
+        },
+        raw_reference: Some(raw_reference),
+        fallback_kind: FallbackKind::PreservedPart,
+        reason: "User-defined presentation tags were preserved as metadata".to_owned(),
+    })
+}
+
+fn parse_user_defined_tags(xml: &str) -> Option<Vec<(String, String)>> {
+    const PML: &[u8] = b"http://schemas.openxmlformats.org/presentationml/2006/main";
+    let mut reader = NsReader::from_str(xml);
+    let mut saw_root = false;
+    let mut tags = Vec::new();
+    loop {
+        match reader.read_resolved_event() {
+            Ok((
+                ResolveResult::Bound(namespace),
+                Event::Start(ref element) | Event::Empty(ref element),
+            )) if namespace.as_ref() == PML => match element.local_name().as_ref() {
+                b"tagLst" if !saw_root => saw_root = true,
+                b"tag" if saw_root => {
+                    let name = attribute_value(element, "name")?;
+                    let value = attribute_value(element, "val")?;
+                    tags.push((name, value));
+                }
+                _ => {}
+            },
+            Ok((_, Event::Eof)) => {
+                tags.sort();
+                tags.dedup();
+                return saw_root.then_some(tags);
+            }
+            Err(_) => return None,
+            _ => {}
+        }
+    }
 }
 
 fn embedded_control_diagnostic(
@@ -1190,6 +1274,7 @@ pub(crate) fn known_relationship_type(value: &str) -> bool {
             | "slideUpdateInfo"
             | "customXml"
             | "control"
+            | "tags"
             | "theme"
             | "themeOverride"
             | "image"

@@ -36,6 +36,7 @@ EXACT_TYPES: Final = {
     "ppt/embeddings/workbook1.xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "ppt/embeddings/control1.xml": "application/vnd.ms-office.activeX+xml",
     "ppt/embeddings/ActiveXControl1.bin": "application/vnd.ms-office.activeX",
+    "ppt/tags/tag1.xml": "application/vnd.openxmlformats-officedocument.presentationml.tags+xml",
 }
 
 

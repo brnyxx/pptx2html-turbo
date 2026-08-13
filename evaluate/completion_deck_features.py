@@ -77,6 +77,14 @@ ABSENT_AUTHOR = NegativeSpec(
 FEATURES = (
     _f(
         24,
+        "user-defined-tags",
+        "user-defined-tags",
+        "<p:tagLst",
+        part="ppt/tags/tag1.xml",
+        relationship_disposition="internal",
+    ),
+    _f(
+        24,
         "control-persistence",
         "embedded-control-persistence",
         "<ax:ocx",

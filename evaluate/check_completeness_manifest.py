@@ -95,6 +95,7 @@ KNOWN_QUALIFIED_NAMES = frozenset(
         "p:sldLayout",
         "p:sldMaster",
         "p:spTree",
+        "p:tagLst",
         "p:timing",
         "p:transition",
         "p:txBody",
@@ -109,6 +110,7 @@ KNOWN_RELATIONSHIP_TYPES = frozenset(
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tags",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video",
         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
     }
@@ -229,7 +231,7 @@ CANONICAL_ROW_DIGESTS = {
     "content-part": "85352f439b6d6e9391b4c988ce1bd158910530ad86f16af86d6ee313d90b7892",
     "embedded-package": "a3fb955e22e44cbe131c1146b3033ffeb4cb0c8fc08a9cba9991a2dba37c9c7b",
     "embedded-control-persistence": "303ace433c02a98b4a25196dfd1b02d5f4175e224dae0dae503a8a48765e521a",
-    "user-defined-tags": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
+    "user-defined-tags": "027e1006c00b41ff5a3b6d4f6af0b22c8bb77622b7407ac62095cd5e0cc634ff",
 }
 
 

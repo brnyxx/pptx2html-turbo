@@ -239,7 +239,7 @@ Exact-promotion evidence uses pinned machine provenance, not cryptographic attes
 ## Generated PPTX capability registry
 
 <!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->
-<!-- manifest-sha256: 6e8c34c1514d7633b7ce743679915d1b7582c958615f9225df3783c09f5fab26 -->
+<!-- manifest-sha256: 431de494bd6bd3bb0d25b22bd831b2a6fc921286ac7afce11a66fd12025e1a85 -->
 | Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |
 |---|---|---|---|---|
 | <a id="capability-presentation"></a>`presentation` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c07e2810b8d5e13a63436f7b11c3ee961e11b15f61bdc50a1ca260c0738e4a4f` | `29665c44b1b28428449e05099e8b3f5d22f1e577d8eaaf700a7f1c9a1b347de5` |
@@ -297,5 +297,5 @@ Exact-promotion evidence uses pinned machine provenance, not cryptographic attes
 | <a id="capability-content-part"></a>`content-part` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `2f7dce33c2e6808355a43fe0820855450ade1abd9fffe83bf6989965dc3da5d9` | `a6dc798a71b64907ffa02c9c93548a78f91ec78b0fca9852ffa861abd11f649e` |
 | <a id="capability-embedded-package"></a>`embedded-package` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `9c9a08d8fb4442f66df36bc3de23ca6a0d0448bab2260996ed41c262cca6d5c0` | `1027870090ccee53b686f31b5098514211c5799b534f317f604406e734c57627` |
 | <a id="capability-embedded-control-persistence"></a>`embedded-control-persistence` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `8cf43f357e46ee3defd6250fa099d6f88a37f4ac976b58cb6e5c6898c1785ce2` | `9353e1d1789f94b67689440757d4617fa6f283426188298e1914fb12f0922f82` |
-| <a id="capability-user-defined-tags"></a>`user-defined-tags` | unparsed/not-applicable<br>unparsed/not-applicable<br>unparsed/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `ad7c41c48ec98943c62f35c56c5700068c2c5c42b33c1b5c6c95eb7c829f8121` | `34cadc54e268123edf5ef9f028f4abeec3cd8a9d39e1be2298669b87cf336f23` |
+| <a id="capability-user-defined-tags"></a>`user-defined-tags` | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | fallback/parsed<br>fallback/not-applicable<br>fallback/not-applicable | `d2bd311c48e46b4ba4449d05eb1b99762d2cc782adb325ec275a07b84c29a6d7` | `c5d90044021cd20e3c67fe72a821ca0073e55a3dde89af7916abfc57ce31f26c` |
 <!-- END GENERATED PPTX CAPABILITY MATRIX -->
