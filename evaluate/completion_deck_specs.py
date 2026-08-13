@@ -471,6 +471,29 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             ),
         ),
         Deck(
+            "content-part",
+            (('<p:contentPart r:id="rIdContent"/>', ""),),
+            slide_rels=(
+                (
+                    "rIdContent",
+                    REL + "customXml",
+                    "../customXml/smil1.xml",
+                    "Internal",
+                ),
+            ),
+            parts=(
+                (
+                    "ppt/customXml/smil1.xml",
+                    (
+                        '<?xml version="1.0"?>'
+                        '<smil xmlns="http://www.w3.org/2001/SMIL20/Language">'
+                        '<body><par dur="indefinite"/></body></smil>'
+                    ).encode(),
+                ),
+            ),
+            types=(("/ppt/customXml/smil1.xml", "application/xml"),),
+        ),
+        Deck(
             "slide-synchronization",
             (("", ""),),
             slide_rels=(

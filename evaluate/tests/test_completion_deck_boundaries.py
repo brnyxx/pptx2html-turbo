@@ -17,6 +17,23 @@ from evaluate.tests.completion_deck_test_support import CANONICAL_MANIFEST
 
 
 class CompletionDeckBoundaryTests(unittest.TestCase):
+    def _feature(self, feature_id: str) -> tuple[int, FeatureSpec]:
+        return next(
+            (index, feature)
+            for index, feature in enumerate(FEATURES)
+            if feature.feature_id == feature_id
+        )
+
+    def _replace_feature(
+        self, feature_id: str, **changes: object
+    ) -> tuple[FeatureSpec, ...]:
+        index, feature = self._feature(feature_id)
+        return (
+            *FEATURES[:index],
+            replace(feature, **changes),
+            *FEATURES[index + 1 :],
+        )
+
     def _assert_schema_rejected(
         self, features: tuple[FeatureSpec, ...], expected_code: str
     ) -> None:
@@ -28,39 +45,45 @@ class CompletionDeckBoundaryTests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_unexpected_negative_schema_is_rejected_before_write(self) -> None:
-        feature = replace(
-            FEATURES[0],
+        features = self._replace_feature(
+            "adjustment-basic",
             schema_expectation=SchemaExpectation.NEGATIVE,
             expected_diagnostic="PPTX_COMPLETENESS_FALLBACK",
         )
         self._assert_schema_rejected(
-            (feature, *FEATURES[1:]), "COMPLETION_SCHEMA_CONTRACT.*adjustment-basic"
+            features, "COMPLETION_SCHEMA_CONTRACT.*adjustment-basic"
         )
 
     def test_negative_schema_requires_exact_diagnostic(self) -> None:
         for diagnostic in (None, "WRONG"):
             with self.subTest(diagnostic=diagnostic):
-                feature = replace(FEATURES[5], expected_diagnostic=diagnostic)
+                features = self._replace_feature(
+                    "pattern-fill-unknown", expected_diagnostic=diagnostic
+                )
                 self._assert_schema_rejected(
-                    (*FEATURES[:5], feature, *FEATURES[6:]),
+                    features,
                     "COMPLETION_SCHEMA_CONTRACT.*pattern-fill-unknown",
                 )
 
     def test_positive_schema_rejects_diagnostic(self) -> None:
-        feature = replace(FEATURES[0], expected_diagnostic="UNEXPECTED")
+        features = self._replace_feature(
+            "adjustment-basic", expected_diagnostic="UNEXPECTED"
+        )
         self._assert_schema_rejected(
-            (feature, *FEATURES[1:]), "COMPLETION_SCHEMA_CONTRACT.*adjustment-basic"
+            features, "COMPLETION_SCHEMA_CONTRACT.*adjustment-basic"
         )
 
     def test_invalid_schema_enum_is_rejected(self) -> None:
-        feature = replace(FEATURES[0], schema_expectation="invalid")
+        features = self._replace_feature("adjustment-basic", schema_expectation="invalid")
         self._assert_schema_rejected(
-            (feature, *FEATURES[1:]),
+            features,
             "COMPLETION_SCHEMA_EXPECTATION_INVALID.*adjustment-basic",
         )
 
     def test_schema_expectation_is_a_closed_enum(self) -> None:
-        self.assertIsInstance(FEATURES[0].schema_expectation, StrEnum)
+        self.assertTrue(
+            all(isinstance(feature.schema_expectation, StrEnum) for feature in FEATURES)
+        )
         negative = [
             (
                 feature.feature_id,
@@ -85,7 +108,7 @@ class CompletionDeckBoundaryTests(unittest.TestCase):
             for feature in FEATURES
             if feature.schema_expectation is SchemaExpectation.POSITIVE
         ]
-        self.assertEqual(len(positive), 35)
+        self.assertEqual(len(positive), len(FEATURES) - 1)
         self.assertTrue(
             all(feature.expected_diagnostic is None for feature in positive)
         )

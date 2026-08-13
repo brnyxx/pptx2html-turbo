@@ -85,6 +85,14 @@ FEATURES = (
     ),
     _f(
         24,
+        "content-part",
+        "content-part",
+        "<smil",
+        part="ppt/customXml/smil1.xml",
+        relationship_disposition="internal",
+    ),
+    _f(
+        24,
         "theme-override",
         "theme-override",
         "<a:themeOverride",

@@ -44,6 +44,20 @@ ABSENT_AUTHOR: Final = AbsenceRule(
 
 
 LOCATORS: Final = {
+    "slide-synchronization": _l(
+        "<p:sldSyncPr", "ppt/slideUpdateInfo/slideUpdateInfo1.xml"
+    ),
+    "content-part": _l("<smil", "ppt/customXml/smil1.xml"),
+    "theme-override": _l("<a:themeOverride", "ppt/theme/themeOverride1.xml"),
+    "thumbnail": _l("thumbnail", "_rels/.rels"),
+    "custom-xml": _l("<demo:project", "customXml/item1.xml"),
+    "additional-characteristics": _l(
+        "<ac:AdditionalCharacteristics", "ppt/additionalCharacteristics.xml"
+    ),
+    "bibliography": _l("<b:Sources", "ppt/bibliography/sources.xml"),
+    "extensions": _l('<p:ext uri="{DEMO-EXTENSION}">', "ppt/presentation.xml"),
+    "handout-master": _l("<p:handoutMaster", "ppt/handoutMasters/handoutMaster1.xml"),
+    "rtl-text": _l('<a:pPr rtl="1"/>'),
     "adjustment-basic": _l('<a:prstGeom prst="roundRect"><a:avLst>'),
     "adjustment-arrows": _l('<a:prstGeom prst="rightArrow"><a:avLst>'),
     "adjustment-remaining": _l('<a:prstGeom prst="wave"><a:avLst>'),

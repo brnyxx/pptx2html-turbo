@@ -154,6 +154,9 @@ def assert_package_graph(
             case.assertTrue(
                 kind.startswith(REL)
                 or kind.startswith(
+                    "http://schemas.openxmlformats.org/package/2006/relationships/"
+                )
+                or kind.startswith(
                     "http://schemas.microsoft.com/office/2018/10/relationships/"
                 ),
                 rel_part,
@@ -166,7 +169,7 @@ def assert_package_graph(
                     rel_part,
                 )
                 continue
-            case.assertIsNone(mode, rel_part)
+            case.assertIn(mode, (None, "Internal"), rel_part)
             resolved = posixpath.normpath(
                 posixpath.join(posixpath.dirname(source), target)
             )

@@ -469,8 +469,12 @@ pub const CAPABILITY_SLIDE_SYNCHRONIZATION: (SupportTier, Option<CapabilityStage
     "p:sldSyncPr",
     "fallback",
 );
-pub const CAPABILITY_CONTENT_PART: (SupportTier, Option<CapabilityStage>, &str, &str) =
-    (SupportTier::Unparsed, None, "p:contentPart", "unparsed");
+pub const CAPABILITY_CONTENT_PART: (SupportTier, Option<CapabilityStage>, &str, &str) = (
+    SupportTier::Fallback,
+    Some(CapabilityStage::Parsed),
+    "p:contentPart",
+    "fallback",
+);
 pub const CAPABILITY_EMBEDDED_PACKAGE: (SupportTier, Option<CapabilityStage>, &str, &str) = (
     SupportTier::Unparsed,
     None,

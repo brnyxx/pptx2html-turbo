@@ -12,6 +12,7 @@ from evaluate import create_completion_decks
 from evaluate.completion_deck_manifest import ContractError
 from evaluate.tests.completion_deck_test_support import (
     CANONICAL_MANIFEST,
+    DECKS,
     run_generator,
 )
 
@@ -65,7 +66,7 @@ class CompletionDeckAtomicTests(unittest.TestCase):
             absent = root / "absent"
             result = run_generator(absent)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(len(tuple(absent.iterdir())), 11)
+            self.assertEqual(len(tuple(absent.iterdir())), len(DECKS) + 1)
 
     def test_mid_write_failure_never_publishes_partial_output(self) -> None:
         original_write = Path.write_bytes

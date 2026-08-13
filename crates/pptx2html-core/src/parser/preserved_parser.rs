@@ -3,6 +3,7 @@ use quick_xml::events::Event;
 use quick_xml::events::{BytesEnd, BytesStart};
 use quick_xml::name::ResolveResult;
 use quick_xml::reader::NsReader;
+use std::collections::BTreeSet;
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
@@ -42,6 +43,7 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
     diagnostics.extend(custom_xml_diagnostics(&mut archive, &names)?);
     diagnostics.extend(theme_override_diagnostics(&mut archive, &names)?);
     diagnostics.extend(slide_synchronization_diagnostics(&mut archive, &names)?);
+    diagnostics.extend(content_part_diagnostics(&mut archive, &names)?);
 
     for name in names {
         notes_comments_parser::collect_part_diagnostics(&name, &mut diagnostics);
@@ -78,6 +80,135 @@ pub(crate) fn collect_package_diagnostics(data: &[u8]) -> PptxResult<Vec<Convers
         }
     }
     Ok(diagnostics)
+}
+
+fn content_part_diagnostics(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    names: &[String],
+) -> PptxResult<Vec<ConversionDiagnostic>> {
+    const CUSTOM_XML: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
+    let mut diagnostics = Vec::new();
+    for owner in names
+        .iter()
+        .filter(|name| slide_index_from_part(name).is_some())
+    {
+        let slide_xml = read_text_entry(archive, owner)?;
+        let relationship_ids = parse_content_part_relationship_ids(&slide_xml);
+        if relationship_ids.is_empty() {
+            continue;
+        }
+        let Some((directory, file)) = owner.rsplit_once('/') else {
+            continue;
+        };
+        let rels_part = format!("{directory}/_rels/{file}.rels");
+        let Ok(relationships_xml) = read_text_entry(archive, &rels_part) else {
+            continue;
+        };
+        let relationships = super::relationships::parse_relationship_records(&relationships_xml)?;
+        for relationship in relationships.iter().filter(|relationship| {
+            relationship_ids.contains(&relationship.id)
+                && relationship.relationship_type == CUSTOM_XML
+                && relationship.target_mode.as_str() == "Internal"
+        }) {
+            let Ok(part) =
+                super::relationships::resolve_internal_target(owner, &relationship.target)
+            else {
+                continue;
+            };
+            let Ok(content_xml) = read_text_entry(archive, &part) else {
+                continue;
+            };
+            let Some((root_name, root_namespace)) = parse_xml_root(&content_xml) else {
+                continue;
+            };
+            diagnostics.push(ConversionDiagnostic {
+                code: "CONTENT_PART_METADATA".to_owned(),
+                family: FeatureFamily::Unsupported,
+                support_tier: SupportTier::Fallback,
+                stage: Some(CapabilityStage::Parsed),
+                location: DiagnosticLocation {
+                    slide_index: slide_index_from_part(owner),
+                    part_name: Some(part.clone()),
+                    relationship_id: Some(relationship.id.clone()),
+                    relationship_type: Some(relationship.relationship_type.clone()),
+                    qualified_element_name: Some("p:contentPart".to_owned()),
+                    ..Default::default()
+                },
+                raw_reference: Some(format!(
+                    "owner={owner}\npart={part}\nrelationship_id={}\nroot_name={root_name}\nroot_namespace={root_namespace}\nbyte_length={}",
+                    relationship.id,
+                    content_xml.len()
+                )),
+                fallback_kind: FallbackKind::PreservedPart,
+                reason: "Content part XML metadata was preserved without interpreting its external vocabulary".to_owned(),
+            });
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn parse_content_part_relationship_ids(xml: &str) -> BTreeSet<String> {
+    const PML: &[u8] = b"http://schemas.openxmlformats.org/presentationml/2006/main";
+    const REL: &[u8] = b"http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    let mut reader = NsReader::from_str(xml);
+    let mut ids = BTreeSet::new();
+    loop {
+        match reader.read_resolved_event() {
+            Ok((namespace, Event::Start(ref element) | Event::Empty(ref element)))
+                if matches!(namespace, ResolveResult::Bound(value) if value.as_ref() == PML)
+                    && element.local_name().as_ref() == b"contentPart" =>
+            {
+                let mut id = None;
+                let mut invalid = false;
+                for attribute in element.attributes().flatten() {
+                    if attribute.key.local_name().as_ref() != b"id" {
+                        continue;
+                    }
+                    if id.is_some()
+                        || !matches!(
+                            reader.resolve_attribute(attribute.key).0,
+                            ResolveResult::Bound(value) if value.as_ref() == REL
+                        )
+                    {
+                        invalid = true;
+                        break;
+                    }
+                    id = attribute
+                        .unescape_value()
+                        .ok()
+                        .map(|value| value.into_owned());
+                }
+                if !invalid && let Some(id) = id {
+                    ids.insert(id);
+                }
+            }
+            Ok((_, Event::Eof)) | Err(_) => break,
+            _ => {}
+        }
+    }
+    ids
+}
+
+fn parse_xml_root(xml: &str) -> Option<(String, String)> {
+    let mut reader = NsReader::from_str(xml);
+    loop {
+        match reader.read_resolved_event() {
+            Ok((namespace, Event::Start(ref element) | Event::Empty(ref element))) => {
+                let root_name = String::from_utf8_lossy(element.local_name().as_ref()).into_owned();
+                let root_namespace = match namespace {
+                    ResolveResult::Bound(value) => {
+                        String::from_utf8_lossy(value.as_ref()).into_owned()
+                    }
+                    ResolveResult::Unbound => String::new(),
+                    ResolveResult::Unknown(_) => return None,
+                };
+                return Some((root_name, root_namespace));
+            }
+            Ok((_, Event::Eof)) | Err(_) => return None,
+            _ => {}
+        }
+    }
 }
 
 fn slide_synchronization_diagnostics(

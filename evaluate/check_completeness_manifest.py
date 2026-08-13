@@ -49,7 +49,9 @@ EXACT_PROMOTION_GATE = {
     "evidence_status": "required-before-promotion",
 }
 FEATURE_ID_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
-QUALIFIED_NAME_PATTERN = re.compile(r"(?:a|c|dgm|m|mc|p):[A-Za-z][A-Za-z0-9]*")
+QUALIFIED_NAME_PATTERN = re.compile(
+    r"(?:a|ac|b|c|dgm|m|mc|p):[A-Za-z][A-Za-z0-9]*"
+)
 SOURCE_STATUSES = ("verified", "unavailable")
 KNOWN_QUALIFIED_NAMES = frozenset(
     {
@@ -60,11 +62,15 @@ KNOWN_QUALIFIED_NAMES = frozenset(
         "a:outerShdw",
         "a:pattFill",
         "a:prstGeom",
+        "a:pPr",
         "a:reflection",
         "a:solidFill",
         "a:tbl",
         "a:theme",
+        "a:themeOverride",
         "a:videoFile",
+        "ac:AdditionalCharacteristics",
+        "b:Sources",
         "dgm:colorsDef",
         "dgm:dataModel",
         "dgm:layoutDef",
@@ -101,6 +107,7 @@ KNOWN_RELATIONSHIP_TYPES = frozenset(
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video",
+        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
     }
 )
 REQUIRED_FEATURE_IDS = frozenset(
@@ -182,7 +189,7 @@ CANONICAL_ROW_DIGESTS = {
     "group-shape": "bdde9faadc54b3f972f5553df29c68d95e263e5291a28feb4428965be74a617b",
     "picture": "8276943cb28ced1c1149111b69e85fc95f69b54dfaf5fc8baf50cdd10ebe4dc4",
     "text-body": "e50e943b9394d6b46685852ff7cb490a664613263a02f0822e9b09f11f38a19d",
-    "rtl-text": "bf6805c8829739a6e2be19e4b5d2c6daab8f1f6d018232d94d0e0b71bf094263",
+    "rtl-text": "d72b9cb5fb3fc68419fab3717f51b373d9ad619a18020ec7b20fd5834c89ace7",
     "bullets": "ebe5f1db2785709048b8b432c8f062c75599e6650086d2a0724f29965ac208a9",
     "picture-bullets": "eb3348834c84326204690d484bfb58f46c73ce4e42dcf0c17d30ea8a0c4e5ee5",
     "fills": "e28c5677404f4ac9ef028942501fdbac27765afad771ab5f0dd875ffc20c98c3",
@@ -210,11 +217,11 @@ CANONICAL_ROW_DIGESTS = {
     "transitions": "09a63cc8e86778e1765eea83684fc59395473a8674fe2f995b325ac097f8236a",
     "extensions": "bcb9682545fa3b7a8aa71bfd2b773a8a6a6cb949c99032898c3e71b2e0599fa2",
     "alternate-content": "bbd117d9f473e4cb27c54d336daf3fe1d9b87cc28f11de78424cbf04225e70d5",
-    "bibliography": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
-    "additional-characteristics": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
+    "bibliography": "855de75751502e793d4a93ef150e48f8a85ea97b61bf817a765c52badfa012f0",
+    "additional-characteristics": "e9d163732e41b91653a869e5d406111fd6151a47c1c1c4cd87eb66304508ff8a",
     "custom-xml": "4883248541688e194f383aeb003c79f75be793b2fe7e05edc493eec8adc08990",
-    "thumbnail": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
-    "theme-override": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
+    "thumbnail": "7a64d2e9558a874c057a5dbc9df95db7f74619340efcbf299315bef503ca4390",
+    "theme-override": "91bf1f47f0c779e8d862a184309fbb5a33f9d02b1dfdfc199dec755f53d0548c",
     "slide-synchronization": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",
     "content-part": "85352f439b6d6e9391b4c988ce1bd158910530ad86f16af86d6ee313d90b7892",
     "embedded-package": "1840c4d3317bf11882bd3f6f9ae59eed9663a08af6099aaf67b3499b23d9e17f",

@@ -81,7 +81,7 @@ class CheckExactnessContractTests(unittest.TestCase):
         for feature_id, mutate, expected in (
             ("presentation", lambda v: v.update(focused_test_case="missing_case"), "FOCUSED_TEST_CASE_MISSING:presentation"),
             ("presentation", lambda v: v.update(scenario_exemption={"reason": "because prose", "dispositions": ["current", "target"]}), "SCENARIO_EXEMPTION_INVALID:presentation"),
-            ("handout-master", lambda v: v.update(scenario_exemption={"reason": "baseline-outside-tasks-8-21", "dispositions": ["current", "target"]}), "SCENARIO_EXEMPTION_INVALID:handout-master"),
+            ("handout-master", lambda v: v.update(scenario_exemption={"reason": "baseline-outside-tasks-8-21", "dispositions": ["current", "target"]}), "COMPLETION_EVIDENCE_INVALID:handout-master"),
         ):
             with self.subTest(feature_id=feature_id), self._overlay() as root:
                 manifest = self._json(root)

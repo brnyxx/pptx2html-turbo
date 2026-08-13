@@ -345,6 +345,56 @@ fn slide_synchronization_is_preserved_as_typed_metadata() {
 }
 
 #[test]
+fn content_parts_are_preserved_as_typed_metadata() {
+    let slide_relationships = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdContent" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/smil1.xml" TargetMode="Internal"/>
+</Relationships>"#;
+    let content = br#"<?xml version="1.0" encoding="UTF-8"?>
+<smil xmlns="http://www.w3.org/2001/SMIL20/Language">
+  <body><par dur="indefinite"/></body>
+</smil>"#;
+    let bytes = MinimalPptx::new(r#"<p:contentPart r:id="rIdContent"/>"#)
+        .with_slide_rels(slide_relationships)
+        .with_extra_file("ppt/customXml/smil1.xml", content)
+        .build();
+
+    let result = convert_bytes_with_metadata(&bytes).expect("content part fixture converts");
+    let diagnostics: Vec<_> = result
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "CONTENT_PART_METADATA")
+        .collect();
+
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].support_tier.as_str(), "fallback");
+    assert_eq!(diagnostics[0].stage.unwrap().as_str(), "parsed");
+    assert_eq!(diagnostics[0].location.slide_index, Some(0));
+    assert_eq!(
+        diagnostics[0].location.part_name.as_deref(),
+        Some("ppt/customXml/smil1.xml")
+    );
+    assert_eq!(
+        diagnostics[0].location.relationship_id.as_deref(),
+        Some("rIdContent")
+    );
+    let raw = diagnostics[0]
+        .raw_reference
+        .as_deref()
+        .expect("content part raw reference");
+    assert!(raw.contains("owner=ppt/slides/slide1.xml"));
+    assert!(raw.contains("part=ppt/customXml/smil1.xml"));
+    assert!(raw.contains("relationship_id=rIdContent"));
+    assert!(raw.contains("root_name=smil"));
+    assert!(raw.contains("root_namespace=http://www.w3.org/2001/SMIL20/Language"));
+    assert!(raw.contains(&format!("byte_length={}", content.len())));
+    assert!(result.diagnostics().iter().all(|diagnostic| {
+        diagnostic.code != "OOXML_RELATIONSHIP_UNSUPPORTED"
+            || diagnostic.location.relationship_id.as_deref() != Some("rIdContent")
+    }));
+}
+
+#[test]
 fn previous_shape_effects_struct_literal_remains_source_compatible() {
     let effects = ShapeEffects {
         outer_shadow: None,

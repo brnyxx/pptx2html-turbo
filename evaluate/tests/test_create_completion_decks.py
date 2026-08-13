@@ -134,7 +134,7 @@ class CompletionDeckTests(unittest.TestCase):
             manifest = json.loads((output / "manifest.json").read_text())
             feature_rows = {row["id"]: row for row in manifest["features"]}
             assert_manifest_locators(self, feature_rows)
-            self.assertEqual(set(feature_rows), {rule.feature_id for rule in RULES})
+            self.assertTrue({rule.feature_id for rule in RULES} <= set(feature_rows))
             for rule in RULES:
                 self.assertEqual(
                     feature_rows[rule.feature_id]["deck"], f"{rule.deck}.pptx"

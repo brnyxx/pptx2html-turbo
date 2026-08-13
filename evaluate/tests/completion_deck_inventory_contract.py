@@ -7,6 +7,16 @@ from typing import Final
 
 
 SCENARIO_CANONICAL: Final = {
+    "slide-synchronization": "slide-synchronization",
+    "content-part": "content-part",
+    "theme-override": "theme-override",
+    "thumbnail": "thumbnail",
+    "custom-xml": "custom-xml",
+    "additional-characteristics": "additional-characteristics",
+    "bibliography": "bibliography",
+    "extensions": "extensions",
+    "handout-master": "handout-master",
+    "rtl-text": "rtl-text",
     "adjustment-basic": "preset-shape",
     "adjustment-arrows": "preset-shape",
     "adjustment-remaining": "preset-shape",
