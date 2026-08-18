@@ -5,7 +5,7 @@ import logging
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,6 @@ def build_contact_sheets(
                 reference_size = reference_source.size
             with Image.open(candidate_path) as candidate_source:
                 candidate_size = candidate_source.size
-            if candidate_size != (960, 540):
-                raise ValueError(
-                    "VISUAL_CAPTURE_DIMENSION_MISMATCH: "
-                    f"{candidate_path} is {candidate_size[0]}x{candidate_size[1]}"
-                )
             aspect_delta = abs(
                 reference_size[0] * candidate_size[1]
                 - reference_size[1] * candidate_size[0]
@@ -85,13 +80,16 @@ def build_contact_sheets(
             ):
                 with Image.open(path) as source:
                     image = source.convert("RGB")
-                    thumbnail = image.resize(
+                    thumbnail = ImageOps.contain(
+                        image,
                         (thumbnail_width, thumbnail_height),
                         Image.Resampling.LANCZOS,
                     )
                 x = (pair_column * 2 + image_column) * thumbnail_width
                 y = row * cell_height
-                sheet.paste(thumbnail, (x, y))
+                thumbnail_x = x + (thumbnail_width - thumbnail.width) // 2
+                thumbnail_y = y + (thumbnail_height - thumbnail.height) // 2
+                sheet.paste(thumbnail, (thumbnail_x, thumbnail_y))
                 draw.text(
                     (x + 4, y + thumbnail_height + 2),
                     f"{role} {reference_path.stem}",

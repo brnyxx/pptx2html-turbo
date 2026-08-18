@@ -77,6 +77,30 @@ class VisualPairContactSheetTests(unittest.TestCase):
 
             self.assertEqual(len(sheets), 1)
 
+    def test_letterboxes_matching_4x3_pairs_without_distortion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference = root / "references" / "deck"
+            candidate = root / "candidates" / "deck"
+            reference.mkdir(parents=True)
+            candidate.mkdir(parents=True)
+            Image.new("RGB", (2000, 1500), "red").save(
+                reference / "slide_0.png"
+            )
+            Image.new("RGB", (960, 720), "red").save(
+                candidate / "slide_0.png"
+            )
+
+            sheets = build_contact_sheets(
+                root / "references",
+                root / "candidates",
+                root / "sheets",
+            )
+
+            with Image.open(sheets[0]) as sheet:
+                self.assertEqual(sheet.getpixel((5, 50)), (255, 255, 255))
+                self.assertEqual(sheet.getpixel((40, 50)), (255, 0, 0))
+
 
 if __name__ == "__main__":
     unittest.main()
