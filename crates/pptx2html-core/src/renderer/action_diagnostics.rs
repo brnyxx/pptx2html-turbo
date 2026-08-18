@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::model::{
     ActionSet, ActionTrigger, CapabilityStage, ConversionDiagnostic, DiagnosticLocation,
     FallbackKind, FeatureFamily, SupportTier,
@@ -69,20 +67,6 @@ pub(super) fn emit(actions: &ActionSet, ctx: &RenderCtx<'_>, identity: &str) {
                 reason: format!("trigger={trigger};mode={mode};identity={identity}"),
             });
     }
-}
-
-pub(super) fn compare(left: &ConversionDiagnostic, right: &ConversionDiagnostic) -> Ordering {
-    if !left.code.starts_with("ACTION_") || !right.code.starts_with("ACTION_") {
-        return Ordering::Equal;
-    }
-    left.code
-        .cmp(&right.code)
-        .then_with(|| left.reason.cmp(&right.reason))
-        .then_with(|| {
-            left.location
-                .relationship_type
-                .cmp(&right.location.relationship_type)
-        })
 }
 
 pub(super) fn exact_duplicate(left: &ConversionDiagnostic, right: &ConversionDiagnostic) -> bool {

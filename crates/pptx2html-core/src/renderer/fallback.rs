@@ -126,11 +126,7 @@ fn extract_relationship_id(xml: &str) -> Option<String> {
 }
 
 pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) {
-    diagnostics.sort_by(|left, right| {
-        timing_source_order(left, right)
-            .unwrap_or_else(|| diagnostic_sort_key(left).cmp(&diagnostic_sort_key(right)))
-            .then_with(|| super::action_diagnostics::compare(left, right))
-    });
+    diagnostics.sort_by(compare_diagnostics);
     diagnostics.dedup_by(|left, right| {
         super::action_diagnostics::exact_duplicate(left, right)
             || (!left.code.starts_with("ACTION_")
@@ -139,33 +135,38 @@ pub(super) fn sort_and_deduplicate(diagnostics: &mut Vec<ConversionDiagnostic>) 
     });
 }
 
-fn timing_source_order(
+fn compare_diagnostics(
     left: &ConversionDiagnostic,
     right: &ConversionDiagnostic,
-) -> Option<std::cmp::Ordering> {
-    if left.code != "PRESENTATIONML_TIMING_FALLBACK"
-        || right.code != "PRESENTATIONML_TIMING_FALLBACK"
-        || left.location.part_name != right.location.part_name
-        || left.location.slide_index != right.location.slide_index
-    {
-        return None;
-    }
-    let left_order = left
-        .location
-        .relationship_id
-        .as_deref()?
-        .parse::<usize>()
-        .ok()?;
-    let right_order = right
-        .location
-        .relationship_id
-        .as_deref()?
-        .parse::<usize>()
-        .ok()?;
-    Some(left_order.cmp(&right_order))
+) -> std::cmp::Ordering {
+    diagnostic_sort_key(left).cmp(&diagnostic_sort_key(right))
 }
 
-type DiagnosticKey<'a> = (
+fn timing_sort_key(diagnostic: &ConversionDiagnostic) -> (u8, Option<usize>) {
+    if diagnostic.code != "PRESENTATIONML_TIMING_FALLBACK" {
+        return (0, None);
+    }
+    let source_order = diagnostic
+        .location
+        .relationship_id
+        .as_deref()
+        .and_then(|value| value.parse::<usize>().ok());
+    (1, source_order)
+}
+
+type DiagnosticSortKey<'a> = (
+    Option<&'a str>,
+    Option<usize>,
+    (u8, Option<usize>),
+    u8,
+    Option<usize>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    (u8, Option<&'a str>, Option<&'a str>, Option<&'a str>),
+);
+
+type DiagnosticDeduplicationKey<'a> = (
     Option<&'a str>,
     Option<usize>,
     u8,
@@ -199,10 +200,25 @@ fn is_ordered_effect(diagnostic: &ConversionDiagnostic) -> bool {
     )
 }
 
-fn diagnostic_sort_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
+fn action_sort_key(
+    diagnostic: &ConversionDiagnostic,
+) -> (u8, Option<&str>, Option<&str>, Option<&str>) {
+    if !diagnostic.code.starts_with("ACTION_") {
+        return (0, None, None, None);
+    }
+    (
+        1,
+        Some(diagnostic.code.as_str()),
+        Some(diagnostic.reason.as_str()),
+        diagnostic.location.relationship_type.as_deref(),
+    )
+}
+
+fn diagnostic_sort_key(diagnostic: &ConversionDiagnostic) -> DiagnosticSortKey<'_> {
     (
         diagnostic.location.part_name.as_deref(),
         diagnostic.location.slide_index,
+        timing_sort_key(diagnostic),
         u8::from(is_ordered_effect(diagnostic)),
         effect_encounter(diagnostic),
         diagnostic.location.qualified_element_name.as_deref(),
@@ -215,10 +231,13 @@ fn diagnostic_sort_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
         } else {
             diagnostic.raw_reference.as_deref()
         },
+        action_sort_key(diagnostic),
     )
 }
 
-fn diagnostic_deduplication_key(diagnostic: &ConversionDiagnostic) -> DiagnosticKey<'_> {
+fn diagnostic_deduplication_key(
+    diagnostic: &ConversionDiagnostic,
+) -> DiagnosticDeduplicationKey<'_> {
     (
         diagnostic.location.part_name.as_deref(),
         diagnostic.location.slide_index,
@@ -346,4 +365,86 @@ pub(super) fn write_json_string(json: &mut String, value: &str) {
         }
     }
     json.push('"');
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timing_and_unsupported_diagnostics_have_a_total_sort_order() {
+        let mut diagnostics = vec![
+            diagnostic("PRESENTATIONML_TIMING_FALLBACK", "p:tn", Some("0")),
+            diagnostic("PRESENTATIONML_TIMING_FALLBACK", "p:animEffect", Some("2")),
+            diagnostic("OOXML_ELEMENT_UNSUPPORTED", "p:extLst", None),
+        ];
+
+        assert_total_order(&diagnostics);
+
+        sort_and_deduplicate(&mut diagnostics);
+
+        let timing_orders = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == "PRESENTATIONML_TIMING_FALLBACK")
+            .filter_map(|diagnostic| diagnostic.location.relationship_id.as_deref())
+            .collect::<Vec<_>>();
+        assert_eq!(timing_orders, ["0", "2"]);
+    }
+
+    #[test]
+    fn action_and_non_action_diagnostics_have_a_total_sort_order() {
+        let diagnostics = vec![
+            diagnostic("ACTION_Z", "a:hlinkClick", None),
+            diagnostic("OOXML_ELEMENT_UNSUPPORTED", "a:hlinkClick", None),
+            diagnostic("ACTION_A", "a:hlinkClick", None),
+        ];
+
+        assert_total_order(&diagnostics);
+    }
+
+    fn assert_total_order(diagnostics: &[ConversionDiagnostic]) {
+        for left in diagnostics {
+            for middle in diagnostics {
+                assert_eq!(
+                    compare_diagnostics(left, middle),
+                    compare_diagnostics(middle, left).reverse()
+                );
+                for right in diagnostics {
+                    if compare_diagnostics(left, middle) == std::cmp::Ordering::Less
+                        && compare_diagnostics(middle, right) == std::cmp::Ordering::Less
+                    {
+                        assert_eq!(compare_diagnostics(left, right), std::cmp::Ordering::Less);
+                    }
+                    if compare_diagnostics(left, middle) == std::cmp::Ordering::Equal
+                        && compare_diagnostics(middle, right) == std::cmp::Ordering::Equal
+                    {
+                        assert_eq!(compare_diagnostics(left, right), std::cmp::Ordering::Equal);
+                    }
+                }
+            }
+        }
+    }
+
+    fn diagnostic(
+        code: &str,
+        qualified_element_name: &str,
+        relationship_id: Option<&str>,
+    ) -> ConversionDiagnostic {
+        ConversionDiagnostic {
+            code: code.to_owned(),
+            family: FeatureFamily::Unsupported,
+            support_tier: SupportTier::Fallback,
+            stage: Some(CapabilityStage::Rendered),
+            location: DiagnosticLocation {
+                slide_index: Some(9),
+                part_name: Some("ppt/slides/slide10.xml".to_owned()),
+                relationship_id: relationship_id.map(str::to_owned),
+                qualified_element_name: Some(qualified_element_name.to_owned()),
+                ..Default::default()
+            },
+            raw_reference: None,
+            fallback_kind: FallbackKind::UnknownElement,
+            reason: "diagnostic sort regression".to_owned(),
+        }
+    }
 }
