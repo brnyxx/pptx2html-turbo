@@ -639,6 +639,7 @@ dependencies = [
  "env_logger",
  "log",
  "pptx2html-core",
+ "same-file",
  "zip",
 ]
 

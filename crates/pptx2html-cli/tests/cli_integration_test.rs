@@ -472,7 +472,6 @@ fn single_file_conversion_reports_external_asset_write_failures() {
     fs::remove_dir_all(output_dir).ok();
 }
 
-#[cfg(unix)]
 #[test]
 fn diagnostics_rejects_input_hard_link_without_changing_input_or_html() {
     let dir = unique_temp_path("diagnostics-input-hard-link");

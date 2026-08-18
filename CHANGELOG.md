@@ -46,6 +46,8 @@ All notable changes to this project will be documented in this file.
 - Validate seven canonical external real-world decks containing 186 slides without conversion failures, blank slides, corrupt renders, or missing candidate/reference pairs
 - Record a 96.843607% LibreOffice proxy corpus mean and 88.967165% minimum for that external corpus in the [v2.0.0 validation report](docs/release-notes/v2.0.0-validation.md); this is proxy evidence and does not replace PowerPoint-native strict comparison
 - Keep PowerPoint-native pixel equality behind native Windows PowerPoint references and provenance validation
+- Keep the Windows CLI on stable Rust by using safe cross-platform hard-link identity checks instead of nightly-only metadata APIs
+- Install the complete evaluation dependency set and Chromium runtime before CI, release, and npm publication browser tests
 
 ### Fixtures / Documentation
 - Extend `notes-comments.pptx` with a modern comment extension payload and escaped script-closing boundary for raw-metadata safety coverage

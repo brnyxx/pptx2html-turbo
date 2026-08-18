@@ -53,16 +53,15 @@ pub(super) fn handout_master_metadata(xml: &str) -> (HandoutMasterMetadata, Opti
                 }
                 depth += 1;
             }
-            Ok((namespace, Event::Empty(element))) => {
+            Ok((namespace, Event::Empty(element)))
                 if depth == 0
                     && (!bound(&namespace, PML)
-                        || element.local_name().as_ref() != b"handoutMaster")
-                {
-                    return (
-                        HandoutMasterMetadata::default(),
-                        Some("Handout master root namespace or element is invalid".to_owned()),
-                    );
-                }
+                        || element.local_name().as_ref() != b"handoutMaster") =>
+            {
+                return (
+                    HandoutMasterMetadata::default(),
+                    Some("Handout master root namespace or element is invalid".to_owned()),
+                );
             }
             Ok((_, Event::Text(value))) if capture_text => match value.unescape() {
                 Ok(value) => metadata.text.push_str(&value),

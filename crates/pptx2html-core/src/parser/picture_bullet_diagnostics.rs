@@ -39,15 +39,16 @@ pub(crate) fn collect(
                     push(part_name, owner, &element, &relationships, diagnostics);
                 }
             }
-            Ok(Event::Empty(element)) => {
-                if xml_utils::local_name(element.name().as_ref()) == "blip" && in_picture_bullet {
-                    push(part_name, owner, &element, &relationships, diagnostics);
-                }
+            Ok(Event::Empty(element))
+                if xml_utils::local_name(element.name().as_ref()) == "blip"
+                    && in_picture_bullet =>
+            {
+                push(part_name, owner, &element, &relationships, diagnostics);
             }
-            Ok(Event::End(element)) => {
-                if xml_utils::local_name(element.name().as_ref()) == "buBlip" {
-                    in_picture_bullet = false;
-                }
+            Ok(Event::End(element))
+                if xml_utils::local_name(element.name().as_ref()) == "buBlip" =>
+            {
+                in_picture_bullet = false;
             }
             Ok(Event::Eof) => return Ok(()),
             Err(error) => return Err(PptxError::Xml(error)),

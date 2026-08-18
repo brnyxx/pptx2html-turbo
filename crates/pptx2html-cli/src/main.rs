@@ -205,38 +205,16 @@ fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
-#[cfg(unix)]
-fn same_file_identity(left: &Path, right: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-
-    let (Ok(left), Ok(right)) = (std::fs::metadata(left), std::fs::metadata(right)) else {
-        return false;
-    };
-    left.dev() == right.dev() && left.ino() == right.ino()
-}
-
-#[cfg(windows)]
-fn same_file_identity(left: &Path, right: &Path) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    let (Ok(left), Ok(right)) = (std::fs::metadata(left), std::fs::metadata(right)) else {
-        return false;
-    };
-    matches!(
-        (
-            left.volume_serial_number(),
-            left.file_index(),
-            right.volume_serial_number(),
-            right.file_index(),
-        ),
-        (Some(left_volume), Some(left_index), Some(right_volume), Some(right_index))
-            if left_volume == right_volume && left_index == right_index
-    )
-}
-
-#[cfg(not(any(unix, windows)))]
-fn same_file_identity(_left: &Path, _right: &Path) -> bool {
-    false
+fn same_file_identity(left: &Path, right: &Path) -> Result<bool, String> {
+    match same_file::is_same_file(left, right) {
+        Ok(is_same) => Ok(is_same),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!(
+            "failed to compare file identity for {} and {}: {error}",
+            left.display(),
+            right.display()
+        )),
+    }
 }
 
 fn reject_sidecar_collision(
@@ -249,7 +227,7 @@ fn reject_sidecar_collision(
     let resolved_sidecar = stable_resolved_path(sidecar)?;
     for (protected_path, kind) in protected_paths {
         let resolved_protected = stable_resolved_path(protected_path)?;
-        if resolved_sidecar == resolved_protected || same_file_identity(sidecar, protected_path) {
+        if resolved_sidecar == resolved_protected || same_file_identity(sidecar, protected_path)? {
             return Err(format!(
                 "diagnostics path {} has the same resolved path as {kind} {}",
                 sidecar.display(),

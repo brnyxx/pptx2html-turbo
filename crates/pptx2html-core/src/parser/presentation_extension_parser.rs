@@ -36,22 +36,21 @@ pub(super) fn parse(xml: &str) -> Vec<PresentationExtensionMetadata> {
                 }
                 stack.push(node);
             }
-            Ok((namespace, Event::Empty(element))) => {
+            Ok((namespace, Event::Empty(element)))
                 if bound(&namespace, PML)
                     && element.local_name().as_ref() == b"ext"
                     && stack.as_slice()
                         == [
                             (true, "presentation".to_owned()),
                             (true, "extLst".to_owned()),
-                        ]
-                {
-                    let uri = attribute(&element, "uri").unwrap_or_default();
-                    let end = reader.buffer_position() as usize;
-                    extensions.push(PresentationExtensionMetadata {
-                        uri,
-                        raw_xml: bounded(&xml[event_start..end]),
-                    });
-                }
+                        ] =>
+            {
+                let uri = attribute(&element, "uri").unwrap_or_default();
+                let end = reader.buffer_position() as usize;
+                extensions.push(PresentationExtensionMetadata {
+                    uri,
+                    raw_xml: bounded(&xml[event_start..end]),
+                });
             }
             Ok((namespace, Event::End(element))) => {
                 if bound(&namespace, PML)

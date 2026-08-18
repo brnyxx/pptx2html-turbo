@@ -913,13 +913,11 @@ fn declared_content_type<R: Read + Seek>(
                 }
             }
             Event::Start(element) | Event::Empty(element)
-                if element.name().local_name().as_ref() == b"Default" =>
+                if element.name().local_name().as_ref() == b"Default"
+                    && attribute_value(&element, "Extension")
+                        .is_some_and(|value| value.eq_ignore_ascii_case(extension)) =>
             {
-                if attribute_value(&element, "Extension")
-                    .is_some_and(|value| value.eq_ignore_ascii_case(extension))
-                {
-                    default = attribute_value(&element, "ContentType");
-                }
+                default = attribute_value(&element, "ContentType");
             }
             Event::Eof => return default,
             _ => {}
