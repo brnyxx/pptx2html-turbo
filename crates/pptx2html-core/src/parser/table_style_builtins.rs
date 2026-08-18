@@ -1,3 +1,9 @@
+use crate::model::{
+    Border, Color, Fill, SolidFill, TableCellStyle, TableStyle, TableStyleRegion, TableTextStyle,
+};
+
+const MEDIUM_STYLE_2_ACCENT_1: &str = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}";
+
 const IDS: &[&str] = &[
     "{00A15C55-8517-42AA-B614-E9B94910E393}",
     "{0505E3EF-67EA-436B-97B2-0124C06EBD24}",
@@ -77,6 +83,49 @@ const IDS: &[&str] = &[
 
 pub(super) fn contains(id: &str) -> bool {
     IDS.contains(&id)
+}
+
+pub(crate) fn definition(id: &str) -> Option<TableStyle> {
+    if id != MEDIUM_STYLE_2_ACCENT_1 {
+        return None;
+    }
+
+    let white_border = Border {
+        width: 0.75,
+        color: Color::rgb("FFFFFF"),
+        ..Border::default()
+    };
+    let cell_style = |color: &str| TableCellStyle {
+        fill: Some(Fill::Solid(SolidFill {
+            color: Color::rgb(color),
+        })),
+        left: Some(white_border.clone()),
+        right: Some(white_border.clone()),
+        top: Some(white_border.clone()),
+        bottom: Some(white_border.clone()),
+        ..TableCellStyle::default()
+    };
+    let mut first_row = cell_style("4F81BD");
+    first_row.text = TableTextStyle {
+        color: Some(Color::rgb("FFFFFF")),
+        bold: Some(true),
+        ..TableTextStyle::default()
+    };
+
+    Some(TableStyle {
+        id: id.to_owned(),
+        name: Some("Medium Style 2 - Accent 1".to_owned()),
+        regions: vec![
+            (TableStyleRegion::WholeTable, cell_style("FFFFFF")),
+            (TableStyleRegion::Band1Horizontal, cell_style("E9ECF3")),
+            (TableStyleRegion::Band2Horizontal, cell_style("D0D8E7")),
+            (TableStyleRegion::FirstRow, first_row),
+        ],
+        table_background: None,
+        table_background_ref: None,
+        unsupported_primitives: Vec::new(),
+        unsupported_references: Vec::new(),
+    })
 }
 
 #[cfg(test)]

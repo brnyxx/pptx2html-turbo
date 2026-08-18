@@ -424,6 +424,7 @@ body {{ background: #f0f0f0; font-family: 'Calibri', 'Malgun Gothic', sans-serif
 .shape {{
   position: absolute;
   overflow: visible;
+  isolation: isolate;
 }}
 .text-body {{
   width: 100%;
@@ -445,19 +446,39 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
 .shape-svg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
 .shape-svg + .text-body {{ position: relative; z-index: 1; }}
 .chart-placeholder {{ display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: #f8f8f8; border: 1px dashed #ccc; color: #888; font-size: 14px; }}
-.chart-direct {{ width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: stretch; gap: 8px; color: #333; }}
-.chart-series-label {{ font-size: 12px; font-weight: 600; color: #555; }}
+.chart-direct {{ width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: stretch; gap: 8px; color: var(--chart-text-color, #333); }}
+.chart-direct[data-chart-legend-position="r"] {{ flex-direction: row-reverse; }}
+.chart-direct[data-chart-legend-position="l"] {{ flex-direction: row; }}
+.chart-direct[data-chart-legend-position="r"] .chart-legend,
+.chart-direct[data-chart-legend-position="l"] .chart-legend {{ flex: 0 0 auto; flex-direction: column; flex-wrap: nowrap; justify-content: center; }}
+.chart-direct-line[data-chart-legend-position="r"],
+.chart-direct-line[data-chart-legend-position="l"] {{ position: relative; flex-direction: column; gap: 0; }}
+.chart-direct-line[data-chart-legend-position="r"] .chart-legend,
+.chart-direct-line[data-chart-legend-position="l"] .chart-legend {{ position: absolute; top: 50%; z-index: 1; transform: translateY(-50%); }}
+.chart-direct-line[data-chart-legend-position="r"] .chart-legend {{ right: 0; }}
+.chart-direct-line[data-chart-legend-position="l"] .chart-legend {{ left: 0; }}
+.chart-direct-line[data-chart-legend-position="r"] .chart-plot-area,
+.chart-direct-line[data-chart-legend-position="l"] .chart-plot-area {{ width: 100%; height: 100%; }}
+.chart-direct[data-chart-legend-position="b"] {{ flex-direction: column-reverse; }}
+.chart-series-label {{ font-size: var(--chart-font-size, 12px); font-weight: 600; color: var(--chart-text-color, #555); }}
 .chart-plot-area {{ display: flex; flex: 1 1 auto; align-items: stretch; gap: 8px; min-height: 0; }}
 .chart-plot-main {{ display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; }}
 .chart-svg {{ width: 100%; height: 100%; }}
-.chart-axis-labels {{ display: flex; justify-content: space-between; font-size: 11px; color: #666; gap: 8px; }}
-.chart-axis-title {{ font-size: 11px; color: #666; }}
+.chart-axis-labels {{ display: flex; justify-content: space-between; font-size: var(--chart-font-size, 11px); color: var(--chart-text-color, #666); gap: 8px; }}
+.chart-axis-title {{ font-size: var(--chart-font-size, 11px); color: var(--chart-text-color, #666); }}
 .chart-axis-title-y {{ writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: center; min-width: 18px; text-align: center; }}
 .chart-axis-title-x {{ text-align: center; padding-top: 2px; }}
-.chart-data-label {{ font-size: 10px; fill: #444; text-anchor: middle; dominant-baseline: middle; }}
-.chart-legend {{ display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #555; }}
+.chart-data-label {{ font-size: var(--chart-font-size, 10px); fill: var(--chart-text-color, #444); text-anchor: middle; dominant-baseline: middle; }}
+.chart-grid-line {{ stroke: #D9D9D9; stroke-width: 1; }}
+.chart-axis-line {{ stroke: var(--chart-text-color, #777); stroke-width: 1; }}
+.chart-axis-tick {{ stroke: var(--chart-text-color, #777); stroke-width: 1; }}
+.chart-y-tick {{ fill: var(--chart-text-color, #666); font-size: var(--chart-font-size, 10px); text-anchor: end; dominant-baseline: middle; }}
+.chart-x-tick {{ fill: var(--chart-text-color, #666); font-size: var(--chart-font-size, 10px); text-anchor: middle; dominant-baseline: alphabetic; }}
+.chart-legend {{ display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--chart-font-size, 11px); color: var(--chart-text-color, #555); }}
 .chart-legend-item {{ display: inline-flex; align-items: center; gap: 4px; }}
 .chart-legend-swatch {{ width: 10px; height: 10px; border-radius: 2px; display: inline-block; }}
+.chart-line-legend-key {{ width: 24px; height: 12px; overflow: visible; flex: 0 0 auto; }}
+.chart-legend-line {{ fill: none; stroke-width: 2; }}
 .chart-bar {{ fill: #4472C4; }}
 .chart-bar-horizontal {{ fill: #4472C4; }}
 .chart-bar-stacked {{ fill: #4472C4; }}
@@ -760,43 +781,6 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
             }
         }
 
-        // Line shapes with zero width or height need a minimum CSS dimension
-        // so the shape div is visible (otherwise browser collapses it)
-        if let Some(pn) = svg_preset_name {
-            let is_line = matches!(
-                pn,
-                "line"
-                    | "lineInv"
-                    | "straightConnector1"
-                    | "bentConnector2"
-                    | "bentConnector3"
-                    | "bentConnector4"
-                    | "bentConnector5"
-                    | "curvedConnector2"
-                    | "curvedConnector3"
-                    | "curvedConnector4"
-                    | "curvedConnector5"
-            );
-            if is_line {
-                if w < 0.5 {
-                    // Vertical line: give minimum width for stroke visibility
-                    style_buf.clear();
-                    let _ = write!(
-                        style_buf,
-                        "left: {:.1}px; top: {y:.1}px; width: 2px; height: {h:.1}px",
-                        x - 1.0
-                    );
-                } else if h < 0.5 {
-                    // Horizontal line: give minimum height for stroke visibility
-                    style_buf.clear();
-                    let _ = write!(
-                        style_buf,
-                        "left: {x:.1}px; top: {:.1}px; width: {w:.1}px; height: 2px",
-                        y - 1.0
-                    );
-                }
-            }
-        }
         let uses_svg =
             svg_preset_name.is_some() || matches!(effective_shape_type, ShapeType::CustomGeom(_));
 
@@ -825,6 +809,24 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
             ctx.scheme,
             ctx.clr_map,
         );
+        let line_min_extent_px = (resolved_border.width * 4.0 / 3.0).max(1.5);
+        if is_connector {
+            if w < 0.5 {
+                style_buf.clear();
+                let _ = write!(
+                    style_buf,
+                    "left: {:.1}px; top: {y:.1}px; width: {line_min_extent_px:.1}px; height: {h:.1}px",
+                    x - line_min_extent_px / 2.0
+                );
+            } else if h < 0.5 {
+                style_buf.clear();
+                let _ = write!(
+                    style_buf,
+                    "left: {x:.1}px; top: {:.1}px; width: {w:.1}px; height: {line_min_extent_px:.1}px",
+                    y - line_min_extent_px / 2.0
+                );
+            }
+        }
 
         // Only apply CSS outline for non-SVG shapes; SVG shapes use stroke instead.
         // Use outline instead of border to avoid box-sizing: border-box shrinking
@@ -848,9 +850,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
         }
 
         let effective_effects = if uses_svg {
-            if !svg_uses_style_ref_effect_fallback(svg_preset_name) {
-                Self::explicit_shape_effects(shape)
-            } else if let Some(explicit) = Self::explicit_shape_effects(shape) {
+            if let Some(explicit) = Self::explicit_shape_effects(shape) {
                 Some(explicit)
             } else {
                 Self::resolve_shape_effects(shape, fmt_scheme, ctx.scheme, ctx.clr_map).map(
@@ -951,6 +951,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
 
         if let ShapeType::Chart(ref chart_data) = shape.shape_type {
             charts::render_chart(chart_data, ctx, w, h, html);
+            html.push_str("</div>\n");
             return;
         }
 
@@ -985,8 +986,16 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                     | "curvedConnector5"
             );
             // For line shapes with zero dimension, use a fixed viewBox and custom path
-            let svg_w = if is_line_shape && w < 0.5 { 2.0 } else { w };
-            let svg_h = if is_line_shape && h < 0.5 { 2.0 } else { h };
+            let svg_w = if is_line_shape && w < 0.5 {
+                line_min_extent_px
+            } else {
+                w
+            };
+            let svg_h = if is_line_shape && h < 0.5 {
+                line_min_extent_px
+            } else {
+                h
+            };
             // Generate path: for zero-dim lines, create centered line path directly
             let line_svg_override = if let Some((ax1, ay1, ax2, ay2)) = anchored_connector {
                 let aw = (ax2 - ax1).abs().max(0.0);
@@ -1004,9 +1013,11 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 }
             } else if is_line_shape && (w < 0.5 || h < 0.5) {
                 if w < 0.5 {
-                    Some(format!("M1.0,0 L1.0,{svg_h:.1}"))
+                    let center = svg_w / 2.0;
+                    Some(format!("M{center:.1},0 L{center:.1},{svg_h:.1}"))
                 } else {
-                    Some(format!("M0,1.0 L{svg_w:.1},1.0"))
+                    let center = svg_h / 2.0;
+                    Some(format!("M0,{center:.1} L{svg_w:.1},{center:.1}"))
                 }
             } else if connector_needs_swap {
                 // Connectors with 90°/270° rotation need rotated path variants.
@@ -1096,7 +1107,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 };
                 let mut defs_buf = String::new();
                 let gradient_fill_ref =
-                    svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf);
+                    svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf, w, h);
                 if !defs_buf.is_empty() {
                     html.push_str("<defs>");
                     html.push_str(&defs_buf);
@@ -1164,7 +1175,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 };
                 let mut defs_buf = String::new();
                 let gradient_fill_ref =
-                    svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf);
+                    svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf, w, h);
                 // Emit marker defs for line endings with unique IDs.
                 // OOXML tailEnd decorates the start of the path and headEnd
                 // decorates the end of the path.
@@ -1309,7 +1320,8 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 _ => ctx.next_gradient_id(),
             };
             let mut defs_buf = String::new();
-            let gradient_fill_ref = svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf);
+            let gradient_fill_ref =
+                svg_gradient_def(&resolved_fill, &grad_id, ctx, &mut defs_buf, w, h);
             // Emit marker defs for custom geometry arrows.
             // OOXML tailEnd decorates the start of the path and headEnd
             // decorates the end of the path.
@@ -1406,10 +1418,16 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                     );
                 } else {
                     // Degenerate crop — show the whole image
-                    let _ = writeln!(html, "<img class=\"shape-image\" src=\"{src}\" alt=\"\">");
+                    let _ = writeln!(
+                        html,
+                        "<img class=\"shape-image\" src=\"{src}\" alt=\"\" style=\"object-fit: fill\">"
+                    );
                 }
             } else {
-                let _ = writeln!(html, "<img class=\"shape-image\" src=\"{src}\" alt=\"\">");
+                let _ = writeln!(
+                    html,
+                    "<img class=\"shape-image\" src=\"{src}\" alt=\"\" style=\"object-fit: fill\">"
+                );
             }
         }
 
@@ -1470,7 +1488,7 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 VerticalAlign::Middle => "v-middle",
                 VerticalAlign::Bottom => "v-bottom",
             };
-            let rect_insets = custom_geom_text_rect_insets(shape, w, h);
+            let rect_insets = geometry_text_rect_insets(shape, w, h, effective_adjust_values);
             let mut tb_style = String::with_capacity(128);
             let _ = write!(
                 tb_style,
@@ -1549,20 +1567,15 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                     _ => {}
                 }
             }
-            if effective_text_rotation != 0.0 {
-                let _ = write!(
-                    tb_style,
-                    "; transform: rotate({effective_text_rotation:.1}deg)"
-                );
-            }
             // Add overflow:hidden when text is auto-fitted with fontScale
             if font_scale.is_some() {
                 tb_style.push_str("; overflow: hidden");
             }
-            // Build combined transform for text-body: vert270 rotate + flip counter-scale
+            // Build one transform so independent body rotation is not overwritten by
+            // vertical-flow correction or shape flip compensation.
             // PowerPoint flips the shape geometry but keeps text left-to-right,
             // so we counter-flip the text container.
-            if has_vert270 || shape.flip_h || shape.flip_v {
+            if effective_text_rotation != 0.0 || has_vert270 || shape.flip_h || shape.flip_v {
                 let mut transforms = Vec::new();
                 if shape.flip_h || shape.flip_v {
                     let tx = if shape.flip_h { -1 } else { 1 };
@@ -1571,6 +1584,9 @@ img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block;
                 }
                 if has_vert270 {
                     transforms.push("rotate(180deg)".to_string());
+                }
+                if effective_text_rotation != 0.0 {
+                    transforms.push(format!("rotate({effective_text_rotation:.1}deg)"));
                 }
                 let _ = write!(tb_style, "; transform: {}", transforms.join(" "));
             }
@@ -1730,11 +1746,29 @@ fn shape_connection_point(shape: &Shape, site_idx: usize) -> Option<(f64, f64)> 
     ))
 }
 
-fn custom_geom_text_rect_insets(
+fn geometry_text_rect_insets(
     shape: &Shape,
     width_px: f64,
     height_px: f64,
+    adjust_values: Option<&HashMap<String, f64>>,
 ) -> (f64, f64, f64, f64) {
+    if let ShapeType::Custom(ref name) = shape.shape_type {
+        let empty = HashMap::new();
+        let Some((left, top, right, bottom)) = geometry::preset_shape_text_rect(
+            name,
+            width_px,
+            height_px,
+            adjust_values.unwrap_or(&empty),
+        ) else {
+            return (0.0, 0.0, 0.0, 0.0);
+        };
+        return (
+            px_to_pt(top.max(0.0)),
+            px_to_pt((width_px - right).max(0.0)),
+            px_to_pt((height_px - bottom).max(0.0)),
+            px_to_pt(left.max(0.0)),
+        );
+    }
     let ShapeType::CustomGeom(ref geom) = shape.shape_type else {
         return (0.0, 0.0, 0.0, 0.0);
     };
@@ -2012,24 +2046,6 @@ fn scale_svg_effect_blur(effects: &ShapeEffects, factor: f64) -> ShapeEffects {
     }
 }
 
-fn svg_uses_style_ref_effect_fallback(preset_name: Option<&str>) -> bool {
-    !matches!(
-        preset_name,
-        Some(
-            "squareTabs"
-                | "plaqueTabs"
-                | "lineInv"
-                | "circularArrow"
-                | "leftCircularArrow"
-                | "leftRightCircularArrow"
-                | "arc"
-                | "mathNotEqual"
-                | "leftRightArrowCallout"
-                | "frame"
-        )
-    )
-}
-
 fn line_cap_to_svg(cap: &LineCap) -> &'static str {
     match cap {
         LineCap::Flat => "",
@@ -2113,6 +2129,8 @@ fn svg_gradient_def(
     grad_id: &str,
     ctx: &RenderCtx<'_>,
     html: &mut String,
+    width: f64,
+    height: f64,
 ) -> Option<String> {
     if let Fill::Pattern(pattern) = fill {
         let (foreground, background) = ctx.pattern_colors(pattern)?;
@@ -2129,18 +2147,33 @@ fn svg_gradient_def(
         }
         match gf.gradient_type {
             GradientType::Linear => {
-                // Convert OOXML angle (clockwise from top) to SVG linearGradient coordinates.
+                // DrawingML angles use the positive x-axis as their origin.
                 // SVG linearGradient uses x1,y1 -> x2,y2 as the gradient vector.
-                let angle_rad = (gf.angle - 90.0_f64).to_radians();
-                let x1 = 50.0 - 50.0 * angle_rad.cos();
-                let y1 = 50.0 - 50.0 * angle_rad.sin();
-                let x2 = 50.0 + 50.0 * angle_rad.cos();
-                let y2 = 50.0 + 50.0 * angle_rad.sin();
-                let _ = write!(
-                    html,
-                    "<linearGradient id=\"{grad_id}\" \
-                     x1=\"{x1:.1}%\" y1=\"{y1:.1}%\" x2=\"{x2:.1}%\" y2=\"{y2:.1}%\">"
-                );
+                let angle_rad = gf.angle.to_radians();
+                let dx = angle_rad.cos();
+                let dy = angle_rad.sin();
+                if gf.scaled == Some(false) {
+                    let half_extent = 0.5 * (width * dx.abs() + height * dy.abs());
+                    let x1 = width * 0.5 - dx * half_extent;
+                    let y1 = height * 0.5 - dy * half_extent;
+                    let x2 = width * 0.5 + dx * half_extent;
+                    let y2 = height * 0.5 + dy * half_extent;
+                    let _ = write!(
+                        html,
+                        "<linearGradient id=\"{grad_id}\" gradientUnits=\"userSpaceOnUse\" \
+                         x1=\"{x1:.1}\" y1=\"{y1:.1}\" x2=\"{x2:.1}\" y2=\"{y2:.1}\">"
+                    );
+                } else {
+                    let x1 = 50.0 - 50.0 * dx;
+                    let y1 = 50.0 - 50.0 * dy;
+                    let x2 = 50.0 + 50.0 * dx;
+                    let y2 = 50.0 + 50.0 * dy;
+                    let _ = write!(
+                        html,
+                        "<linearGradient id=\"{grad_id}\" \
+                         x1=\"{x1:.1}%\" y1=\"{y1:.1}%\" x2=\"{x2:.1}%\" y2=\"{y2:.1}%\">"
+                    );
+                }
             }
             GradientType::Radial | GradientType::Rectangular | GradientType::Shape => {
                 let _ = write!(
@@ -2395,6 +2428,7 @@ mod tests {
                 },
             ],
             angle: 135.0,
+            scaled: None,
         });
 
         let (pres_embed, collector_embed) = test_ctx(true);
@@ -2409,12 +2443,19 @@ mod tests {
         };
         let mut buf = String::new();
         HtmlRenderer::fill_to_css_buf(&gradient_fill, &ctx_embed, &mut buf);
-        assert!(buf.contains("linear-gradient(135deg"));
+        assert!(buf.contains("linear-gradient(225deg"));
         assert!(HtmlRenderer::fill_to_css(&gradient_fill, &ctx_embed).contains("linear-gradient"));
 
         let mut defs = String::new();
-        let fill_attr = svg_gradient_def(&gradient_fill, "grad-test", &ctx_embed, &mut defs)
-            .expect("svg gradient should be emitted");
+        let fill_attr = svg_gradient_def(
+            &gradient_fill,
+            "grad-test",
+            &ctx_embed,
+            &mut defs,
+            100.0,
+            100.0,
+        )
+        .expect("svg gradient should be emitted");
         assert_eq!(fill_attr, "url(#grad-test)");
         assert!(defs.contains("<linearGradient id=\"grad-test\""));
 
@@ -2443,6 +2484,90 @@ mod tests {
         let assets = &collector_external.borrow().external_assets;
         assert_eq!(assets.len(), 1);
         assert_eq!(assets[0].relative_path, "images/slide-1/background-0.png");
+    }
+
+    #[test]
+    fn drawingml_gradient_angle_preserves_css_and_svg_direction() {
+        let gradient_fill = Fill::Gradient(GradientFill {
+            gradient_type: GradientType::Linear,
+            stops: vec![
+                GradientStop {
+                    position: 0.0,
+                    color: Color::rgb("0D0D2B"),
+                },
+                GradientStop {
+                    position: 1.0,
+                    color: Color::rgb("4F7DF3"),
+                },
+            ],
+            angle: 325.0,
+            scaled: None,
+        });
+        let (pres, collector) = test_ctx(true);
+        let ctx = RenderCtx {
+            pres: &pres,
+            slide: None,
+            timing: None,
+            scheme: pres.primary_theme().map(|theme| &theme.color_scheme),
+            clr_map: None,
+            embed_images: true,
+            collector: &collector,
+        };
+
+        let css = HtmlRenderer::fill_to_css(&gradient_fill, &ctx);
+        assert!(css.contains("linear-gradient(55deg"), "{css}");
+
+        let mut defs = String::new();
+        svg_gradient_def(&gradient_fill, "grad-test", &ctx, &mut defs, 100.0, 100.0);
+        assert!(
+            defs.contains(r#"x1="9.0%" y1="78.7%" x2="91.0%" y2="21.3%""#),
+            "{defs}"
+        );
+    }
+
+    #[test]
+    fn drawingml_unscaled_gradient_uses_user_space_vector() {
+        let gradient_fill = Fill::Gradient(GradientFill {
+            gradient_type: GradientType::Linear,
+            stops: vec![
+                GradientStop {
+                    position: 0.0,
+                    color: Color::rgb("000000"),
+                },
+                GradientStop {
+                    position: 1.0,
+                    color: Color::rgb("FFFFFF"),
+                },
+            ],
+            angle: 325.0,
+            scaled: Some(false),
+        });
+        let (pres, collector) = test_ctx(true);
+        let ctx = RenderCtx {
+            pres: &pres,
+            slide: None,
+            timing: None,
+            scheme: pres.primary_theme().map(|theme| &theme.color_scheme),
+            clr_map: None,
+            embed_images: true,
+            collector: &collector,
+        };
+        let mut defs = String::new();
+
+        svg_gradient_def(
+            &gradient_fill,
+            "grad-unscaled",
+            &ctx,
+            &mut defs,
+            600.0,
+            100.0,
+        );
+
+        assert!(defs.contains("gradientUnits=\"userSpaceOnUse\""), "{defs}");
+        assert!(
+            defs.contains(r#"x1="75.2" y1="207.4" x2="524.8" y2="-107.4""#),
+            "{defs}"
+        );
     }
 
     #[test]
@@ -2653,6 +2778,24 @@ mod tests {
                     ..Default::default()
                 },
                 Shape {
+                    name: "stretched-picture".to_string(),
+                    shape_type: ShapeType::Picture(PictureData {
+                        rel_id: "rId2".to_string(),
+                        content_type: "image/png".to_string(),
+                        data: vec![1, 2, 3, 4],
+                        crop: None,
+                    }),
+                    position: Position {
+                        x: Emu(914_400),
+                        y: Emu(0),
+                    },
+                    size: Size {
+                        width: Emu(914_400),
+                        height: Emu(457_200),
+                    },
+                    ..Default::default()
+                },
+                Shape {
                     name: "group".to_string(),
                     shape_type: ShapeType::Group(
                         vec![Shape {
@@ -2702,8 +2845,9 @@ mod tests {
         HtmlRenderer::render_slide(&slide, 1, 960.0, 540.0, 1.0, &ctx, &mut html);
 
         assert!(html.contains("transform: rotate(30.0deg)"));
-        assert!(html.contains("width: 2px"));
+        assert!(html.contains("width: 1.5px"));
         assert!(html.contains("overflow: hidden"));
+        assert_eq!(html.matches("object-fit: fill").count(), 2);
         assert!(html.contains("data-type=\"custom-geometry\""));
         assert!(html.contains("background-color: #00FF00"));
         assert!(!html.contains("hidden-master"));
@@ -2880,6 +3024,45 @@ mod tests {
 
         assert!(html.contains("filter: drop-shadow("));
         assert!(!html.contains("box-shadow:"));
+
+        let arc_shape = Shape {
+            name: "arc-style-ref-only".to_string(),
+            shape_type: ShapeType::Custom("arc".to_string()),
+            ..shape.clone()
+        };
+        let mut arc_html = String::new();
+        HtmlRenderer::render_shape_resolved(&arc_shape, None, None, &ctx, &mut arc_html);
+
+        assert!(arc_html.matches("<path").count() >= 2, "{arc_html}");
+        assert!(
+            arc_html.contains("<g style=\"filter: drop-shadow("),
+            "{arc_html}"
+        );
+
+        for preset in [
+            "squareTabs",
+            "plaqueTabs",
+            "lineInv",
+            "circularArrow",
+            "leftCircularArrow",
+            "leftRightCircularArrow",
+            "mathNotEqual",
+            "leftRightArrowCallout",
+            "frame",
+        ] {
+            let preset_shape = Shape {
+                name: format!("{preset}-style-ref-only"),
+                shape_type: ShapeType::Custom(preset.to_string()),
+                ..shape.clone()
+            };
+            let mut preset_html = String::new();
+            HtmlRenderer::render_shape_resolved(&preset_shape, None, None, &ctx, &mut preset_html);
+
+            assert!(
+                preset_html.contains("filter: drop-shadow("),
+                "{preset}: {preset_html}"
+            );
+        }
     }
 
     #[test]
@@ -2937,7 +3120,7 @@ mod tests {
                 rel_id: "rIdChart".to_string(),
                 preview_image: None,
                 preview_mime: None,
-                direct_spec: Some(spec),
+                direct_spec: Some(Box::new(spec)),
             }),
             size: Size {
                 width: Emu(1_828_800),
@@ -3438,7 +3621,7 @@ mod tests {
                 rel_id: "rIdChart".to_string(),
                 preview_image: None,
                 preview_mime: None,
-                direct_spec: Some(spec),
+                direct_spec: Some(Box::new(spec)),
             }),
             size: Size {
                 width: Emu(1_828_800),

@@ -317,8 +317,7 @@ impl HtmlRenderer {
         let theme = ctx.pres.primary_theme()?;
         let font_scheme = &theme.font_scheme;
         let scheme = ctx.scheme?;
-        let clr_map = ctx.clr_map?;
-        style_ref::resolve_font_ref(font_ref, font_scheme, scheme, clr_map)
+        style_ref::resolve_font_ref(font_ref, font_scheme, scheme, ctx.clr_map)
     }
 
     #[cfg(test)]
@@ -814,7 +813,7 @@ impl HtmlRenderer {
             run_style.push_str(cap_css);
         }
 
-        // Color -- explicit > para defRPr > inherited > fontRef > none
+        // Color -- explicit > para defRPr > shape fontRef > inherited > none
         // Use or_else chaining so that a None at any level falls through to the next
         let color_css = if !run.style.color.is_none() {
             ctx.color_to_css(&run.style.color)
@@ -823,13 +822,13 @@ impl HtmlRenderer {
                 .para_def_rpr
                 .and_then(|pd| pd.color.as_ref())
                 .and_then(|c| ctx.color_to_css(c))
+                .or_else(|| defaults.font_ref_color.as_ref().map(|c| c.to_css()))
                 .or_else(|| {
                     defaults
                         .run_defaults
                         .and_then(|rd| rd.color.as_ref())
                         .and_then(|c| ctx.color_to_css(c))
                 })
-                .or_else(|| defaults.font_ref_color.as_ref().map(|c| c.to_css()))
         };
         if let Some(css_color) = color_css {
             push_sep(&mut run_style);

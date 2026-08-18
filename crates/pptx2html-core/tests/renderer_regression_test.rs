@@ -13,7 +13,7 @@ fn chart_shape(spec: ChartSpec) -> Shape {
             rel_id: "rIdChart".to_string(),
             preview_image: None,
             preview_mime: None,
-            direct_spec: Some(spec),
+            direct_spec: Some(Box::new(spec)),
         }),
         size: Size {
             width: Emu(1_828_800),

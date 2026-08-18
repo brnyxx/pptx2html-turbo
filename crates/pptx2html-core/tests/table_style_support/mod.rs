@@ -16,6 +16,10 @@ pub fn invalid_package() -> Vec<u8> {
     package_with_slide(document(&table(INVALID_STYLE, "1", "1", false)))
 }
 
+pub fn built_in_default_package() -> Vec<u8> {
+    package_with_slide(document(&table(BUILT_IN_STYLE, "0", "0", false)))
+}
+
 pub fn other_built_in_package() -> Vec<u8> {
     package_with_slide(document(&table(OTHER_BUILT_IN_STYLE, "1", "1", false)))
 }

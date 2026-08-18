@@ -99,3 +99,41 @@ fn normal_whitespace_and_comments_elsewhere_are_rendered() {
     );
     assert_rendered(render_source(&source));
 }
+
+#[test]
+fn ellipse_ribbons_use_official_multi_path_geometry() {
+    const PRESETS: &[&str] = &["ellipseRibbon", "ellipseRibbon2"];
+
+    super::official_ellipse_ribbon_presets::definitions()
+        .expect("official ellipse ribbon preset XML should parse");
+    for preset in PRESETS {
+        assert!(
+            super::official_ellipse_ribbon_presets::contains(preset),
+            "missing official ellipse ribbon preset: {preset}"
+        );
+        assert!(
+            matches!(
+                super::official_presets::route(preset, 160.0, 100.0, &HashMap::new()),
+                OfficialPresetRender::Rendered(_)
+            ),
+            "official ellipse ribbon preset did not render: {preset}"
+        );
+    }
+}
+
+#[test]
+fn curved_right_arrow_arc_reaches_official_guide_endpoint() {
+    let OfficialPresetRender::Rendered(svg) =
+        super::official_presets::route("curvedRightArrow", 235.2, 103.68, &HashMap::new())
+    else {
+        panic!("default curvedRightArrow should render")
+    };
+
+    assert!(
+        svg.paths[0]
+            .d
+            .contains("A235.20,32.40 0 0,0 209.28,64.60 L209.28,51.64"),
+        "{}",
+        svg.paths[0].d
+    );
+}

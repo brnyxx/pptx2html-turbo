@@ -6,7 +6,10 @@
 
 use std::collections::HashMap;
 
+use log::warn;
+
 mod action_buttons;
+mod arc_math;
 mod arcs;
 mod arrow_callouts;
 mod arrows;
@@ -22,6 +25,7 @@ mod custom_geom;
 mod flowchart;
 mod math;
 mod misc;
+mod official_ellipse_ribbon_presets;
 mod official_presets;
 mod official_presets_formula;
 mod official_presets_path;
@@ -327,6 +331,21 @@ pub fn preset_shape_svg(
         "bentConnector4" => Some(connectors::bent_connector4_path(w, h, adjust_values)),
         "bentConnector5" => Some(connectors::bent_connector5_path(w, h, adjust_values)),
         _ => None,
+    }
+}
+
+pub fn preset_shape_text_rect(
+    name: &str,
+    width: f64,
+    height: f64,
+    adjust_values: &HashMap<String, f64>,
+) -> Option<(f64, f64, f64, f64)> {
+    match official_presets::text_rect(name, width, height, adjust_values) {
+        Ok(rect) => rect,
+        Err(error) => {
+            warn!("official preset text rectangle fallback: preset={name} error={error}");
+            None
+        }
     }
 }
 

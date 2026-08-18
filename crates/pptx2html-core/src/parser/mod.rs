@@ -23,7 +23,7 @@ mod preserved_parser;
 pub mod relationships;
 mod slide_parser;
 mod table_parser;
-mod table_style_builtins;
+pub(crate) mod table_style_builtins;
 mod table_style_package_diagnostics;
 mod table_style_parser;
 mod table_style_values;

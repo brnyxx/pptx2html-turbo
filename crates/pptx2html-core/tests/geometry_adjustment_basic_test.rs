@@ -354,6 +354,23 @@ fn assert_approx(actual: f64, expected: f64) {
     );
 }
 
+fn contains_landmark(path: &str, landmark: &str) -> bool {
+    let Some(command) = landmark.chars().next() else {
+        return false;
+    };
+    let expected = path_numbers(landmark);
+    path.split_ascii_whitespace()
+        .filter(|token| token.starts_with(command))
+        .any(|token| {
+            let actual = path_numbers(token);
+            actual.len() >= expected.len()
+                && actual
+                    .iter()
+                    .zip(&expected)
+                    .all(|(actual, expected)| (actual - expected).abs() <= 0.11)
+        })
+}
+
 fn json_array<'a>(source: &'a str, key: &str) -> &'a str {
     let field = format!(r#""{key}""#);
     let field_start = source.find(&field).expect("JSON field");
@@ -977,12 +994,12 @@ fn every_multi_key_shape_matches_official_derived_landmarks() {
         (
             "ellipseRibbon",
             vec![("adj1", 20_000.0), ("adj2", 40_000.0), ("adj3", 10_000.0)],
-            ["M0,80.0", "L160.0,10.0"],
+            ["M0,0.0", "L160.0,80.0"],
         ),
         (
             "ellipseRibbon2",
             vec![("adj1", 20_000.0), ("adj2", 40_000.0), ("adj3", 10_000.0)],
-            ["M0,20.0", "L160.0,90.0"],
+            ["M0,100.0", "L160.0,20.0"],
         ),
         (
             "corner",
@@ -1000,7 +1017,7 @@ fn every_multi_key_shape_matches_official_derived_landmarks() {
         let path = render_path_with(preset, &adjustments, 1_524_000, 952_500);
         for landmark in landmarks {
             assert!(
-                path.contains(landmark),
+                contains_landmark(&path, landmark),
                 "{preset}: missing {landmark} in {path}"
             );
         }

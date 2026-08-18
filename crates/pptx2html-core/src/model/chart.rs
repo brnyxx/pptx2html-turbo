@@ -4,7 +4,7 @@ pub struct ChartData {
     pub rel_id: String,
     pub preview_image: Option<Vec<u8>>,
     pub preview_mime: Option<String>,
-    pub direct_spec: Option<ChartSpec>,
+    pub direct_spec: Option<Box<ChartSpec>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -97,6 +97,24 @@ pub enum ChartDataLabelPosition {
     OutEnd,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ChartLegendPosition {
+    Left,
+    #[default]
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ChartTickMark {
+    #[default]
+    None,
+    Inside,
+    Outside,
+    Cross,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ChartSeries {
     pub name: Option<String>,
@@ -125,6 +143,15 @@ pub struct ChartSpec {
     pub hole_size: Option<i32>,
     pub category_axis_title: Option<String>,
     pub value_axis_title: Option<String>,
+    pub value_axis_min: Option<f64>,
+    pub value_axis_max: Option<f64>,
+    pub value_axis_major_unit: Option<f64>,
+    pub value_axis_major_gridlines: bool,
+    pub value_axis_visible: bool,
+    pub category_axis_major_tick_mark: ChartTickMark,
+    pub value_axis_major_tick_mark: ChartTickMark,
+    pub legend_position: Option<ChartLegendPosition>,
+    pub text_size_pt: Option<f64>,
     pub data_labels: Option<ChartDataLabelSettings>,
     pub series: Vec<ChartSeries>,
 }

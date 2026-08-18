@@ -286,10 +286,11 @@ impl HtmlRenderer {
                     push_sep(buf);
                     match gf.gradient_type {
                         GradientType::Linear => {
+                            let css_angle = (gf.angle + 90.0).rem_euclid(360.0);
                             let _ = write!(
                                 buf,
                                 "background: linear-gradient({:.0}deg, {stops_buf})",
-                                gf.angle
+                                css_angle
                             );
                         }
                         GradientType::Radial => {
@@ -372,7 +373,8 @@ impl HtmlRenderer {
                     let joined = stops.join(", ");
                     match gf.gradient_type {
                         GradientType::Linear => {
-                            format!("background: linear-gradient({:.0}deg, {joined})", gf.angle)
+                            let css_angle = (gf.angle + 90.0).rem_euclid(360.0);
+                            format!("background: linear-gradient({css_angle:.0}deg, {joined})")
                         }
                         GradientType::Radial => {
                             format!("background: radial-gradient(circle, {joined})")

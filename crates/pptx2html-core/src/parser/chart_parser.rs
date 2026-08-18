@@ -9,8 +9,8 @@ use super::xml_utils;
 use crate::error::PptxResult;
 use crate::model::{
     ChartBubbleSizeRepresents, ChartDataLabelPosition, ChartDataLabelSettings, ChartGrouping,
-    ChartMarkerSpec, ChartOfPieType, ChartRadarStyle, ChartScatterStyle, ChartSeries, ChartSpec,
-    ChartSplitType, ChartType,
+    ChartLegendPosition, ChartMarkerSpec, ChartOfPieType, ChartRadarStyle, ChartScatterStyle,
+    ChartSeries, ChartSpec, ChartSplitType, ChartTickMark, ChartType,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -695,7 +695,10 @@ fn include_semantic_element(
             parent_included
                 && root == "chartSpace"
                 && namespace == PartNamespace::Classic
-                && local == "chart"
+                && matches!(local, "chart" | "txPr")
+        }
+        _ if path.len() >= 2 && path[0].1 == "chartSpace" && path[1].1 == "txPr" => {
+            parent_included && matches!(namespace, PartNamespace::Classic | PartNamespace::Drawing)
         }
         [
             (PartNamespace::Classic, root),
@@ -705,13 +708,20 @@ fn include_semantic_element(
                 && root == "chartSpace"
                 && chart == "chart"
                 && namespace == PartNamespace::Classic
-                && local == "plotArea"
+                && matches!(local, "plotArea" | "legend" | "txPr")
         }
         _ if path.len() == 3 && exact_classic_scaffold(path) => {
             parent_included
                 && namespace == PartNamespace::Classic
                 && (is_chart_family(local)
                     || matches!(local, "catAx" | "dateAx" | "valAx" | "serAx"))
+        }
+        _ if path.len() >= 3
+            && path[0].1 == "chartSpace"
+            && path[1].1 == "chart"
+            && matches!(path[2].1.as_str(), "legend" | "txPr") =>
+        {
+            parent_included && matches!(namespace, PartNamespace::Classic | PartNamespace::Drawing)
         }
         _ if path.len() > 3 && exact_classic_scaffold(&path[..3]) => {
             parent_included
@@ -811,6 +821,15 @@ fn parse_direct_chart(xml: &str) -> PptxResult<Option<ChartSpec>> {
     let mut series = Vec::new();
     let mut category_axis_title = String::new();
     let mut value_axis_title = String::new();
+    let mut value_axis_min = None;
+    let mut value_axis_max = None;
+    let mut value_axis_major_unit = None;
+    let mut value_axis_major_gridlines = false;
+    let mut value_axis_visible = true;
+    let mut category_axis_major_tick_mark = ChartTickMark::None;
+    let mut value_axis_major_tick_mark = ChartTickMark::None;
+    let mut legend_position = None;
+    let mut text_size_pt = None;
     let mut data_labels = ChartDataLabelSettings::default();
     let mut saw_dlbls = false;
     let mut in_tx = false;
@@ -1011,6 +1030,45 @@ fn parse_direct_chart(xml: &str) -> PptxResult<Option<ChartSpec>> {
                     }
                     "catAx" => in_cat_ax = true,
                     "valAx" => in_val_ax = true,
+                    "min" if in_val_ax => {
+                        value_axis_min =
+                            xml_utils::attr_str(e, "val").and_then(|val| val.parse().ok());
+                    }
+                    "max" if in_val_ax => {
+                        value_axis_max =
+                            xml_utils::attr_str(e, "val").and_then(|val| val.parse().ok());
+                    }
+                    "majorUnit" if in_val_ax => {
+                        value_axis_major_unit =
+                            xml_utils::attr_str(e, "val").and_then(|val| val.parse().ok());
+                    }
+                    "majorGridlines" if in_val_ax => value_axis_major_gridlines = true,
+                    "majorTickMark" if in_cat_ax => {
+                        category_axis_major_tick_mark =
+                            parse_chart_tick_mark(xml_utils::attr_str(e, "val").as_deref());
+                    }
+                    "majorTickMark" if in_val_ax => {
+                        value_axis_major_tick_mark =
+                            parse_chart_tick_mark(xml_utils::attr_str(e, "val").as_deref());
+                    }
+                    "delete" if in_val_ax => {
+                        value_axis_visible = xml_utils::attr_str(e, "val")
+                            .map(|val| !matches!(val.as_str(), "1" | "true"))
+                            .unwrap_or(false);
+                    }
+                    "legendPos" => {
+                        legend_position = Some(match xml_utils::attr_str(e, "val").as_deref() {
+                            Some("l") => ChartLegendPosition::Left,
+                            Some("t") => ChartLegendPosition::Top,
+                            Some("b") => ChartLegendPosition::Bottom,
+                            _ => ChartLegendPosition::Right,
+                        });
+                    }
+                    "defRPr" => {
+                        text_size_pt = xml_utils::attr_str(e, "sz")
+                            .and_then(|value| value.parse::<f64>().ok())
+                            .map(|value| value / 100.0);
+                    }
                     "title" if in_cat_ax || in_val_ax => in_title = true,
                     "t" if in_title => in_title_text = true,
                     "ser"
@@ -1186,8 +1244,26 @@ fn parse_direct_chart(xml: &str) -> PptxResult<Option<ChartSpec>> {
             category_axis_title: (!category_axis_title.trim().is_empty())
                 .then_some(category_axis_title),
             value_axis_title: (!value_axis_title.trim().is_empty()).then_some(value_axis_title),
+            value_axis_min,
+            value_axis_max,
+            value_axis_major_unit,
+            value_axis_major_gridlines,
+            value_axis_visible,
+            category_axis_major_tick_mark,
+            value_axis_major_tick_mark,
+            legend_position,
+            text_size_pt,
             data_labels: saw_dlbls.then_some(data_labels),
             series,
         }))
+    }
+}
+
+fn parse_chart_tick_mark(value: Option<&str>) -> ChartTickMark {
+    match value {
+        Some("in") => ChartTickMark::Inside,
+        Some("out") => ChartTickMark::Outside,
+        Some("cross") => ChartTickMark::Cross,
+        _ => ChartTickMark::None,
     }
 }

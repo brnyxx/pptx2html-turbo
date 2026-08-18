@@ -215,7 +215,7 @@ fn every_classic_family_has_one_public_deterministic_disposition() {
             .filter(|item| item.code == "DRAWINGML_CHART_FALLBACK")
             .collect();
         assert_eq!(
-            result.html.contains("<div class=\"chart-direct\">"),
+            result.html.contains("class=\"chart-direct"),
             direct,
             "{family}"
         );

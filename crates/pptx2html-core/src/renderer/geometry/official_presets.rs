@@ -82,6 +82,8 @@ pub(super) fn route(
 ) -> OfficialPresetRender {
     let definitions = if OFFICIAL_NAMES.contains(&name) {
         definitions()
+    } else if super::official_ellipse_ribbon_presets::contains(name) {
+        super::official_ellipse_ribbon_presets::definitions()
     } else if super::official_remaining_presets::contains(name) {
         super::official_remaining_presets::definitions()
     } else {
@@ -108,6 +110,24 @@ fn render_from_definitions(
     let definition = definitions
         .get(name)
         .ok_or_else(|| format!("unknown official preset: {name}"))?;
+    let environment = guide_environment(definition, width, height, adjustments)?;
+    let paths = definition
+        .paths
+        .iter()
+        .map(|path| render_path(path, &environment, width, height))
+        .collect::<Result<Vec<_>, _>>()?;
+    if paths.is_empty() {
+        return Err(format!("official preset has no paths: {name}"));
+    }
+    Ok(CustomGeomSvg { paths })
+}
+
+fn guide_environment(
+    definition: &PresetDefinition,
+    width: f64,
+    height: f64,
+    adjustments: &HashMap<String, f64>,
+) -> Result<GuideEnvironment, String> {
     let mut environment = GuideEnvironment::new(width, height);
     for adjustment in &definition.adjustments {
         let default = environment.evaluate(&adjustment.formula)?;
@@ -122,15 +142,37 @@ fn render_from_definitions(
         let value = environment.evaluate(&guide.formula)?;
         environment.insert(&guide.name, value)?;
     }
-    let paths = definition
-        .paths
-        .iter()
-        .map(|path| render_path(path, &environment, width, height))
-        .collect::<Result<Vec<_>, _>>()?;
-    if paths.is_empty() {
-        return Err(format!("official preset has no paths: {name}"));
-    }
-    Ok(CustomGeomSvg { paths })
+    Ok(environment)
+}
+
+pub(super) fn text_rect(
+    name: &str,
+    width: f64,
+    height: f64,
+    adjustments: &HashMap<String, f64>,
+) -> Result<Option<(f64, f64, f64, f64)>, String> {
+    let definitions = if OFFICIAL_NAMES.contains(&name) {
+        definitions()?
+    } else if super::official_ellipse_ribbon_presets::contains(name) {
+        super::official_ellipse_ribbon_presets::definitions()?
+    } else if super::official_remaining_presets::contains(name) {
+        super::official_remaining_presets::definitions()?
+    } else {
+        return Ok(None);
+    };
+    let Some(definition) = definitions.get(name) else {
+        return Ok(None);
+    };
+    let Some(rect) = definition.text_rect.as_ref() else {
+        return Ok(None);
+    };
+    let environment = guide_environment(definition, width, height, adjustments)?;
+    Ok(Some((
+        environment.resolve(&rect.left)?,
+        environment.resolve(&rect.top)?,
+        environment.resolve(&rect.right)?,
+        environment.resolve(&rect.bottom)?,
+    )))
 }
 
 fn invalid_fallback(width: f64, height: f64) -> CustomGeomSvg {
@@ -181,7 +223,7 @@ pub(super) fn route_with_xml(
 
 #[cfg(test)]
 mod tests {
-    use super::{OfficialPresetRender, definitions, route, route_with_xml};
+    use super::{OfficialPresetRender, definitions, route, route_with_xml, text_rect};
     use crate::renderer::geometry::official_presets_xml::source_xml;
     use std::collections::HashMap;
 
@@ -201,6 +243,15 @@ mod tests {
             };
             assert!(svg.paths.iter().all(|path| !path.d.is_empty()));
         }
+    }
+
+    #[test]
+    fn evaluates_chevron_text_rectangle() {
+        let rect = text_rect("chevron", 300.0, 200.0, &HashMap::new())
+            .expect("chevron text rectangle evaluation")
+            .expect("chevron text rectangle");
+
+        assert_eq!(rect, (100.0, 0.0, 200.0, 200.0));
     }
 
     #[test]

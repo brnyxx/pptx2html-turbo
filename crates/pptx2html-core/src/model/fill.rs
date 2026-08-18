@@ -78,6 +78,7 @@ pub struct GradientFill {
     pub gradient_type: GradientType,
     pub stops: Vec<GradientStop>,
     pub angle: f64, // in degrees (used for Linear)
+    pub scaled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default)]

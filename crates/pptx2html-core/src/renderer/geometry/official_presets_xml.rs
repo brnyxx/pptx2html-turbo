@@ -12,7 +12,16 @@ const XML: &str = include_str!("official_arrow_presets.xml");
 pub(super) struct PresetDefinition {
     pub(super) adjustments: Vec<GuideDefinition>,
     pub(super) guides: Vec<GuideDefinition>,
+    pub(super) text_rect: Option<TextRectDefinition>,
     pub(super) paths: Vec<PathDefinition>,
+}
+
+#[derive(Debug)]
+pub(super) struct TextRectDefinition {
+    pub(super) left: String,
+    pub(super) top: String,
+    pub(super) right: String,
+    pub(super) bottom: String,
 }
 
 #[derive(Debug)]
@@ -206,7 +215,16 @@ fn handle_empty(
                 .push(PathCommandDefinition::Close)
         }
         "pos" => validate_attributes(reader, element, &["xmlns", "x", "y"])?,
-        "rect" => validate_attributes(reader, element, &["xmlns", "l", "t", "r", "b"])?,
+        "rect" => {
+            validate_attributes(reader, element, &["xmlns", "l", "t", "r", "b"])?;
+            let (_, definition) = preset.as_mut().ok_or("text rectangle outside preset")?;
+            definition.text_rect = Some(TextRectDefinition {
+                left: attribute(reader, element, "l")?,
+                top: attribute(reader, element, "t")?,
+                right: attribute(reader, element, "r")?,
+                bottom: attribute(reader, element, "b")?,
+            });
+        }
         _ => return Err(format!("unknown empty official XML element: {tag}")),
     }
     Ok(())
@@ -252,6 +270,7 @@ fn empty_preset() -> PresetDefinition {
     PresetDefinition {
         adjustments: Vec::new(),
         guides: Vec::new(),
+        text_rect: None,
         paths: Vec::new(),
     }
 }
@@ -259,4 +278,21 @@ fn empty_preset() -> PresetDefinition {
 #[cfg(test)]
 pub(super) fn source_xml() -> &'static str {
     XML
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_definitions;
+
+    #[test]
+    fn parses_chevron_text_rectangle() {
+        let definitions = parse_definitions().expect("official preset definitions");
+        let chevron = definitions.get("chevron").expect("chevron definition");
+        let rect = chevron.text_rect.as_ref().expect("chevron text rectangle");
+
+        assert_eq!(rect.left, "il");
+        assert_eq!(rect.top, "t");
+        assert_eq!(rect.right, "ir");
+        assert_eq!(rect.bottom, "b");
+    }
 }

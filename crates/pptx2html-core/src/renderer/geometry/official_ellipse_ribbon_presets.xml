@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="utf-8"?>
+<presetShapeDefinitions>
+  <ellipseRibbon>
+    <avLst>
+      <gd name="adj1" fmla="val 25000" />
+      <gd name="adj2" fmla="val 50000" />
+      <gd name="adj3" fmla="val 12500" />
+    </avLst>
+    <gdLst>
+      <gd name="a1" fmla="pin 0 adj1 100000" />
+      <gd name="a2" fmla="pin 25000 adj2 75000" />
+      <gd name="q10" fmla="+- 100000 0 a1" />
+      <gd name="q11" fmla="*/ q10 1 2" />
+      <gd name="q12" fmla="+- a1 0 q11" />
+      <gd name="minAdj3" fmla="max 0 q12" />
+      <gd name="a3" fmla="pin minAdj3 adj3 a1" />
+      <gd name="dx2" fmla="*/ w a2 200000" />
+      <gd name="x2" fmla="+- hc 0 dx2" />
+      <gd name="x3" fmla="+- x2 wd8 0" />
+      <gd name="x4" fmla="+- r 0 x3" />
+      <gd name="x5" fmla="+- r 0 x2" />
+      <gd name="x6" fmla="+- r 0 wd8" />
+      <gd name="dy1" fmla="*/ h a3 100000" />
+      <gd name="f1" fmla="*/ 4 dy1 w" />
+      <gd name="q1" fmla="*/ x3 x3 w" />
+      <gd name="q2" fmla="+- x3 0 q1" />
+      <gd name="y1" fmla="*/ f1 q2 1" />
+      <gd name="cx1" fmla="*/ x3 1 2" />
+      <gd name="cy1" fmla="*/ f1 cx1 1" />
+      <gd name="cx2" fmla="+- r 0 cx1" />
+      <gd name="q1" fmla="*/ h a1 100000" />
+      <gd name="dy3" fmla="+- q1 0 dy1" />
+      <gd name="q3" fmla="*/ x2 x2 w" />
+      <gd name="q4" fmla="+- x2 0 q3" />
+      <gd name="q5" fmla="*/ f1 q4 1" />
+      <gd name="y3" fmla="+- q5 dy3 0" />
+      <gd name="q6" fmla="+- dy1 dy3 y3" />
+      <gd name="q7" fmla="+- q6 dy1 0" />
+      <gd name="cy3" fmla="+- q7 dy3 0" />
+      <gd name="rh" fmla="+- b 0 q1" />
+      <gd name="q8" fmla="*/ dy1 14 16" />
+      <gd name="y2" fmla="+/ q8 rh 2" />
+      <gd name="y5" fmla="+- q5 rh 0" />
+      <gd name="y6" fmla="+- y3 rh 0" />
+      <gd name="cx4" fmla="*/ x2 1 2" />
+      <gd name="q9" fmla="*/ f1 cx4 1" />
+      <gd name="cy4" fmla="+- q9 rh 0" />
+      <gd name="cx5" fmla="+- r 0 cx4" />
+      <gd name="cy6" fmla="+- cy3 rh 0" />
+      <gd name="y7" fmla="+- y1 dy3 0" />
+      <gd name="cy7" fmla="+- q1 q1 y7" />
+      <gd name="y8" fmla="+- b 0 dy1" />
+    </gdLst>
+    <ahLst>
+      <ahXY gdRefY="adj1" minY="0" maxY="100000">
+        <pos x="hc" y="q1" />
+      </ahXY>
+      <ahXY gdRefX="adj2" minX="25000" maxX="75000">
+        <pos x="x2" y="b" />
+      </ahXY>
+      <ahXY gdRefY="adj3" minY="minAdj3" maxY="a1">
+        <pos x="l" y="y8" />
+      </ahXY>
+    </ahLst>
+    <cxnLst>
+      <cxn ang="3cd4">
+        <pos x="hc" y="q1" />
+      </cxn>
+      <cxn ang="cd2">
+        <pos x="wd8" y="y2" />
+      </cxn>
+      <cxn ang="cd4">
+        <pos x="hc" y="b" />
+      </cxn>
+      <cxn ang="0">
+        <pos x="x6" y="y2" />
+      </cxn>
+    </cxnLst>
+    <rect l="x2" t="q1" r="x5" b="y6" />
+    <pathLst>
+      <path stroke="false" extrusionOk="false">
+        <moveTo>
+          <pt x="l" y="t" />
+        </moveTo>
+        <quadBezTo>
+          <pt x="cx1" y="cy1" />
+          <pt x="x3" y="y1" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x2" y="y3" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy3" />
+          <pt x="x5" y="y3" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x4" y="y1" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx2" y="cy1" />
+          <pt x="r" y="t" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x6" y="y2" />
+        </lnTo>
+        <lnTo>
+          <pt x="r" y="rh" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx5" y="cy4" />
+          <pt x="x5" y="y5" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x5" y="y6" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy6" />
+          <pt x="x2" y="y6" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x2" y="y5" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx4" y="cy4" />
+          <pt x="l" y="rh" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="wd8" y="y2" />
+        </lnTo>
+        <close />
+      </path>
+      <path fill="darkenLess" stroke="false" extrusionOk="false">
+        <moveTo>
+          <pt x="x3" y="y7" />
+        </moveTo>
+        <lnTo>
+          <pt x="x3" y="y1" />
+        </lnTo>
+        <lnTo>
+          <pt x="x2" y="y3" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy3" />
+          <pt x="x5" y="y3" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x4" y="y1" />
+        </lnTo>
+        <lnTo>
+          <pt x="x4" y="y7" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy7" />
+          <pt x="x3" y="y7" />
+        </quadBezTo>
+        <close />
+      </path>
+      <path fill="none" extrusionOk="false">
+        <moveTo>
+          <pt x="l" y="t" />
+        </moveTo>
+        <quadBezTo>
+          <pt x="cx1" y="cy1" />
+          <pt x="x3" y="y1" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x2" y="y3" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy3" />
+          <pt x="x5" y="y3" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x4" y="y1" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx2" y="cy1" />
+          <pt x="r" y="t" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x6" y="y2" />
+        </lnTo>
+        <lnTo>
+          <pt x="r" y="rh" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx5" y="cy4" />
+          <pt x="x5" y="y5" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x5" y="y6" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy6" />
+          <pt x="x2" y="y6" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x2" y="y5" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx4" y="cy4" />
+          <pt x="l" y="rh" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="wd8" y="y2" />
+        </lnTo>
+        <close />
+        <moveTo>
+          <pt x="x2" y="y5" />
+        </moveTo>
+        <lnTo>
+          <pt x="x2" y="y3" />
+        </lnTo>
+        <moveTo>
+          <pt x="x5" y="y3" />
+        </moveTo>
+        <lnTo>
+          <pt x="x5" y="y5" />
+        </lnTo>
+        <moveTo>
+          <pt x="x3" y="y1" />
+        </moveTo>
+        <lnTo>
+          <pt x="x3" y="y7" />
+        </lnTo>
+        <moveTo>
+          <pt x="x4" y="y7" />
+        </moveTo>
+        <lnTo>
+          <pt x="x4" y="y1" />
+        </lnTo>
+      </path>
+    </pathLst>
+  </ellipseRibbon>
+  <ellipseRibbon2>
+    <avLst>
+      <gd name="adj1" fmla="val 25000" />
+      <gd name="adj2" fmla="val 50000" />
+      <gd name="adj3" fmla="val 12500" />
+    </avLst>
+    <gdLst>
+      <gd name="a1" fmla="pin 0 adj1 100000" />
+      <gd name="a2" fmla="pin 25000 adj2 75000" />
+      <gd name="q10" fmla="+- 100000 0 a1" />
+      <gd name="q11" fmla="*/ q10 1 2" />
+      <gd name="q12" fmla="+- a1 0 q11" />
+      <gd name="minAdj3" fmla="max 0 q12" />
+      <gd name="a3" fmla="pin minAdj3 adj3 a1" />
+      <gd name="dx2" fmla="*/ w a2 200000" />
+      <gd name="x2" fmla="+- hc 0 dx2" />
+      <gd name="x3" fmla="+- x2 wd8 0" />
+      <gd name="x4" fmla="+- r 0 x3" />
+      <gd name="x5" fmla="+- r 0 x2" />
+      <gd name="x6" fmla="+- r 0 wd8" />
+      <gd name="dy1" fmla="*/ h a3 100000" />
+      <gd name="f1" fmla="*/ 4 dy1 w" />
+      <gd name="q1" fmla="*/ x3 x3 w" />
+      <gd name="q2" fmla="+- x3 0 q1" />
+      <gd name="u1" fmla="*/ f1 q2 1" />
+      <gd name="y1" fmla="+- b 0 u1" />
+      <gd name="cx1" fmla="*/ x3 1 2" />
+      <gd name="cu1" fmla="*/ f1 cx1 1" />
+      <gd name="cy1" fmla="+- b 0 cu1" />
+      <gd name="cx2" fmla="+- r 0 cx1" />
+      <gd name="q1" fmla="*/ h a1 100000" />
+      <gd name="dy3" fmla="+- q1 0 dy1" />
+      <gd name="q3" fmla="*/ x2 x2 w" />
+      <gd name="q4" fmla="+- x2 0 q3" />
+      <gd name="q5" fmla="*/ f1 q4 1" />
+      <gd name="u3" fmla="+- q5 dy3 0" />
+      <gd name="y3" fmla="+- b 0 u3" />
+      <gd name="q6" fmla="+- dy1 dy3 u3" />
+      <gd name="q7" fmla="+- q6 dy1 0" />
+      <gd name="cu3" fmla="+- q7 dy3 0" />
+      <gd name="cy3" fmla="+- b 0 cu3" />
+      <gd name="rh" fmla="+- b 0 q1" />
+      <gd name="q8" fmla="*/ dy1 14 16" />
+      <gd name="u2" fmla="+/ q8 rh 2" />
+      <gd name="y2" fmla="+- b 0 u2" />
+      <gd name="u5" fmla="+- q5 rh 0" />
+      <gd name="y5" fmla="+- b 0 u5" />
+      <gd name="u6" fmla="+- u3 rh 0" />
+      <gd name="y6" fmla="+- b 0 u6" />
+      <gd name="cx4" fmla="*/ x2 1 2" />
+      <gd name="q9" fmla="*/ f1 cx4 1" />
+      <gd name="cu4" fmla="+- q9 rh 0" />
+      <gd name="cy4" fmla="+- b 0 cu4" />
+      <gd name="cx5" fmla="+- r 0 cx4" />
+      <gd name="cu6" fmla="+- cu3 rh 0" />
+      <gd name="cy6" fmla="+- b 0 cu6" />
+      <gd name="u7" fmla="+- u1 dy3 0" />
+      <gd name="y7" fmla="+- b 0 u7" />
+      <gd name="cu7" fmla="+- q1 q1 u7" />
+      <gd name="cy7" fmla="+- b 0 cu7" />
+    </gdLst>
+    <ahLst>
+      <ahXY gdRefY="adj1" minY="0" maxY="100000">
+        <pos x="hc" y="rh" />
+      </ahXY>
+      <ahXY gdRefX="adj2" minX="25000" maxX="100000">
+        <pos x="x2" y="t" />
+      </ahXY>
+      <ahXY gdRefY="adj3" minY="minAdj3" maxY="a1">
+        <pos x="l" y="dy1" />
+      </ahXY>
+    </ahLst>
+    <cxnLst>
+      <cxn ang="3cd4">
+        <pos x="hc" y="t" />
+      </cxn>
+      <cxn ang="cd2">
+        <pos x="wd8" y="y2" />
+      </cxn>
+      <cxn ang="cd4">
+        <pos x="hc" y="rh" />
+      </cxn>
+      <cxn ang="0">
+        <pos x="x6" y="y2" />
+      </cxn>
+    </cxnLst>
+    <rect l="x2" t="y6" r="x5" b="rh" />
+    <pathLst>
+      <path stroke="false" extrusionOk="false">
+        <moveTo>
+          <pt x="l" y="b" />
+        </moveTo>
+        <quadBezTo>
+          <pt x="cx1" y="cy1" />
+          <pt x="x3" y="y1" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x2" y="y3" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy3" />
+          <pt x="x5" y="y3" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x4" y="y1" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx2" y="cy1" />
+          <pt x="r" y="b" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x6" y="y2" />
+        </lnTo>
+        <lnTo>
+          <pt x="r" y="q1" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx5" y="cy4" />
+          <pt x="x5" y="y5" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x5" y="y6" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy6" />
+          <pt x="x2" y="y6" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x2" y="y5" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx4" y="cy4" />
+          <pt x="l" y="q1" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="wd8" y="y2" />
+        </lnTo>
+        <close />
+      </path>
+      <path fill="darkenLess" stroke="false" extrusionOk="false">
+        <moveTo>
+          <pt x="x3" y="y7" />
+        </moveTo>
+        <lnTo>
+          <pt x="x3" y="y1" />
+        </lnTo>
+        <lnTo>
+          <pt x="x2" y="y3" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy3" />
+          <pt x="x5" y="y3" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x4" y="y1" />
+        </lnTo>
+        <lnTo>
+          <pt x="x4" y="y7" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy7" />
+          <pt x="x3" y="y7" />
+        </quadBezTo>
+        <close />
+      </path>
+      <path fill="none" extrusionOk="false">
+        <moveTo>
+          <pt x="l" y="b" />
+        </moveTo>
+        <lnTo>
+          <pt x="wd8" y="y2" />
+        </lnTo>
+        <lnTo>
+          <pt x="l" y="q1" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx4" y="cy4" />
+          <pt x="x2" y="y5" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x2" y="y6" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy6" />
+          <pt x="x5" y="y6" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x5" y="y5" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx5" y="cy4" />
+          <pt x="r" y="q1" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x6" y="y2" />
+        </lnTo>
+        <lnTo>
+          <pt x="r" y="b" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx2" y="cy1" />
+          <pt x="x4" y="y1" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x5" y="y3" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="hc" y="cy3" />
+          <pt x="x2" y="y3" />
+        </quadBezTo>
+        <lnTo>
+          <pt x="x3" y="y1" />
+        </lnTo>
+        <quadBezTo>
+          <pt x="cx1" y="cy1" />
+          <pt x="l" y="b" />
+        </quadBezTo>
+        <close />
+        <moveTo>
+          <pt x="x2" y="y3" />
+        </moveTo>
+        <lnTo>
+          <pt x="x2" y="y5" />
+        </lnTo>
+        <moveTo>
+          <pt x="x5" y="y5" />
+        </moveTo>
+        <lnTo>
+          <pt x="x5" y="y3" />
+        </lnTo>
+        <moveTo>
+          <pt x="x3" y="y7" />
+        </moveTo>
+        <lnTo>
+          <pt x="x3" y="y1" />
+        </lnTo>
+        <moveTo>
+          <pt x="x4" y="y1" />
+        </moveTo>
+        <lnTo>
+          <pt x="x4" y="y7" />
+        </lnTo>
+      </path>
+    </pathLst>
+  </ellipseRibbon2>
+</presetShapeDefinitions>

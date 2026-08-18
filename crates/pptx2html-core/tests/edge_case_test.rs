@@ -513,7 +513,7 @@ fn test_nested_group_shapes() {
     <p:grpSp>
       <p:nvGrpSpPr><p:cNvPr id="10" name="Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
       <p:grpSpPr>
-        <a:xfrm>
+        <a:xfrm rot="600000">
           <a:off x="100000" y="100000"/>
           <a:ext cx="5000000" cy="3000000"/>
           <a:chOff x="0" y="0"/>
@@ -533,13 +533,134 @@ fn test_nested_group_shapes() {
     let pptx = fixtures::MinimalPptx::new(slide).build();
     let pres = parse_pptx(&pptx);
     assert_eq!(pres.slides[0].shapes.len(), 1);
-    assert!(
-        matches!(&pres.slides[0].shapes[0].shape_type, ShapeType::Group(children, _) if children.len() == 1),
-        "Expected group with one child"
-    );
+    let group = &pres.slides[0].shapes[0];
+    let ShapeType::Group(children, _) = &group.shape_type else {
+        panic!("Expected group with one child");
+    };
+    assert_eq!(children.len(), 1);
+    assert_eq!(group.rotation, 10.0);
+    assert_eq!(children[0].rotation, 0.0);
 
     let html = render_html(&pptx);
     assert!(html.contains("#AABB00"), "Inner shape fill not rendered");
+    assert_eq!(html.matches("rotate(10.0deg)").count(), 1);
+}
+
+#[test]
+fn test_explicit_shape_outline_without_width_renders_hairline() {
+    let slide = r#"
+    <p:sp>
+      <p:nvSpPr><p:cNvPr id="10" name="Outlined"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+      <p:spPr>
+        <a:xfrm><a:off x="100000" y="100000"/><a:ext cx="2000000" cy="1000000"/></a:xfrm>
+        <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="172033"/></a:solidFill>
+        <a:ln><a:solidFill><a:srgbClr val="D7DCE5"/></a:solidFill></a:ln>
+      </p:spPr>
+    </p:sp>"#;
+
+    let pptx = fixtures::MinimalPptx::new(slide).build();
+    let html = render_html(&pptx);
+
+    assert!(html.contains("stroke=\"#D7DCE5\""), "{html}");
+    assert!(html.contains("stroke-width=\"1.0\""), "{html}");
+}
+
+#[test]
+fn test_shape_font_ref_color_reaches_unstyled_runs() {
+    let slide = r#"
+    <p:sp>
+      <p:nvSpPr><p:cNvPr id="10" name="StyledText"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+      <p:spPr>
+        <a:xfrm><a:off x="100000" y="100000"/><a:ext cx="2000000" cy="1000000"/></a:xfrm>
+        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="172033"/></a:solidFill>
+      </p:spPr>
+      <p:style>
+        <a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef>
+        <a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef>
+        <a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef>
+        <a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef>
+      </p:style>
+      <p:txBody>
+        <a:bodyPr/><a:lstStyle/>
+        <a:p><a:r><a:rPr sz="1400"/><a:t>Inherited White</a:t></a:r></a:p>
+      </p:txBody>
+    </p:sp>"#;
+
+    let pptx = fixtures::MinimalPptx::new(slide).build();
+    let html = render_html(&pptx);
+    let text_index = html.find("Inherited White").expect("styled text");
+    let run_markup = &html[text_index.saturating_sub(240)..text_index];
+
+    assert!(run_markup.contains("color: #FFFFFF"), "{run_markup}");
+    assert!(!run_markup.contains("color: #000000"), "{run_markup}");
+}
+
+#[test]
+fn test_shape_text_stays_in_shape_stacking_context() {
+    let slide = r#"
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld><p:spTree/></p:cSld>
+</p:sld>"#;
+    let pptx = fixtures::MinimalPptx::new(slide).build();
+    let html = render_html(&pptx);
+
+    assert!(html.contains("isolation: isolate"), "{html}");
+}
+
+#[test]
+fn test_chevron_uses_preset_text_rectangle() {
+    let slide = r#"
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>
+    <p:sp>
+      <p:nvSpPr><p:cNvPr id="2" name="Chevron"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+      <p:spPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="2857500" cy="1905000"/></a:xfrm>
+        <a:prstGeom prst="chevron"><a:avLst/></a:prstGeom>
+      </p:spPr>
+      <p:txBody>
+        <a:bodyPr anchor="ctr"/><a:lstStyle/>
+        <a:p><a:r><a:t>CHEVRON</a:t></a:r></a:p>
+      </p:txBody>
+    </p:sp>
+  </p:spTree></p:cSld>
+</p:sld>"#;
+    let pptx = fixtures::MinimalPptx::new(slide).build();
+    let html = render_html(&pptx);
+    let text_index = html.find("CHEVRON").expect("chevron text");
+    let text_markup = &html[text_index.saturating_sub(320)..text_index];
+
+    assert!(
+        text_markup.contains("padding: 3.6pt 82.2pt 3.6pt 82.2pt"),
+        "{text_markup}"
+    );
+}
+
+#[test]
+fn test_zero_height_connector_reserves_full_stroke_width() {
+    let slide = r#"
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>
+    <p:cxnSp>
+      <p:nvCxnSpPr><p:cNvPr id="2" name="Horizontal Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+      <p:spPr>
+        <a:xfrm><a:off x="0" y="952500"/><a:ext cx="2857500" cy="0"/></a:xfrm>
+        <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+        <a:ln w="31750"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+      </p:spPr>
+    </p:cxnSp>
+  </p:spTree></p:cSld>
+</p:sld>"#;
+    let pptx = fixtures::MinimalPptx::new(slide).build();
+    let html = render_html(&pptx);
+
+    assert!(html.contains("height: 3.3px"), "{html}");
+    assert!(html.contains(r#"viewBox="0 0 300.0 3.3""#), "{html}");
+    assert!(html.contains("M0,1.7 L300.0,1.7"), "{html}");
 }
 
 // ── get_info / get_info_from_bytes ──
@@ -3465,6 +3586,31 @@ fn test_vertical_text_with_flip_keeps_combined_transform() {
     assert!(
         tb_chunk.contains("rotate(180deg)"),
         "Expected vert270 rotation: {tb_chunk}"
+    );
+}
+
+#[test]
+fn test_body_rotation_with_flip_keeps_independent_text_transform() {
+    let slide = r#"
+    <p:sp>
+      <p:nvSpPr><p:cNvPr id="2" name="RotatedFlip"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
+      <p:spPr>
+        <a:xfrm flipH="1"><a:off x="100000" y="100000"/><a:ext cx="3000000" cy="1000000"/></a:xfrm>
+        <a:prstGeom prst="rect"/>
+      </p:spPr>
+      <p:txBody>
+        <a:bodyPr rot="5400000"/>
+        <a:p><a:r><a:t>Independent rotation</a:t></a:r></a:p>
+      </p:txBody>
+    </p:sp>"#;
+
+    let pptx = fixtures::MinimalPptx::new(slide).build();
+    let html = render_html(&pptx);
+    let tb_start = html.find("class=\"text-body").expect("text-body div");
+    let tb_chunk = &html[tb_start..tb_start + 300.min(html.len() - tb_start)];
+    assert!(
+        tb_chunk.contains("transform: scale(-1,1) rotate(90.0deg)"),
+        "Expected shape flip compensation and independent body rotation: {tb_chunk}"
     );
 }
 

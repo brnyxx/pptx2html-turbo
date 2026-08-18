@@ -155,7 +155,7 @@ pub fn resolve_font_ref(
     font_ref: &FontRef,
     font_scheme: &FontScheme,
     scheme: &ColorScheme,
-    clr_map: &ClrMap,
+    clr_map: Option<&ClrMap>,
 ) -> Option<(String, Option<ResolvedColor>)> {
     let font_name = match font_ref.idx.as_str() {
         "major" => &font_scheme.major_latin,
@@ -168,7 +168,7 @@ pub fn resolve_font_ref(
     }
 
     let resolved_color = if !font_ref.color.is_none() {
-        font_ref.color.resolve(Some(scheme), Some(clr_map))
+        font_ref.color.resolve(Some(scheme), clr_map)
     } else {
         None
     };
@@ -394,7 +394,7 @@ mod tests {
             minor_latin: "Calibri".to_string(),
             ..Default::default()
         };
-        let result = resolve_font_ref(&fr, &fs, &test_scheme(), &ClrMap::default()).unwrap();
+        let result = resolve_font_ref(&fr, &fs, &test_scheme(), Some(&ClrMap::default())).unwrap();
         assert_eq!(result.0, "Calibri Light");
         assert!(result.1.is_some());
     }
@@ -410,9 +410,25 @@ mod tests {
             minor_latin: "Calibri".to_string(),
             ..Default::default()
         };
-        let result = resolve_font_ref(&fr, &fs, &test_scheme(), &ClrMap::default()).unwrap();
+        let result = resolve_font_ref(&fr, &fs, &test_scheme(), Some(&ClrMap::default())).unwrap();
         assert_eq!(result.0, "Calibri");
         assert!(result.1.is_none());
+    }
+
+    #[test]
+    fn font_ref_theme_color_resolves_without_color_map() {
+        let fr = FontRef {
+            idx: "minor".to_string(),
+            color: Color::theme("lt1"),
+        };
+        let fs = FontScheme {
+            minor_latin: "Calibri".to_string(),
+            ..Default::default()
+        };
+
+        let result = resolve_font_ref(&fr, &fs, &test_scheme(), None).unwrap();
+
+        assert_eq!(result.1.expect("font color").to_css(), "#FFFFFF");
     }
 
     #[test]
@@ -422,7 +438,7 @@ mod tests {
             color: Color::none(),
         };
         let fs = FontScheme::default();
-        assert!(resolve_font_ref(&fr, &fs, &test_scheme(), &ClrMap::default()).is_none());
+        assert!(resolve_font_ref(&fr, &fs, &test_scheme(), Some(&ClrMap::default())).is_none());
     }
 
     #[test]
@@ -436,7 +452,7 @@ mod tests {
             minor_latin: "Calibri".to_string(),
             ..Default::default()
         };
-        assert!(resolve_font_ref(&fr, &fs, &test_scheme(), &ClrMap::default()).is_none());
+        assert!(resolve_font_ref(&fr, &fs, &test_scheme(), Some(&ClrMap::default())).is_none());
     }
 
     fn test_fmt_scheme_with_effects() -> FmtScheme {

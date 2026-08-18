@@ -129,7 +129,7 @@ fn tables_keep_structure_and_cell_style_contract() {
 fn charts_keep_direct_svg_contract() {
     let chart = ChartData {
         rel_id: "rIdChart".to_string(),
-        direct_spec: Some(ChartSpec {
+        direct_spec: Some(Box::new(ChartSpec {
             chart_type: ChartType::Column,
             series: vec![ChartSeries {
                 name: Some("Revenue".to_string()),
@@ -138,13 +138,13 @@ fn charts_keep_direct_svg_contract() {
                 ..Default::default()
             }],
             ..Default::default()
-        }),
+        })),
         ..Default::default()
     };
 
     let html = render_shapes(vec![sized_shape(ShapeType::Chart(chart))]);
 
-    assert!(html.contains("<div class=\"chart-direct\">"));
+    assert!(html.contains("class=\"chart-direct"));
     assert!(html.contains("<rect class=\"chart-bar\""));
     assert!(html.contains(
         "<span class=\"chart-legend-item\"><span class=\"chart-legend-swatch\" style=\"background:#4472C4\"></span>Revenue</span>"

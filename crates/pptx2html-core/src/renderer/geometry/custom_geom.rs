@@ -1,6 +1,7 @@
 // Auto-split from renderer/geometry.rs (mechanical move, no logic edits).
 // Family: custom_geom
 
+use super::arc_math::polar_ellipse_offset;
 use super::shared::{CustomGeomPathSvg, CustomGeomSvg};
 use crate::model::{CustomGeometry, GeometryPath, PathCommand};
 use std::fmt::Write;
@@ -110,8 +111,14 @@ pub(super) fn geometry_path_to_svg(path: &GeometryPath, shape_w: f64, shape_h: f
                 }
                 let st_rad = st_deg.to_radians();
                 let end_rad = (st_deg + sw_deg).to_radians();
-                let end_x = cur_x + rx * (end_rad.cos() - st_rad.cos());
-                let end_y = cur_y + ry * (end_rad.sin() - st_rad.sin());
+                let Some(start_offset) = polar_ellipse_offset(*wr, *hr, st_rad) else {
+                    continue;
+                };
+                let Some(end_offset) = polar_ellipse_offset(*wr, *hr, end_rad) else {
+                    continue;
+                };
+                let end_x = cur_x + (end_offset.0 - start_offset.0) * sx;
+                let end_y = cur_y + (end_offset.1 - start_offset.1) * sy;
                 let large_arc = if sw_deg.abs() > 180.0 { 1 } else { 0 };
                 let sweep = if sw_deg > 0.0 { 1 } else { 0 };
                 let _ = write!(
@@ -127,4 +134,33 @@ pub(super) fn geometry_path_to_svg(path: &GeometryPath, shape_w: f64, shape_h: f
         }
     }
     d.trim_end().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::geometry_path_to_svg;
+    use crate::model::{GeometryPath, PathCommand, PathFill};
+
+    #[test]
+    fn unequal_radii_arc_converts_source_angles_before_anisotropic_scaling() {
+        let path = GeometryPath {
+            width: 40.0,
+            height: 20.0,
+            commands: vec![
+                PathCommand::MoveTo { x: 0.0, y: 10.0 },
+                PathCommand::ArcTo {
+                    wr: 20.0,
+                    hr: 10.0,
+                    start_angle: 10_800_000.0,
+                    swing_angle: -2_700_000.0,
+                },
+            ],
+            fill: PathFill::Norm,
+        };
+
+        assert_eq!(
+            geometry_path_to_svg(&path, 80.0, 60.0),
+            "M0.00,30.00 A40.00,30.00 0 0,0 22.11,56.83"
+        );
+    }
 }

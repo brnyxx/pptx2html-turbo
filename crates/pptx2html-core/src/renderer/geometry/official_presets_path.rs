@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use super::arc_math::polar_ellipse_offset;
 use super::official_presets_formula::GuideEnvironment;
 use super::shared::CustomGeomPathSvg;
 use crate::model::PathFill;
@@ -99,14 +100,21 @@ pub(super) fn render_path(
                 start_angle,
                 swing_angle,
             } => {
-                let radius_x = environment.resolve(width_radius)? * scale_x;
-                let radius_y = environment.resolve(height_radius)? * scale_y;
+                let radius_x = environment.resolve(width_radius)?;
+                let radius_y = environment.resolve(height_radius)?;
                 let start = environment.resolve(start_angle)?;
                 let swing = environment.resolve(swing_angle)?;
                 if radius_x.abs() < 0.001 || radius_y.abs() < 0.001 || swing.abs() < 0.001 {
                     continue;
                 }
-                append_arc(&mut output, &mut current, radius_x, radius_y, start, swing)?;
+                append_arc(
+                    &mut output,
+                    &mut current,
+                    (radius_x, radius_y),
+                    (scale_x, scale_y),
+                    start,
+                    swing,
+                )?;
             }
             PathCommandDefinition::Close => output.push_str("Z "),
         }
@@ -121,8 +129,8 @@ pub(super) fn render_path(
 fn append_arc(
     output: &mut String,
     current: &mut (f64, f64),
-    radius_x: f64,
-    radius_y: f64,
+    radii: (f64, f64),
+    scale: (f64, f64),
     start: f64,
     swing: f64,
 ) -> Result<(), String> {
@@ -135,15 +143,23 @@ fn append_arc(
     let segments = segment_count as usize;
     let segment_swing = swing / segments as f64;
     let origin = *current;
+    let (radius_x, radius_y) = radii;
+    let (scale_x, scale_y) = scale;
     let start_radians = ooxml_radians(start);
+    let start_offset = polar_ellipse_offset(radius_x, radius_y, start_radians)
+        .ok_or_else(|| format!("unrepresentable arc radii: {radius_x}x{radius_y}"))?;
+    let scaled_radius_x = radius_x * scale_x;
+    let scaled_radius_y = radius_y * scale_y;
     let sweep_flag = i32::from(swing > 0.0);
     for index in 1..=segments {
         let end_radians = ooxml_radians(start + segment_swing * index as f64);
-        current.0 = origin.0 + radius_x * (end_radians.cos() - start_radians.cos());
-        current.1 = origin.1 + radius_y * (end_radians.sin() - start_radians.sin());
+        let end_offset = polar_ellipse_offset(radius_x, radius_y, end_radians)
+            .ok_or_else(|| format!("unrepresentable arc angle: {end_radians}"))?;
+        current.0 = origin.0 + (end_offset.0 - start_offset.0) * scale_x;
+        current.1 = origin.1 + (end_offset.1 - start_offset.1) * scale_y;
         let _ = write!(
             output,
-            "A{radius_x:.2},{radius_y:.2} 0 0,{sweep_flag} {:.2},{:.2} ",
+            "A{scaled_radius_x:.2},{scaled_radius_y:.2} 0 0,{sweep_flag} {:.2},{:.2} ",
             current.0, current.1
         );
     }
@@ -225,6 +241,30 @@ mod tests {
                 .collect::<String>(),
             "MLQCAZ"
         );
+    }
+
+    #[test]
+    fn unequal_radii_arc_uses_ooxml_ray_angle_endpoint() {
+        let definition = PathDefinition {
+            width: Some("40".into()),
+            height: Some("20".into()),
+            fill: PathFill::Norm,
+            stroke: true,
+            commands: vec![
+                PathCommandDefinition::Move(vec![point("0", "10")]),
+                PathCommandDefinition::Arc {
+                    width_radius: "20".into(),
+                    height_radius: "10".into(),
+                    start_angle: "10800000".into(),
+                    swing_angle: "-2700000".into(),
+                },
+            ],
+        };
+
+        let path = render_path(&definition, &GuideEnvironment::new(40.0, 20.0), 40.0, 20.0)
+            .expect("unequal-radii official arc");
+
+        assert_eq!(path.d, "M0.00,10.00 A20.00,10.00 0 0,0 11.06,18.94");
     }
 
     fn point(x: &str, y: &str) -> PointDefinition {

@@ -21,10 +21,15 @@ pub(super) fn resolve(
     column: usize,
     column_span: usize,
 ) -> ResolvedTableCellStyle {
+    let built_in = table
+        .style
+        .as_ref()
+        .and_then(|style| crate::parser::table_style_builtins::definition(&style.id));
     let Some(definition) = table
         .style
         .as_ref()
-        .and_then(|style| style.definition.as_ref())
+        .and_then(|style| style.definition.as_deref())
+        .or(built_in.as_ref())
     else {
         return explicit_style(cell, ResolvedTableCellStyle::default());
     };

@@ -461,6 +461,10 @@ fn build_multi_series_column_chart_pptx() -> Vec<u8> {
 }
 
 fn build_line_chart_pptx(series_count: usize) -> Vec<u8> {
+    build_line_chart_pptx_with_theme(series_count, "4472C4", "ED7D31")
+}
+
+fn build_line_chart_pptx_with_theme(series_count: usize, accent1: &str, accent2: &str) -> Vec<u8> {
     use std::io::{Cursor, Write};
     use zip::ZipWriter;
     use zip::write::SimpleFileOptions;
@@ -483,6 +487,18 @@ fn build_line_chart_pptx(series_count: usize) -> Vec<u8> {
           </a:graphicData>
         </a:graphic>
       </p:graphicFrame>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="3" name="AfterChart"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+        <p:spPr>
+          <a:xfrm><a:off x="6000000" y="100000"/><a:ext cx="1200000" cy="400000"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          <a:solidFill><a:srgbClr val="4F7DF3"/></a:solidFill>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/><a:lstStyle/>
+          <a:p><a:r><a:rPr lang="en-US"/><a:t>AFTER CHART</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
     </p:spTree>
   </p:cSld>
 </p:sld>"#;
@@ -539,14 +555,30 @@ fn build_line_chart_pptx(series_count: usize) -> Vec<u8> {
       </c:lineChart>
       <c:catAx>
         <c:axId val="123"/>
+        <c:majorTickMark val="out"/>
         <c:crossAx val="456"/>
       </c:catAx>
       <c:valAx>
         <c:axId val="456"/>
+        <c:scaling>
+          <c:min val="0"/>
+          <c:max val="60"/>
+        </c:scaling>
+        <c:delete val="0"/>
+        <c:majorGridlines/>
+        <c:majorTickMark val="out"/>
+        <c:majorUnit val="10"/>
         <c:crossAx val="123"/>
       </c:valAx>
     </c:plotArea>
+    <c:legend>
+      <c:legendPos val="r"/>
+    </c:legend>
   </c:chart>
+    <c:txPr>
+      <a:bodyPr/><a:lstStyle/>
+      <a:p><a:pPr><a:defRPr sz="1800"/></a:pPr></a:p>
+    </c:txPr>
 </c:chartSpace>"#
     );
 
@@ -600,7 +632,8 @@ fn build_line_chart_pptx(series_count: usize) -> Vec<u8> {
     zip.start_file("ppt/charts/chart1.xml", opts).unwrap();
     zip.write_all(chart_xml.as_bytes()).unwrap();
     zip.start_file("ppt/theme/theme1.xml", opts).unwrap();
-    zip.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    let theme_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="T">
   <a:themeElements>
     <a:clrScheme name="O">
@@ -608,8 +641,8 @@ fn build_line_chart_pptx(series_count: usize) -> Vec<u8> {
       <a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
       <a:dk2><a:srgbClr val="44546A"/></a:dk2>
       <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
-      <a:accent1><a:srgbClr val="4472C4"/></a:accent1>
-      <a:accent2><a:srgbClr val="ED7D31"/></a:accent2>
+      <a:accent1><a:srgbClr val="{accent1}"/></a:accent1>
+      <a:accent2><a:srgbClr val="{accent2}"/></a:accent2>
       <a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>
       <a:accent4><a:srgbClr val="FFC000"/></a:accent4>
       <a:accent5><a:srgbClr val="5B9BD5"/></a:accent5>
@@ -619,7 +652,9 @@ fn build_line_chart_pptx(series_count: usize) -> Vec<u8> {
     </a:clrScheme>
     <a:fontScheme name="O"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
   </a:themeElements>
-</a:theme>"#).unwrap();
+</a:theme>"#
+    );
+    zip.write_all(theme_xml.as_bytes()).unwrap();
 
     zip.finish().unwrap().into_inner()
 }
@@ -5038,7 +5073,7 @@ fn test_multi_series_column_chart_renders_grouped_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Multi-series chart should render directly once grouped rendering is supported: {html}"
     );
     assert!(
@@ -5061,7 +5096,7 @@ fn test_multi_series_bar_chart_renders_grouped_horizontal_bars() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Multi-series bar chart should render directly: {html}"
     );
     assert!(
@@ -5090,6 +5125,14 @@ fn test_line_chart_parses_direct_spec() {
             assert_eq!(spec.chart_type, ChartType::Line);
             assert_eq!(spec.series.len(), 1);
             assert_eq!(spec.series[0].name.as_deref(), Some("Revenue"));
+            assert_eq!(spec.value_axis_min, Some(0.0));
+            assert_eq!(spec.value_axis_max, Some(60.0));
+            assert_eq!(spec.value_axis_major_unit, Some(10.0));
+            assert!(spec.value_axis_major_gridlines);
+            assert!(spec.value_axis_visible);
+            assert_eq!(spec.category_axis_major_tick_mark, ChartTickMark::Outside);
+            assert_eq!(spec.value_axis_major_tick_mark, ChartTickMark::Outside);
+            assert_eq!(spec.legend_position, Some(ChartLegendPosition::Right));
         }
         _ => panic!("Expected Chart shape type"),
     }
@@ -5101,7 +5144,7 @@ fn test_line_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("<div class=\"chart-direct chart-direct-line\""),
         "Line chart should render directly: {html}"
     );
     assert!(
@@ -5115,6 +5158,141 @@ fn test_line_chart_renders_directly() {
     assert!(
         !html.contains("<div class=\"chart-placeholder\">"),
         "Line chart should not use placeholder: {html}"
+    );
+}
+
+#[test]
+fn test_line_chart_closes_outer_shape_before_following_shape() {
+    let pptx = build_line_chart_pptx(1);
+    let html = render_html(&pptx);
+    let after_text = html.find("AFTER CHART").expect("following shape text");
+    let following_shape = html[..after_text]
+        .rfind("<div class=\"shape\"")
+        .expect("following shape container");
+    let chart_shape = html[..following_shape]
+        .rfind("<div class=\"shape\"")
+        .expect("chart shape container");
+    let chart_markup = &html[chart_shape..following_shape];
+
+    assert_eq!(
+        chart_markup.matches("<div").count(),
+        chart_markup.matches("</div>").count(),
+        "Chart shape must close before the following shape starts: {chart_markup}"
+    );
+}
+
+#[test]
+fn test_line_chart_renders_value_axis_gridlines_and_right_legend() {
+    let pptx = build_line_chart_pptx(1);
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains("class=\"chart-grid-line\""),
+        "Line chart should render major gridlines: {html}"
+    );
+    assert!(
+        html.contains("class=\"chart-y-tick\"") && html.contains("data-axis-value=\"60\""),
+        "Line chart should render value-axis ticks through the configured maximum: {html}"
+    );
+    assert!(
+        html.contains("data-chart-legend-position=\"r\""),
+        "Line chart should preserve right-side legend intent: {html}"
+    );
+}
+
+#[test]
+fn test_line_chart_renders_value_and_category_axis_spines() {
+    let pptx = build_line_chart_pptx(1);
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains("<line class=\"chart-axis-line\" data-axis=\"value\""),
+        "{html}"
+    );
+    assert!(
+        html.contains("<line class=\"chart-axis-line\" data-axis=\"category\""),
+        "{html}"
+    );
+}
+
+#[test]
+fn test_line_chart_renders_authored_axis_ticks_and_theme_text() {
+    let pptx = build_line_chart_pptx(1);
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains(r#"<line class="chart-axis-tick" data-axis="value" data-axis-value="60""#),
+        "Value-axis major ticks must preserve majorTickMark=out: {html}"
+    );
+    assert!(
+        html.contains(
+            r#"<line class="chart-axis-tick" data-axis="category" data-category-boundary="0""#
+        ),
+        "Category-axis boundary ticks must preserve majorTickMark=out: {html}"
+    );
+    assert!(
+        html.contains("--chart-text-color: #000000"),
+        "Chart axis and legend text must resolve theme dk1: {html}"
+    );
+}
+
+#[test]
+fn test_line_chart_renders_chart_text_property_size() {
+    let pptx = build_line_chart_pptx(1);
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains("--chart-font-size: 18.0pt"),
+        "Chart text should preserve txPr defRPr size: {html}"
+    );
+}
+
+#[test]
+fn test_line_chart_reserves_top_gutter_for_large_axis_text() {
+    let pptx = build_line_chart_pptx(1);
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains(
+            r#"<text class="chart-y-tick" data-axis-value="60" x="32.0" y="18.0">60</text>"#
+        ),
+        "The 18pt top tick must fit inside the SVG viewport: {html}"
+    );
+}
+
+#[test]
+fn test_line_chart_categories_share_series_point_coordinates() {
+    let pptx = build_line_chart_pptx(1);
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains(r#"points="96.1,"#),
+        "The first line point must use the default half-category inset: {html}"
+    );
+    assert!(
+        html.contains(r#"<text class="chart-x-tick" data-category-index="0" x="96.1""#),
+        "The first category label must share the first point's x coordinate: {html}"
+    );
+}
+
+#[test]
+fn test_line_chart_uses_theme_palette_and_automatic_markers() {
+    let pptx = build_line_chart_pptx_with_theme(2, "4F81BD", "C0504D");
+    let html = render_html(&pptx);
+
+    assert!(html.contains("stroke:#4F81BD"), "{html}");
+    assert!(html.contains("stroke:#C0504D"), "{html}");
+    assert!(
+        html.contains("<rect class=\"chart-point\" data-marker-symbol=\"square\""),
+        "{html}"
+    );
+    assert!(
+        html.contains("<polygon class=\"chart-point\" data-marker-symbol=\"diamond\""),
+        "{html}"
+    );
+    assert!(
+        html.contains("data-marker-radius=\"4.0\""),
+        "Automatic line markers must match the 6pt proxy reference: {html}"
     );
 }
 
@@ -5133,6 +5311,51 @@ fn test_line_chart_parses_marker_spec() {
         }
         _ => panic!("Expected Chart shape type"),
     }
+}
+
+#[test]
+fn test_line_chart_renders_marker_shape_and_series_color() {
+    let pptx = build_line_chart_with_marker_pptx("diamond", Some(9));
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains("<polygon class=\"chart-point\" data-marker-symbol=\"diamond\""),
+        "Diamond markers should render as diamond polygons: {html}"
+    );
+    assert!(
+        html.contains("stroke:#4472C4"),
+        "Marker line should preserve the first theme palette color: {html}"
+    );
+    assert!(
+        html.contains("data-marker-radius=\"6.0\""),
+        "A 9pt marker must render with a 6px radius at 96 DPI: {html}"
+    );
+}
+
+#[test]
+fn test_line_chart_legend_renders_series_line_and_marker_symbols() {
+    let pptx = build_line_chart_pptx_with_theme(2, "4F81BD", "C0504D");
+    let html = render_html(&pptx);
+
+    assert!(
+        html.contains("<svg class=\"chart-line-legend-key\""),
+        "Line chart legends must use an SVG line key: {html}"
+    );
+    assert!(
+        html.contains("<line class=\"chart-legend-line\""),
+        "Line chart legends must preserve the series line: {html}"
+    );
+    assert!(
+        html.contains(r#"<div class="chart-direct chart-direct-line""#)
+            && html.contains(r#"class="chart-svg" preserveAspectRatio="xMidYMid meet""#),
+        "Line chart layout must not non-uniformly squash markers or strokes: {html}"
+    );
+    assert!(
+        html.contains("<rect class=\"chart-legend-point\" data-marker-symbol=\"square\"")
+            && html
+                .contains("<polygon class=\"chart-legend-point\" data-marker-symbol=\"diamond\""),
+        "Line chart legends must match automatic series markers: {html}"
+    );
 }
 
 #[test]
@@ -5213,7 +5436,7 @@ fn test_line_chart_renders_centered_value_labels() {
         "Centered line labels should expose ctr label position: {html}"
     );
     assert!(
-        html.contains("y=\"93.0\">20</text>"),
+        html.contains("y=\"107.0\">20</text>"),
         "Centered line label should sit on the point center: {html}"
     );
 }
@@ -5228,7 +5451,7 @@ fn test_line_chart_renders_in_end_value_labels() {
         "Line inEnd labels should expose inEnd label position: {html}"
     );
     assert!(
-        html.contains("y=\"103.0\">20</text>"),
+        html.contains("y=\"117.0\">20</text>"),
         "Line inEnd label should move below the point: {html}"
     );
 }
@@ -5286,7 +5509,7 @@ fn test_scatter_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Scatter chart should render directly: {html}"
     );
     assert!(
@@ -5599,7 +5822,7 @@ fn test_bubble_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Bubble chart should render directly once bubble support is available: {html}"
     );
     assert!(
@@ -5617,7 +5840,7 @@ fn test_positive_bubble_chart_with_show_neg_bubbles_true_still_renders_directly(
     let html = render_html(&build_bubble_chart_with_show_neg_bubbles_pptx("1"));
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "showNegBubbles on positive-only bubble data should not disable direct rendering: {html}"
     );
     assert!(
@@ -5740,7 +5963,7 @@ fn test_area_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Area chart should render directly: {html}"
     );
     assert!(
@@ -5763,7 +5986,7 @@ fn test_area3d_chart_renders_directly_as_flat_area() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "3D area chart should reuse the direct chart renderer when the series shape matches a flat area: {html}"
     );
     assert!(
@@ -5786,7 +6009,7 @@ fn test_stacked_area3d_chart_falls_back_to_placeholder() {
         "Stacked area3D should stay on fallback until stacked flattening is explicitly supported: {html}"
     );
     assert!(
-        !html.contains("<div class=\"chart-direct\">"),
+        !html.contains("class=\"chart-direct"),
         "Stacked area3D should not enter the direct chart path yet: {html}"
     );
 }
@@ -5797,7 +6020,7 @@ fn test_radar_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Radar chart should render directly once radar support is available: {html}"
     );
     assert!(
@@ -5838,7 +6061,7 @@ fn test_radar_marker_style_uses_series_marker_symbol_and_size() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Marker-style radar should still render directly: {html}"
     );
     assert!(
@@ -5846,7 +6069,7 @@ fn test_radar_marker_style_uses_series_marker_symbol_and_size() {
         "Radar marker style should expose the parsed marker symbol on rendered points: {html}"
     );
     assert!(
-        html.contains("r=\"6.0\""),
+        html.contains("data-marker-radius=\"6.0\""),
         "Radar marker style should scale point radius from the parsed marker size: {html}"
     );
 }
@@ -5887,7 +6110,7 @@ fn test_multi_series_radar_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Multi-series radar should render directly once bounded multi-series radar support is enabled: {html}"
     );
     assert!(
@@ -5910,7 +6133,7 @@ fn test_multi_series_radar_chart_with_value_labels_falls_back_to_placeholder() {
         "Multi-series radar with data labels should stay on fallback until bounded radar label support is implemented: {html}"
     );
     assert!(
-        !html.contains("<div class=\"chart-direct\">"),
+        !html.contains("class=\"chart-direct"),
         "Multi-series radar with data labels should not enter the direct chart path yet: {html}"
     );
 }
@@ -5921,7 +6144,7 @@ fn test_multi_series_radar_marker_style_renders_markers_for_each_series() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Multi-series marker radar should render directly: {html}"
     );
     assert!(
@@ -5940,7 +6163,7 @@ fn test_multi_series_radar_filled_style_renders_fill_for_each_series() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Multi-series filled radar should render directly: {html}"
     );
     assert!(
@@ -5989,7 +6212,7 @@ fn test_multi_series_line_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Multi-series line chart should render directly: {html}"
     );
     assert!(
@@ -6012,7 +6235,7 @@ fn test_stacked_column_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Stacked column chart should render directly: {html}"
     );
     assert!(
@@ -6035,7 +6258,7 @@ fn test_percent_stacked_column_chart_normalizes_to_full_height() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "100% stacked chart should render directly: {html}"
     );
     assert!(
@@ -6058,7 +6281,7 @@ fn test_stacked_bar_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Stacked bar chart should render directly: {html}"
     );
     assert!(
@@ -6085,7 +6308,7 @@ fn test_percent_stacked_bar_chart_normalizes_to_full_width() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "100% stacked bar chart should render directly: {html}"
     );
     assert!(
@@ -6338,7 +6561,7 @@ fn test_doughnut_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Doughnut chart should render directly: {html}"
     );
     assert!(
@@ -6361,7 +6584,7 @@ fn test_pie_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "Pie chart should render directly: {html}"
     );
     assert!(
@@ -6418,7 +6641,7 @@ fn test_pie3d_chart_renders_directly_as_flat_pie() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "3D pie chart should reuse the direct chart renderer when the series shape matches a flat pie: {html}"
     );
     assert!(
@@ -6441,7 +6664,7 @@ fn test_of_pie_chart_renders_directly() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("<div class=\"chart-direct\">"),
+        html.contains("class=\"chart-direct"),
         "ofPie chart should render directly once bounded ofPie support is available: {html}"
     );
     assert!(
@@ -6824,8 +7047,8 @@ fn test_ln_defaults_and_extended_line_properties_are_parsed() {
     let shape = &pres.slides[0].shapes[0];
 
     assert_eq!(
-        shape.border.width, 0.0,
-        "Default ln width should remain zero"
+        shape.border.width, 0.75,
+        "Default ln width should preserve the renderer hairline"
     );
     assert!(matches!(shape.border.cap, LineCap::Square));
     assert!(matches!(shape.border.compound, CompoundLine::Double));
@@ -6959,7 +7182,7 @@ fn test_straight_connector_anchors_to_custom_geometry_connection_sites() {
     let html = render_html(&pptx);
 
     assert!(
-        html.contains("left: 133.3px; top: 65.7px; width: 133.3px; height: 2px"),
+        html.contains("left: 133.3px; top: 65.9px; width: 133.3px; height: 1.5px"),
         "anchored connector should span between connection sites: {html}"
     );
 }

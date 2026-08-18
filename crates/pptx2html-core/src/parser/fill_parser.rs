@@ -22,6 +22,7 @@ pub(crate) struct FillSaxState {
     pub(crate) in_gradient: bool,
     pub(crate) gradient_stops: Vec<GradientStop>,
     pub(crate) gradient_angle: f64,
+    pub(crate) gradient_scaled: Option<bool>,
     pub(crate) gradient_type: GradientType,
     pub(crate) gradient_stop_position: f64,
     pub(crate) in_text_effect_list: bool,
@@ -51,6 +52,7 @@ pub(crate) struct FillSaxState {
     in_background_gradient: bool,
     background_gradient_stops: Vec<GradientStop>,
     background_gradient_angle: f64,
+    background_gradient_scaled: Option<bool>,
     background_gradient_type: GradientType,
     background_stop_position: f64,
     pattern: PatternSaxState,
@@ -81,6 +83,7 @@ impl Default for FillSaxState {
             in_gradient: false,
             gradient_stops: Vec::new(),
             gradient_angle: 0.0,
+            gradient_scaled: None,
             gradient_type: GradientType::Linear,
             gradient_stop_position: 0.0,
             in_text_effect_list: false,
@@ -110,6 +113,7 @@ impl Default for FillSaxState {
             in_background_gradient: false,
             background_gradient_stops: Vec::new(),
             background_gradient_angle: 0.0,
+            background_gradient_scaled: None,
             background_gradient_type: GradientType::Linear,
             background_stop_position: 0.0,
             pattern: PatternSaxState::default(),
@@ -230,6 +234,7 @@ impl FillSaxState {
                     .map(|value| value / 60_000.0)
                     .unwrap_or(0.0);
                 self.background_gradient_type = GradientType::Linear;
+                self.background_gradient_scaled = parse_optional_bool(element, "scaled");
             }
             "path" if self.in_background_gradient => {
                 if let Some(value) = xml_utils::attr_str(element, "path") {
@@ -317,6 +322,7 @@ impl FillSaxState {
                     .map(|value| value / 60_000.0)
                     .unwrap_or(0.0);
                 self.gradient_type = GradientType::Linear;
+                self.gradient_scaled = parse_optional_bool(element, "scaled");
             }
             "path" if self.in_gradient => {
                 if let Some(value) = xml_utils::attr_str(element, "path") {
@@ -377,6 +383,7 @@ impl FillSaxState {
                 self.in_background_gradient = true;
                 self.background_gradient_stops.clear();
                 self.background_gradient_angle = 0.0;
+                self.background_gradient_scaled = None;
                 self.background_gradient_type = GradientType::Linear;
             }
             "gs" if self.in_background_gradient => {
@@ -406,7 +413,7 @@ impl FillSaxState {
                 let shape = shape.as_mut().expect("shape builder for line");
                 shape.border_width = xml_utils::attr_str(element, "w")
                     .map(|value| Emu::parse_emu(&value).to_pt())
-                    .unwrap_or(0.0);
+                    .unwrap_or(0.75);
                 shape.border_cap = match xml_utils::attr_str(element, "cap").as_deref() {
                     Some("rnd") => LineCap::Round,
                     Some("flat") => LineCap::Flat,
@@ -428,6 +435,7 @@ impl FillSaxState {
                 self.in_gradient = true;
                 self.gradient_stops.clear();
                 self.gradient_angle = 0.0;
+                self.gradient_scaled = None;
                 self.gradient_type = GradientType::Linear;
             }
             "gs" if self.in_gradient => {
@@ -590,6 +598,7 @@ impl FillSaxState {
                         gradient_type: std::mem::take(&mut self.gradient_type),
                         stops: std::mem::take(&mut self.gradient_stops),
                         angle: self.gradient_angle,
+                        scaled: self.gradient_scaled.take(),
                     });
                 }
             }
@@ -629,9 +638,18 @@ impl FillSaxState {
                 gradient_type: std::mem::take(&mut self.background_gradient_type),
                 stops: std::mem::take(&mut self.background_gradient_stops),
                 angle: self.background_gradient_angle,
+                scaled: self.background_gradient_scaled.take(),
             }));
         }
     }
+}
+
+fn parse_optional_bool(element: &BytesStart<'_>, name: &str) -> Option<bool> {
+    xml_utils::attr_str(element, name).and_then(|value| match value.as_str() {
+        "true" | "1" => Some(true),
+        "false" | "0" => Some(false),
+        _ => None,
+    })
 }
 
 fn relationship_embed_id(element: &BytesStart<'_>) -> Option<String> {

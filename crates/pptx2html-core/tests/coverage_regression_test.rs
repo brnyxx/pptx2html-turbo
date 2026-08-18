@@ -55,7 +55,7 @@ fn renderer_chart_shape(spec: ChartSpec) -> Shape {
             rel_id: "rIdChart".to_string(),
             preview_image: None,
             preview_mime: None,
-            direct_spec: Some(spec),
+            direct_spec: Some(Box::new(spec)),
         }),
         size: Size {
             width: Emu(1_828_800),
@@ -819,6 +819,7 @@ fn renders_remaining_chart_label_and_gradient_branches_through_public_renderer()
                 },
             ],
             angle: 45.0,
+            scaled: None,
         })
     };
     let gradient_shape = |gradient_type| Shape {
@@ -1116,6 +1117,7 @@ fn renders_anchor_geometry_and_fill_fallbacks_through_public_renderer() {
                     gradient_type: GradientType::Linear,
                     stops: Vec::new(),
                     angle: 0.0,
+                    scaled: None,
                 }),
                 size: Size {
                     width: Emu(457_200),
@@ -1144,6 +1146,7 @@ fn renders_anchor_geometry_and_fill_fallbacks_through_public_renderer() {
             gradient_type: GradientType::Linear,
             stops: Vec::new(),
             angle: 0.0,
+            scaled: None,
         })),
         ..Default::default()
     });
@@ -1399,6 +1402,7 @@ fn renders_last_renderer_fallback_edges_through_public_renderer() {
             gradient_type: GradientType::Linear,
             stops: Vec::new(),
             angle: 0.0,
+            scaled: None,
         }),
         size: Size {
             width: Emu(457_200),

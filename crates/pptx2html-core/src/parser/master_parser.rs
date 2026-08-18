@@ -977,6 +977,7 @@ fn finalize_background<R: Read + Seek>(
             gradient_type: std::mem::take(bg_grad_type),
             stops: std::mem::take(bg_grad_stops),
             angle: bg_grad_angle,
+            scaled: None,
         }));
     }
 }

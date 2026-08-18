@@ -690,6 +690,7 @@ pub fn parse_slide_layout<R: Read + Seek>(
                                 gradient_type: std::mem::take(&mut bg_grad_type),
                                 stops: std::mem::take(&mut bg_grad_stops),
                                 angle: bg_grad_angle,
+                                scaled: None,
                             }));
                         }
                     }

@@ -59,6 +59,17 @@ fn parses_style_id_flags_and_office_region_precedence() {
 }
 
 #[test]
+fn built_in_medium_style_two_renders_default_header_and_row_banding() {
+    let result = convert_bytes_with_metadata(&table_style_support::built_in_default_package())
+        .expect("built-in table style fixture converts");
+
+    assert!(result.html.contains("background-color: #4F81BD"));
+    assert!(result.html.contains("background-color: #D0D8E7"));
+    assert!(result.html.contains("background-color: #E9ECF3"));
+    assert!(result.html.contains("color: #FFFFFF"));
+}
+
+#[test]
 fn unavailable_built_in_preserves_id_and_six_flags_in_one_diagnostic() {
     let result = convert_bytes_with_metadata(&package()).expect("table style fixture converts");
     let diagnostics = result

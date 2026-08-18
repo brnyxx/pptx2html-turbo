@@ -274,6 +274,7 @@ mod tests {
                 color: Color::rgb("445566"),
             }],
             angle: 45.0,
+            scaled: None,
         });
         assert_eq!(gradient.color_ref().to_css().as_deref(), Some("#445566"));
         assert_eq!(Fill::default().color_ref().to_css(), None);

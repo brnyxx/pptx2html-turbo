@@ -2,10 +2,108 @@ use std::fmt::Write;
 
 use base64::Engine;
 
+use crate::model::ChartTickMark;
+
 use super::{
-    ChartData, ChartDataLabelPosition, ChartGrouping, ChartScatterStyle, ChartType, RenderCtx,
-    escape_html,
+    ChartData, ChartDataLabelPosition, ChartGrouping, ChartLegendPosition, ChartMarkerSpec,
+    ChartScatterStyle, ChartType, Color, RenderCtx, escape_html,
 };
+
+fn format_axis_value(value: f64) -> String {
+    if value.fract().abs() < f64::EPSILON {
+        format!("{value:.0}")
+    } else {
+        let formatted = format!("{value:.2}");
+        formatted
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
+    }
+}
+
+fn line_marker_symbol(marker: Option<&ChartMarkerSpec>, series_idx: usize) -> Option<&str> {
+    match marker.and_then(|spec| spec.symbol.as_deref()) {
+        Some("none") => None,
+        Some(symbol) => Some(symbol),
+        None if marker.is_none() => Some(match series_idx % 4 {
+            0 => "square",
+            1 => "diamond",
+            2 => "triangle",
+            _ => "circle",
+        }),
+        None => None,
+    }
+}
+
+fn line_marker_radius(marker: Option<&ChartMarkerSpec>) -> f64 {
+    let size_pt = marker
+        .and_then(|spec| spec.size)
+        .filter(|size| *size > 0)
+        .unwrap_or(6) as f64;
+    size_pt * 2.0 / 3.0
+}
+
+fn axis_tick_span(tick_mark: ChartTickMark, outside_sign: f64) -> Option<(f64, f64)> {
+    let outside = 6.0 * outside_sign;
+    let inside = -outside;
+    match tick_mark {
+        ChartTickMark::None => None,
+        ChartTickMark::Inside => Some((0.0, inside)),
+        ChartTickMark::Outside => Some((outside, 0.0)),
+        ChartTickMark::Cross => Some((outside / 2.0, inside / 2.0)),
+    }
+}
+
+fn render_line_marker(
+    html: &mut String,
+    class_name: &str,
+    symbol: &str,
+    color: &str,
+    x: f64,
+    y: f64,
+    radius: f64,
+) {
+    match symbol {
+        "diamond" => {
+            let _ = writeln!(
+                html,
+                "<polygon class=\"{class_name}\" data-marker-symbol=\"diamond\" data-marker-radius=\"{radius:.1}\" style=\"fill:{color}\" points=\"{x:.1},{:.1} {:.1},{y:.1} {x:.1},{:.1} {:.1},{y:.1}\" />",
+                y - radius,
+                x + radius,
+                y + radius,
+                x - radius
+            );
+        }
+        "square" => {
+            let _ = writeln!(
+                html,
+                "<rect class=\"{class_name}\" data-marker-symbol=\"square\" data-marker-radius=\"{radius:.1}\" style=\"fill:{color}\" x=\"{:.1}\" y=\"{:.1}\" width=\"{:.1}\" height=\"{:.1}\" />",
+                x - radius,
+                y - radius,
+                radius * 2.0,
+                radius * 2.0
+            );
+        }
+        "triangle" => {
+            let _ = writeln!(
+                html,
+                "<polygon class=\"{class_name}\" data-marker-symbol=\"triangle\" data-marker-radius=\"{radius:.1}\" style=\"fill:{color}\" points=\"{x:.1},{:.1} {:.1},{:.1} {:.1},{:.1}\" />",
+                y - radius,
+                x + radius,
+                y + radius,
+                x - radius,
+                y + radius
+            );
+        }
+        _ => {
+            let _ = writeln!(
+                html,
+                "<circle class=\"{class_name}\" data-marker-symbol=\"{}\" data-marker-radius=\"{radius:.1}\" style=\"fill:{color}\" cx=\"{x:.1}\" cy=\"{y:.1}\" r=\"{radius:.1}\" />",
+                escape_html(symbol)
+            );
+        }
+    }
+}
 
 pub(super) fn render_chart(
     chart_data: &ChartData,
@@ -75,16 +173,35 @@ pub(super) fn render_chart(
             };
 
         if direct_chart_supported {
-            let palette = [
+            let fallback_palette = [
                 "#4472C4", "#ED7D31", "#A5A5A5", "#FFC000", "#5B9BD5", "#70AD47",
             ];
+            let palette = [
+                "accent1", "accent2", "accent3", "accent4", "accent5", "accent6",
+            ]
+            .iter()
+            .zip(fallback_palette)
+            .map(|(scheme, fallback)| {
+                ctx.color_to_css(&Color::theme(*scheme))
+                    .unwrap_or_else(|| fallback.to_string())
+            })
+            .collect::<Vec<_>>();
             let max_value = spec
                 .series
                 .iter()
                 .flat_map(|series| series.values.iter().copied())
                 .fold(0.0_f64, f64::max)
                 .max(1.0);
-            let chart_height = (h - 52.0).max(60.0);
+            let side_line_legend = spec.chart_type == ChartType::Line
+                && matches!(
+                    spec.legend_position,
+                    Some(ChartLegendPosition::Left | ChartLegendPosition::Right)
+                );
+            let chart_height = if side_line_legend {
+                h.max(60.0)
+            } else {
+                (h - 52.0).max(60.0)
+            };
             let series_count = spec.series.len().max(1) as f64;
             let gap_width = spec.gap_width.unwrap_or(150).clamp(0, 500);
             let overlap = spec.overlap.unwrap_or(0).clamp(-100, 100);
@@ -152,20 +269,67 @@ pub(super) fn render_chart(
                     .unwrap_or(ChartDataLabelPosition::OutEnd)
             };
 
-            let _ = writeln!(html, "<div class=\"chart-direct\">");
+            let legend_position = match spec.legend_position {
+                Some(ChartLegendPosition::Left) => "l",
+                Some(ChartLegendPosition::Right) => "r",
+                Some(ChartLegendPosition::Top) => "t",
+                Some(ChartLegendPosition::Bottom) => "b",
+                None => "t",
+            };
+            let chart_text_color = ctx
+                .color_to_css(&Color::theme("dk1"))
+                .unwrap_or_else(|| "#000000".to_string());
+            let mut chart_style = format!("--chart-text-color: {chart_text_color}");
+            if let Some(size) = spec
+                .text_size_pt
+                .filter(|size| size.is_finite() && *size > 0.0)
+            {
+                let _ = write!(chart_style, "; --chart-font-size: {size:.1}pt");
+            }
+            let text_size_style = format!(" style=\"{chart_style}\"");
+            let _ = writeln!(
+                html,
+                "<div class=\"chart-direct{}\" data-chart-legend-position=\"{legend_position}\"{text_size_style}>",
+                if spec.chart_type == ChartType::Line {
+                    " chart-direct-line"
+                } else {
+                    ""
+                }
+            );
             html.push_str("<div class=\"chart-legend\">\n");
             if matches!(spec.chart_type, ChartType::Pie | ChartType::Doughnut) {
                 for (idx, category) in first_series.categories.iter().enumerate() {
-                    let color = palette[idx % palette.len()];
+                    let color = palette[idx % palette.len()].as_str();
                     let _ = writeln!(
                         html,
                         "<span class=\"chart-legend-item\"><span class=\"chart-legend-swatch\" style=\"background:{color}\"></span>{}</span>",
                         escape_html(category)
                     );
                 }
+            } else if spec.chart_type == ChartType::Line {
+                for (series_idx, series) in spec.series.iter().enumerate() {
+                    let color = palette[series_idx % palette.len()].as_str();
+                    let label = series.name.as_deref().unwrap_or("Series");
+                    let _ = write!(
+                        html,
+                        "<span class=\"chart-legend-item\"><svg class=\"chart-line-legend-key\" viewBox=\"0 0 24 12\" aria-hidden=\"true\"><line class=\"chart-legend-line\" style=\"stroke:{color}\" x1=\"1\" y1=\"6\" x2=\"23\" y2=\"6\" />"
+                    );
+                    if let Some(symbol) = line_marker_symbol(series.marker.as_ref(), series_idx) {
+                        render_line_marker(
+                            html,
+                            "chart-legend-point",
+                            symbol,
+                            color,
+                            12.0,
+                            6.0,
+                            line_marker_radius(series.marker.as_ref()),
+                        );
+                    }
+                    let _ = writeln!(html, "</svg>{}</span>", escape_html(label));
+                }
             } else {
                 for (series_idx, series) in spec.series.iter().enumerate() {
-                    let color = palette[series_idx % palette.len()];
+                    let color = palette[series_idx % palette.len()].as_str();
                     let label = series.name.as_deref().unwrap_or("Series");
                     let _ = writeln!(
                         html,
@@ -186,7 +350,12 @@ pub(super) fn render_chart(
             html.push_str("<div class=\"chart-plot-main\">\n");
             let _ = writeln!(
                 html,
-                "<svg viewBox=\"0 0 {w:.1} {chart_height:.1}\" class=\"chart-svg\" preserveAspectRatio=\"none\">"
+                "<svg viewBox=\"0 0 {w:.1} {chart_height:.1}\" class=\"chart-svg\" preserveAspectRatio=\"{}\">",
+                if spec.chart_type == ChartType::Line {
+                    "xMidYMid meet"
+                } else {
+                    "none"
+                }
             );
             let grouping_attr = match spec.grouping {
                 ChartGrouping::Clustered => "clustered",
@@ -225,7 +394,7 @@ pub(super) fn render_chart(
                             }
                             let mut accumulated = vec![0.0; category_count];
                             for (series_idx, series) in spec.series.iter().enumerate() {
-                                let color = palette[series_idx % palette.len()];
+                                let color = palette[series_idx % palette.len()].as_str();
                                 for (idx, value) in series.values.iter().enumerate() {
                                     let normalized =
                                         if matches!(spec.grouping, ChartGrouping::PercentStacked) {
@@ -289,7 +458,7 @@ pub(super) fn render_chart(
                                 0.0
                             };
                             for (series_idx, series) in spec.series.iter().enumerate() {
-                                let color = palette[series_idx % palette.len()];
+                                let color = palette[series_idx % palette.len()].as_str();
                                 for (idx, value) in series.values.iter().enumerate() {
                                     let bar_height = if *value <= 0.0 {
                                         0.0
@@ -359,7 +528,7 @@ pub(super) fn render_chart(
                             }
                             let mut accumulated = vec![0.0; category_count];
                             for (series_idx, series) in spec.series.iter().enumerate() {
-                                let color = palette[series_idx % palette.len()];
+                                let color = palette[series_idx % palette.len()].as_str();
                                 for (idx, value) in series.values.iter().enumerate() {
                                     let normalized =
                                         if matches!(spec.grouping, ChartGrouping::PercentStacked) {
@@ -425,7 +594,7 @@ pub(super) fn render_chart(
                                 0.0
                             };
                             for (series_idx, series) in spec.series.iter().enumerate() {
-                                let color = palette[series_idx % palette.len()];
+                                let color = palette[series_idx % palette.len()].as_str();
                                 for (idx, value) in series.values.iter().enumerate() {
                                     let width = if *value <= 0.0 {
                                         0.0
@@ -509,7 +678,7 @@ pub(super) fn render_chart(
                     }
 
                     for (series_idx, series) in spec.series.iter().enumerate() {
-                        let color = palette[series_idx % palette.len()];
+                        let color = palette[series_idx % palette.len()].as_str();
                         let marker_symbol = series
                             .marker
                             .as_ref()
@@ -558,57 +727,158 @@ pub(super) fn render_chart(
                         );
                         if render_markers {
                             for (x, y) in &points {
-                                let _ = writeln!(
+                                render_line_marker(
                                     html,
-                                    "<circle class=\"chart-point\" data-marker-symbol=\"{}\" style=\"fill:{color}\" cx=\"{x:.1}\" cy=\"{y:.1}\" r=\"{marker_radius:.1}\" />",
-                                    escape_html(marker_symbol)
+                                    "chart-point",
+                                    marker_symbol,
+                                    color,
+                                    *x,
+                                    *y,
+                                    marker_radius,
                                 );
                             }
                         }
                     }
                 }
                 ChartType::Line => {
-                    let left_pad = 8.0;
-                    let right_pad = 8.0;
+                    let chart_font_px = spec.text_size_pt.unwrap_or(7.5) * 4.0 / 3.0;
+                    let legend_gutter = if side_line_legend {
+                        let longest_label = spec
+                            .series
+                            .iter()
+                            .map(|series| {
+                                series.name.as_deref().unwrap_or("Series").chars().count()
+                            })
+                            .max()
+                            .unwrap_or(6) as f64;
+                        (36.0 + longest_label * chart_font_px * 0.55).max(72.0)
+                    } else {
+                        0.0
+                    };
+                    let left_pad = if spec.value_axis_visible { 36.0 } else { 8.0 }
+                        + if spec.legend_position == Some(ChartLegendPosition::Left) {
+                            legend_gutter
+                        } else {
+                            0.0
+                        };
+                    let right_pad = if spec.legend_position == Some(ChartLegendPosition::Right) {
+                        legend_gutter
+                    } else {
+                        8.0
+                    };
+                    let top_pad = (chart_font_px * 0.75).max(8.0);
+                    let bottom_pad = (chart_font_px + 8.0).max(24.0);
                     let usable_width = (w - left_pad - right_pad).max(1.0);
+                    let plot_height = (chart_height - top_pad - bottom_pad).max(1.0);
+                    let axis_min = spec.value_axis_min.unwrap_or(0.0);
+                    let raw_major = ((max_value - axis_min).max(1.0) / 6.0).max(f64::EPSILON);
+                    let magnitude = 10_f64.powf(raw_major.log10().floor());
+                    let normalized_major = raw_major / magnitude;
+                    let auto_major = if normalized_major <= 1.0 {
+                        magnitude
+                    } else if normalized_major <= 2.0 {
+                        2.0 * magnitude
+                    } else if normalized_major <= 5.0 {
+                        5.0 * magnitude
+                    } else {
+                        10.0 * magnitude
+                    };
+                    let major_unit = spec
+                        .value_axis_major_unit
+                        .filter(|unit| unit.is_finite() && *unit > 0.0)
+                        .unwrap_or(auto_major);
+                    let mut axis_max = spec.value_axis_max.unwrap_or_else(|| {
+                        let rounded = (max_value / major_unit).ceil() * major_unit;
+                        if rounded - max_value < major_unit * 0.25 {
+                            rounded + major_unit
+                        } else {
+                            rounded
+                        }
+                    });
+                    if !axis_max.is_finite() || axis_max <= axis_min {
+                        axis_max = axis_min + major_unit;
+                    }
+                    let axis_span = axis_max - axis_min;
+                    if spec.value_axis_visible {
+                        let mut tick = axis_min;
+                        let mut tick_count = 0;
+                        while tick <= axis_max + major_unit * 0.001 && tick_count < 100 {
+                            let y = top_pad + (axis_max - tick) / axis_span * plot_height;
+                            if spec.value_axis_major_gridlines {
+                                let _ = writeln!(
+                                    html,
+                                    "<line class=\"chart-grid-line\" x1=\"{left_pad:.1}\" y1=\"{y:.1}\" x2=\"{:.1}\" y2=\"{y:.1}\" />",
+                                    w - right_pad
+                                );
+                            }
+                            let label = format_axis_value(tick);
+                            if let Some((start, end)) =
+                                axis_tick_span(spec.value_axis_major_tick_mark, -1.0)
+                            {
+                                let x1 = left_pad + start;
+                                let x2 = left_pad + end;
+                                let _ = writeln!(
+                                    html,
+                                    "<line class=\"chart-axis-tick\" data-axis=\"value\" data-axis-value=\"{label}\" x1=\"{x1:.1}\" y1=\"{y:.1}\" x2=\"{x2:.1}\" y2=\"{y:.1}\" />"
+                                );
+                            }
+                            let _ = writeln!(
+                                html,
+                                "<text class=\"chart-y-tick\" data-axis-value=\"{label}\" x=\"{:.1}\" y=\"{y:.1}\">{label}</text>",
+                                left_pad - 4.0
+                            );
+                            tick += major_unit;
+                            tick_count += 1;
+                        }
+                        let _ = writeln!(
+                            html,
+                            "<line class=\"chart-axis-line\" data-axis=\"value\" x1=\"{left_pad:.1}\" y1=\"{top_pad:.1}\" x2=\"{left_pad:.1}\" y2=\"{:.1}\" />",
+                            chart_height - bottom_pad
+                        );
+                    }
+                    let _ = writeln!(
+                        html,
+                        "<line class=\"chart-axis-line\" data-axis=\"category\" x1=\"{left_pad:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\" />",
+                        chart_height - bottom_pad,
+                        w - right_pad,
+                        chart_height - bottom_pad
+                    );
                     let point_label_position = spec
                         .data_labels
                         .as_ref()
                         .and_then(|labels| labels.position)
                         .unwrap_or(ChartDataLabelPosition::OutEnd);
                     let point_count = first_series.values.len().max(1);
-                    let step_x = if point_count > 1 {
-                        usable_width / (point_count as f64 - 1.0)
-                    } else {
-                        0.0
-                    };
+                    let step_x = usable_width / point_count as f64;
+                    let first_point_x = left_pad + step_x / 2.0;
+                    if let Some((start, end)) =
+                        axis_tick_span(spec.category_axis_major_tick_mark, 1.0)
+                    {
+                        let axis_y = chart_height - bottom_pad;
+                        for boundary in 0..=point_count {
+                            let x = left_pad + boundary as f64 * step_x;
+                            let y1 = axis_y + start;
+                            let y2 = axis_y + end;
+                            let _ = writeln!(
+                                html,
+                                "<line class=\"chart-axis-tick\" data-axis=\"category\" data-category-boundary=\"{boundary}\" x1=\"{x:.1}\" y1=\"{y1:.1}\" x2=\"{x:.1}\" y2=\"{y2:.1}\" />"
+                            );
+                        }
+                    }
                     for (series_idx, series) in spec.series.iter().enumerate() {
-                        let color = palette[series_idx % palette.len()];
+                        let color = palette[series_idx % palette.len()].as_str();
                         let mut points = Vec::new();
-                        let marker_symbol = series
-                            .marker
-                            .as_ref()
-                            .and_then(|marker| marker.symbol.as_deref())
-                            .unwrap_or("circle");
-                        let marker_radius = series
-                            .marker
-                            .as_ref()
-                            .and_then(|marker| marker.size)
-                            .map(|size| (size as f64 / 2.0).clamp(2.0, 18.0))
-                            .unwrap_or(3.0);
+                        let marker_symbol = line_marker_symbol(series.marker.as_ref(), series_idx);
+                        let marker_radius = line_marker_radius(series.marker.as_ref());
                         let render_value_labels = spec
                             .data_labels
                             .as_ref()
                             .map(|labels| labels.show_value)
                             .unwrap_or(false);
                         for (idx, value) in series.values.iter().enumerate() {
-                            let x = left_pad + idx as f64 * step_x;
-                            let y = chart_height
-                                - if *value <= 0.0 {
-                                    0.0
-                                } else {
-                                    (*value / max_value) * (chart_height - 8.0)
-                                };
+                            let x = first_point_x + idx as f64 * step_x;
+                            let normalized = ((*value - axis_min) / axis_span).clamp(0.0, 1.0);
+                            let y = top_pad + (1.0 - normalized) * plot_height;
                             points.push((x, y));
                         }
                         let polyline_points = points
@@ -620,14 +890,18 @@ pub(super) fn render_chart(
                             html,
                             "<polyline class=\"chart-line\" style=\"stroke:{color}\" points=\"{polyline_points}\" />"
                         );
-                        if marker_symbol != "none" {
+                        if let Some(marker_symbol) = marker_symbol {
                             for (idx, ((x, y), value)) in
                                 points.iter().copied().zip(series.values.iter()).enumerate()
                             {
-                                let _ = writeln!(
+                                render_line_marker(
                                     html,
-                                    "<circle class=\"chart-point\" data-marker-symbol=\"{}\" style=\"fill:{color}\" cx=\"{x:.1}\" cy=\"{y:.1}\" r=\"{marker_radius:.1}\" />",
-                                    escape_html(marker_symbol)
+                                    "chart-point",
+                                    marker_symbol,
+                                    color,
+                                    x,
+                                    y,
+                                    marker_radius,
                                 );
                                 if render_value_labels && *value > 0.0 {
                                     let label_y = match point_label_position {
@@ -687,6 +961,15 @@ pub(super) fn render_chart(
                             }
                         }
                     }
+                    let label_y = chart_height - 4.0;
+                    for (idx, category) in first_series.categories.iter().enumerate() {
+                        let x = first_point_x + idx as f64 * step_x;
+                        let _ = writeln!(
+                            html,
+                            "<text class=\"chart-x-tick\" data-category-index=\"{idx}\" x=\"{x:.1}\" y=\"{label_y:.1}\">{}</text>",
+                            escape_html(category)
+                        );
+                    }
                 }
                 ChartType::Scatter => {
                     let left_pad = 8.0;
@@ -732,7 +1015,7 @@ pub(super) fn render_chart(
                     let usable_height = (chart_height - top_pad - bottom_pad).max(1.0);
 
                     for (series_idx, series) in spec.series.iter().enumerate() {
-                        let color = palette[series_idx % palette.len()];
+                        let color = palette[series_idx % palette.len()].as_str();
                         let marker_symbol = series
                             .marker
                             .as_ref()
@@ -884,7 +1167,7 @@ pub(super) fn render_chart(
                     let usable_height = (chart_height - top_pad - bottom_pad).max(1.0);
 
                     for (series_idx, series) in spec.series.iter().enumerate() {
-                        let color = palette[series_idx % palette.len()];
+                        let color = palette[series_idx % palette.len()].as_str();
                         for ((x_value, y_value), bubble_size) in series
                             .x_values
                             .iter()
@@ -925,7 +1208,7 @@ pub(super) fn render_chart(
                         .map(|labels| labels.show_value)
                         .unwrap_or(false);
                     for (series_idx, series) in spec.series.iter().enumerate() {
-                        let color = palette[series_idx % palette.len()];
+                        let color = palette[series_idx % palette.len()].as_str();
                         let mut points = Vec::new();
                         for (idx, value) in series.values.iter().enumerate() {
                             let x = left_pad + idx as f64 * step_x;
@@ -1034,7 +1317,7 @@ pub(super) fn render_chart(
                                 if *value <= 0.0 {
                                     continue;
                                 }
-                                let color = palette[(color_offset + idx) % palette.len()];
+                                let color = palette[(color_offset + idx) % palette.len()].as_str();
                                 let sweep = (*value / total) * std::f64::consts::TAU;
                                 let end_angle = start_angle + sweep;
                                 let x1 = center_x + radius * start_angle.cos();
@@ -1107,7 +1390,7 @@ pub(super) fn render_chart(
                             if *value <= 0.0 {
                                 continue;
                             }
-                            let color = palette[idx % palette.len()];
+                            let color = palette[idx % palette.len()].as_str();
                             let sweep = (*value / total) * std::f64::consts::TAU;
                             let end_angle = start_angle + sweep;
                             let x1 = center_x + radius * start_angle.cos();
@@ -1179,7 +1462,7 @@ pub(super) fn render_chart(
                 }
             }
             html.push_str("</svg>\n<div class=\"chart-axis-labels\">");
-            if !matches!(spec.chart_type, ChartType::Scatter) {
+            if !matches!(spec.chart_type, ChartType::Line | ChartType::Scatter) {
                 for category in &first_series.categories {
                     let _ = writeln!(html, "<span>{}</span>", escape_html(category));
                 }

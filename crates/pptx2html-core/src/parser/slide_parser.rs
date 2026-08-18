@@ -282,6 +282,9 @@ fn parse_slide_impl<R: Read + Seek>(
                             size: Size::default(),
                             child_offset: Position::default(),
                             child_extent: Size::default(),
+                            rotation: 0.0,
+                            flip_h: false,
+                            flip_v: false,
                         });
                     }
                     // Group shape properties
@@ -309,6 +312,12 @@ fn parse_slide_impl<R: Read + Seek>(
                         in_sp_pr = true;
                     }
                     // Transform (rotation, flip)
+                    "xfrm" if in_grp_sp_pr => {
+                        apply_group_transform(
+                            grp_stack.last_mut().expect("group context in grpSpPr"),
+                            e,
+                        );
+                    }
                     "xfrm" if in_sp_pr => {
                         apply_shape_transform(
                             current_shape.as_mut().expect("shape builder in spPr"),
@@ -676,6 +685,14 @@ fn parse_slide_impl<R: Read + Seek>(
                         }
                     }
                     // Transform (Empty variant, e.g. connector with no children)
+                    "xfrm" if in_grp_sp_pr => {
+                        apply_group_transform(
+                            grp_stack
+                                .last_mut()
+                                .expect("group context in empty group xfrm"),
+                            e,
+                        );
+                    }
                     "xfrm" if in_sp_pr => {
                         apply_shape_transform(
                             current_shape.as_mut().expect("shape builder in empty xfrm"),
@@ -956,6 +973,9 @@ fn parse_slide_impl<R: Read + Seek>(
                                 actions: gc.actions,
                                 position: gc.position,
                                 size: gc.size,
+                                rotation: gc.rotation,
+                                flip_h: gc.flip_h,
+                                flip_v: gc.flip_v,
                                 shape_type: ShapeType::Group(gc.shapes, group_data),
                                 ..Default::default()
                             };
@@ -1302,6 +1322,18 @@ fn apply_shape_transform(sb: &mut ShapeBuilder, e: &quick_xml::events::BytesStar
     }
     if let Some(fv) = xml_utils::attr_str(e, "flipV") {
         sb.flip_v = fv == "1" || fv == "true";
+    }
+}
+
+fn apply_group_transform(gc: &mut GroupContext, e: &quick_xml::events::BytesStart<'_>) {
+    if let Some(rot) = xml_utils::attr_str(e, "rot") {
+        gc.rotation = rot.parse::<f64>().unwrap_or(0.0) / 60000.0;
+    }
+    if let Some(fh) = xml_utils::attr_str(e, "flipH") {
+        gc.flip_h = fh == "1" || fh == "true";
+    }
+    if let Some(fv) = xml_utils::attr_str(e, "flipV") {
+        gc.flip_v = fv == "1" || fv == "true";
     }
 }
 
@@ -1664,7 +1696,7 @@ impl ShapeBuilder {
                 rel_id: self.chart_rel_id.unwrap_or_default(),
                 preview_image: self.chart_preview_image,
                 preview_mime: self.chart_preview_mime,
-                direct_spec: self.chart_direct_spec,
+                direct_spec: self.chart_direct_spec.map(Box::new),
             })
         } else if self.is_picture {
             ShapeType::Picture(PictureData {
@@ -1790,6 +1822,9 @@ struct GroupContext {
     size: Size,
     child_offset: Position,
     child_extent: Size,
+    rotation: f64,
+    flip_h: bool,
+    flip_v: bool,
 }
 
 #[cfg(test)]
