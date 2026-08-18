@@ -247,6 +247,20 @@ class CheckPresetAdjustmentsTests(unittest.TestCase):
         # Then
         self.assertIn("upArrow", result)
 
+    def test_official_supplement_checkout_preserves_lf_bytes(self) -> None:
+        # Given
+        attributes_path = REPO_ROOT / ".gitattributes"
+
+        # When
+        rules = {
+            line.strip()
+            for line in attributes_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+
+        # Then
+        self.assertIn("evaluate/official_supplements/*.xml text eol=lf", rules)
+
     def test_official_supplement_deletion_and_mutation_fail_stably(self) -> None:
         supplement = REPO_ROOT / "evaluate/official_supplements/upArrow.xml"
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -48,7 +48,7 @@ All notable changes to this project will be documented in this file.
 - Keep PowerPoint-native pixel equality behind native Windows PowerPoint references and provenance validation
 - Keep the Windows CLI on stable Rust by using safe cross-platform hard-link identity checks instead of nightly-only metadata APIs
 - Install the complete evaluation dependency set and Chromium runtime before CI, release, and npm publication browser tests
-- Keep official supplement validation and timing event sequencing deterministic across Windows and Linux hosted runners
+- Keep official supplement bytes, validation, and timing event sequencing deterministic across Windows and Linux hosted runners
 
 ### Fixtures / Documentation
 - Extend `notes-comments.pptx` with a modern comment extension payload and escaped script-closing boundary for raw-metadata safety coverage
