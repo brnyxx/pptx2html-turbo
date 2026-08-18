@@ -46,6 +46,11 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Build WASM (web target)
         run: wasm-pack build crates/pptx2html-wasm --target web --release
+      - name: Validate Pages demo contracts
+        run: |
+          VERSION=$(bash scripts/read_release_version.sh)
+          node crates/pptx2html-wasm/tests/demo-contract.mjs "$VERSION"
+          node crates/pptx2html-wasm/tests/release-version-contract.mjs
       - name: Verify package artifacts
         run: |
           test -f crates/pptx2html-wasm/pkg/package.json

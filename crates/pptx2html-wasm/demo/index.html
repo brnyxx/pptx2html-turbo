@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>pptx2html-turbo Demo · v2.0.0</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -58,7 +59,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   padding: 16px;
   margin-bottom: 16px;
 }
-.controls label { font-size: 14px; font-weight: 600; color: #444; }
+.controls .control-label { font-size: 14px; font-weight: 600; color: #444; }
 .controls input[type="range"] { width: 100%; }
 .controls input[type="number"] {
   width: 100%;
@@ -81,15 +82,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .drop-zone.dragover { border-color: #4472C4; background: #f0f4ff; }
 .drop-zone p { font-size: 16px; color: #888; }
 .drop-zone .icon { font-size: 36px; margin-bottom: 12px; display: block; color: #bbb; }
-.status { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; display: none; }
-.status.info { display: block; background: #e8f4fd; color: #1565c0; }
-.status.error { display: block; background: #fdecea; color: #c62828; }
-.status.success { display: block; background: #e8f5e9; color: #2e7d32; }
-.meta { font-size: 13px; color: #666; margin-bottom: 16px; }
-.meta span { margin-right: 16px; }
+.status { border-radius: 6px; font-size: 14px; }
+.status:not(:empty) { padding: 12px 16px; margin-bottom: 16px; }
+.status.info { background: #e8f4fd; color: #1565c0; }
+.status.error { background: #fdecea; color: #c62828; }
+.status.success { background: #e8f5e9; color: #2e7d32; }
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 16px;
+}
 .output-frame {
   width: 100%; min-height: 600px; border: 1px solid #e0e0e0;
   border-radius: 8px; background: #fff; display: none;
+}
+@media (max-width: 640px) {
+  .header { padding: 20px 16px; }
+  .container { padding: 16px; }
+  .drop-zone { padding: 32px 16px; }
+  .controls { grid-template-columns: minmax(0, 1fr) 96px; }
+  .controls .control-label,
+  .controls .hint { grid-column: 1 / -1; }
+  .output-frame { min-height: 320px; }
 }
 input[type="file"] {
   position: absolute;
@@ -107,20 +124,21 @@ input[type="file"] {
 <body>
 <div class="header">
   <h1>pptx2html-turbo Demo · v2.0.0</h1>
-  <p>The v2.0.0 browser demo includes expanded semantic preservation, deterministic diagnostics, and improved preset geometry.</p>
+  <p>Convert PPTX files locally in your browser with the v2.0.0 high-fidelity Rust/WASM engine.</p>
 </div>
 <div class="container">
   <div class="release-panel">
     <div class="badges">
-      <span class="badge stable">Stable demo</span>
       <span class="badge version">v2.0.0</span>
-      <span class="badge feature">Coverage</span>
+      <span class="badge stable">56/56 bounded semantics</span>
+      <span class="badge feature">187 presets</span>
     </div>
     <p>
-      This page tracks the v2.0.0 release line and demonstrates in-browser conversion with image-like whole-slide zoom.
-      You can compare the browser package, repository, and release history directly:
-      <a href="https://www.npmjs.com/package/@briank-dev/pptx2html-turbo" target="_blank" rel="noreferrer">npm package</a>,
-      <a href="https://github.com/kim62210/pptx2html-turbo" target="_blank" rel="noreferrer">repository</a>.
+      This page demonstrates in-browser conversion, ordered diagnostic counts, renderer-owned actions and timing, and image-like whole-slide zoom.
+      Review the
+      <a href="https://www.npmjs.com/package/@briank-dev/pptx2html-turbo" target="_blank" rel="noopener noreferrer">npm package</a>,
+      <a href="https://github.com/kim62210/pptx2html-turbo" target="_blank" rel="noopener noreferrer">repository</a>, and
+      <a href="https://github.com/kim62210/pptx2html-turbo/releases" target="_blank" rel="noopener noreferrer">release history</a>.
     </p>
   </div>
   <label class="drop-zone" id="dropZone" for="fileInput">
@@ -128,18 +146,18 @@ input[type="file"] {
     <p>Drop a .pptx file here or click to select</p>
   </label>
   <input type="file" id="fileInput" accept=".pptx">
-  <div class="status" id="status"></div>
-  <div class="controls" id="controls">
-    <label for="scaleRange">Slide zoom</label>
-    <input type="range" id="scaleRange" min="0.5" max="3" step="0.1" value="1">
-    <input type="number" id="scaleNumber" min="0.5" max="3" step="0.1" value="1.0">
-    <div class="hint">Layout-preserving whole-slide scale. The output grows like an image without changing coordinates or reflowing text.</div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <div class="controls" id="controls" role="group" aria-labelledby="scaleLabel">
+    <label class="control-label" id="scaleLabel" for="scaleRange">Slide zoom</label>
+    <input type="range" id="scaleRange" min="0.1" max="3" step="0.01" value="1" aria-label="Slide zoom slider" aria-describedby="scaleHint">
+    <input type="number" id="scaleNumber" min="0.1" max="3" step="0.01" value="1.0" aria-label="Slide zoom value" aria-describedby="scaleHint">
+    <div class="hint" id="scaleHint">Layout-preserving whole-slide scale. The output grows like an image without changing coordinates or reflowing text.</div>
   </div>
   <div class="meta" id="meta"></div>
-  <iframe class="output-frame" id="output" sandbox="allow-same-origin"></iframe>
+  <iframe class="output-frame" id="output" sandbox="allow-scripts" title="Converted slide output"></iframe>
 </div>
 <script type="module">
-import init, { convert_with_options, get_info } from './pkg/pptx2html_wasm.js';
+import init, { convert_with_options_metadata, get_info } from './pkg/pptx2html_wasm.js';
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -151,6 +169,7 @@ const meta = document.getElementById('meta');
 const output = document.getElementById('output');
 let currentBuffer = null;
 let currentInfo = null;
+let currentDiagnostics = [];
 
 function setStatus(msg, type) {
   status.textContent = msg;
@@ -160,25 +179,50 @@ function setStatus(msg, type) {
 function clampScale(value) {
   const parsed = Number.parseFloat(value);
   if (!Number.isFinite(parsed)) return 1.0;
-  return Math.min(3.0, Math.max(0.5, parsed));
+  return Math.min(3.0, Math.max(0.1, parsed));
+}
+
+function formatScale(value) {
+  const fixed = value.toFixed(2);
+  return fixed.endsWith('0') ? value.toFixed(1) : fixed;
 }
 
 function syncScaleInputs(value) {
   const scale = clampScale(value);
-  scaleRange.value = scale.toFixed(1);
-  scaleNumber.value = scale.toFixed(1);
+  const formatted = formatScale(scale);
+  scaleRange.value = formatted;
+  scaleRange.setAttribute('aria-valuetext', formatted + ' times');
+  scaleNumber.value = formatted;
   return scale;
+}
+
+function fitScaleToContainer() {
+  if (!currentInfo) return 1.0;
+  const container = output.parentElement;
+  const style = getComputedStyle(container);
+  const horizontalPadding =
+    Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+  const availableWidth = container.clientWidth - horizontalPadding;
+  const fitScale = Math.floor((availableWidth / currentInfo.width_px) * 100) / 100;
+  return clampScale(fitScale);
 }
 
 function updateMeta() {
   if (!currentInfo) return;
   const scale = clampScale(scaleNumber.value);
-  meta.innerHTML =
-    '<span>Slides: ' + currentInfo.slide_count + '</span>' +
-    '<span>Original: ' + currentInfo.width_px.toFixed(0) + ' x ' + currentInfo.height_px.toFixed(0) + ' px</span>' +
-    '<span>Rendered: ' + (currentInfo.width_px * scale).toFixed(0) + ' x ' + (currentInfo.height_px * scale).toFixed(0) + ' px</span>' +
-    '<span>Zoom: ' + scale.toFixed(1) + 'x</span>' +
-    (currentInfo.title ? '<span>Title: ' + currentInfo.title + '</span>' : '');
+  const fields = [
+    'Slides: ' + currentInfo.slide_count,
+    'Original: ' + currentInfo.width_px.toFixed(0) + ' x ' + currentInfo.height_px.toFixed(0) + ' px',
+    'Rendered: ' + (currentInfo.width_px * scale).toFixed(0) + ' x ' + (currentInfo.height_px * scale).toFixed(0) + ' px',
+    'Zoom: ' + formatScale(scale) + 'x',
+    'Diagnostics: ' + currentDiagnostics.length,
+  ];
+  if (currentInfo.title) fields.push('Title: ' + currentInfo.title);
+  meta.replaceChildren(...fields.map((text) => {
+    const span = document.createElement('span');
+    span.textContent = text;
+    return span;
+  }));
 }
 
 async function renderCurrentBuffer() {
@@ -186,35 +230,54 @@ async function renderCurrentBuffer() {
   const scale = clampScale(scaleNumber.value);
   syncScaleInputs(scale);
   updateMeta();
-  setStatus('Converting at ' + scale.toFixed(1) + 'x…', 'info');
+  setStatus('Converting at ' + formatScale(scale) + 'x…', 'info');
 
   try {
     const t0 = performance.now();
-    const html = convert_with_options(currentBuffer, true, false, [], scale);
+    const result = convert_with_options_metadata(
+      currentBuffer,
+      true,
+      false,
+      new Uint32Array(),
+      scale,
+    );
+    let html;
+    try {
+      html = result.html;
+      currentDiagnostics = JSON.parse(result.diagnostics);
+    } finally {
+      result.free();
+    }
     const elapsed = (performance.now() - t0).toFixed(0);
 
     output.srcdoc = html;
     output.style.display = 'block';
-    setStatus('Converted in ' + elapsed + ' ms (' + (html.length / 1024).toFixed(1) + ' KB HTML, ' + scale.toFixed(1) + 'x zoom)', 'success');
+    updateMeta();
+    setStatus('Converted in ' + elapsed + ' ms (' + (html.length / 1024).toFixed(1) + ' KB HTML, ' + formatScale(scale) + 'x zoom)', 'success');
   } catch (e) {
     setStatus('Conversion failed: ' + e.message, 'error');
   }
 }
 
 async function handleFile(file) {
+  controls.style.display = 'none';
+  currentBuffer = null;
+  currentInfo = null;
+  currentDiagnostics = [];
+  meta.replaceChildren();
+  output.style.display = 'none';
+
   if (!file.name.toLowerCase().endsWith('.pptx')) {
     setStatus('Please select a .pptx file.', 'error');
     return;
   }
   setStatus('Loading presentation…', 'info');
-  meta.innerHTML = '';
-  output.style.display = 'none';
 
   try {
     currentBuffer = new Uint8Array(await file.arrayBuffer());
     currentInfo = JSON.parse(get_info(currentBuffer));
     controls.style.display = 'grid';
-    syncScaleInputs(scaleNumber.value);
+    syncScaleInputs(fitScaleToContainer());
     await renderCurrentBuffer();
   } catch (e) {
     setStatus('Conversion failed: ' + e.message, 'error');

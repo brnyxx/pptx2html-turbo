@@ -37,6 +37,18 @@ fi
 
 release_version="$unique_versions"
 
+demo_file="$REPO_ROOT/crates/pptx2html-wasm/demo/index.html"
+demo_versions="$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' "$demo_file" | sort -u || true)"
+if [ -z "$demo_versions" ]; then
+  echo "failed to read demo version from $demo_file" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$demo_versions" | wc -l | tr -d ' ')" -ne 1 ] ||
+  [ "$demo_versions" != "v$release_version" ]; then
+  echo "demo version mismatch: $demo_versions does not match manifest version v$release_version" >&2
+  exit 1
+fi
+
 if [ "${1:-}" != "" ]; then
   tag="${1#refs/tags/}"
   if [ "${tag#v}" = "$tag" ]; then
