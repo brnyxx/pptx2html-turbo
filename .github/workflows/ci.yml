@@ -97,8 +97,22 @@ jobs:
         run: |
           python evaluate/powerpoint_evidence.py summary --golden-set-dir evaluate/golden_set --output-dir evaluate/powerpoint_golden --output-json artifacts/evaluate/powerpoint-evidence-summary.json
           python evaluate/powerpoint_evidence.py gate --family text-layout --golden-set-dir evaluate/golden_set --output-dir evaluate/powerpoint_golden --output-json artifacts/evaluate/powerpoint-evidence-text-layout-gate.json || true
+      - name: Run strict PowerPoint pixel gate when evidence exists
+        shell: bash
+        run: |
+          if [[ -f evaluate/powerpoint_golden/manifest.json ]]; then
+            python evaluate/strict_pixel_compare.py \
+              --golden-set-dir evaluate/golden_set \
+              --reference-dir evaluate/powerpoint_golden \
+              --candidate-dir evaluate/candidates \
+              --diff-dir artifacts/evaluate/pixel-diffs \
+              --output-json artifacts/evaluate/strict-pixel-report.json
+          else
+            printf '%s\n' '{"ok":false,"status":"awaiting-powerpoint-native-evidence"}' \
+              > artifacts/evaluate/strict-pixel-report.json
+          fi
       - name: Upload evaluate artifacts
         uses: actions/upload-artifact@v7
         with:
           name: evaluate-artifacts
-          path: artifacts/evaluate/*.json
+          path: artifacts/evaluate

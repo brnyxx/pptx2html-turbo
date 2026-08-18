@@ -62,6 +62,7 @@ LOCATORS: Final = {
     "extensions": _l('<p:ext uri="{DEMO-EXTENSION}">', "ppt/presentation.xml"),
     "handout-master": _l("<p:handoutMaster", "ppt/handoutMasters/handoutMaster1.xml"),
     "rtl-text": _l('<a:pPr rtl="1"/>'),
+    "text-transform-composition": _l('<a:bodyPr rot="5400000"/>'),
     "adjustment-basic": _l('<a:prstGeom prst="roundRect"><a:avLst>'),
     "adjustment-arrows": _l('<a:prstGeom prst="rightArrow"><a:avLst>'),
     "adjustment-remaining": _l('<a:prstGeom prst="wave"><a:avLst>'),

@@ -64,7 +64,7 @@ class SummarizePowerPointGoldenBatchTests(unittest.TestCase):
             yield golden, output
 
     def _metadata(self):
-        return {"producer":"Microsoft PowerPoint","platform":"Windows","powerpoint_version":"16.0.17726.20160","powerpoint_build":"16.0.17726.20160","powerpoint_channel":"Current Channel","windows_version":"Windows 11 23H2","export_command":"pwsh -File reference_render_powerpoint.ps1","output_resolution":"960x540","golden_set_revision":"abc1234","capture_timestamp":"2026-04-02T12:00:00Z","batch_id":"powerpoint-test-batch"}
+        return {"producer":"Microsoft PowerPoint","platform":"Windows","powerpoint_version":"16.0.17726.20160","powerpoint_build":"16.0.17726.20160","powerpoint_channel":"Current Channel","windows_version":"Windows 11 23H2","export_command":"pwsh -File reference_render_powerpoint.ps1","output_resolution":"1x1","golden_set_revision":"abc1234","capture_timestamp":"2026-04-02T12:00:00Z","batch_id":"powerpoint-test-batch"}
 
 
 if __name__ == "__main__":

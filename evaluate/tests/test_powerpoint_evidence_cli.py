@@ -7,9 +7,8 @@ from pathlib import Path
 
 from pptx import Presentation
 
-from evaluate.powerpoint_evidence import main
 from evaluate.completion_deck_package import png_bytes
-
+from evaluate.powerpoint_evidence import main
 
 TEXT_LAYOUT_DECKS = [
     "basic_text_08_narrow_box_autofit",
@@ -86,7 +85,7 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         "--export-command",
                         "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golden_set -OutputDir ./powerpoint_golden",
                         "--output-resolution",
-                        "960x540",
+                        "1x1",
                         "--golden-set-revision",
                         "abc1234",
                         "--capture-timestamp",
@@ -237,7 +236,7 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         "--export-command",
                         "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golden_set -OutputDir ./powerpoint_golden",
                         "--output-resolution",
-                        "960x540",
+                        "1x1",
                         "--golden-set-revision",
                         "abc1234",
                         "--capture-timestamp",
@@ -308,7 +307,7 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         "--export-command",
                         "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golden_set -OutputDir ./powerpoint_golden",
                         "--output-resolution",
-                        "960x540",
+                        "1x1",
                         "--golden-set-revision",
                         "abc1234",
                         "--capture-timestamp",
@@ -326,7 +325,7 @@ class PowerPointEvidenceCliTests(unittest.TestCase):
                         "powerpoint_channel": "Current Channel",
                         "windows_version": "Windows 11 23H2",
                         "export_command": "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golden_set -OutputDir ./powerpoint_golden",
-                        "output_resolution": "960x540",
+                        "output_resolution": "1x1",
                         "golden_set_revision": "abc1234",
                         "capture_date": "2026-04-02",
                         "deck_name": "shapes_01_rectangles",

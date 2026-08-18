@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Render pptx2html-rs HTML output to PNG screenshots via Playwright.
 
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Default viewport matching standard slide dimensions (px)
 DEFAULT_VIEWPORT_WIDTH = 960
-DEFAULT_VIEWPORT_HEIGHT = 720
+DEFAULT_VIEWPORT_HEIGHT = 540
 
 
 def render_html_to_pngs(
@@ -30,6 +29,8 @@ def render_html_to_pngs(
     output_dir: Path,
     viewport_width: int = DEFAULT_VIEWPORT_WIDTH,
     viewport_height: int = DEFAULT_VIEWPORT_HEIGHT,
+    output_width: int | None = None,
+    output_height: int | None = None,
 ) -> list[Path]:
     """Render an HTML file to per-slide PNG screenshots.
 
@@ -89,11 +90,44 @@ def render_html_to_pngs(
             for idx, slide_el in enumerate(slides):
                 png_path = output_dir / f"slide_{idx}.png"
 
-                # Scroll slide into view and screenshot
+                dimensions = slide_el.bounding_box()
+                if dimensions is None:
+                    raise RuntimeError(f"Slide {idx} has no renderable bounding box")
+                target_width = output_width or viewport_width
+                target_height = output_height or viewport_height
+                scale_x = target_width / dimensions["width"]
+                scale_y = target_height / dimensions["height"]
+                if abs(scale_x - scale_y) > 1e-9:
+                    raise RuntimeError(
+                        "Candidate output aspect ratio does not match slide: "
+                        f"slide={dimensions['width']}x{dimensions['height']} "
+                        f"output={target_width}x{target_height}"
+                    )
+                page.evaluate(
+                    """([slide, scale, width, height]) => {
+                        document.documentElement.style.margin = "0";
+                        document.body.style.margin = "0";
+                        document.body.style.overflow = "hidden";
+                        slide.style.transformOrigin = "top left";
+                        slide.style.transform = `scale(${scale})`;
+                        const shell = slide.parentElement;
+                        if (shell) {
+                            shell.style.width = `${width}px`;
+                            shell.style.height = `${height}px`;
+                        }
+                    }""",
+                    [slide_el, scale_x, target_width, target_height],
+                )
                 slide_el.scroll_into_view_if_needed()
-                page.wait_for_timeout(100)
-
-                slide_el.screenshot(path=str(png_path))
+                page.screenshot(
+                    path=str(png_path),
+                    clip={
+                        "x": 0,
+                        "y": 0,
+                        "width": target_width,
+                        "height": target_height,
+                    },
+                )
                 png_paths.append(png_path)
                 logger.debug("  Captured slide %d -> %s", idx, png_path.name)
         else:
@@ -137,6 +171,8 @@ def render_directory(
     Returns:
         Dict mapping html_stem -> list of PNG paths.
     """
+    from playwright.sync_api import Error as PlaywrightError
+
     html_files = sorted(html_dir.glob("*.html"))
     if not html_files:
         logger.error("No HTML files found in %s", html_dir)
@@ -157,7 +193,7 @@ def render_directory(
                 viewport_height=viewport_height,
             )
             results[html_file.stem] = pngs
-        except Exception as exc:
+        except (OSError, PlaywrightError) as exc:
             logger.error(
                 "Failed to render %s: %s", html_file.name, exc
             )

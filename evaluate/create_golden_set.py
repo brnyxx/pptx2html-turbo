@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Generate golden PPTX test files for the fidelity evaluation pipeline.
 
@@ -33,10 +32,17 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml import parse_xml
 from pptx.util import Emu, Inches, Pt
 
+if __package__:
+    from evaluate.challenge_deck import create_challenge_corpus
+    from evaluate.stress_deck import create_stress_deck
+else:
+    from challenge_deck import create_challenge_corpus
+    from stress_deck import create_stress_deck
+
 logger = logging.getLogger(__name__)
 
-# Slide dimensions (standard 10x7.5 inches)
-SLIDE_WIDTH = Inches(10)
+# Slide dimensions (widescreen 16:9, rendered as 960x540 pixels)
+SLIDE_WIDTH = Inches(40 / 3)
 SLIDE_HEIGHT = Inches(7.5)
 
 
@@ -65,6 +71,19 @@ def _create_test_image(
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def _insert_gradient_stop(
+    shape: object,
+    *,
+    position: int,
+    color: RGBColor,
+) -> None:
+    stop = parse_xml(
+        '<a:gs xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+        f'pos="{position}"><a:srgbClr val="{color}"/></a:gs>'
+    )
+    shape.fill.gradient_stops._gsLst.insert(1, stop)
 
 
 # ---------------------------------------------------------------------------
@@ -1109,10 +1128,11 @@ def _create_gradients(output_dir: Path) -> list[Path]:
     stops[0].position = 0.0
     stops[1].color.rgb = RGBColor(0x00, 0x00, 0xFF)
     stops[1].position = 1.0
-    # Add middle stop
-    stop = stops.add()
-    stop.color.rgb = RGBColor(0xFF, 0xFF, 0x00)
-    stop.position = 0.5
+    _insert_gradient_stop(
+        shape,
+        position=50_000,
+        color=RGBColor(0xFF, 0xFF, 0x00),
+    )
 
     path = output_dir / "gradients_02_three_color.pptx"
     prs.save(str(path))
@@ -1285,8 +1305,8 @@ def _create_groups(output_dir: Path) -> list[Path]:
         RGBColor(0x2E, 0x53, 0x8C),
     ]
     for (w, h), color in zip(sizes, shape_colors):
-        left = Inches((10 - w) / 2)
-        top = Inches((7.5 - h) / 2)
+        left = (SLIDE_WIDTH - Inches(w)) // 2
+        top = (SLIDE_HEIGHT - Inches(h)) // 2
         shape = slide.shapes.add_shape(
             MSO_SHAPE.OVAL,
             left,
@@ -1931,6 +1951,8 @@ CATEGORY_GENERATORS = {
     "layouts": _create_layouts,
     "bullets": _create_bullets,
     "mixed": _create_mixed,
+    "stress": create_stress_deck,
+    "challenge": create_challenge_corpus,
 }
 
 
@@ -1957,13 +1979,10 @@ def create_golden_set(
 
     for category, gen_fn in generators.items():
         logger.info("Generating category: %s", category)
-        try:
-            paths = gen_fn(output_dir)
-            results[category] = paths
-            total += len(paths)
-            logger.info("  -> %d files generated", len(paths))
-        except Exception as exc:
-            logger.error("Failed to generate %s: %s", category, exc)
+        paths = gen_fn(output_dir)
+        results[category] = paths
+        total += len(paths)
+        logger.info("  -> %d files generated", len(paths))
 
     logger.info("Total: %d golden PPTX files generated in %s", total, output_dir)
     return results

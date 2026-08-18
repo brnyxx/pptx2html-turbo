@@ -70,6 +70,30 @@ class ScaffoldPowerPointGoldenBatchTests(unittest.TestCase):
             self.assertEqual(summary["deck_count"], 1)
             self.assertEqual(summary["slide_image_count"], 2)
 
+    def test_rejects_png_dimensions_that_disagree_with_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            golden_set = root / "golden_set"
+            output_dir = root / "powerpoint_golden"
+            golden_set.mkdir()
+            output_dir.mkdir()
+            self._create_pptx(golden_set / "sample.pptx", slide_count=1)
+            deck_output = output_dir / "sample"
+            deck_output.mkdir()
+            (deck_output / "Slide1.PNG").write_bytes(png_bytes())
+            metadata = self._metadata()
+            metadata["output_resolution"] = "960x540"
+
+            with self.assertRaisesRegex(
+                ScaffoldError,
+                "POWERPOINT_OUTPUT_RESOLUTION_MISMATCH",
+            ):
+                scaffold_powerpoint_golden_batch(
+                    golden_set,
+                    output_dir,
+                    metadata=metadata,
+                )
+
     def _create_pptx(self, path: Path, slide_count: int) -> None:
         presentation = Presentation()
         blank_layout = presentation.slide_layouts[6]
@@ -86,7 +110,7 @@ class ScaffoldPowerPointGoldenBatchTests(unittest.TestCase):
             "powerpoint_channel": "Current Channel",
             "windows_version": "Windows 11 23H2",
             "export_command": "pwsh -File ./reference_render_powerpoint.ps1 -InputDir ./golden_set -OutputDir ./powerpoint_golden",
-            "output_resolution": "960x540",
+            "output_resolution": "1x1",
             "golden_set_revision": "abc1234",
             "capture_timestamp": "2026-04-02T12:00:00Z",
             "batch_id": "powerpoint-test-batch",

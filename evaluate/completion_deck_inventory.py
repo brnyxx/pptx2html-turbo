@@ -36,6 +36,7 @@ SCENARIO_CANONICAL: Final = {
     "extensions": "extensions",
     "handout-master": "handout-master",
     "rtl-text": "rtl-text",
+    "text-transform-composition": "text-body",
     "adjustment-basic": "preset-shape",
     "adjustment-arrows": "preset-shape",
     "adjustment-remaining": "preset-shape",

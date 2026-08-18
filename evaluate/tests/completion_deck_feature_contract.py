@@ -58,6 +58,11 @@ def _negative_r(
 
 
 RULES: Final = (
+    _r(
+        "text-transform-composition",
+        "rtl-text",
+        ".//p:sp/p:txBody/a:bodyPr[@rot='5400000']",
+    ),
     _r("adjustment-basic", "patterns", ".//a:prstGeom[@prst='roundRect']/a:avLst/a:gd"),
     _r(
         "adjustment-arrows",

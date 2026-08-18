@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from pptx import Presentation
 
 try:
     from evaluate.powerpoint_provenance import (
-        PRODUCER,
         PLATFORM,
+        PRODUCER,
         canonical_json_sha256,
         sha256_file,
         validate_png,
@@ -17,8 +18,8 @@ try:
     )
 except ModuleNotFoundError:
     from powerpoint_provenance import (
-        PRODUCER,
         PLATFORM,
+        PRODUCER,
         canonical_json_sha256,
         sha256_file,
         validate_png,
@@ -28,6 +29,13 @@ except ModuleNotFoundError:
 
 class ScaffoldError(RuntimeError):
     pass
+
+
+def _expected_resolution(metadata: dict[str, str]) -> tuple[int, int]:
+    match = re.fullmatch(r"([1-9][0-9]*)x([1-9][0-9]*)", metadata["output_resolution"])
+    if match is None:
+        raise ScaffoldError("POWERPOINT_OUTPUT_RESOLUTION_INVALID")
+    return int(match.group(1)), int(match.group(2))
 
 
 def scaffold_powerpoint_golden_batch(
@@ -41,6 +49,7 @@ def scaffold_powerpoint_golden_batch(
     errors = validate_provenance(metadata)
     if errors:
         raise ScaffoldError(",".join(errors))
+    expected_resolution = _expected_resolution(metadata)
 
     decks: list[dict[str, object]] = []
     total_slide_count = 0
@@ -53,9 +62,18 @@ def scaffold_powerpoint_golden_batch(
         images = []
         for slide in range(1, slide_count + 1):
             try:
-                images.append(validate_png(deck_output / f"Slide{slide}.PNG"))
+                image = validate_png(deck_output / f"Slide{slide}.PNG")
             except OSError as error:
                 raise ScaffoldError(str(error)) from error
+            actual_resolution = (image["width"], image["height"])
+            if actual_resolution != expected_resolution:
+                raise ScaffoldError(
+                    "POWERPOINT_OUTPUT_RESOLUTION_MISMATCH:"
+                    f"{deck_name}:Slide{slide}.PNG:"
+                    f"expected={expected_resolution[0]}x{expected_resolution[1]}:"
+                    f"actual={actual_resolution[0]}x{actual_resolution[1]}"
+                )
+            images.append(image)
         source_sha256 = sha256_file(deck_path)
         deck_metadata: dict[str, object] = {
             **metadata,

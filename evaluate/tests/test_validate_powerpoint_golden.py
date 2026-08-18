@@ -1,5 +1,5 @@
-import contextlib
 import binascii
+import contextlib
 import json
 import struct
 import tempfile
@@ -15,7 +15,10 @@ from evaluate.powerpoint_provenance import (
     validate_provenance,
 )
 from evaluate.scaffold_powerpoint_golden_batch import scaffold_powerpoint_golden_batch
-from evaluate.validate_powerpoint_golden import ValidationError, validate_powerpoint_golden_batch
+from evaluate.validate_powerpoint_golden import (
+    ValidationError,
+    validate_powerpoint_golden_batch,
+)
 
 
 class ValidatePowerPointGoldenBatchTests(unittest.TestCase):
@@ -122,7 +125,7 @@ class ValidatePowerPointGoldenBatchTests(unittest.TestCase):
             "powerpoint_channel": "Current Channel",
             "windows_version": "Windows 11 23H2",
             "export_command": "pwsh -File reference_render_powerpoint.ps1",
-            "output_resolution": "960x540",
+            "output_resolution": "1x1",
             "golden_set_revision": "abc1234",
             "capture_timestamp": "2026-04-02T12:00:00Z",
             "batch_id": "powerpoint-test-batch",

@@ -2,12 +2,177 @@
 
 Objective scoring pipeline for the pptx2html-rs autoresearch loop.
 
-The evaluation strategy now has two tracks:
+The evaluation strategy now has three tracks:
 
 1. **PowerPoint-first fidelity validation** for features that claim `exact` support.
 2. **LibreOffice-backed regression detection** for fast, broad visual comparison during iteration.
+3. **Independent synthetic exactness** for deterministic parser and renderer contracts.
 
 The existing composite score remains useful for regression control, but it is no longer the only fidelity signal.
+
+## Strict PowerPoint Pixel Gate
+
+The strict gate is intentionally binary. It validates the PowerPoint-native
+batch provenance, compares every browser candidate against its corresponding
+PowerPoint PNG at the same dimensions, and fails when any RGBA pixel differs.
+It never resizes images and has no tolerance threshold.
+
+Generate the complete 16:9 corpus and export it on the pinned Windows host:
+
+```bash
+python evaluate/create_golden_set.py --output evaluate/golden_set
+```
+
+```powershell
+pwsh -File ./evaluate/reference_render_powerpoint.ps1 `
+  -InputDir ./evaluate/golden_set `
+  -OutputDir ./evaluate/powerpoint_golden `
+  -PowerPointChannel "Current Channel" `
+  -WindowsVersion "Windows 11 23H2" `
+  -OutputResolution "960x540" `
+  -GoldenSetRevision <commit-sha>
+```
+
+After converting the same decks and rendering each HTML slide into
+`evaluate/candidates/<deck>/slide_<zero-based-index>.png`, run:
+
+```bash
+python evaluate/strict_pixel_compare.py \
+  --golden-set-dir evaluate/golden_set \
+  --reference-dir evaluate/powerpoint_golden \
+  --candidate-dir evaluate/candidates \
+  --diff-dir artifacts/evaluate/pixel-diffs \
+  --output-json artifacts/evaluate/strict-pixel-report.json
+```
+
+An `ok: true` result means zero mismatched pixels across the complete captured
+batch. Absence of a PowerPoint-native batch is not a pass.
+
+## Synthetic Scene Exact Gate
+
+The synthetic gate compiles one immutable scene specification through two
+independent paths:
+
+1. scene specification -> PPTX -> pptx2html -> Chromium candidate PNG;
+2. scene specification -> standalone HTML -> Chromium reference PNG.
+
+The reference emitter does not import the PPTX emitter, converter, candidate
+renderer, or strict comparator. The initial 100-slide vocabulary covers
+whole-pixel slide backgrounds, opaque rectangles, overlap order, coordinates,
+sizes, and solid colors. This gate proves those controlled contracts exactly;
+it does not replace PowerPoint-native evidence.
+
+Generate and compare the 10-deck, 100-slide corpus from the repository root:
+
+```bash
+rm -rf /tmp/pptx-synthetic-oracle
+python -m evaluate.synthetic_pptx \
+  --output /tmp/pptx-synthetic-oracle/decks
+python -m evaluate.synthetic_reference \
+  --output /tmp/pptx-synthetic-oracle/reference-html
+python evaluate/candidate_render.py \
+  --html-dir /tmp/pptx-synthetic-oracle/reference-html \
+  --output /tmp/pptx-synthetic-oracle/references \
+  --width 960 --height 540
+
+mkdir -p /tmp/pptx-synthetic-oracle/candidate-html
+for deck in /tmp/pptx-synthetic-oracle/decks/synthetic_*.pptx; do
+  stem="$(basename "${deck}" .pptx)"
+  target/release/pptx2html "${deck}" \
+    -o "/tmp/pptx-synthetic-oracle/candidate-html/${stem}.html"
+done
+python evaluate/candidate_render.py \
+  --html-dir /tmp/pptx-synthetic-oracle/candidate-html \
+  --output /tmp/pptx-synthetic-oracle/candidates \
+  --width 960 --height 540
+python -m evaluate.synthetic_pixel_compare \
+  --reference-dir /tmp/pptx-synthetic-oracle/references \
+  --candidate-dir /tmp/pptx-synthetic-oracle/candidates \
+  --diff-dir /tmp/pptx-synthetic-oracle/diffs \
+  --output-json /tmp/pptx-synthetic-oracle/report.json
+```
+
+An `ok: true` report requires all 51,840,000 RGBA pixels to match exactly.
+
+## Visual Element Coverage Matrix
+
+`visual_element_coverage.json` is the machine-consumed inventory for visual
+elements. It maps every `ShapeType` variant plus renderer-level features to at
+least one evidence source:
+
+- `synthetic-exact`: independent scene reference with exact RGBA equality;
+- `challenge-proxy`: authored PPTX rendered by LibreOffice and Chromium;
+- `rust-regression`: parser, resolver, geometry, or renderer contract test;
+- `fallback-contract`: preserved unsupported content and diagnostics.
+
+The challenging 10-deck corpus explicitly includes arrows, diamonds, curved
+and straight connectors, charts, tables, text, cropped pictures, gradients,
+groups, borders, rotations, and preset shapes. The coverage test generates a
+real deck, inspects its OOXML parts, validates every manifest source, and fails
+when a `ShapeType` variant or required element loses evidence:
+
+```bash
+python -m unittest evaluate.tests.test_visual_element_coverage -v
+```
+
+After producing the challenge proxy report, link every manifest element to all
+ten corresponding deck/slide pairs:
+
+```bash
+python -m evaluate.visual_element_evidence \
+  --manifest evaluate/visual_element_coverage.json \
+  --deck-root artifacts/evaluate/decks \
+  --proxy-report artifacts/evaluate/proxy-pixel-report.json \
+  --output-json artifacts/evaluate/visual-element-evidence.json
+```
+
+Synthetic exactness and challenge proxy fidelity are intentionally separate.
+An exact rectangle result cannot promote charts, tables, text, or complex
+geometry to PowerPoint-native exactness.
+
+## Exhaustive Preset Adjustment Matrix
+
+The adjustment corpus is generated directly from `preset_adjustments.json`.
+Its contract covers all 187 preset names, all 300 official preset/adjustment
+pairs, and three deterministic cases per pair (`low`, `default`, and `high`).
+The resulting deck contains 900 named shapes across 75 slides. Connector
+presets use native `p:cxnSp` elements, and the corpus manifest records whether
+each probe uses numeric bounds, default-to-bound interpolation, or an
+unverified/unavailable official range.
+
+```bash
+python evaluate/check_preset_adjustments.py --repo-root .
+
+python -m evaluate.create_exhaustive_adjustment_deck \
+  --adjustment-manifest evaluate/preset_adjustments.json \
+  --output-dir artifacts/evaluate/all-adjustments/decks
+
+python evaluate/reference_render.py \
+  --input artifacts/evaluate/all-adjustments/decks \
+  --output artifacts/evaluate/all-adjustments/references \
+  --dpi 150 --force
+
+target/release/pptx2html \
+  artifacts/evaluate/all-adjustments/decks/all_adjustments.pptx \
+  -o artifacts/evaluate/all-adjustments/all_adjustments.html
+
+python evaluate/candidate_render.py \
+  --html-dir artifacts/evaluate/all-adjustments \
+  --output artifacts/evaluate/all-adjustments/candidates \
+  --width 960 --height 540
+```
+
+Generate `proxy.json` with `proxy_pixel_report.py` and `shapes.json` with
+`shape_actual_coverage.py`, then enforce complete slide/shape linkage plus the
+95% per-slide and 0.75 per-shape foreground SSIM gates:
+
+```bash
+python -m evaluate.adjustment_visual_evidence \
+  --corpus-manifest artifacts/evaluate/all-adjustments/decks/manifest.json \
+  --proxy-report artifacts/evaluate/all-adjustments/reports/proxy.json \
+  --shape-report artifacts/evaluate/all-adjustments/reports/shapes.json \
+  --output-json artifacts/evaluate/all-adjustments/reports/evidence.json
+```
 
 ## Composite Score
 
@@ -239,7 +404,7 @@ Exact-promotion evidence uses pinned machine provenance, not cryptographic attes
 ## Generated PPTX capability registry
 
 <!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->
-<!-- manifest-sha256: 431de494bd6bd3bb0d25b22bd831b2a6fc921286ac7afce11a66fd12025e1a85 -->
+<!-- manifest-sha256: dd24142f66dbd737b6ef27f77ac4bc433053bc1249e86965c34033a19b32da47 -->
 | Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |
 |---|---|---|---|---|
 | <a id="capability-presentation"></a>`presentation` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c07e2810b8d5e13a63436f7b11c3ee961e11b15f61bdc50a1ca260c0738e4a4f` | `29665c44b1b28428449e05099e8b3f5d22f1e577d8eaaf700a7f1c9a1b347de5` |
@@ -259,7 +424,7 @@ Exact-promotion evidence uses pinned machine provenance, not cryptographic attes
 | <a id="capability-connector"></a>`connector` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `7e7b1b3a0a60e49d6702574dba2a1929d3e4c82abd8f7b60a7d162a0f63fa509` | `f469f88311b3de633ad23f2d8257cd92e2faaa75299ee824ac1279ee1f00367c` |
 | <a id="capability-group-shape"></a>`group-shape` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `393472e96359637a79aa7a838f6c16db5b9d71b24cb648fefea81e3a646a41fb` | `e5f16afa6c7699ece99d11402306f0119f415730b8889499312d6be6083db36e` |
 | <a id="capability-picture"></a>`picture` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `dffb48ca4b06c68069e0b407c9934ceaceb8dabf447bedac71f10b581a2ac645` | `7199c2265f56c189e0b25a8f38529f37da9174155adb2c46b2e236d3105947f8` |
-| <a id="capability-text-body"></a>`text-body` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `3179eda0c97d469d36443ad0ae40f908c4d9ffaf0808c9ee704a71910119e6d4` | `083e42ef74c2c0f2c2f854b2438bea7c57c58b65f0eb7872434727244c8a54f9` |
+| <a id="capability-text-body"></a>`text-body` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `262f4fb2d080594a9c78a70b702253e646af04a1e7e86f2d9b8debfe18f15e8b` | `bbbb778196c659c4ba3931d9f51c8383575a005812fde7c4f92a85d90cf53e89` |
 | <a id="capability-rtl-text"></a>`rtl-text` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c503fb10524fa65e82d1d4ea5d4de2579f51949547d1de8ad5cb1b496f0070e5` | `85173066116d7250da3058a7f80b43b147cfeef918f4cf802bbf94dff3613c65` |
 | <a id="capability-bullets"></a>`bullets` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `ed157a688196eea774392c88ae5db59cb6cfc0f7167532360488ca899ebdff3d` | `7083d9593322381b21f9ac938277da2637c57b8e9663fe7baf886efe289ff341` |
 | <a id="capability-picture-bullets"></a>`picture-bullets` | fallback/parsed<br>fallback/rendered<br>fallback/not-applicable | fallback/parsed<br>fallback/rendered<br>fallback/not-applicable | `7d1c21ce2540da7b56a5a48196f9f4d69d56c985e23afd6772a5b96d1de5508f` | `d4d97387d415bb350ee62522151319c7190d7a60f9fc6a33ad16fd2953d680d0` |

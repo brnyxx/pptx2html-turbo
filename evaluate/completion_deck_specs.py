@@ -7,14 +7,26 @@ if __package__:
     from .completion_deck_charts import parts as chart_parts
     from .completion_deck_fallbacks import (
         FALLBACKS,
+    )
+    from .completion_deck_fallbacks import (
         content_types as fallback_content_types,
+    )
+    from .completion_deck_fallbacks import (
         parts as fallback_parts,
+    )
+    from .completion_deck_fallbacks import (
         relationships as fallback_relationships,
     )
     from .completion_deck_notes import (
         content_types as notes_content_types,
+    )
+    from .completion_deck_notes import (
         parts as notes_parts,
+    )
+    from .completion_deck_notes import (
         presentation_relationships as notes_presentation_relationships,
+    )
+    from .completion_deck_notes import (
         slide_relationships as notes_slide_relationships,
     )
     from .completion_deck_package import (
@@ -28,28 +40,52 @@ if __package__:
     from .completion_deck_patterns import pattern_backgrounds, pattern_slides
     from .completion_deck_picture_bullets import (
         PICTURE_BULLETS,
+    )
+    from .completion_deck_picture_bullets import (
         content_types as picture_bullet_content_types,
+    )
+    from .completion_deck_picture_bullets import (
         parts as picture_bullet_parts,
+    )
+    from .completion_deck_picture_bullets import (
         relationships as picture_bullet_relationships,
     )
     from .completion_deck_tables import (
         TABLES,
+    )
+    from .completion_deck_tables import (
         content_types as table_content_types,
+    )
+    from .completion_deck_tables import (
         parts as table_parts,
+    )
+    from .completion_deck_tables import (
         presentation_relationships as table_presentation_relationships,
     )
 else:
     from completion_deck_charts import parts as chart_parts
     from completion_deck_fallbacks import (
         FALLBACKS,
+    )
+    from completion_deck_fallbacks import (
         content_types as fallback_content_types,
+    )
+    from completion_deck_fallbacks import (
         parts as fallback_parts,
+    )
+    from completion_deck_fallbacks import (
         relationships as fallback_relationships,
     )
     from completion_deck_notes import (
         content_types as notes_content_types,
+    )
+    from completion_deck_notes import (
         parts as notes_parts,
+    )
+    from completion_deck_notes import (
         presentation_relationships as notes_presentation_relationships,
+    )
+    from completion_deck_notes import (
         slide_relationships as notes_slide_relationships,
     )
     from completion_deck_package import (
@@ -63,14 +99,26 @@ else:
     from completion_deck_patterns import pattern_backgrounds, pattern_slides
     from completion_deck_picture_bullets import (
         PICTURE_BULLETS,
+    )
+    from completion_deck_picture_bullets import (
         content_types as picture_bullet_content_types,
+    )
+    from completion_deck_picture_bullets import (
         parts as picture_bullet_parts,
+    )
+    from completion_deck_picture_bullets import (
         relationships as picture_bullet_relationships,
     )
     from completion_deck_tables import (
         TABLES,
+    )
+    from completion_deck_tables import (
         content_types as table_content_types,
+    )
+    from completion_deck_tables import (
         parts as table_parts,
+    )
+    from completion_deck_tables import (
         presentation_relationships as table_presentation_relationships,
     )
 
@@ -304,12 +352,22 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
             "rtl-text",
             (
                 (
-                    '<p:sp><p:nvSpPr><p:cNvPr id="2" name="RTL mixed-script text"/>'
-                    '<p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm>'
-                    '<a:off x="914400" y="914400"/><a:ext cx="7315200" cy="1828800"/>'
-                    '</a:xfrm><a:prstGeom prst="rect"/></p:spPr><p:txBody><a:bodyPr/>'
-                    '<a:lstStyle/><a:p><a:pPr rtl="1"/><a:r><a:rPr lang="ar-SA"/>'
-                    '<a:t>مرحبا PowerPoint 2026 بالعالم</a:t></a:r></a:p></p:txBody></p:sp>',
+                    (
+                        '<p:sp><p:nvSpPr><p:cNvPr id="2" name="RTL mixed-script text"/>'
+                        '<p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm>'
+                        '<a:off x="914400" y="914400"/><a:ext cx="7315200" cy="1828800"/>'
+                        '</a:xfrm><a:prstGeom prst="rect"/></p:spPr><p:txBody><a:bodyPr/>'
+                        '<a:lstStyle/><a:p><a:pPr rtl="1"/><a:r><a:rPr lang="ar-SA"/>'
+                        '<a:t>مرحبا PowerPoint 2026 بالعالم</a:t></a:r></a:p></p:txBody></p:sp>'
+                        '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Independent text transform"/>'
+                        '<p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>'
+                        '<a:xfrm flipH="1"><a:off x="914400" y="3200400"/>'
+                        '<a:ext cx="3657600" cy="914400"/></a:xfrm>'
+                        '<a:prstGeom prst="rect"/></p:spPr><p:txBody>'
+                        '<a:bodyPr rot="5400000"/><a:lstStyle/><a:p><a:r>'
+                        '<a:rPr sz="1800"/><a:t>TEXT_TRANSFORM_COMPOSITION</a:t>'
+                        '</a:r></a:p></p:txBody></p:sp>'
+                    ),
                     "",
                 ),
             ),
@@ -335,7 +393,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         '<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r>'
                         '<a:t>HANDOUT_HEADER</a:t></a:r></a:p></p:txBody></p:sp>'
                         '</p:spTree></p:cSld></p:handoutMaster>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
             ),
             types=(
@@ -370,7 +428,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         '<b:Last>Doe</b:Last><b:First>Jane</b:First>'
                         '</b:Person></b:NameList></b:Author></b:Author>'
                         '</b:Source></b:Sources>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
             ),
             types=(("/ppt/bibliography/sources.xml", "application/xml"),),
@@ -388,7 +446,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         'vocabulary="urn:pptx2html:capabilities"/>'
                         '<ac:Characteristic name="rendererVersion" relation="eq" val="1.1.0"/>'
                         '</ac:AdditionalCharacteristics>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
             ),
             types=(("/ppt/additionalCharacteristics.xml", "application/xml"),),
@@ -403,7 +461,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         '<?xml version="1.0"?><demo:project '
                         'xmlns:demo="urn:pptx2html:custom-data" id="alpha">'
                         '<demo:title>CUSTOM_XML_SENTINEL</demo:title></demo:project>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
                 (
                     "customXml/itemProps1.xml",
@@ -413,7 +471,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         'ds:itemID="{11111111-2222-3333-4444-555555555555}">'
                         '<ds:schemaRefs><ds:schemaRef ds:uri="urn:pptx2html:custom-data"/>'
                         '</ds:schemaRefs></ds:datastoreItem>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
             ),
             types=(
@@ -460,7 +518,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         '<a:accent1><a:srgbClr val="FF0000"/></a:accent1>'
                         '</a:clrScheme><a:fontScheme name="Override Fonts">'
                         '<a:majorFont/><a:minorFont/></a:fontScheme></a:themeOverride>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
             ),
             types=(
@@ -490,7 +548,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         '<p:tag name="Department" val="Research"/>'
                         '<p:tag name="Classification" val="Internal"/>'
                         "</p:tagLst>"
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
             ),
             types=(
@@ -520,7 +578,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
                         'ax:classid="{FDD0D569-5B7A-4E3D-820C-5C487DB7796C}" '
                         'ax:persistence="persistStream" r:id="rIdBinary"/>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
                 (
                     "ppt/embeddings/_rels/control1.xml.rels",
@@ -530,7 +588,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         '<Relationship Id="rIdBinary" '
                         'Type="http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary" '
                         'Target="ActiveXControl1.bin"/></Relationships>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
                 (
                     "ppt/embeddings/ActiveXControl1.bin",
@@ -566,7 +624,7 @@ def build_decks(adjustment_shapes: str) -> tuple[Deck, ...]:
                         '<?xml version="1.0"?>'
                         '<smil xmlns="http://www.w3.org/2001/SMIL20/Language">'
                         '<body><par dur="indefinite"/></body></smil>'
-                    ).encode(),
+                    ).encode("ascii"),
                 ),
             ),
             types=(("/ppt/customXml/smil1.xml", "application/xml"),),

@@ -46,6 +46,12 @@ $resolvedOutput = Resolve-Path -Path $OutputDir
 $powerPointVersion = $null
 $powerPointBuild = $null
 
+if ($OutputResolution -notmatch "^(?<Width>[1-9][0-9]*)x(?<Height>[1-9][0-9]*)$") {
+    throw "OutputResolution must use WIDTHxHEIGHT, for example 960x540"
+}
+$outputWidth = [int]$Matches.Width
+$outputHeight = [int]$Matches.Height
+
 try {
     $powerPoint = New-Object -ComObject PowerPoint.Application
     $powerPoint.Visible = 1
@@ -64,7 +70,15 @@ try {
 
         try {
             $deck = $presentations.Open($_.FullName, $false, $true, $false)
-            $deck.SaveAs($deckOutput, 18)
+            for ($slideIndex = 1; $slideIndex -le $deck.Slides.Count; $slideIndex++) {
+                $slidePath = Join-Path $deckOutput ("Slide" + $slideIndex + ".PNG")
+                $deck.Slides.Item($slideIndex).Export(
+                    $slidePath,
+                    "PNG",
+                    $outputWidth,
+                    $outputHeight
+                )
+            }
         }
         finally {
             if ($null -ne $deck) {

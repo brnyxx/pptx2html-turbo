@@ -1185,16 +1185,12 @@
             "disposition_token": "direct"
           }
         ],
-        "focused_test": "crates/pptx2html-core/tests/coverage_regression_test.rs",
-        "scenario_exemption": {
-          "reason": "baseline-outside-tasks-8-21",
-          "dispositions": [
-            "current",
-            "target"
-          ]
-        },
-        "documentation_anchor": "capability-text-body",
-        "focused_test_case": "parses_presentation_relationship_fallbacks_through_public_parser"
+      "focused_test": "crates/pptx2html-core/tests/edge_case_test.rs",
+      "completion_scenarios": [
+        "text-transform-composition"
+      ],
+      "documentation_anchor": "capability-text-body",
+      "focused_test_case": "test_body_rotation_with_flip_keeps_independent_text_transform"
       }
     },
     {

@@ -1,0 +1,272 @@
+{
+  "version": 1,
+  "shape_type_variants": {
+    "Rectangle": "solid-rectangle",
+    "RoundedRectangle": "rounded-rectangle",
+    "Ellipse": "ellipse",
+    "Triangle": "triangle",
+    "Arrow": "arrow",
+    "Line": "straight-connector",
+    "TextBox": "text-typography",
+    "Picture": "image-crop",
+    "Table": "table",
+    "Group": "group",
+    "Chart": "chart",
+    "Custom": "custom-preset",
+    "CustomGeom": "custom-geometry",
+    "Unsupported": "unsupported-fallback"
+  },
+  "elements": [
+    {
+      "id": "slide-background",
+      "evidence": [
+        {
+          "tier": "synthetic-exact",
+          "source": "synthetic-scene-spec:all-slides"
+        }
+      ]
+    },
+    {
+      "id": "solid-rectangle",
+      "evidence": [
+        {
+          "tier": "synthetic-exact",
+          "source": "synthetic-scene-spec:all-slides"
+        }
+      ]
+    },
+    {
+      "id": "solid-fill",
+      "evidence": [
+        {
+          "tier": "synthetic-exact",
+          "source": "synthetic-scene-spec:all-slides"
+        }
+      ]
+    },
+    {
+      "id": "overlap-order",
+      "evidence": [
+        {
+          "tier": "synthetic-exact",
+          "source": "synthetic-scene-spec:all-slides"
+        }
+      ]
+    },
+    {
+      "id": "rounded-rectangle",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_2:gradient",
+          "ooxml_marker": "prst=\"roundRect\"",
+          "ooxml_part": "ppt/slides/slide3.xml"
+        }
+      ]
+    },
+    {
+      "id": "ellipse",
+      "evidence": [
+        {
+          "tier": "rust-regression",
+          "source": "edge_case_test:test_all_basic_preset_shapes_no_panic"
+        }
+      ]
+    },
+    {
+      "id": "triangle",
+      "evidence": [
+        {
+          "tier": "rust-regression",
+          "source": "edge_case_test:test_all_basic_preset_shapes_no_panic"
+        }
+      ]
+    },
+    {
+      "id": "arrow",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_2:stress_deck:_shapes:rightArrow",
+          "ooxml_marker": "prst=\"rightArrow\"",
+          "ooxml_part": "ppt/slides/slide3.xml"
+        },
+        {
+          "tier": "rust-regression",
+          "source": "edge_case_test:test_arrow_preset_shapes_no_panic"
+        }
+      ]
+    },
+    {
+      "id": "diamond",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_2:stress_deck:_shapes:diamond",
+          "ooxml_marker": "prst=\"diamond\"",
+          "ooxml_part": "ppt/slides/slide3.xml"
+        }
+      ]
+    },
+    {
+      "id": "straight-connector",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_3:straightConnector1",
+          "ooxml_marker": "prst=\"line\"",
+          "ooxml_part": "ppt/slides/slide4.xml"
+        }
+      ]
+    },
+    {
+      "id": "curved-connector",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_3:stress_deck:_architecture:curvedConnector3",
+          "ooxml_marker": "prst=\"curvedConnector3\"",
+          "ooxml_part": "ppt/slides/slide4.xml"
+        }
+      ]
+    },
+    {
+      "id": "table",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_4:table",
+          "ooxml_marker": "<a:tbl>",
+          "ooxml_part": "ppt/slides/slide5.xml"
+        },
+        {
+          "tier": "rust-regression",
+          "source": "table:cdata_style_id_and_supported_table_primitives_reach_public_html"
+        }
+      ]
+    },
+    {
+      "id": "chart",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_6:lineChart",
+          "ooxml_marker": "<c:lineChart>",
+          "ooxml_part": "ppt/charts/chart1.xml"
+        },
+        {
+          "tier": "rust-regression",
+          "source": "chart:chart_parts_require_exact_family_and_descendant_ancestry"
+        }
+      ]
+    },
+    {
+      "id": "text-typography",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_1:text",
+          "ooxml_marker": "<a:t>",
+          "ooxml_part": "ppt/slides/slide2.xml"
+        }
+      ]
+    },
+    {
+      "id": "image-crop",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_5:picture",
+          "ooxml_marker": "<a:srcRect",
+          "ooxml_part": "ppt/slides/slide6.xml"
+        }
+      ]
+    },
+    {
+      "id": "gradient-fill",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_2:gradient",
+          "ooxml_marker": "<a:gradFill",
+          "ooxml_part": "ppt/slides/slide3.xml"
+        }
+      ]
+    },
+    {
+      "id": "group",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_3:group",
+          "ooxml_marker": "<p:grpSp>",
+          "ooxml_part": "ppt/slides/slide4.xml"
+        }
+      ]
+    },
+    {
+      "id": "rotation-flip",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_2:rotation",
+          "ooxml_marker": " rot=\"",
+          "ooxml_part": "ppt/slides/slide3.xml"
+        }
+      ]
+    },
+    {
+      "id": "border",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_3:connector-line",
+          "ooxml_marker": "<a:ln",
+          "ooxml_part": "ppt/slides/slide4.xml"
+        }
+      ]
+    },
+    {
+      "id": "effects",
+      "evidence": [
+        {
+          "tier": "rust-regression",
+          "source": "renderer:render_shape_resolved_applies_style_ref_effect_fallback_for_svg_shapes"
+        }
+      ]
+    },
+    {
+      "id": "custom-preset",
+      "evidence": [
+        {
+          "tier": "challenge-proxy",
+          "source": "challenge:slide_2:preset-shapes",
+          "ooxml_marker": "prst=\"chevron\"",
+          "ooxml_part": "ppt/slides/slide3.xml"
+        },
+        {
+          "tier": "rust-regression",
+          "source": "edge_case_test:test_all_basic_preset_shapes_no_panic"
+        }
+      ]
+    },
+    {
+      "id": "custom-geometry",
+      "evidence": [
+        {
+          "tier": "rust-regression",
+          "source": "integration_test:test_custgeom_rect_insets_text_body_padding"
+        }
+      ]
+    },
+    {
+      "id": "unsupported-fallback",
+      "evidence": [
+        {
+          "tier": "fallback-contract",
+          "source": "completeness_manifest:unsupported-capabilities"
+        }
+      ]
+    }
+  ]
+}
