@@ -10,15 +10,16 @@ import tempfile
 import unittest
 import zipfile
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from unittest.mock import patch
 from xml.etree import ElementTree
 
+import evaluate.check_preset_adjustments as adjustment_checker
 from evaluate.check_preset_adjustments import (
     JsonValue,
     check_repository,
     verify_official_artifact,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKER = REPO_ROOT / "evaluate/check_preset_adjustments.py"
@@ -228,6 +229,23 @@ class CheckPresetAdjustmentsTests(unittest.TestCase):
                 hashlib.sha256(output.read_bytes()).hexdigest(),
                 "ad5ae101031077cdcc3507157027fd2f618e8b2ff3787c4265658529f025ff73",
             )
+
+    def test_official_supplement_metadata_uses_portable_manifest_path(self) -> None:
+        # Given
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        supplement = REPO_ROOT / "evaluate/official_supplements/upArrow.xml"
+        windows_default = PureWindowsPath("evaluate/official_supplements/upArrow.xml")
+
+        # When
+        with patch.object(
+            adjustment_checker,
+            "DEFAULT_SUPPLEMENT",
+            windows_default,
+        ):
+            result = adjustment_checker._official_supplement(supplement, manifest)
+
+        # Then
+        self.assertIn("upArrow", result)
 
     def test_official_supplement_deletion_and_mutation_fail_stably(self) -> None:
         supplement = REPO_ROOT / "evaluate/official_supplements/upArrow.xml"

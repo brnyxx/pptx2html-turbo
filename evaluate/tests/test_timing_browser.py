@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 
 
 class TimingBrowserTests(unittest.TestCase):
-    def test_completion_timing_uses_exact_events_and_keeps_fallback_visible(self) -> None:
+    def test_completion_timing_uses_exact_events_and_keeps_fallback_visible(
+        self,
+    ) -> None:
         from playwright.sync_api import sync_playwright
 
         root = Path(__file__).resolve().parents[2]
@@ -21,12 +23,28 @@ class TimingBrowserTests(unittest.TestCase):
             decks = work / "decks"
             html_path = work / "timing.html"
             subprocess.run(
-                ["python3", "-m", "evaluate.create_completion_decks", "--output-dir", str(decks)],
+                [
+                    "python3",
+                    "-m",
+                    "evaluate.create_completion_decks",
+                    "--output-dir",
+                    str(decks),
+                ],
                 cwd=root,
                 check=True,
             )
             subprocess.run(
-                ["cargo", "run", "-q", "-p", "pptx2html-cli", "--", str(decks / "timing-transitions.pptx"), "-o", str(html_path)],
+                [
+                    "cargo",
+                    "run",
+                    "-q",
+                    "-p",
+                    "pptx2html-cli",
+                    "--",
+                    str(decks / "timing-transitions.pptx"),
+                    "-o",
+                    str(html_path),
+                ],
                 cwd=root,
                 check=True,
             )
@@ -35,9 +53,7 @@ class TimingBrowserTests(unittest.TestCase):
         self.assertTrue(html_path.is_file())
 
         screenshot_dir = Path(
-            os.environ.get(
-                "PPTX_TIMING_SCREENSHOTS", ".omo/evidence/task-19-timing"
-            )
+            os.environ.get("PPTX_TIMING_SCREENSHOTS", ".omo/evidence/task-19-timing")
         )
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         with sync_playwright() as playwright:
@@ -80,9 +96,26 @@ class TimingBrowserTests(unittest.TestCase):
                 }"""
             )
             self.assertEqual(page.evaluate("window.__timingEvents"), [])
+            page.evaluate(
+                """() => {
+                  window.__initialActionTransition = window.__waitExact(
+                    'pptx2html:transition-complete', 'slide-transition-0', 2);
+                }"""
+            )
             page.locator("#slide-1 .shape-action-surface").click()
             page.wait_for_url("**#slide-2")
-            self.assertFalse(any(event["name"].startswith("pptx2html:timing-group") for event in page.evaluate("window.__timingEvents")))
+            page.evaluate(
+                """async () => {
+                  await window.__initialActionTransition;
+                  delete window.__initialActionTransition;
+                }"""
+            )
+            self.assertFalse(
+                any(
+                    event["name"].startswith("pptx2html:timing-group")
+                    for event in page.evaluate("window.__timingEvents")
+                )
+            )
             page.evaluate(
                 """() => {
                   for (const href of ['https://example.test/', 'mailto:timing@example.test']) {
@@ -97,7 +130,12 @@ class TimingBrowserTests(unittest.TestCase):
                   }
                 }"""
             )
-            self.assertFalse(any(event["name"].startswith("pptx2html:timing-group") for event in page.evaluate("window.__timingEvents")))
+            self.assertFalse(
+                any(
+                    event["name"].startswith("pptx2html:timing-group")
+                    for event in page.evaluate("window.__timingEvents")
+                )
+            )
             page.evaluate(
                 """async () => {
                   const reset = window.__waitExact(

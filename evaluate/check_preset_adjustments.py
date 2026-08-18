@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
 # dependencies = []
@@ -20,7 +19,6 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final, TypeAlias
 from xml.etree import ElementTree
-
 
 UNKNOWN_ADJUSTMENT_KEY: Final = "UNKNOWN_ADJUSTMENT_KEY"
 UNPARSEABLE_ADJUSTMENT_LOOKUP: Final = "UNPARSEABLE_ADJUSTMENT_LOOKUP"
@@ -595,7 +593,7 @@ def _official_supplement(
     metadata = manifest.get("official_supplements")
     expected_metadata = {
         "preset": "upArrow",
-        "path": str(DEFAULT_SUPPLEMENT),
+        "path": DEFAULT_SUPPLEMENT.as_posix(),
         "url": OFFICIAL_SUPPLEMENT_URL,
         "accepted_answer_author": (
             "Tom Jebo, Microsoft Employee, Microsoft Open Specifications Support"
