@@ -6,7 +6,7 @@
 - Applies regions in the Microsoft Office order and lets explicit cell fill, `noFill`, and side-border presence override style regions.
 - Uses logical grid coordinates across `gridSpan`, `hMerge`, and `vMerge` cells.
 - Preserves unavailable built-in and invalid IDs without inventing an appearance and emits `TABLE_STYLE_DEFINITION_UNAVAILABLE` with ID/source kind/six flags.
-- `[교차검증 필요]` The cited Office application-order note does not define whether band numbering restarts after first/last rows; the converter currently uses one-based odd/even physical grid coordinates before later first/last-region overrides.
+- The converter uses one-based odd/even physical grid coordinates before later first/last-region overrides and does not claim exact PowerPoint equivalence for header/footer-relative band origins.
 
 Status legend: `exact` / `approximate` / `fallback` / `unparsed`
 
@@ -163,7 +163,7 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Column span | `gridSpan` | Supported |
 | Row span | `rowSpan` + `vMerge` | Supported |
 | Table styles | `<a:tblStyle>` | Partial - package definitions, official region order, strict namespace/context diagnostics |
-| Table-style fill reference | `<a:fillRef>` | Partial - index/color/modifiers preserved; parsed theme fills resolve; unavailable non-solid fills emit `TABLE_STYLE_PRIMITIVE_UNSUPPORTED` without a replacement (`[교차검증 필요]`) |
+| Table-style fill reference | `<a:fillRef>` | Partial - index/color/modifiers preserved; parsed theme fills resolve; unavailable non-solid fills emit `TABLE_STYLE_PRIMITIVE_UNSUPPORTED` without a replacement or exactness claim |
 | Table-style effect/line reference | `<a:tblBg>/<a:effectRef>`, border side `<a:lnRef>` | Preserved only - scoped index/color/modifiers emit `TABLE_STYLE_PRIMITIVE_UNSUPPORTED`; no effect or line is invented |
 
 ## Images

@@ -72,9 +72,9 @@ const filteredWithMetadata = convert_with_options_metadata(
 
 ### Slide Scale
 
-- `scale` defaults to `1.0`.
+- `scale` is required; pass `1.0` for the original slide size.
 - Values like `2.0` enlarge the whole slide canvas uniformly without recomputing coordinates or reflowing text.
-- The included browser demo exposes this as an image-like zoom control.
+- The included browser demo displays ordered diagnostics, executes renderer-owned actions and timing in an opaque-origin frame, and initializes image-like zoom to the available width.
 
 ## Package Scope
 

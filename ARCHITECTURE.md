@@ -59,7 +59,7 @@ PPTX file (ZIP archive)
 │                                                 │
 │  • Self-contained HTML with inline styles       │
 │  • Absolute positioning (EMU → CSS px)          │
-│  • SVG <path> for 30 preset shapes              │
+│  • SVG <path> for 187 classified presets        │
 │  • Base64 image embedding (optional)            │
 │  • Color resolution via Theme + ClrMap          │
 └─────────────────────────────────────────────────┘
@@ -87,9 +87,9 @@ PPTX file (ZIP archive)
 | `resolver/placeholder.rs` | Placeholder matching by type and index |
 | `resolver/style_ref.rs` | Resolves `fillRef`, `lnRef`, `fontRef` against FmtScheme |
 | `renderer/mod.rs` | HTML/CSS string generation from resolved model |
-| `renderer/geometry.rs` | SVG path generation for 30 preset shapes |
+| `renderer/geometry.rs` and `renderer/geometry/` | SVG path generation for 187 classified presets plus shared path helpers |
 | `error.rs` | `PptxError` enum and `PptxResult` type alias |
-| `lib.rs` | Public API: `convert_file`, `convert_bytes`, `get_info` |
+| `lib.rs` | Public file/byte conversion APIs, option and metadata variants, `get_info`, and `get_info_from_bytes` |
 
 ## Color Resolution Chain
 

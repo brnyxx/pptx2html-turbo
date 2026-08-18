@@ -13,10 +13,11 @@ v2.0.0 is the first semver-major release after the converter expanded its typed 
 
 ## Highlights
 
-- Complete the bounded semantic capability matrix at 56/56 entries with no semantic `unparsed` state.
+- Cover all 56 bounded semantic capability-matrix entries with no semantic `unparsed` state; no entry claims `exact`.
 - Preserve notes and comments, actions, timing and transitions, bounded media, advanced effects, table styles, embedded package metadata, custom XML, presentation extensions, synchronization metadata, thumbnails, theme overrides, and user-defined tags through typed models or deterministic fallbacks.
 - Improve preset geometry, degenerate arc handling, overflowing shapes, brackets, mixed-script RTL paragraphs, chart fallbacks, and diagnostic ordering on real-world decks.
-- Add exhaustive adjustment coverage for 187 preset families and 900 deterministic low/default/high cases.
+- Add exhaustive adjustment coverage for all 300 official preset/adjustment pairs across 187 presets and 900 deterministic low/default/high cases.
+- Refresh the GitHub Pages demo with isolated timing/action runtime execution, canonical diagnostic counts, current release links, a fit-width default, and accessible status, zoom, and output-frame contracts.
 
 ## Breaking Changes
 
@@ -30,15 +31,17 @@ v2.0.0 is the first semver-major release after the converter expanded its typed 
 
 - Rust workspace formatting, Clippy, tests, and release builds must pass from the tagged tree.
 - Python evaluation helper tests, exactness-contract generation, wheel build/install smoke tests, and WASM package contract/runtime smoke tests must pass.
-- The seven-deck `prompter-be` corpus converts all 186 slides. LibreOffice proxy comparison records a 96.843607% mean and an 88.967165% minimum with no blank, corrupt, or missing slide pairs observed.
+- Real Chrome, Firefox, and WebKit load the Pages artifact and convert the same real 10-slide deck with ordered diagnostics, isolated renderer scripts, and no console or page errors.
+- The external seven-deck real-world corpus converts all 186 slides. LibreOffice proxy comparison records a 96.843607% mean and an 88.967165% minimum with no blank, corrupt, or missing slide pairs observed.
 - The exhaustive adjustment proxy records a 98.926092% mean and a 98.265724% minimum across 900 cases.
+- [`v2.0.0-validation.md`](./v2.0.0-validation.md) records the environment, evidence boundary, report hashes, and strict PowerPoint-native blocker for these figures.
 
 LibreOffice scores are proxy evidence only. This release does not claim PowerPoint-native strict pixel equality without genuine Windows PowerPoint reference exports and validated provenance.
 
 ## Publication Scope
 
 - GitHub Release with validated CLI artifacts.
-- Public npm package `@briank-dev/pptx2html-turbo`.
+- Public npm package `@briank-dev/pptx2html-turbo@2.0.0`.
 - GitHub Pages WASM demo from `main`.
 - The repository does not currently define crates.io or PyPI publication jobs.
 

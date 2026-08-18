@@ -26,14 +26,14 @@ Empty `slide_indices` means all slides (`optional_slide_indices` returns `None`)
 |---|---|
 | All exports and helpers | `src/lib.rs` |
 | JS-visible docs, indexing note, scale semantics | `README.md` (copied into the npm tarball verbatim) |
-| Browser usage example | `demo/index.html` (uses `convert_with_options` + `get_info`) |
+| Browser usage example | `demo/index.html` (uses `convert_with_options_metadata` + `get_info`) |
 | npm metadata rewrite + publish gate | `scripts/prepare_wasm_release_package.sh` |
 | Version agreement across manifests | `scripts/read_release_version.sh` |
 | CI wasm job | `.github/workflows/ci.yml`, `publish-npm.yml`, `deploy-demo.yml` |
 
 ## PACKAGING AND VERSIONS
 `wasm-pack` generates `pkg/package.json`; the release script then overwrites name, version, description, keywords, author, homepage, repository, bugs, and `exports` from env vars. Don't hand-edit `pkg/`, it's a build artifact.
-`read_release_version.sh` requires core, cli, py, wasm `Cargo.toml` and `pyproject.toml` to carry the identical version, and a `vX.Y.Z` tag to match it. Bump this crate's version alone and release fails before publish.
+`read_release_version.sh` requires core, cli, py, wasm `Cargo.toml`, `pyproject.toml`, and every `vX.Y.Z` string in the Pages demo to agree, and a release tag to match them. Bump this crate's version alone and release fails before publish.
 Package contract asserted in `tests/check-package-contract.mjs`: name, version, `exports["."].import`/`.types`, homepage, bugs URL, and presence of `README.md`, `LICENSE`, the `.js`, the `.d.ts`, the `_bg.wasm`.
 
 ## VALIDATION
@@ -48,10 +48,12 @@ cargo test -p pptx2html-wasm                                  # native unit test
 cargo clippy -p pptx2html-wasm -- -D warnings                 # lint on host; wasm32 target fails on the zip dev-dep
 wasm-pack build crates/pptx2html-wasm --target web --release  # writes pkg/
 node crates/pptx2html-wasm/tests/node-smoke.mjs
+node crates/pptx2html-wasm/tests/demo-contract.mjs "$(bash scripts/read_release_version.sh)"
+node crates/pptx2html-wasm/tests/release-version-contract.mjs
 node crates/pptx2html-wasm/tests/package-root-smoke.mjs
-node crates/pptx2html-wasm/tests/check-package-contract.mjs crates/pptx2html-wasm/pkg 1.1.0
-bash scripts/read_release_version.sh v1.1.0                   # version + tag agreement
-python3 -m http.server -d crates/pptx2html-wasm 8000          # then open /demo/index.html
+node crates/pptx2html-wasm/tests/check-package-contract.mjs crates/pptx2html-wasm/pkg "$(bash scripts/read_release_version.sh)"
+bash scripts/read_release_version.sh v2.0.0                   # version + tag agreement
+python3 -m http.server -d _site 8000                          # after workflow-equivalent _site assembly
 ```
 
 ## ANTI-PATTERNS

@@ -35,8 +35,9 @@ See [`README.md`](./README.md) for the intended release-note workflow and how th
 
 ## 5. Release Notes and Docs
 
-- [ ] `CHANGELOG.md` `Unreleased` section reflects the actual shipped scope
+- [ ] `CHANGELOG.md` has a heading for the release under preparation and it reflects the actual shipped scope
 - [ ] `docs/release-notes/unreleased-draft.md` is updated or intentionally superseded
+- [ ] The release validation report separates repository-reproducible evidence, external-corpus proxy evidence, and unavailable PowerPoint-native evidence
 - [ ] Root `README.md` reflects any new validation or packaging expectations introduced since the last release
 
 ## 6. Tagging Decision

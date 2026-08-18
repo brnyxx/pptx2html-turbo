@@ -25,7 +25,7 @@ What actually happened (include screenshots if possible).
 
 ## Environment
 
-- **pptx2html version**: (e.g., 0.6.0)
+- **pptx2html version**: (e.g., 2.0.0)
 - **Target**: (CLI / Rust lib / Python / WASM)
 - **OS**: (e.g., macOS 15, Ubuntu 24.04)
 

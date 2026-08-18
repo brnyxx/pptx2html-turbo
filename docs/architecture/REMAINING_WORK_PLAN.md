@@ -2,6 +2,8 @@
 
 `evaluate/completeness_manifest.json` is the sole machine-readable current/target status source. This document records only work beyond the bounded completeness program and does not duplicate task delivery state.
 
+All 56 bounded semantic capabilities have a parsed or not-applicable disposition and none remains `unparsed`. The remaining work is visual-fidelity improvement and evidence-backed promotion; no capability is currently `exact`.
+
 ## Exactness backlog
 
 - Capture pinned Microsoft PowerPoint provenance on Windows for any proposed exact promotion.

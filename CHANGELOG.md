@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - Preserve ordered slide transition/timing XML and approximately execute only bounded cut/fade and click/with-previous/after-previous appear, disappear, or fade behavior on resolved slide shapes
 - Keep automatic advance, loops, unbounded effects, unsupported commands, and unresolved targets inert with typed `PRESENTATIONML_TIMING_FALLBACK` diagnostics
 - Preserve finite start-condition delays up to 10000 ms and exact raw unsupported timing nodes in typed fallback diagnostics
-- Keep timing inventory private to conversion so the 1.1.0 public `Slide`, capability enums, and existing `TimingInventory` API remain source-compatible
+- Keep timing inventory private to conversion so the pre-v2.0 public `Slide`, capability enums, and existing `TimingInventory` API remain source-compatible
 
 ### Breaking API changes
 
@@ -36,22 +36,25 @@ All notable changes to this project will be documented in this file.
 - Preserve unavailable built-in and invalid table style IDs plus all six flags in `TABLE_STYLE_DEFINITION_UNAVAILABLE` diagnostics without synthesizing Office appearances
 - Add `TableData::style`, `TableCell::h_merge`, `TableCell::explicit_borders`, `TableCellStyle::fill_ref`, `TableStyle::table_background_ref`, and `TableStyle::unsupported_references`; store `TableStyleReference::definition` as `Option<Box<TableStyle>>` so table metadata does not inflate every `ShapeType`; consumers upgrading from v1.x must migrate external struct literals
 - Reject unsafe/external table-style relationships and invalid table-style XML with stable diagnostics, and preserve per-table diagnostic identity from `cNvPr`
-- Preserve table-style `fillRef` index/color/modifiers; resolve parsed theme fills and diagnose unavailable non-solid theme fills without inventing a solid replacement (`[교차검증 필요]` for exact non-solid resolution)
+- Preserve table-style `fillRef` index/color/modifiers; resolve parsed theme fills and diagnose unavailable non-solid theme fills without inventing a solid replacement or claiming exact non-solid resolution
 - Preserve scoped table-style `tblBg/effectRef` and border-side `lnRef` index/color/modifiers and diagnose them as unsupported without discarding sibling styles or inventing effects/lines
 
 ### Validation
 
-- Complete the bounded semantic capability matrix at 56/56 entries with no semantic `unparsed` state
-- Exercise 187 preset families through 900 deterministic low/default/high adjustment cases and keep every official adjustment key classified
-- Validate seven canonical real-world decks containing 186 slides without conversion failures, blank slides, corrupt renders, or missing candidate/reference pairs
-- Record a 96.843607% LibreOffice proxy corpus mean and 88.967165% minimum for the real-world corpus; this is proxy evidence and does not replace PowerPoint-native strict comparison
+- Cover all 56 bounded semantic capability-matrix entries with no semantic `unparsed` state; no entry is `exact`
+- Exercise all 300 official preset/adjustment pairs across 187 presets through 900 deterministic low/default/high cases and keep every official adjustment key classified
+- Validate seven canonical external real-world decks containing 186 slides without conversion failures, blank slides, corrupt renders, or missing candidate/reference pairs
+- Record a 96.843607% LibreOffice proxy corpus mean and 88.967165% minimum for that external corpus in the [v2.0.0 validation report](docs/release-notes/v2.0.0-validation.md); this is proxy evidence and does not replace PowerPoint-native strict comparison
 - Keep PowerPoint-native pixel equality behind native Windows PowerPoint references and provenance validation
 
 ### Fixtures / Documentation
 - Extend `notes-comments.pptx` with a modern comment extension payload and escaped script-closing boundary for raw-metadata safety coverage
 - Expand `actions.pptx` to three presentation-ordered slides with nonsequential part names plus external, navigation, hover, media, blocked, shape, nested group, table-frame/table-run, picture, and connector stimuli
 - Expand the completion table deck to a region matrix with explicit fill/noFill overrides and a horizontal merge row
-- Mark the header/footer-relative band origin as `[교차검증 필요]` because the Office application-order note does not define that offset
+- Keep header/footer-relative row and column band origins approximate without claiming PowerPoint equivalence
+- Synchronize README, architecture, binding, evaluation, release, and issue-reporting documentation with the v2.0.0 public surfaces and publication scope
+- Update the GitHub Pages demo to execute isolated timing/action runtimes, display canonical diagnostic counts, expose current release links, default to fit-width zoom, and enforce accessible status, zoom, and output-frame contracts
+- Replace unsupported `pixel-perfect` npm marketing copy with the evidence-backed `high-fidelity` description
 
 ## [1.1.0] - 2026-04-14
 

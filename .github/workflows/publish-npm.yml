@@ -14,7 +14,7 @@ on:
           - 'true'
           - 'false'
       version_tag:
-        description: 'Release tag to validate against the package version (for manual publish, e.g. v1.0.4)'
+        description: 'Release tag to validate against the package version (for manual publish, e.g. v2.0.0)'
         required: false
         default: ''
         type: string
@@ -29,7 +29,7 @@ env:
   PACKAGE_AUTHOR: 'Brian Kim <hyungjoo.drb@gmail.com>'
   PACKAGE_HOMEPAGE: 'https://github.com/kim62210/pptx2html-turbo'
   PACKAGE_BUGS_URL: 'https://github.com/kim62210/pptx2html-turbo/issues'
-  PACKAGE_DESCRIPTION: 'Convert PPTX slides to pixel-perfect HTML in the browser — pure Rust/WASM, zero dependencies'
+  PACKAGE_DESCRIPTION: 'Convert PPTX slides to high-fidelity HTML in the browser — pure Rust/WASM, zero dependencies'
 
 jobs:
   publish:

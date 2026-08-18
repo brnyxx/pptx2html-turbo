@@ -132,7 +132,7 @@ impl ConversionResult {
         self.diagnostics_json.clone()
     }
 
-    /// JSON array of unresolved elements (SmartArt, OLE, Math).
+    /// JSON array of unresolved elements (SmartArt, OLE, Math, custom geometry).
     ///
     /// Each element: `{ slideIndex, elementType, placeholderId, rawXml?, dataModel? }`
     #[wasm_bindgen(getter, js_name = "unresolvedElements")]

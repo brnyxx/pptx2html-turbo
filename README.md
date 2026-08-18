@@ -5,6 +5,7 @@ Convert PPTX slides to HTML in pure Rust with direct rendering and structured fa
 Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bindings, just Rust.
 
 **[Live Demo](https://kim62210.github.io/pptx2html-turbo/)** — try it in your browser, no installation needed.
+**[Releases](https://github.com/kim62210/pptx2html-turbo/releases)** — download CLI artifacts and read versioned release notes.
 
 ## Features
 
@@ -28,12 +29,9 @@ Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bind
 
 ```bash
 # npm (WASM — browser)
-npm install @briank-dev/pptx2html-turbo
+npm install @briank-dev/pptx2html-turbo@2.0.0
 
-# Rust library
-cargo add pptx2html-core
-
-# CLI
+# CLI (from a checked-out v2.0.0 source tree)
 cargo install --path crates/pptx2html-cli
 
 # Python (requires maturin)
@@ -41,6 +39,14 @@ cd crates/pptx2html-py && maturin develop
 
 # WASM (build from source)
 cd crates/pptx2html-wasm && wasm-pack build --target web
+```
+
+The Rust crates and Python binding are source distributions in v2.0.0; this release does not publish them to crates.io or PyPI.
+Rust library consumers can depend on the release tag directly:
+
+```toml
+[dependencies]
+pptx2html-core = { git = "https://github.com/kim62210/pptx2html-turbo", tag = "v2.0.0" }
 ```
 
 ## Usage
@@ -71,13 +77,21 @@ pptx2html input.pptx --scale 2.0
 
 # Print presentation info as JSON
 pptx2html input.pptx --info
+
+# Write the canonical ordered diagnostics JSON
+pptx2html input.pptx --diagnostics diagnostics.json
+
+# Still write outputs, but exit 2 when fallback diagnostics are present
+pptx2html input.pptx --fail-on-fallback
 ```
 
 ### Rust Library
 
 ```rust
-use std::path::Path;
-use pptx2html_core::{convert_file, convert_file_with_options, ConversionOptions, get_info};
+use std::{fs, path::Path};
+use pptx2html_core::{
+    convert_file, convert_file_with_options_metadata, get_info, ConversionOptions,
+};
 
 // Simple conversion
 let html = convert_file(Path::new("presentation.pptx"))?;
@@ -93,7 +107,17 @@ let opts = ConversionOptions {
     scale: 2.0,
     ..Default::default()
 };
-let html = convert_file_with_options(Path::new("presentation.pptx"), &opts)?;
+let result = convert_file_with_options_metadata(Path::new("presentation.pptx"), &opts)?;
+let output_dir = Path::new("output");
+fs::create_dir_all(output_dir)?;
+fs::write(output_dir.join("presentation.html"), &result.html)?;
+for asset in &result.external_assets {
+    let asset_path = output_dir.join(&asset.relative_path);
+    if let Some(parent) = asset_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(asset_path, &asset.data)?;
+}
 
 // Get metadata
 let info = get_info(Path::new("presentation.pptx"))?;
@@ -137,7 +161,7 @@ html = pptx2html.convert(
 info = pptx2html.get_info("presentation.pptx")
 print(f"Slides: {info.slide_count}, Size: {info.width_px}x{info.height_px}")
 
-# Conversion with metadata (SmartArt/OLE/Math sideband)
+# Conversion with metadata (SmartArt/OLE/Math/custom-geometry sideband)
 result = pptx2html.convert_with_metadata("presentation.pptx")
 print(f"HTML: {len(result.html)} chars, Unresolved: {len(result.unresolved_elements)}")
 for elem in result.unresolved_elements:
@@ -171,18 +195,18 @@ const html2 = convert_with_options(data, false, true, new Uint32Array([1, 3]), 1
 const info = get_presentation_info(data);
 console.log(`Slides: ${info.slideCount}, Size: ${info.widthPx}x${info.heightPx}`);
 
-// Conversion with metadata sideband (SmartArt/OLE/Math)
+// Conversion with metadata sideband (SmartArt/OLE/Math/custom geometry)
 const result = convert_with_metadata(data);
 console.log(`HTML: ${result.html.length}, Unresolved: ${result.unresolvedElements}`);
 </script>
 ```
 
 A drag-and-drop demo page is included at `crates/pptx2html-wasm/demo/index.html`.
-The included demo exposes image-like whole-slide zoom controls that keep the original slide coordinates and text flow intact.
+The included demo displays ordered diagnostic counts, runs renderer-owned actions and timing in an opaque-origin frame, and initializes image-like whole-slide zoom to the available width while keeping slide coordinates and text flow intact.
 
 ## Supported Features
 
-See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element inventory, [docs/architecture/CAPABILITY_MATRIX.md](docs/architecture/CAPABILITY_MATRIX.md) for the authoritative support-stage matrix, and [docs/architecture/PPTX_COMPLETENESS_PROGRESS.md](docs/architecture/PPTX_COMPLETENESS_PROGRESS.md) for the delivered-task ledger and remaining acceptance plan.
+See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element inventory, [docs/architecture/CAPABILITY_MATRIX.md](docs/architecture/CAPABILITY_MATRIX.md) for the authoritative support-stage matrix, and [docs/architecture/PPTX_COMPLETENESS_PROGRESS.md](docs/architecture/PPTX_COMPLETENESS_PROGRESS.md) for the current capability ledger and remaining exactness work.
 
 | Category | Highlights |
 |----------|-----------|
@@ -202,9 +226,13 @@ See [SUPPORTED_FEATURES.md](SUPPORTED_FEATURES.md) for the full ECMA-376 element
 
 ### v2.0.0 API compatibility
 
-The v2.0.0 line adds the public `Bullet::Picture` enum variant. Rust consumers upgrading from v1.x that exhaustively match `Bullet` must add a `Bullet::Picture` arm.
+Rust consumers upgrading from v1.x must account for these public API changes:
 
-Table-style support stores `TableStyleReference::definition` as `Option<Box<TableStyle>>` to keep `ShapeType` compact. Rust consumers upgrading from v1.x that construct or destructure this public field must account for the indirection.
+- `Bullet::Picture` adds a new exhaustive-match arm.
+- `Shape::actions`, `TextRun::actions`, typed action enums, and `FallbackKind::ActionMetadata` extend action handling.
+- `TableStyleReference::definition` is now `Option<Box<TableStyle>>`, and the public table-style structs expose additional typed fields.
+- `Presentation::embedded_inventory` adds a public field; use `..Default::default()` where appropriate.
+- `ConversionResult::diagnostics` adds a public field; construct results with `ConversionResult::new(html, slide_count)`.
 
 DrawingML preset names beginning with `math`, such as `mathPlus`, are geometric shapes only and do not imply OMML equation support.
 
@@ -231,11 +259,11 @@ Rust consumers upgrading to v2.0.0 and constructing `ConversionResult` should us
 
 Slide notes and legacy/modern comments are parsed from internal relationship parts and remain outside the visible `.slide` subtree. Their paragraph-aware text, one-based presentation slide association, author records, timestamp, relationship ID, part name, and validated notes-master relationship are carried by the existing ordered diagnostics JSON as `fallback/parsed` metadata. Missing authors do not discard comment text and emit `COMMENT_AUTHOR_UNRESOLVED`; duplicate author IDs remain unresolved instead of selecting an arbitrary record. Unsafe, external, malformed, duplicate, or type-spoofed annotation relationships never select unrelated package parts. Each unknown modern comment extension subtree is retained independently with `MODERN_COMMENT_EXTENSION_FALLBACK` and is not claimed as exact interpretation. These bounds follow Microsoft's [Notes Slide](https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-notes-slides), [legacy comments](https://learn.microsoft.com/en-us/office/open-xml/presentation/working-with-comments), [PresentationML structure](https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document), [modern CT_Comment](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-pptx/161bc2c9-98fc-46b7-852b-ba7ee77e2e54), [modern Comment Part](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-pptx/b85a9293-bdca-4c6b-a554-8f3918db9791), and [modern Author Part](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-pptx/4071f53f-9509-405f-a76b-594b865e177a) documentation.
 
-The v2.0.0 table-style model adds fields to the public `TableData`, `TableCell`, `TableCellStyle`, and `TableStyle` structs, including typed unsupported reference primitives. External Rust code upgrading from v1.x and using struct literals must migrate by using `..Default::default()` or the new fields explicitly. Package-defined styles follow the documented Office region order. A valid Office built-in whose converter definition is unavailable, or an invalid ID, preserves its ID and six flags and emits `TABLE_STYLE_DEFINITION_UNAVAILABLE` without inventing an appearance. Table-style `fillRef` preserves its index, reference color, and modifiers and resolves only when the referenced fill is present in the parsed theme format scheme. A non-solid theme fill that the current theme parser cannot carry is left unapplied with `TABLE_STYLE_PRIMITIVE_UNSUPPORTED`; flattening it to a solid fill is forbidden and exact non-solid resolution remains `[교차검증 필요]`. Scoped `tblBg/effectRef` and border-side `lnRef` index/color/modifiers are also preserved and diagnosed as unsupported without discarding sibling styles or inventing effects/lines. Row/column band origin around header/footer rows remains `[교차검증 필요]` because the cited Office application-order note does not define that offset.
+The v2.0.0 table-style model adds fields to the public `TableData`, `TableCell`, `TableCellStyle`, and `TableStyle` structs, including typed unsupported reference primitives. External Rust code upgrading from v1.x and using struct literals must migrate by using `..Default::default()` or the new fields explicitly. Package-defined styles follow the documented Office region order. A valid Office built-in whose converter definition is unavailable, or an invalid ID, preserves its ID and six flags and emits `TABLE_STYLE_DEFINITION_UNAVAILABLE` without inventing an appearance. Table-style `fillRef` preserves its index, reference color, and modifiers and resolves only when the referenced fill is present in the parsed theme format scheme. A non-solid theme fill that the current theme parser cannot carry is left unapplied with `TABLE_STYLE_PRIMITIVE_UNSUPPORTED`; flattening it to a solid fill is forbidden and the converter does not claim exact non-solid resolution. Scoped `tblBg/effectRef` and border-side `lnRef` index/color/modifiers are also preserved and diagnosed as unsupported without discarding sibling styles or inventing effects/lines. Header/footer-relative row and column band origins remain approximate and are not claimed as PowerPoint-equivalent.
 
-`Shape::actions` and `TextRun::actions` are the authoritative typed action contract. They distinguish click from mouse-over and preserve external URI, actual presentation-order slide target, next/previous/first/last, no-op, media, and unsupported raw action semantics. `TextRun::hyperlink` remains as a compatibility projection, but both typed and legacy links pass the same product security policy: only ASCII-control/whitespace-free `http`, `https`, and `mailto` URIs are executable. HTTP(S) credentials and malformed, relative, protocol-relative, file, program, macro, and custom targets are inert. Executable external links open in a new browsing context with `rel="noopener noreferrer"`; mouse-over metadata never navigates. Boundary and hidden-slide traversal equivalence with PowerPoint remains `[교차검증 필요]`.
+`Shape::actions` and `TextRun::actions` are the authoritative typed action contract. They distinguish click from mouse-over and preserve external URI, actual presentation-order slide target, next/previous/first/last, no-op, media, and unsupported raw action semantics. `TextRun::hyperlink` remains as a compatibility projection, but both typed and legacy links pass the same product security policy: only ASCII-control/whitespace-free `http`, `https`, and `mailto` URIs are executable. HTTP(S) credentials and malformed, relative, protocol-relative, file, program, macro, and custom targets are inert. Executable external links open in a new browsing context with `rel="noopener noreferrer"`; mouse-over metadata never navigates. Boundary and hidden-slide traversal remain approximate and are not claimed as PowerPoint-equivalent.
 
-Shape-owned `a:audioFile` and `a:videoFile` references are supported only for official internal relationships that resolve safely into `ppt/media/`, stay within 16 MiB, and have namespace-valid content types. Audio is limited to PCM WAV. Video is limited to one structurally parsed IDR I-slice of 8-bit 4:2:0 progressive Constrained Baseline AVC (profile 66, compatibility `0xc0`, level 30), 16x16 through 256x256 macroblock-aligned dimensions, with raster-ordered I_PCM macroblocks, canonical emulation prevention and trailing bits, matching `avc1`/SPS dimensions, and sample-table ranges wholly inside `mdat`. Extra parameter sets, slices, NAL units, or unsupported AVC syntax fall back; no fixture-byte or pixel-byte whitelist is accepted. Supported assets use native controls without autoplay, and external relationships are never fetched. Browser codec and native PowerPoint fidelity remain approximate and `[교차검증 필요]`.
+Shape-owned `a:audioFile` and `a:videoFile` references are supported only for official internal relationships that resolve safely into `ppt/media/`, stay within 16 MiB, and have namespace-valid content types. Audio is limited to PCM WAV. Video is limited to one structurally parsed IDR I-slice of 8-bit 4:2:0 progressive Constrained Baseline AVC (profile 66, compatibility `0xc0`, level 30), 16x16 through 256x256 macroblock-aligned dimensions, with raster-ordered I_PCM macroblocks, canonical emulation prevention and trailing bits, matching `avc1`/SPS dimensions, and sample-table ranges wholly inside `mdat`. Extra parameter sets, slices, NAL units, or unsupported AVC syntax fall back; no fixture-byte or pixel-byte whitelist is accepted. Supported assets use native controls without autoplay, and external relationships are never fetched. Browser codec behavior and native PowerPoint fidelity remain approximate and are not claimed as exact.
 
 Group and table graphic-frame actions retain their own `cNvPr` identity without overriding descendant actions. Typed runs and safe legacy `TextRun::hyperlink` anchors remain pointer-reachable above enclosing shape, group, and table action surfaces; plain runs and blocked unsafe legacy links do not intercept the owner action. Run diagnostics use stable slide/shape/paragraph/run coordinates, with table row/column coordinates where applicable; exact duplicate emissions collapse while distinct occurrences remain separate. Action parsing requires the exact PresentationML owner/nonvisual/`cNvPr` stack and DrawingML action namespace.
 
@@ -336,7 +364,7 @@ cd evaluate
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && playwright install chromium
 
-# 1. Generate golden test set (50 PPTX files, 10 categories)
+# 1. Generate the deterministic golden fixture set
 python create_golden_set.py
 
 # 2. Render references via LibreOffice headless (secondary regression signal)

@@ -22,7 +22,7 @@
 //! - High-fidelity layout preservation (absolute positioning in EMU coordinates)
 //! - Theme color resolution with 12 color modifiers (tint, shade, lumMod, etc.)
 //! - Slide master / layout inheritance chain
-//! - 30 preset shape SVG rendering
+//! - 187 classified preset shapes with deterministic SVG or fallback handling
 //! - Table, group shape, and connector support
 //! - Image embedding (base64) or external references
 //! - Text styling: bold, italic, underline, bullets, vertical text, shadows

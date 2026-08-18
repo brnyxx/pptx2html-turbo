@@ -4,7 +4,7 @@
 
 No feature is `exact`. PowerPoint-native provenance is unavailable on this Mac, and secondary browser or LibreOffice captures cannot authorize promotion.
 
-The complete post-integration gate is `scripts/task-23-final-local-gates.sh`. Its final evidence file is produced only after all feature branches are integrated.
+The reusable post-integration gate is `scripts/task-23-final-local-gates.sh`. Run it, or the equivalent commands documented in the release checklist, against every release candidate after all intended changes are integrated.
 
 ## Generated PPTX capability registry
 

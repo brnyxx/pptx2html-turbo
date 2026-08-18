@@ -72,7 +72,7 @@ The first command checks the 187-name dispatcher contract, traces literal
 a Rust comment/string/raw-string-aware lexical scan, and reports official
 manifest keys that the current renderer never consumes. Dynamic or otherwise
 unparseable adjustment lookups fail closed. The bundle commands scope consumed,
-unknown, and unconsumed counts to the module groups required by Tasks 8-10. Use
+unknown, and unconsumed counts to the corresponding geometry module groups. Use
 `--source-root` to inspect a copied geometry-family directory, `--dispatcher`
 to override the dispatcher source, and `--json` to write a stable
 machine-readable report. Invalid manifests, source roots, dispatchers, and
