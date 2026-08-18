@@ -114,7 +114,7 @@ pub(super) fn left_bracket_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> S
     let max_adj = 50_000.0 * (h / ss);
     let a = finite(adj.get("adj").copied(), 8_333.0).clamp(0.0, max_adj);
     let r = scaled(ss, a);
-    let x = w * 0.7;
+    let x = w;
     format!(
         "M{x:.1},0 L{r:.1},0 Q0,0 0,{r:.1} L0,{y:.1} Q0,{h:.1} {r:.1},{h:.1} L{x:.1},{h:.1}",
         x = x,
@@ -131,7 +131,7 @@ pub(super) fn right_bracket_path(w: f64, h: f64, adj: &HashMap<String, f64>) -> 
     let max_adj = 50_000.0 * (h / ss);
     let a = finite(adj.get("adj").copied(), 8_333.0).clamp(0.0, max_adj);
     let r = scaled(ss, a);
-    let x = w * 0.3;
+    let x = 0.0;
     format!(
         "M{x:.1},0 L{xr:.1},0 Q{w:.1},0 {w:.1},{r:.1} L{w:.1},{y:.1} Q{w:.1},{h:.1} {xr:.1},{h:.1} L{x:.1},{h:.1}",
         x = x,

@@ -939,6 +939,17 @@ fn official_landmarks_match_ecma_derived_coordinates() {
 }
 
 #[test]
+fn bracket_paths_span_the_full_shape_width() {
+    let left = render_path("leftBracket", Some(("adj", 8_333.0)));
+    assert!(left.starts_with("M160.0,0"), "{left}");
+    assert!(left.ends_with("L160.0,100.0"), "{left}");
+
+    let right = render_path("rightBracket", Some(("adj", 8_333.0)));
+    assert!(right.starts_with("M0.0,0"), "{right}");
+    assert!(right.ends_with("L0.0,100.0"), "{right}");
+}
+
+#[test]
 fn every_multi_key_shape_matches_official_derived_landmarks() {
     let cases = [
         (
