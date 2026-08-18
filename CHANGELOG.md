@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-18
+
 ### Timing and transitions
 
 - Preserve ordered slide transition/timing XML and approximately execute only bounded cut/fade and click/with-previous/after-previous appear, disappear, or fade behavior on resolved slide shapes
@@ -11,12 +13,13 @@ All notable changes to this project will be documented in this file.
 - Preserve finite start-condition delays up to 10000 ms and exact raw unsupported timing nodes in typed fallback diagnostics
 - Keep timing inventory private to conversion so the 1.1.0 public `Slide`, capability enums, and existing `TimingInventory` API remain source-compatible
 
-### Breaking API notice - next semver-major only
+### Breaking API changes
 
 - Add the public `Bullet::Picture` variant for typed DrawingML picture bullets.
 - Rust consumers with exhaustive `Bullet` matches must add a `Bullet::Picture` arm.
-- Publish this public enum change only in the next semver-major release; package manifests remain unchanged on the current release line.
+- Ship this public enum change in v2.0.0; consumers upgrading from v1.x must update exhaustive matches.
 - Add `Presentation::embedded_inventory` as typed presentation-owned fallback state while retaining the original public `model::embedded::EmbeddedInventory` marker. Existing exhaustive `Presentation` literals must add `embedded_inventory: Default::default()` (or switch to `..Default::default()`); an external-crate compile contract pins both the legacy `E0063` failure and the migrated literal. This avoids ambient parser state and semantic overloading of unrelated public fields.
+- Add ordered `ConversionResult::diagnostics`; consumers upgrading from v1.x must replace external struct literals with `ConversionResult::new(html, slide_count)` and populate metadata fields afterwards.
 - Restrict embedded previews to a dependency-free safe PNG subset: CRC-valid IHDR/IDAT/IEND-only, bounded 8-bit non-interlaced RGBA with stored-zlib/filter-0 scanlines. Other PNG forms and JPEG/GIF/WebP previews fall back to placeholders.
 - Bound unknown package-part inventory to 128 sorted entries and 32 KiB of part-name metadata, followed by one deterministic omitted-count diagnostic.
 
@@ -28,13 +31,21 @@ All notable changes to this project will be documented in this file.
 - Render only strict product-allowlisted `http`, `https`, and `mailto` links, use actual presentation slide order for internal navigation, and keep unsafe or unsupported actions inert with stable diagnostics
 - Preserve group and table graphic-frame action ownership, require exact PresentationML owner stacks, and use stable owner-derived run/table-cell diagnostic identities
 - Keep safe legacy run hyperlinks pointer-reachable above enclosing shape, group, and table actions without enabling plain or unsafe legacy runs
-- Add public `Shape::actions`, `TextRun::actions`, typed action enums, and `FallbackKind::ActionMetadata`; exhaustive matches and struct literals require a next-semver-major source migration while the manifest version remains unchanged
+- Add public `Shape::actions`, `TextRun::actions`, typed action enums, and `FallbackKind::ActionMetadata`; consumers upgrading from v1.x must migrate exhaustive matches and struct literals
 - Resolve package-defined DrawingML table styles in Office region precedence order, including theme-aware fills, text, outer/inside borders, explicit-cell overrides, and logical merged-cell coordinates
 - Preserve unavailable built-in and invalid table style IDs plus all six flags in `TABLE_STYLE_DEFINITION_UNAVAILABLE` diagnostics without synthesizing Office appearances
-- Add `TableData::style`, `TableCell::h_merge`, `TableCell::explicit_borders`, `TableCellStyle::fill_ref`, `TableStyle::table_background_ref`, and `TableStyle::unsupported_references`; store `TableStyleReference::definition` as `Option<Box<TableStyle>>` so table metadata does not inflate every `ShapeType`; external struct literals require a next-semver-major source migration while the manifest version remains unchanged
+- Add `TableData::style`, `TableCell::h_merge`, `TableCell::explicit_borders`, `TableCellStyle::fill_ref`, `TableStyle::table_background_ref`, and `TableStyle::unsupported_references`; store `TableStyleReference::definition` as `Option<Box<TableStyle>>` so table metadata does not inflate every `ShapeType`; consumers upgrading from v1.x must migrate external struct literals
 - Reject unsafe/external table-style relationships and invalid table-style XML with stable diagnostics, and preserve per-table diagnostic identity from `cNvPr`
 - Preserve table-style `fillRef` index/color/modifiers; resolve parsed theme fills and diagnose unavailable non-solid theme fills without inventing a solid replacement (`[교차검증 필요]` for exact non-solid resolution)
 - Preserve scoped table-style `tblBg/effectRef` and border-side `lnRef` index/color/modifiers and diagnose them as unsupported without discarding sibling styles or inventing effects/lines
+
+### Validation
+
+- Complete the bounded semantic capability matrix at 56/56 entries with no semantic `unparsed` state
+- Exercise 187 preset families through 900 deterministic low/default/high adjustment cases and keep every official adjustment key classified
+- Validate seven canonical real-world decks containing 186 slides without conversion failures, blank slides, corrupt renders, or missing candidate/reference pairs
+- Record a 96.843607% LibreOffice proxy corpus mean and 88.967165% minimum for the real-world corpus; this is proxy evidence and does not replace PowerPoint-native strict comparison
+- Keep PowerPoint-native pixel equality behind native Windows PowerPoint references and provenance validation
 
 ### Fixtures / Documentation
 - Extend `notes-comments.pptx` with a modern comment extension payload and escaped script-closing boundary for raw-metadata safety coverage
