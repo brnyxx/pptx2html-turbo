@@ -443,7 +443,7 @@ body {{ background: #f0f0f0; font-family: 'Calibri', 'Malgun Gothic', sans-serif
 .text-body.emergency-wrap .run {{ word-break: break-word; overflow-wrap: anywhere; }}
 .text-body.nowrap .run {{ white-space: inherit; word-break: normal; overflow-wrap: normal; }}
 img.shape-image {{ width: 100%; height: 100%; object-fit: cover; display: block; }}
-.shape-svg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
+.shape-svg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; }}
 .shape-svg + .text-body {{ position: relative; z-index: 1; }}
 .chart-placeholder {{ display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: #f8f8f8; border: 1px dashed #ccc; color: #888; font-size: 14px; }}
 .chart-direct {{ width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: stretch; gap: 8px; color: var(--chart-text-color, #333); }}
@@ -2328,6 +2328,18 @@ mod tests {
         assert_eq!(
             escape_html("<tag attr=\"1\">&"),
             "&lt;tag attr=&quot;1&quot;&gt;&amp;"
+        );
+    }
+
+    #[test]
+    fn global_css_preserves_geometry_outside_shape_svg_viewports() {
+        let css = HtmlRenderer::global_css(960.0, 540.0);
+
+        assert!(
+            css.contains(
+                ".shape-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; }"
+            ),
+            "{css}"
         );
     }
 

@@ -104,7 +104,27 @@ pub(super) fn render_path(
                 let radius_y = environment.resolve(height_radius)?;
                 let start = environment.resolve(start_angle)?;
                 let swing = environment.resolve(swing_angle)?;
-                if radius_x.abs() < 0.001 || radius_y.abs() < 0.001 || swing.abs() < 0.001 {
+                if swing.abs() < 0.001 {
+                    continue;
+                }
+                if radius_x.abs() < 0.001 || radius_y.abs() < 0.001 {
+                    let start_radians = ooxml_radians(start);
+                    let end_radians = ooxml_radians(start + swing);
+                    let delta_x = if radius_y.abs() < 0.001 {
+                        radius_x * (end_radians.cos() - start_radians.cos()) * scale_x
+                    } else {
+                        0.0
+                    };
+                    let delta_y = if radius_x.abs() < 0.001 {
+                        radius_y * (end_radians.sin() - start_radians.sin()) * scale_y
+                    } else {
+                        0.0
+                    };
+                    current.0 += delta_x;
+                    current.1 += delta_y;
+                    if delta_x.abs() >= 0.001 || delta_y.abs() >= 0.001 {
+                        let _ = write!(output, "L{:.2},{:.2} ", current.0, current.1);
+                    }
                     continue;
                 }
                 append_arc(
@@ -265,6 +285,30 @@ mod tests {
             .expect("unequal-radii official arc");
 
         assert_eq!(path.d, "M0.00,10.00 A20.00,10.00 0 0,0 11.06,18.94");
+    }
+
+    #[test]
+    fn zero_height_arc_degenerates_to_its_horizontal_chord() {
+        let definition = PathDefinition {
+            width: Some("40".into()),
+            height: Some("20".into()),
+            fill: PathFill::Norm,
+            stroke: true,
+            commands: vec![
+                PathCommandDefinition::Move(vec![point("0", "0")]),
+                PathCommandDefinition::Arc {
+                    width_radius: "20".into(),
+                    height_radius: "0".into(),
+                    start_angle: "10800000".into(),
+                    swing_angle: "-10800000".into(),
+                },
+            ],
+        };
+
+        let path = render_path(&definition, &GuideEnvironment::new(40.0, 20.0), 40.0, 20.0)
+            .expect("zero-height official arc");
+
+        assert_eq!(path.d, "M0.00,0.00 L40.00,0.00");
     }
 
     fn point(x: &str, y: &str) -> PointDefinition {
