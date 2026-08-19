@@ -9,7 +9,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  PACKAGE_NAME: '@briank-dev/pptx2html-turbo'
+  PACKAGE_NAME: '@briank-dev/pptx-to-html'
   PACKAGE_AUTHOR: 'Brian Kim <hyungjoo.drb@gmail.com>'
   PACKAGE_HOMEPAGE: 'https://github.com/kim62210/pptx2html-turbo'
   PACKAGE_BUGS_URL: 'https://github.com/kim62210/pptx2html-turbo/issues'
@@ -110,7 +110,7 @@ jobs:
       - name: Install maturin
         run: python -m pip install maturin
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: cargo install wasm-pack --version 0.14.0 --locked
       - name: Read release version
         run: |
           chmod +x scripts/read_release_version.sh

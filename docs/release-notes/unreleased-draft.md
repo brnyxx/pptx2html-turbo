@@ -1,51 +1,47 @@
-# v2.0.0 Release Notes Draft
+# v2.0.1 Release Notes Draft
 
 See [`README.md`](./README.md) for the release-note workflow in this directory.
 See [`pre-release-checklist.md`](./pre-release-checklist.md) before creating the tag.
 
 ## Suggested Title
 
-`v2.0.0`
+`v2.0.1`
 
 ## Summary
 
-v2.0.0 is the first semver-major release after the converter expanded its typed PPTX preservation model, deterministic fallback diagnostics, and visual-fidelity evaluation surface. It ships the public API changes that were intentionally held for a major version.
+v2.0.1 gives the browser package a descriptive primary name and a simpler entrypoint while preserving the v2.0.0 conversion engine and every published low-level export.
 
 ## Highlights
 
-- Cover all 56 bounded semantic capability-matrix entries with no semantic `unparsed` state; no entry claims `exact`.
-- Preserve notes and comments, actions, timing and transitions, bounded media, advanced effects, table styles, embedded package metadata, custom XML, presentation extensions, synchronization metadata, thumbnails, theme overrides, and user-defined tags through typed models or deterministic fallbacks.
-- Improve preset geometry, degenerate arc handling, overflowing shapes, brackets, mixed-script RTL paragraphs, chart fallbacks, and diagnostic ordering on real-world decks.
-- Add exhaustive adjustment coverage for all 300 official preset/adjustment pairs across 187 presets and 900 deterministic low/default/high cases.
-- Refresh the GitHub Pages demo with isolated timing/action runtime execution, canonical diagnostic counts, current release links, a fit-width default, and accessible status, zoom, and output-frame contracts.
+- Publish `@briank-dev/pptx-to-html` as the primary browser package.
+- Keep `@briank-dev/pptx2html-turbo` on the same version and API during migration.
+- Add `pptxToHtml(input, moduleOrPath?)` with lazy WASM initialization and direct `Blob`, `ArrayBuffer`, or `Uint8Array` input.
+- Share the first initialization attempt and its success or failure across concurrent calls, then retry initialization on a later call after failure.
+- Preserve the default initializer and all existing low-level named exports.
+- Validate facade entrypoints and both npm tarballs before publication.
 
-## Breaking Changes
+## Compatibility
 
-- Add `Bullet::Picture`; exhaustive `Bullet` matches must add an arm.
-- Add public action fields and enums, including `Shape::actions`, `TextRun::actions`, and `FallbackKind::ActionMetadata`.
-- Add table-style and merge metadata to public table structs and store `TableStyleReference::definition` as `Option<Box<TableStyle>>`.
-- Add presentation-owned embedded inventory and other typed metadata fields that require external struct literals to migrate or use `..Default::default()`.
-- Add ordered `ConversionResult::diagnostics`; external Rust consumers must construct results with `ConversionResult::new(html, slide_count)` instead of struct literals.
+This patch release is additive. Existing imports from `@briank-dev/pptx2html-turbo` and direct `init`/`convert` usage remain supported.
 
 ## Validation
 
 - Rust workspace formatting, Clippy, tests, and release builds must pass from the tagged tree.
-- Python evaluation helper tests, exactness-contract generation, wheel build/install smoke tests, and WASM package contract/runtime smoke tests must pass.
-- Real Chrome, Firefox, and WebKit load the Pages artifact and convert the same real 10-slide deck with ordered diagnostics, isolated renderer scripts, and no console or page errors.
-- The external seven-deck real-world corpus converts all 186 slides. LibreOffice proxy comparison records a 96.843607% mean and an 88.967165% minimum with no blank, corrupt, or missing slide pairs observed.
-- The exhaustive adjustment proxy records a 98.926092% mean and a 98.265724% minimum across 900 cases.
-- [`v2.0.0-validation.md`](./v2.0.0-validation.md) records the environment, evidence boundary, report hashes, and strict PowerPoint-native blocker for these figures.
+- Python evaluation tests and the exactness contract must pass.
+- Both npm package names must pass package-root import, real two-slide conversion, package contract, and `npm publish --dry-run`.
+- The GitHub Pages demo must expose the v2.0.1 release and primary npm package.
 
-LibreOffice scores are proxy evidence only. This release does not claim PowerPoint-native strict pixel equality without genuine Windows PowerPoint reference exports and validated provenance.
+The v2.0.0 evidence boundary remains unchanged. This patch release does not add a PowerPoint-native strict pixel-equality claim.
 
 ## Publication Scope
 
 - GitHub Release with validated CLI artifacts.
-- Public npm package `@briank-dev/pptx2html-turbo@2.0.0`.
+- Primary npm package `@briank-dev/pptx-to-html@2.0.1`.
+- Legacy npm package `@briank-dev/pptx2html-turbo@2.0.1`.
 - GitHub Pages WASM demo from `main`.
 - The repository does not currently define crates.io or PyPI publication jobs.
 
 ## Publish Status
 
-- Target tag: `v2.0.0`.
+- Target tag: `v2.0.1`.
 - Tag and publish remain pending the final human approval required by [`pre-release-checklist.md`](./pre-release-checklist.md).

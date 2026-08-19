@@ -633,7 +633,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-cli"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "clap",
  "env_logger",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-core"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "base64",
  "criterion",
@@ -659,7 +659,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-py"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "pptx2html-core",
  "pyo3",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-wasm"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "pptx2html-core",
  "wasm-bindgen",

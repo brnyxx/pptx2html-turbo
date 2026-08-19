@@ -14,9 +14,8 @@ on:
           - 'true'
           - 'false'
       version_tag:
-        description: 'Release tag to validate against the package version (for manual publish, e.g. v2.0.0)'
-        required: false
-        default: ''
+        description: 'Release tag to validate against the package version (for manual publish, e.g. v2.0.1)'
+        required: true
         type: string
 
 permissions:
@@ -25,7 +24,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  PACKAGE_NAME: '@briank-dev/pptx2html-turbo'
+  PACKAGE_NAME: '@briank-dev/pptx-to-html'
+  LEGACY_PACKAGE_NAME: '@briank-dev/pptx2html-turbo'
   PACKAGE_AUTHOR: 'Brian Kim <hyungjoo.drb@gmail.com>'
   PACKAGE_HOMEPAGE: 'https://github.com/kim62210/pptx2html-turbo'
   PACKAGE_BUGS_URL: 'https://github.com/kim62210/pptx2html-turbo/issues'
@@ -65,7 +65,7 @@ jobs:
         run: python3 evaluate/check_exactness_contract.py --repo-root .
 
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: cargo install wasm-pack --version 0.14.0 --locked
 
       - name: Read release version
         run: |
@@ -79,33 +79,88 @@ jobs:
 
       - name: Check manual publish version tag
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
-        run: bash scripts/read_release_version.sh "${{ github.event.inputs.version_tag }}"
+        env:
+          VERSION_TAG: ${{ github.event.inputs.version_tag }}
+        run: |
+          if [ -z "$VERSION_TAG" ]; then
+            echo "version_tag is required for a real manual publish" >&2
+            exit 1
+          fi
+          bash scripts/read_release_version.sh "$VERSION_TAG"
 
       - name: Prepare validated WASM package
         run: bash scripts/prepare_wasm_release_package.sh "$PACKAGE_VERSION"
 
-      - name: Show package contents
-        working-directory: crates/pptx2html-wasm/pkg
-        run: |
-          echo "=== package.json ==="
-          cat package.json
-          echo ""
-          echo "=== Files ==="
-          ls -lh
-          echo ""
-          echo "=== WASM size ==="
-          du -h *.wasm
+      - name: Run browser package smoke
+        run: python3 crates/pptx2html-wasm/tests/package_browser_smoke.py
 
-      - name: Publish to npm (dry run)
+      - name: Prepare legacy package alias
+        run: |
+          rm -rf crates/pptx2html-wasm/pkg-legacy
+          cp -R crates/pptx2html-wasm/pkg crates/pptx2html-wasm/pkg-legacy
+          node -e '
+            const fs = require("fs");
+            const packagePath = "crates/pptx2html-wasm/pkg-legacy/package.json";
+            const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+            packageJson.name = process.env.LEGACY_PACKAGE_NAME;
+            fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2) + "\n");
+          '
+          node crates/pptx2html-wasm/tests/check-package-contract.mjs \
+            crates/pptx2html-wasm/pkg-legacy \
+            "$PACKAGE_VERSION" \
+            "$LEGACY_PACKAGE_NAME"
+          node crates/pptx2html-wasm/tests/package-root-smoke.mjs \
+            "$LEGACY_PACKAGE_NAME" \
+            crates/pptx2html-wasm/pkg-legacy
+
+      - name: Show package contents
+        run: |
+          for package_dir in \
+            crates/pptx2html-wasm/pkg \
+            crates/pptx2html-wasm/pkg-legacy
+          do
+            echo "=== $package_dir/package.json ==="
+            cat "$package_dir/package.json"
+            echo ""
+            echo "=== $package_dir files ==="
+            ls -lh "$package_dir"
+            echo ""
+            echo "=== $package_dir WASM size ==="
+            du -h "$package_dir"/*.wasm
+          done
+
+      - name: Publish primary package to npm (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         working-directory: crates/pptx2html-wasm/pkg
         run: npm publish --dry-run --access public
+
+      - name: Publish legacy package to npm (dry run)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        working-directory: crates/pptx2html-wasm/pkg-legacy
+        run: npm publish --dry-run --access public
+
+      - name: Publish primary package to npm
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        working-directory: crates/pptx2html-wasm/pkg
+        run: |
+          PACKAGE_ID="$PACKAGE_NAME@$PACKAGE_VERSION"
+          if npm view "$PACKAGE_ID" version >/dev/null 2>&1; then
+            echo "$PACKAGE_ID is already published; skipping"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish to npm
+      - name: Publish legacy package to npm
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
-        working-directory: crates/pptx2html-wasm/pkg
-        run: npm publish --access public
+        working-directory: crates/pptx2html-wasm/pkg-legacy
+        run: |
+          PACKAGE_ID="$LEGACY_PACKAGE_NAME@$PACKAGE_VERSION"
+          if npm view "$PACKAGE_ID" version >/dev/null 2>&1; then
+            echo "$PACKAGE_ID is already published; skipping"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

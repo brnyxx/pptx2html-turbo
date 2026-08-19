@@ -1,6 +1,6 @@
 [package]
 name = "pptx2html-cli"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 description = "CLI tool for converting PPTX to HTML"
 license = "MIT"

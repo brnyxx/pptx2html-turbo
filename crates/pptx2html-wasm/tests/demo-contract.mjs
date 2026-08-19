@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const demoPath = fileURLToPath(new URL('../demo/index.html', import.meta.url));
 const html = await readFile(demoPath, 'utf8');
-const expectedVersion = process.argv[2] ?? '2.0.0';
+const expectedVersion = process.argv[2] ?? '2.0.1';
 
 function tagWithId(id) {
   const match = html.match(new RegExp(`<[^>]+\\bid="${id}"[^>]*>`));

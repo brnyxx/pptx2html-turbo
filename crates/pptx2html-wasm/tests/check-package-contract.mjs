@@ -4,6 +4,8 @@ import path from 'node:path';
 
 const packageDir = process.argv[2] ?? 'crates/pptx2html-wasm/pkg';
 const expectedVersion = process.argv[3];
+const expectedPackageName =
+  process.argv[4] ?? '@briank-dev/pptx-to-html';
 
 if (!expectedVersion) {
   throw new Error('expected version argument is required');
@@ -12,21 +14,34 @@ if (!expectedVersion) {
 const packageJsonPath = path.join(packageDir, 'package.json');
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
 
-assert.equal(packageJson.name, '@briank-dev/pptx2html-turbo');
+assert.equal(packageJson.name, expectedPackageName);
 assert.equal(packageJson.version, expectedVersion);
-assert.equal(packageJson.exports['.'].import, './pptx2html_wasm.js');
-assert.equal(packageJson.exports['.'].types, './pptx2html_wasm.d.ts');
+assert.equal(packageJson.exports['.'].import, './index.js');
+assert.equal(packageJson.exports['.'].types, './index.d.ts');
+assert.equal(packageJson.main, './index.js');
+assert.equal(packageJson.module, './index.js');
+assert.equal(packageJson.types, './index.d.ts');
+assert.ok(packageJson.files.includes('index.js'));
+assert.ok(packageJson.files.includes('index.d.ts'));
 assert.equal(packageJson.homepage, 'https://github.com/kim62210/pptx2html-turbo');
 assert.equal(packageJson.bugs.url, 'https://github.com/kim62210/pptx2html-turbo/issues');
 
 const declarations = await readFile(path.join(packageDir, 'pptx2html_wasm.d.ts'), 'utf8');
+const facadeDeclarations = await readFile(path.join(packageDir, 'index.d.ts'), 'utf8');
+const normalizedFacadeDeclarations = facadeDeclarations.replace(/\s+/g, ' ');
 assert.match(declarations, /readonly diagnosticsJson: string/);
 assert.match(declarations, /readonly diagnostics: string/);
 assert.match(declarations, /readonly unresolvedElements: string/);
+assert.match(
+  normalizedFacadeDeclarations,
+  /function pptxToHtml\(\s*input: PptxInput,\s*moduleOrPath\?: InitInput \| Promise<InitInput>,?\s*\): Promise<string>/,
+);
 
 for (const fileName of [
   'README.md',
   'LICENSE',
+  'index.js',
+  'index.d.ts',
   'pptx2html_wasm.js',
   'pptx2html_wasm.d.ts',
   'pptx2html_wasm_bg.wasm',

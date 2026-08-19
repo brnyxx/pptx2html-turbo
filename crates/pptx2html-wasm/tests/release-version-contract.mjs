@@ -24,13 +24,25 @@ try {
     await cp(join(repoRoot, relativePath), destination);
   }
 
+  const invalidTagResult = spawnSync(
+    'bash',
+    [join(tempRoot, 'scripts/read_release_version.sh'), 'v2.0.1;echo injected'],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(
+    invalidTagResult.status,
+    0,
+    'invalid release tag syntax must fail validation',
+  );
+  assert.match(invalidTagResult.stderr, /must match vMAJOR\.MINOR\.PATCH/);
+
   const demoPath = join(tempRoot, 'crates/pptx2html-wasm/demo/index.html');
   const demo = await readFile(demoPath, 'utf8');
-  await writeFile(demoPath, demo.replaceAll('v2.0.0', 'v9.9.9'));
+  await writeFile(demoPath, demo.replaceAll('v2.0.1', 'v9.9.9'));
 
   const result = spawnSync(
     'bash',
-    [join(tempRoot, 'scripts/read_release_version.sh'), 'v2.0.0'],
+    [join(tempRoot, 'scripts/read_release_version.sh'), 'v2.0.1'],
     { encoding: 'utf8' },
   );
 

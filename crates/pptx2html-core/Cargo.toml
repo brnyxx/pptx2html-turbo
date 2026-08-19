@@ -1,6 +1,6 @@
 [package]
 name = "pptx2html-core"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 description = "ECMA-376 based pure Rust PPTX to HTML converter — core library"
 license = "MIT"

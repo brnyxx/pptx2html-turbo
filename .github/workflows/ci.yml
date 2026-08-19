@@ -8,6 +8,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PACKAGE_NAME: '@briank-dev/pptx-to-html'
+  PACKAGE_AUTHOR: 'Brian Kim <hyungjoo.drb@gmail.com>'
+  PACKAGE_HOMEPAGE: 'https://github.com/kim62210/pptx2html-turbo'
+  PACKAGE_BUGS_URL: 'https://github.com/kim62210/pptx2html-turbo/issues'
+  PACKAGE_DESCRIPTION: 'Convert PPTX slides to high-fidelity HTML in the browser — pure Rust/WASM, zero dependencies'
 
 jobs:
   test:
@@ -41,11 +46,23 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
       - uses: Swatinem/rust-cache@v2
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - name: Build WASM (web target)
-        run: wasm-pack build crates/pptx2html-wasm --target web --release
+        run: cargo install wasm-pack --version 0.14.0 --locked
+      - name: Install browser smoke dependencies
+        run: python -m pip install -r evaluate/requirements-test.txt
+      - name: Install Chromium test runtime
+        run: python -m playwright install --with-deps chromium
+      - name: Prepare validated WASM package
+        run: |
+          VERSION=$(bash scripts/read_release_version.sh)
+          bash scripts/prepare_wasm_release_package.sh "$VERSION"
       - name: Validate Pages demo contracts
         run: |
           VERSION=$(bash scripts/read_release_version.sh)
@@ -54,12 +71,16 @@ jobs:
       - name: Verify package artifacts
         run: |
           test -f crates/pptx2html-wasm/pkg/package.json
+          test -f crates/pptx2html-wasm/pkg/index.js
+          test -f crates/pptx2html-wasm/pkg/index.d.ts
           test -f crates/pptx2html-wasm/pkg/pptx2html_wasm.js
           test -f crates/pptx2html-wasm/pkg/pptx2html_wasm.d.ts
           test -f crates/pptx2html-wasm/pkg/pptx2html_wasm_bg.wasm
           echo "All WASM artifacts present"
       - name: Run WASM runtime smoke test
         run: node crates/pptx2html-wasm/tests/node-smoke.mjs
+      - name: Run browser package smoke
+        run: python3 crates/pptx2html-wasm/tests/package_browser_smoke.py
   python-bindings:
     name: Python Bindings Build
     runs-on: ubuntu-latest

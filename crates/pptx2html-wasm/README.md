@@ -1,16 +1,41 @@
-# @briank-dev/pptx2html-turbo
+# pptx-to-html
 
 Convert PPTX slides to high-fidelity HTML in the browser with a Rust/WASM core.
 
 This package is the browser-focused WASM distribution of the `pptx2html-turbo` project.
+New installations use `@briank-dev/pptx-to-html`; the
+`@briank-dev/pptx2html-turbo` package remains the supported legacy name.
 
 ## Install
 
 ```bash
-npm install @briank-dev/pptx2html-turbo
+npm install @briank-dev/pptx-to-html
 ```
 
 ## Usage
+
+The convenience API initializes WASM on first use and accepts a browser
+`File`/`Blob`, `ArrayBuffer`, or `Uint8Array`.
+
+```html
+<iframe
+  id="output"
+  sandbox="allow-scripts"
+  title="Converted slide output"
+></iframe>
+<script type="module">
+import { pptxToHtml } from '@briank-dev/pptx-to-html';
+
+const html = await pptxToHtml(file);
+document.getElementById('output').srcdoc = html;
+</script>
+```
+
+Converted output is active, untrusted HTML. Render it in a sandboxed iframe
+with `allow-scripts` and without `allow-same-origin`, as shown above.
+
+The lower-level API remains available for explicit initialization, filtering,
+metadata, and compatibility:
 
 ```html
 <script type="module">
@@ -20,7 +45,7 @@ import init, {
   convert_with_metadata,
   convert_with_options_metadata,
   get_presentation_info,
-} from '@briank-dev/pptx2html-turbo';
+} from '@briank-dev/pptx-to-html';
 
 await init();
 
@@ -56,6 +81,7 @@ const filteredWithMetadata = convert_with_options_metadata(
 
 ## API
 
+- `pptxToHtml(input, moduleOrPath?)` — lazily initialize WASM and convert browser or byte input; concurrent calls share the first initialization attempt and its success or failure, while a later call retries after failure
 - `init()` — initialize the WASM module
 - `convert(data)` — convert PPTX bytes to HTML
 - `convert_with_options(data, embedImages, includeHidden, slideIndices, scale)`
@@ -79,6 +105,9 @@ const filteredWithMetadata = convert_with_options_metadata(
 ## Package Scope
 
 This npm package is intended for **browser ESM/WASM usage**.
+
+`@briank-dev/pptx2html-turbo` is the legacy package name. It remains available
+with the same API and release versions during migration.
 
 ## Project
 

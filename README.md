@@ -1,8 +1,11 @@
-# pptx2html-turbo
+# pptx-to-html
 
 Convert PPTX slides to HTML in pure Rust with direct rendering and structured fallbacks.
 
 Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bindings, just Rust.
+
+The primary npm package is `@briank-dev/pptx-to-html`. The repository and
+internal Rust crate names remain `pptx2html-*` for compatibility.
 
 **[Live Demo](https://kim62210.github.io/pptx2html-turbo/)** — try it in your browser, no installation needed.
 **[Releases](https://github.com/kim62210/pptx2html-turbo/releases)** — download CLI artifacts and read versioned release notes.
@@ -29,9 +32,9 @@ Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bind
 
 ```bash
 # npm (WASM — browser)
-npm install @briank-dev/pptx2html-turbo@2.0.0
+npm install @briank-dev/pptx-to-html@2.0.1
 
-# CLI (from a checked-out v2.0.0 source tree)
+# CLI (from a checked-out v2.0.1 source tree)
 cargo install --path crates/pptx2html-cli
 
 # Python (requires maturin)
@@ -41,12 +44,35 @@ cd crates/pptx2html-py && maturin develop
 cd crates/pptx2html-wasm && wasm-pack build --target web
 ```
 
-The Rust crates and Python binding are source distributions in v2.0.0; this release does not publish them to crates.io or PyPI.
+Existing `@briank-dev/pptx2html-turbo` installations remain supported and
+receive the same builds during the package-name migration.
+
+### Browser quick start
+
+```html
+<iframe
+  id="output"
+  sandbox="allow-scripts"
+  title="Converted slide output"
+></iframe>
+<script type="module">
+import { pptxToHtml } from '@briank-dev/pptx-to-html';
+
+const response = await fetch('/presentation.pptx');
+const html = await pptxToHtml(await response.blob());
+document.getElementById('output').srcdoc = html;
+</script>
+```
+
+Converted output is active, untrusted HTML. Keep `allow-same-origin` out of
+the iframe sandbox.
+
+The Rust crates and Python binding are source distributions in v2.0.1; this release does not publish them to crates.io or PyPI.
 Rust library consumers can depend on the release tag directly:
 
 ```toml
 [dependencies]
-pptx2html-core = { git = "https://github.com/kim62210/pptx2html-turbo", tag = "v2.0.0" }
+pptx2html-core = { git = "https://github.com/kim62210/pptx2html-turbo", tag = "v2.0.1" }
 ```
 
 ## Usage
@@ -177,7 +203,7 @@ import init, {
   convert_with_options,
   convert_with_metadata,
   get_presentation_info,
-} from '@briank-dev/pptx2html-turbo';
+} from '@briank-dev/pptx-to-html';
 
 await init();
 

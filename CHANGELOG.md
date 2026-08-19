@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-08-19
+
+### Added
+
+- Publish the browser package primarily as `@briank-dev/pptx-to-html`
+- Add `pptxToHtml(input, moduleOrPath?)` for lazy WASM initialization and direct `Blob`, `ArrayBuffer`, or `Uint8Array` conversion
+
+### Changed
+
+- Continue publishing `@briank-dev/pptx2html-turbo` with the same version and API during migration
+- Validate facade entrypoints, npm tarball contents, and both package names in CI and release workflows
+- Make concurrent calls share the first initialization attempt and its success or failure, then retry initialization on a later call after failure
+- Harden manual npm publication inputs, pin the publish-time `wasm-pack` version, and make partial dual-publish runs resumable
+
 ## [2.0.0] - 2026-08-18
 
 ### Timing and transitions

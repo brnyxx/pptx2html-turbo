@@ -55,6 +55,10 @@ if [ "${1:-}" != "" ]; then
     echo "release tag must start with v: $1" >&2
     exit 1
   fi
+  if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "release tag must match vMAJOR.MINOR.PATCH: $1" >&2
+    exit 1
+  fi
   if [ "${tag#v}" != "$release_version" ]; then
     echo "release tag $tag does not match manifest version $release_version" >&2
     exit 1

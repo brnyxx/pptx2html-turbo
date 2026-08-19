@@ -3,10 +3,11 @@
 Scope: browser bindings and npm packaging only. Rendering fidelity and document semantics remain owned by `pptx2html-core`.
 
 ## OVERVIEW
-Thin `wasm-bindgen` adapter over `pptx2html-core`, shipped to npm as `@briank-dev/pptx2html-turbo`. Everything is in one file, `src/lib.rs`, roughly 240 lines of bindings plus tests.
+Thin `wasm-bindgen` adapter over `pptx2html-core`, shipped primarily as `@briank-dev/pptx-to-html` and compatibly as `@briank-dev/pptx2html-turbo`. Rust bindings live in `src/lib.rs`; the lazy-init npm facade lives in `npm/index.js` and `npm/index.d.ts`.
 Two API generations live side by side and both are public contract:
 - v0.5 legacy: `convert`, `convert_slides`, `get_slide_count`, `get_info` (JSON string).
 - v0.6 enhanced: `convert_with_options`, `convert_with_metadata`, `convert_with_options_metadata`, `get_presentation_info`, plus the `PresentationInfo` and `ConversionResult` structs.
+- npm facade: `pptxToHtml(input, moduleOrPath?)` lazily initializes WASM and accepts `Blob`, `ArrayBuffer`, or `Uint8Array`.
 Legacy names stay. Removing or renaming one breaks published npm consumers and the smoke tests that import them by name.
 
 ## INDEXING QUIRK
@@ -25,6 +26,7 @@ Empty `slide_indices` means all slides (`optional_slide_indices` returns `None`)
 | Task | Location |
 |---|---|
 | All exports and helpers | `src/lib.rs` |
+| Lazy-init npm facade | `npm/index.js`, `npm/index.d.ts` |
 | JS-visible docs, indexing note, scale semantics | `README.md` (copied into the npm tarball verbatim) |
 | Browser usage example | `demo/index.html` (uses `convert_with_options_metadata` + `get_info`) |
 | npm metadata rewrite + publish gate | `scripts/prepare_wasm_release_package.sh` |
@@ -32,14 +34,14 @@ Empty `slide_indices` means all slides (`optional_slide_indices` returns `None`)
 | CI wasm job | `.github/workflows/ci.yml`, `publish-npm.yml`, `deploy-demo.yml` |
 
 ## PACKAGING AND VERSIONS
-`wasm-pack` generates `pkg/package.json`; the release script then overwrites name, version, description, keywords, author, homepage, repository, bugs, and `exports` from env vars. Don't hand-edit `pkg/`, it's a build artifact.
+`wasm-pack` generates `pkg/package.json`; the release script then copies the npm facade and overwrites name, version, description, keywords, author, homepage, repository, bugs, entrypoints, and `exports` from env vars. Don't hand-edit `pkg/`, it's a build artifact.
 `read_release_version.sh` requires core, cli, py, wasm `Cargo.toml`, `pyproject.toml`, and every `vX.Y.Z` string in the Pages demo to agree, and a release tag to match them. Bump this crate's version alone and release fails before publish.
-Package contract asserted in `tests/check-package-contract.mjs`: name, version, `exports["."].import`/`.types`, homepage, bugs URL, and presence of `README.md`, `LICENSE`, the `.js`, the `.d.ts`, the `_bg.wasm`.
+Package contract asserted in `tests/check-package-contract.mjs`: parameterized name, version, facade entrypoints, homepage, bugs URL, tarball allowlist, and presence of `README.md`, `LICENSE`, the facade, generated `.js`/`.d.ts`, and `_bg.wasm`.
 
 ## VALIDATION
 Node and browser are separate risks. Node smoke tests catch broken exports and error mapping; they don't prove browser behavior.
 - `tests/node-smoke.mjs` initializes with explicit bytes (`init({ module_or_path: wasmBytes })`), checks each export is a function, and asserts garbage input throws.
-- `tests/package-root-smoke.mjs` symlinks `pkg/` into a temp `node_modules/@briank-dev/` and imports by bare package specifier, which is what catches a broken `exports` map.
+- `tests/package-root-smoke.mjs` symlinks a package directory into a temp `node_modules/@briank-dev/`, imports either package name by bare specifier, and converts a real two-slide fixture through `pptxToHtml`.
 - Browser paths (default `init()` fetch, demo page, image embedding, real rendering) are only exercised by loading `demo/index.html` over HTTP after a `--target web` build. `file://` won't work.
 
 ## COMMANDS
@@ -50,9 +52,9 @@ wasm-pack build crates/pptx2html-wasm --target web --release  # writes pkg/
 node crates/pptx2html-wasm/tests/node-smoke.mjs
 node crates/pptx2html-wasm/tests/demo-contract.mjs "$(bash scripts/read_release_version.sh)"
 node crates/pptx2html-wasm/tests/release-version-contract.mjs
-node crates/pptx2html-wasm/tests/package-root-smoke.mjs
-node crates/pptx2html-wasm/tests/check-package-contract.mjs crates/pptx2html-wasm/pkg "$(bash scripts/read_release_version.sh)"
-bash scripts/read_release_version.sh v2.0.0                   # version + tag agreement
+node crates/pptx2html-wasm/tests/package-root-smoke.mjs @briank-dev/pptx-to-html
+node crates/pptx2html-wasm/tests/check-package-contract.mjs crates/pptx2html-wasm/pkg "$(bash scripts/read_release_version.sh)" @briank-dev/pptx-to-html
+bash scripts/read_release_version.sh v2.0.1                   # version + tag agreement
 python3 -m http.server -d _site 8000                          # after workflow-equivalent _site assembly
 ```
 
