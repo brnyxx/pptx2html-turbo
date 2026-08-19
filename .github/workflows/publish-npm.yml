@@ -65,7 +65,10 @@ jobs:
         run: python3 evaluate/check_exactness_contract.py --repo-root .
 
       - name: Install wasm-pack
-        run: cargo install wasm-pack --version 0.14.0 --locked
+        run: |
+          if ! wasm-pack --version 2>/dev/null | grep -qx 'wasm-pack 0.14.0'; then
+            cargo install wasm-pack --version 0.14.0 --locked --force
+          fi
 
       - name: Read release version
         run: |

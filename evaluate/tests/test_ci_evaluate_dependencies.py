@@ -109,11 +109,13 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
         )
         self.assertLess(cleanup_index, copy_index)
 
-    def test_demo_and_release_workflows_pin_wasm_pack(self) -> None:
+    def test_workflows_install_pinned_wasm_pack_idempotently(self) -> None:
         # Given
         root = Path(__file__).resolve().parents[2]
         workflows = (
+            root / ".github" / "workflows" / "ci.yml",
             root / ".github" / "workflows" / "deploy-demo.yml",
+            root / ".github" / "workflows" / "publish-npm.yml",
             root / ".github" / "workflows" / "release.yml",
         )
 
@@ -125,6 +127,11 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
                 # Then
                 self.assertIn(
                     "cargo install wasm-pack --version 0.14.0 --locked",
+                    source,
+                )
+                self.assertIn(
+                    "wasm-pack --version 2>/dev/null | "
+                    "grep -qx 'wasm-pack 0.14.0'",
                     source,
                 )
                 self.assertNotIn(
