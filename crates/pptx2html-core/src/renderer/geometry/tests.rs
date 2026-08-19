@@ -1730,7 +1730,7 @@ fn test_chord_default_path_matches_office_outline() {
     assert_official_path(&path, 1, 2);
     assert!(path.starts_with("M98.41,88.41 A60.00,50.00"), "{path}");
     assert!(path.contains("6.27,72.26"), "{path}");
-    assert!(path.ends_with("60.00,-0.00 Z"));
+    assert!(path.ends_with("60.00,0.00 Z"));
 }
 
 #[test]
@@ -1749,7 +1749,7 @@ fn test_pie_wedge_default_path_matches_reference_orientation() {
 
     assert_eq!(
         path,
-        "M0.00,100.00 A120.00,100.00 0 0,1 120.00,-0.00 L120.00,100.00 Z"
+        "M0.00,100.00 A120.00,100.00 0 0,1 120.00,0.00 L120.00,100.00 Z"
     );
 }
 

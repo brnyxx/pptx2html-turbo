@@ -140,7 +140,7 @@ pub(super) fn render_path(
         }
     }
     Ok(CustomGeomPathSvg {
-        d: output.trim_end().to_owned(),
+        d: output.trim_end().replace("-0.00", "0.00"),
         fill: definition.fill.clone(),
         stroke: definition.stroke,
     })
