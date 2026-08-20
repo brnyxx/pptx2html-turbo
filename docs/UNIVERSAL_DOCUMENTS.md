@@ -143,6 +143,41 @@ uv run python -m evaluate.multiformat_gate \
 
 Exit codes are 0 for `PASS`, 1 for `FAIL`, and 2 for `INCOMPLETE`.
 
+Create a non-destructive, explicitly incomplete evidence wave before adding
+corpus files:
+
+```bash
+uv run python -m evaluate.scaffold_multiformat_evidence \
+  --output-dir evaluate/multiformat/wave
+```
+
+The scaffolder refuses to overlay a non-empty directory and never writes
+passing scores. Every report remains `INCOMPLETE` until real corpus, metric,
+security, determinism, review, and oracle artifacts replace the templates.
+
+On a network-disabled Windows host with desktop Microsoft Office and Poppler,
+capture the positive native references:
+
+```powershell
+pwsh -File evaluate/capture_multiformat_office_oracles.ps1 `
+  -InputManifest evaluate/multiformat/wave/office-input-manifest.json `
+  -OutputDir evaluate/multiformat/wave/office-oracles `
+  -GoldenSetRevision <commit-sha> `
+  -FontBundleSha256 <64-lowercase-hex> `
+  -HostNetworkIsolation disabled
+```
+
+Ready reports bind relative evaluator, corpus-manifest, and metrics-evidence
+paths to their real SHA-256 digests. The gate resolves every path under the
+declared evidence root, rejects traversal, and re-hashes each file:
+
+```bash
+uv run python -m evaluate.multiformat_gate \
+  --reports-dir evaluate/multiformat/wave/reports \
+  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --evidence-root evaluate/multiformat/wave
+```
+
 Authoritative format references:
 
 - ECMA-376 OOXML:

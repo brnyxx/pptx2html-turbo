@@ -106,7 +106,7 @@ class MultiFormatGateTests(unittest.TestCase):
             self._write_reports(reports, lock)
             report_path = reports / "pdf.json"
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            report["metrics_evidence_sha256"] = "not-a-digest"
+            report["metrics_evidence"]["sha256"] = "not-a-digest"
             report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
 
             # When
@@ -115,7 +115,47 @@ class MultiFormatGateTests(unittest.TestCase):
             # Then
             self.assertEqual(summary.status, GateStatus.FAIL)
             pdf = next(result for result in summary.formats if result.format == "pdf")
-            self.assertEqual(pdf.reasons, ("report_schema",))
+            self.assertEqual(pdf.reasons, ("metrics_evidence",))
+
+    def test_missing_bound_evidence_file_fails_closed(self) -> None:
+        # Given
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            reports = root / "reports"
+            reports.mkdir()
+            lock = self._write_oracle_lock(root)
+            self._write_reports(reports, lock)
+            (root / "evidence" / "metrics.json").unlink()
+
+            # When
+            summary = evaluate_reports(CONTRACT_PATH, reports, lock)
+
+            # Then
+            self.assertEqual(summary.status, GateStatus.FAIL)
+            self.assertTrue(
+                all("metrics_evidence" in result.reasons for result in summary.formats),
+            )
+
+    def test_evidence_path_cannot_escape_root(self) -> None:
+        # Given
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            reports = root / "reports"
+            reports.mkdir()
+            lock = self._write_oracle_lock(root)
+            self._write_reports(reports, lock)
+            report_path = reports / "pptx.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["evaluator"]["path"] = "../oracle-lock.json"
+            report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+
+            # When
+            summary = evaluate_reports(CONTRACT_PATH, reports, lock)
+
+            # Then
+            self.assertEqual(summary.status, GateStatus.FAIL)
+            pptx = next(result for result in summary.formats if result.format == "pptx")
+            self.assertEqual(pptx.reasons, ("evaluator",))
 
     def _write_oracle_lock(self, root: Path) -> Path:
         lock = root / "oracle-lock.json"
@@ -144,6 +184,22 @@ class MultiFormatGateTests(unittest.TestCase):
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
         contract_hash = hashlib.sha256(CONTRACT_PATH.read_bytes()).hexdigest()
         lock_hash = hashlib.sha256(lock.read_bytes()).hexdigest()
+        evidence = reports.parent / "evidence"
+        evidence.mkdir(exist_ok=True)
+        evidence_files = {
+            "evaluator": evidence / "evaluator.py",
+            "corpus_manifest": evidence / "corpus.json",
+            "metrics_evidence": evidence / "metrics.json",
+        }
+        for name, path in evidence_files.items():
+            path.write_text(f"{name}\n", encoding="utf-8")
+        bindings = {
+            name: {
+                "path": path.relative_to(reports.parent).as_posix(),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for name, path in evidence_files.items()
+        }
         for document_format in contract["required_formats"]:
             strata = {name: 96.5 for name in contract["strata"][document_format]}
             report = self._passing_report(
@@ -151,6 +207,7 @@ class MultiFormatGateTests(unittest.TestCase):
                 contract_hash,
                 lock_hash,
                 strata,
+                bindings,
             )
             (reports / f"{document_format}.json").write_text(
                 json.dumps(report, sort_keys=True),
@@ -163,6 +220,7 @@ class MultiFormatGateTests(unittest.TestCase):
         contract_hash: str,
         lock_hash: str,
         strata: dict[str, float],
+        bindings: dict[str, dict[str, str]],
     ) -> dict[str, Any]:
         track = {
             "score": 96.5,
@@ -172,12 +230,13 @@ class MultiFormatGateTests(unittest.TestCase):
         }
         return {
             "schema_version": 1,
+            "status": "READY",
             "format": document_format,
             "contract_sha256": contract_hash,
             "oracle_lock_sha256": lock_hash,
-            "evaluator_sha256": "b" * 64,
-            "corpus_manifest_sha256": "c" * 64,
-            "metrics_evidence_sha256": "d" * 64,
+            "evaluator": bindings["evaluator"],
+            "corpus_manifest": bindings["corpus_manifest"],
+            "metrics_evidence": bindings["metrics_evidence"],
             "conformance": {
                 **track,
                 "unit_count": 100,

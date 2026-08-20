@@ -59,6 +59,7 @@ def evaluate_reports(
     contract_path: Path,
     reports_dir: Path,
     oracle_lock_path: Path,
+    evidence_root: Path | None = None,
 ) -> GateSummary:
     contract = read_object(contract_path)
     required_formats = string_list(contract, "required_formats")
@@ -75,6 +76,7 @@ def evaluate_reports(
 
     contract_hash = sha256_file(contract_path)
     lock_hash = sha256_file(oracle_lock_path)
+    resolved_evidence_root = evidence_root or reports_dir.parent
     results = tuple(
         _evaluate_format(
             document_format=document_format,
@@ -82,6 +84,7 @@ def evaluate_reports(
             contract=contract,
             contract_hash=contract_hash,
             lock_hash=lock_hash,
+            evidence_root=resolved_evidence_root,
         )
         for document_format in required_formats
     )
@@ -101,17 +104,33 @@ def _evaluate_format(
     contract: dict[str, JsonValue],
     contract_hash: str,
     lock_hash: str,
+    evidence_root: Path,
 ) -> FormatGateResult:
     if not report_path.is_file():
         return FormatGateResult(document_format, GateStatus.INCOMPLETE, ("report",))
     try:
         report = read_object(report_path)
+        report_status = report.get("status")
+        if report_status == "INCOMPLETE":
+            missing = tuple(string_list(report, "missing"))
+            return FormatGateResult(
+                document_format,
+                GateStatus.INCOMPLETE,
+                missing or ("report",),
+            )
+        if report_status != "READY":
+            return FormatGateResult(
+                document_format,
+                GateStatus.FAIL,
+                ("report_schema",),
+            )
         reasons = _report_failures(
             document_format,
             report,
             contract,
             contract_hash,
             lock_hash,
+            evidence_root,
         )
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError):
         return FormatGateResult(document_format, GateStatus.FAIL, ("report_schema",))
@@ -125,6 +144,7 @@ def _report_failures(
     contract: dict[str, JsonValue],
     contract_hash: str,
     lock_hash: str,
+    evidence_root: Path,
 ) -> list[str]:
     failures: list[str] = []
     _require_equal(report, "schema_version", 1, "schema_version", failures)
@@ -135,12 +155,8 @@ def _report_failures(
     _require_equal(
         report, "oracle_lock_sha256", lock_hash, "oracle_lock_sha256", failures
     )
-    for field in [
-        "evaluator_sha256",
-        "corpus_manifest_sha256",
-        "metrics_evidence_sha256",
-    ]:
-        sha256_value(report, field)
+    for field in ["evaluator", "corpus_manifest", "metrics_evidence"]:
+        _check_evidence_binding(report, field, evidence_root, failures)
     corpus = object_value(contract, "corpus")
     thresholds = object_value(contract, "thresholds")
     conformance = object_value(report, "conformance")
@@ -188,6 +204,44 @@ def _report_failures(
     check_strata(document_format, conformance, contract, thresholds, failures)
     check_hard_gates(report, corpus, failures)
     return failures
+
+
+def _check_evidence_binding(
+    report: dict[str, JsonValue],
+    field: str,
+    evidence_root: Path,
+    failures: list[str],
+) -> None:
+    try:
+        binding = object_value(report, field)
+        relative_path = string_value(binding, "path")
+        expected_hash = sha256_value(binding, "sha256")
+        evidence_path = _resolve_evidence_path(evidence_root, relative_path)
+        if sha256_file(evidence_path) != expected_hash:
+            failures.append(field)
+    except (OSError, TypeError, ValueError):
+        failures.append(field)
+
+
+def _resolve_evidence_path(root: Path, relative_path: str) -> Path:
+    relative = Path(relative_path)
+    if (
+        relative.is_absolute()
+        or "\\" in relative_path
+        or relative_path != relative.as_posix()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise ValueError("evidence path must be normalized and relative")
+    resolved_root = root.resolve(strict=True)
+    candidate = resolved_root
+    for part in relative.parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise ValueError("evidence path cannot contain symlinks")
+    candidate = candidate.resolve(strict=True)
+    if not candidate.is_relative_to(resolved_root) or not candidate.is_file():
+        raise ValueError("evidence path escapes the evidence root")
+    return candidate
 
 
 def _require_equal(

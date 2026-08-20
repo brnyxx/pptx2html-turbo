@@ -27,6 +27,24 @@ the conformance, blind, component, stratum, minimum-unit, security,
 determinism, review, and SHA-256 evidence-binding checks in the same wave.
 Missing native Microsoft Office evidence is `INCOMPLETE`, never `PASS`.
 
+Scaffold one new fail-closed evidence wave:
+
+```bash
+uv run python -m evaluate.scaffold_multiformat_evidence \
+  --output-dir evaluate/multiformat/wave
+```
+
+On a network-disabled Windows Office host, populate the positive native oracle
+batch with `evaluate/capture_multiformat_office_oracles.ps1`. The capture
+script opens the actual modern or binary source file read-only, disables
+macros and link updates, exports native Office PDFs, exports PowerPoint slides
+directly at 960x540, rasterizes page formats at 144 DPI, records semantic
+inventories, and SHA-256-binds every artifact.
+
+When evaluating a scaffolded wave, pass
+`--evidence-root evaluate/multiformat/wave`. Report evidence paths must remain
+under that root and their bytes must match the recorded digests.
+
 See `docs/UNIVERSAL_DOCUMENTS.md` and
 `docs/superpowers/specs/2026-08-20-universal-document-engine-design.md` for the
 runtime architecture and full evidence rationale.

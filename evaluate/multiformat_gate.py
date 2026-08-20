@@ -33,12 +33,22 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--reports-dir", type=Path, required=True)
     parser.add_argument("--oracle-lock", type=Path, required=True)
+    parser.add_argument(
+        "--evidence-root",
+        type=Path,
+        help="Root for evidence paths in reports (default: reports parent)",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    summary = evaluate_reports(args.contract, args.reports_dir, args.oracle_lock)
+    summary = evaluate_reports(
+        args.contract,
+        args.reports_dir,
+        args.oracle_lock,
+        args.evidence_root,
+    )
     sys.stdout.write(
         json.dumps(summary.to_json_value(), ensure_ascii=True, sort_keys=True) + "\n",
     )
