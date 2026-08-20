@@ -2,6 +2,7 @@
 name = "pptx2html-cli"
 version = "2.0.1"
 edition = "2024"
+default-run = "pptx2html"
 description = "CLI tool for converting PPTX to HTML"
 license = "MIT"
 repository = "https://github.com/kim62210/pptx2html-turbo"
