@@ -8,7 +8,7 @@ from evaluate.multiformat_corpus import CorpusError, validate_corpus_manifest
 from evaluate.multiformat_corpus_sources import validate_source
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_package_validation import MAX_SOURCE_BYTES
-from evaluate.tests import test_multiformat_corpus as corpus_fixture
+from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 from evaluate.tests.multiformat_source_fixture import (
     write_ambiguous_legacy_source,
     write_ambiguous_ooxml_source,
@@ -20,9 +20,7 @@ class MultiFormatCorpusAdversarialTests(unittest.TestCase):
     def test_blind_source_cannot_reuse_conformance_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            contract, manifest_path = (
-                corpus_fixture.MultiFormatCorpusTests._ready_fixture(root)
-            )
+            contract, manifest_path = ready_fixture(root)
             source_root = manifest_path.parent
             conformance = source_root / "sources" / "conformance.docx"
             blind = source_root / "sources" / "blind-0.docx"
@@ -118,9 +116,7 @@ class MultiFormatCorpusAdversarialTests(unittest.TestCase):
     def test_unit_ordinals_must_cover_each_source_without_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            contract, manifest_path = (
-                corpus_fixture.MultiFormatCorpusTests._ready_fixture(root)
-            )
+            contract, manifest_path = ready_fixture(root)
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest["tracks"]["conformance"]["items"][0]["units"][1]["ordinal"] = 3
             manifest_path.write_text(
@@ -139,9 +135,7 @@ class MultiFormatCorpusAdversarialTests(unittest.TestCase):
             with self.subTest(field=field):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     root = Path(temp_dir)
-                    contract, manifest_path = (
-                        corpus_fixture.MultiFormatCorpusTests._ready_fixture(root)
-                    )
+                    contract, manifest_path = ready_fixture(root)
                     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                     manifest["tracks"]["security"]["items"][0][field] = value
                     manifest_path.write_text(
@@ -172,3 +166,20 @@ class MultiFormatCorpusAdversarialTests(unittest.TestCase):
                     DocumentFormat.PDF,
                     require_valid_format=True,
                 )
+
+    def test_nested_duplicate_contract_keys_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            contract, manifest = ready_fixture(root)
+            text = contract.read_text(encoding="utf-8")
+            contract.write_text(
+                text.replace(
+                    '"blind_files": 5',
+                    '"blind_files": 5, "blind_files": 5',
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(CorpusError, "manifest.schema"):
+                validate_corpus_manifest(contract, manifest)

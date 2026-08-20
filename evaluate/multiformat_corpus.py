@@ -23,12 +23,12 @@ from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
     object_value,
-    read_object,
     sha256_file,
     sha256_value,
     string_list,
     string_value,
 )
+from evaluate.multiformat_strict_json import read_strict_object
 
 __all__ = [
     "CorpusError",
@@ -60,8 +60,8 @@ def _validate_corpus_manifest(
     contract_path: Path,
     manifest_path: Path,
 ) -> CorpusValidation:
-    contract = read_object(contract_path)
-    manifest = read_object(manifest_path)
+    contract = read_strict_object(contract_path)
+    manifest = read_strict_object(manifest_path)
     _require_keys(
         manifest,
         {

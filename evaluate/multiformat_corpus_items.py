@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import unicodedata
+import re
 from urllib.parse import urlsplit
 
 from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_schema import JsonValue, integer_value
+
+BACKGROUND = re.compile(r"^#[0-9a-f]{6}$")
 
 
 def track_items(
@@ -71,3 +74,8 @@ def canonical_source_uri(value: str) -> str:
     if parsed.scheme.casefold() == "urn" and parsed.path:
         return unicodedata.normalize("NFKC", value).casefold()
     raise CorpusError("blind.source_uri", value)
+
+
+def validate_background(value: str, reason: str) -> None:
+    if BACKGROUND.fullmatch(value) is None:
+        raise CorpusError(reason, value)

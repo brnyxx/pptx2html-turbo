@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from evaluate.multiformat_schema import (
     JsonValue,
     object_value,
-    read_object,
     sha256_file,
     sha256_value,
     string_value,
 )
+from evaluate.multiformat_strict_json import read_strict_object
 
 
 class EvidencePathError(Exception):
@@ -62,7 +61,7 @@ def oracle_lock_ready(path: Path) -> bool:
     if not path.is_file():
         return False
     try:
-        lock = read_object(path)
+        lock = read_strict_object(path)
         if lock.get("schema_version") != 1 or lock.get("status") != "locked":
             return False
         office = object_value(lock, "office")
@@ -77,5 +76,5 @@ def oracle_lock_ready(path: Path) -> bool:
         return len(font_hash) == 64 and all(
             character in "0123456789abcdef" for character in font_hash
         )
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError):
+    except (OSError, UnicodeError, ValueError, TypeError):
         return False

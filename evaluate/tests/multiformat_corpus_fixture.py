@@ -80,6 +80,8 @@ def _modern_conformance(
                     "ordinal": ordinal,
                     "primary_stratum": stratum,
                     "paired_stratum": None,
+                    "applicable_metrics": ["visual", "content", "layout"],
+                    "background": "#ffffff",
                     "secondary_features": [],
                 }
             )
@@ -118,6 +120,8 @@ def _legacy_conformance(
                     "ordinal": ordinal,
                     "primary_stratum": "paired-legacy",
                     "paired_stratum": stratum,
+                    "applicable_metrics": ["visual", "content", "layout"],
+                    "background": "#ffffff",
                     "secondary_features": [],
                 }
             )
@@ -127,6 +131,8 @@ def _legacy_conformance(
             "ordinal": ordinal,
             "primary_stratum": "binary-specific",
             "paired_stratum": None,
+            "applicable_metrics": ["visual", "content", "layout"],
+            "background": "#ffffff",
             "secondary_features": [],
         }
         for ordinal in range(1, 41)
@@ -176,6 +182,8 @@ def _blind_sources(
                 "source_uri": f"urn:gate-test:{document_format}:{index}",
                 "template_family": f"template-{index}",
                 "unit_count": 1,
+                "applicable_metrics": ["visual", "content", "layout"],
+                "background": "#ffffff",
             }
         )
     return blind

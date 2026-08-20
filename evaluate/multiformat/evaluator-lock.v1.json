@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "python": "3.11",
+  "unicode_version": "14.0.0",
+  "dependencies": {
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "Pillow": "12.3.0"
+  },
+  "algorithm_parameters": {
+    "visual": {"ms_ssim": 0.35, "active_tile_ssim": 0.25, "color_similarity": 0.20, "edge_f1": 0.20},
+    "content": {"text_or_cell_similarity": 0.70, "object_f1": 0.30},
+    "layout": {"matched_box_iou": 0.70, "order_baseline": 0.30},
+    "order_baseline": {"reading_order_similarity": 0.50, "baseline_similarity": 0.50},
+    "unit": {"visual": 0.60, "content": 0.25, "layout": 0.15},
+    "ms_ssim": {"scales": 5, "window": 11, "sigma": 1.5, "k1": 0.01, "k2": 0.03, "weights": [0.0448, 0.2856, 0.3001, 0.2363, 0.1333]},
+    "active_tiles": {"rows": 32, "columns": 32, "luminance_variance": 16},
+    "color": {"delta_e_cap": 20},
+    "edges": {"sigma": 1.0, "low_threshold": 100, "high_threshold": 200, "tolerance_pixels": 1},
+    "rendering": {"paged_dpi": 144, "presentation_width": 960, "presentation_height": 540},
+    "decimal_places": 6,
+    "rounding": "ROUND_HALF_EVEN"
+  }
+}

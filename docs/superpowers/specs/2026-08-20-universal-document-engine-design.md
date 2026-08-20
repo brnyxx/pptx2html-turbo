@@ -563,6 +563,8 @@ The machine implementation is fixed as follows:
 - Layout IoU is the mean IoU of matched boxes with unmatched boxes scored zero.
   Reading-order similarity uses normalized Kendall tau; baseline similarity is
   one minus clamped mean baseline error divided by text height.
+- The `reading-order and baseline similarity` term is the fixed arithmetic
+  mean of reading-order similarity and baseline similarity.
 - Each component is scaled to `[0, 100]`, retained to six decimal places, and
   compared to thresholds without pre-comparison rounding.
 - Conformance score is the arithmetic mean of exactly 100 unit scores. Blind

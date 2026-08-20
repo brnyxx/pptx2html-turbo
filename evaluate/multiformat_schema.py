@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import cast
+from typing import TypeAlias, cast
 
-type JsonValue = (
-    None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
+JsonValue: TypeAlias = (
+    None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 )
 
 

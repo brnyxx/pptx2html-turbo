@@ -10,6 +10,7 @@ from evaluate.multiformat_corpus_items import (
     object_list,
     require_keys,
     track_items,
+    validate_background,
 )
 from evaluate.multiformat_corpus_sources import (
     validate_identifier,
@@ -71,6 +72,8 @@ def validate_conformance(
                     "ordinal",
                     "primary_stratum",
                     "paired_stratum",
+                    "applicable_metrics",
+                    "background",
                     "secondary_features",
                 },
                 "conformance.unit",
@@ -88,6 +91,11 @@ def validate_conformance(
             if paired_stratum is not None:
                 paired_strata[paired_stratum] += 1
                 item_paired_strata[paired_stratum] += 1
+            _validate_applicable_metrics(unit, unit_id)
+            validate_background(
+                string_value(unit, "background"),
+                "conformance.background",
+            )
             secondary = string_list(unit, "secondary_features")
             if len(secondary) != len(set(secondary)):
                 raise CorpusError("conformance.secondary_features", unit_id)
@@ -197,3 +205,16 @@ def _optional_string(values: dict[str, JsonValue], field: str) -> str | None:
     if not isinstance(value, str) or not value:
         raise CorpusError(f"conformance.{field}", "must be a string or null")
     return value
+
+
+def _validate_applicable_metrics(
+    unit: dict[str, JsonValue],
+    unit_id: str,
+) -> None:
+    metrics = string_list(unit, "applicable_metrics")
+    if (
+        "visual" not in metrics
+        or len(metrics) != len(set(metrics))
+        or not set(metrics).issubset({"visual", "content", "layout"})
+    ):
+        raise CorpusError("conformance.applicable_metrics", unit_id)

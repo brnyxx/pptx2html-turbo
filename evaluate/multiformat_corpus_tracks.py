@@ -8,6 +8,7 @@ from evaluate.multiformat_corpus_items import (
     canonical_source_uri,
     require_keys,
     track_items,
+    validate_background,
 )
 from evaluate.multiformat_corpus_sources import (
     validate_source,
@@ -22,6 +23,7 @@ from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
     object_value,
+    string_list,
     string_value,
 )
 
@@ -62,6 +64,8 @@ def validate_blind(
                 "source_uri",
                 "template_family",
                 "unit_count",
+                "applicable_metrics",
+                "background",
             },
             "blind.item",
         )
@@ -86,6 +90,14 @@ def validate_blind(
         add_unique(templates, template, "blind.template_family")
         source_uri = canonical_source_uri(string_value(item, "source_uri"))
         add_unique(source_uris, source_uri, "blind.source_uri")
+        metrics = string_list(item, "applicable_metrics")
+        if (
+            "visual" not in metrics
+            or len(metrics) != len(set(metrics))
+            or not set(metrics).issubset({"visual", "content", "layout"})
+        ):
+            raise CorpusError("blind.applicable_metrics", source.item_id)
+        validate_background(string_value(item, "background"), "blind.background")
         if integer_value(item, "unit_count") <= 0:
             raise CorpusError("blind.unit_count", source.item_id)
     if len(items) != expected_count:
