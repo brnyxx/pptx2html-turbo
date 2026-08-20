@@ -318,6 +318,7 @@ dependencies = [
  "base64",
  "document2html-core",
  "log",
+ "tempfile",
  "thiserror",
  "zip",
 ]

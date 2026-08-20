@@ -39,28 +39,32 @@ impl NativeDocumentConverter {
             result.capabilities = native_runtime_capabilities();
             return Ok(result);
         }
-        if format != DocumentFormat::Docx {
-            return Err(NativeError::Document(DocumentError::BackendUnavailable {
-                format,
-                runtime: "native",
-            }));
+        match format {
+            DocumentFormat::Docx | DocumentFormat::Doc => {
+                self.convert_office(input, format, UnitKind::Page, options)
+            }
+            DocumentFormat::Pptx => unreachable!("PPTX returns through the core adapter"),
+            DocumentFormat::Xlsx
+            | DocumentFormat::Xls
+            | DocumentFormat::Ppt
+            | DocumentFormat::Pdf => {
+                Err(NativeError::Document(DocumentError::BackendUnavailable {
+                    format,
+                    runtime: "native",
+                }))
+            }
         }
-        self.convert_docx(input, options)
     }
 
-    fn convert_docx(
+    fn convert_office(
         &self,
         input: &DocumentInput<'_>,
+        format: DocumentFormat,
+        unit_kind: UnitKind,
         options: &DocumentConversionOptions,
     ) -> NativeResult<DocumentConversionResult> {
         let workspace = TemporaryWorkspace::create()?;
-        let pdf = convert_office_to_pdf(
-            input,
-            DocumentFormat::Docx,
-            &self.config,
-            &self.runtime,
-            &workspace,
-        )?;
+        let pdf = convert_office_to_pdf(input, format, &self.config, &self.runtime, &workspace)?;
         let normalized = convert_pdf_to_html(
             &pdf,
             options.asset_mode,
@@ -69,12 +73,12 @@ impl NativeDocumentConverter {
             &workspace,
         )?;
         Ok(DocumentConversionResult {
-            format: DocumentFormat::Docx,
+            format,
             html: normalized.html,
             external_assets: normalized.assets,
             diagnostics: native_diagnostics(&self.config),
             unit_count: normalized.page_count,
-            unit_kind: UnitKind::Page,
+            unit_kind,
             backend: BackendIdentity {
                 name: "libreoffice+poppler".to_owned(),
                 version: format!(
@@ -116,7 +120,7 @@ const fn native_runtime_capabilities() -> [RuntimeCapability; 7] {
     [
         available(DocumentFormat::Pptx, "pptx2html-core"),
         available(DocumentFormat::Docx, "libreoffice+poppler"),
-        unavailable(DocumentFormat::Doc),
+        available(DocumentFormat::Doc, "libreoffice+poppler"),
         unavailable(DocumentFormat::Xlsx),
         unavailable(DocumentFormat::Xls),
         unavailable(DocumentFormat::Ppt),
