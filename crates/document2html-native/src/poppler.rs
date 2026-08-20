@@ -11,9 +11,25 @@ use crate::stage::run_stage;
 use crate::workspace::TemporaryWorkspace;
 use crate::{NativeError, NativeResult};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PdfHtmlScale {
+    Paged,
+    Presentation,
+}
+
+impl PdfHtmlScale {
+    const fn zoom(self) -> &'static str {
+        match self {
+            Self::Paged => "2",
+            Self::Presentation => "1.3333333333333333",
+        }
+    }
+}
+
 pub(crate) fn convert_pdf_to_html(
     pdf_path: &Path,
     asset_mode: AssetMode,
+    scale: PdfHtmlScale,
     config: &NativeBackendConfig,
     runtime: &NativeRuntimeInfo,
     workspace: &TemporaryWorkspace,
@@ -31,6 +47,8 @@ pub(crate) fn convert_pdf_to_html(
             "UTF-8",
             "-fmt",
             "png",
+            "-zoom",
+            scale.zoom(),
         ])
         .arg(pdf_path)
         .arg(&html_path)
@@ -71,5 +89,16 @@ fn malformed_error(reason: &str) -> NativeError {
     NativeError::MalformedBackendOutput {
         backend: "poppler",
         reason: reason.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PdfHtmlScale;
+
+    #[test]
+    fn fixes_paged_and_presentation_render_scales() {
+        assert_eq!(PdfHtmlScale::Paged.zoom(), "2");
+        assert_eq!(PdfHtmlScale::Presentation.zoom(), "1.3333333333333333");
     }
 }

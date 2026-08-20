@@ -8,7 +8,7 @@ use document2html_core::{
 
 use crate::config::NativeBackendConfig;
 use crate::office::convert_office_to_pdf;
-use crate::poppler::convert_pdf_to_html;
+use crate::poppler::{PdfHtmlScale, convert_pdf_to_html};
 use crate::runtime::{NativeRuntime, NativeRuntimeInfo};
 use crate::stage::isolation_diagnostic;
 use crate::workspace::TemporaryWorkspace;
@@ -66,6 +66,11 @@ impl NativeDocumentConverter {
         let normalized = convert_pdf_to_html(
             &pdf,
             options.asset_mode,
+            if format == DocumentFormat::Ppt {
+                PdfHtmlScale::Presentation
+            } else {
+                PdfHtmlScale::Paged
+            },
             &self.config,
             &self.runtime,
             &workspace,
@@ -105,6 +110,7 @@ impl NativeDocumentConverter {
         let normalized = convert_pdf_to_html(
             &pdf,
             options.asset_mode,
+            PdfHtmlScale::Paged,
             &self.config,
             &self.runtime,
             &workspace,

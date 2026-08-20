@@ -61,3 +61,39 @@ fn command_spec_never_uses_a_shell_string() {
     assert_eq!(command.arguments.len(), 2);
     assert_eq!(command.arguments[1], "file name.html");
 }
+
+#[test]
+#[cfg(unix)]
+fn timeout_terminates_spawned_descendants() {
+    // Given
+    let workspace = TemporaryWorkspace::create().expect("create workspace");
+    let pid_path = workspace.root().join("descendant.pid");
+    let script = format!(
+        "sleep 60 & child=$!; echo $child > '{}'; wait",
+        pid_path.display()
+    );
+    let command = CommandSpec::new("/bin/sh")
+        .args(["-c", &script])
+        .working_directory(workspace.root());
+    let limits = ProcessLimits {
+        timeout: Duration::from_millis(500),
+        max_log_bytes: 1024,
+        max_output_bytes: 1024,
+    };
+
+    // When
+    let result = SystemCommandRunner::run(&command, &limits, workspace.root());
+
+    // Then
+    assert!(result.is_err());
+    let pid = std::fs::read_to_string(&pid_path).expect("descendant pid");
+    let status = std::process::Command::new("/bin/ps")
+        .args(["-p", pid.trim(), "-o", "stat="])
+        .output()
+        .expect("inspect descendant");
+    let state = String::from_utf8_lossy(&status.stdout);
+    assert!(
+        state.trim().is_empty() || state.trim_start().starts_with('Z'),
+        "descendant survived with state {state}"
+    );
+}

@@ -67,6 +67,10 @@ struct Cli {
     /// Override the pdfinfo executable path
     #[arg(long, value_name = "PATH")]
     pdfinfo: Option<PathBuf>,
+
+    /// Uniform PPTX scale used by deterministic presentation capture
+    #[arg(long, value_parser = parse_positive_scale)]
+    presentation_scale: Option<f64>,
 }
 
 fn main() {
@@ -124,8 +128,17 @@ fn run(cli: Cli) -> Result<i32, String> {
         },
     };
     let result = if format == DocumentFormat::Pptx {
-        CoreDocumentConverter::convert(&input, &options).map_err(|error| error.to_string())?
+        let pptx_options = pptx2html_core::ConversionOptions {
+            embed_images: options.asset_mode == AssetMode::Embed,
+            scale: cli.presentation_scale.unwrap_or(1.0),
+            ..Default::default()
+        };
+        CoreDocumentConverter::convert_pptx_with_options(&input, &pptx_options)
+            .map_err(|error| error.to_string())?
     } else {
+        if cli.presentation_scale.is_some() {
+            return Err("--presentation-scale is only valid for PPTX input".to_owned());
+        }
         let converter =
             NativeDocumentConverter::new(native_config(&cli)).map_err(|error| error.to_string())?;
         converter
@@ -181,6 +194,17 @@ fn parse_format(value: &str) -> Result<DocumentFormat, String> {
         "ppt" => Ok(DocumentFormat::Ppt),
         "pdf" => Ok(DocumentFormat::Pdf),
         _ => Err(format!("unsupported input format: {value}")),
+    }
+}
+
+fn parse_positive_scale(value: &str) -> Result<f64, String> {
+    let scale = value
+        .parse::<f64>()
+        .map_err(|_| "presentation scale must be a number".to_owned())?;
+    if scale.is_finite() && scale > 0.0 {
+        Ok(scale)
+    } else {
+        Err("presentation scale must be finite and greater than zero".to_owned())
     }
 }
 

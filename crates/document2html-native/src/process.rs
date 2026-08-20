@@ -45,6 +45,7 @@ impl SystemCommandRunner {
         if let Some(directory) = &spec.working_directory {
             command.current_dir(directory);
         }
+        configure_process_tree(&mut command);
         let mut child = command
             .spawn()
             .map_err(|source| NativeError::ProcessLaunch {
@@ -191,6 +192,7 @@ fn drain_events(
 }
 
 fn terminate(child: &mut std::process::Child) {
+    terminate_process_tree(child);
     if let Err(error) = child.kill()
         && error.kind() != std::io::ErrorKind::InvalidInput
     {
@@ -200,6 +202,51 @@ fn terminate(child: &mut std::process::Child) {
         log::warn!("failed to reap native process {}: {error}", child.id());
     }
 }
+
+#[cfg(unix)]
+fn configure_process_tree(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(windows)]
+fn configure_process_tree(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+}
+
+#[cfg(not(any(unix, windows)))]
+fn configure_process_tree(_command: &mut Command) {}
+
+#[cfg(unix)]
+fn terminate_process_tree(child: &std::process::Child) {
+    let group = format!("-{}", child.id());
+    if let Err(error) = Command::new("/bin/kill")
+        .args(["-KILL", &group])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+    {
+        log::warn!(
+            "failed to kill native process group {}: {error}",
+            child.id()
+        );
+    }
+}
+
+#[cfg(windows)]
+fn terminate_process_tree(child: &std::process::Child) {
+    if let Err(error) = Command::new("taskkill")
+        .args(["/T", "/F", "/PID", &child.id().to_string()])
+        .status()
+    {
+        log::warn!("failed to kill native process tree {}: {error}", child.id());
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminate_process_tree(_child: &std::process::Child) {}
 
 fn join_reader(handle: thread::JoinHandle<()>) -> NativeResult<()> {
     handle

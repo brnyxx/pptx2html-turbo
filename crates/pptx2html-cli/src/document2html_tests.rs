@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use super::json_string;
 use super::output::validate_asset_path;
+use super::{json_string, parse_positive_scale};
 
 #[test]
 fn json_string_escapes_machine_consumed_text() {
@@ -40,4 +40,15 @@ fn external_assets_must_stay_below_the_output_root() {
 
     // Then
     assert!(result.is_ok());
+}
+
+#[test]
+fn presentation_scale_must_be_positive_and_finite() {
+    assert_eq!(parse_positive_scale("0.75"), Ok(0.75));
+    for invalid in ["0", "-1", "NaN", "inf", "not-a-number"] {
+        assert!(
+            parse_positive_scale(invalid).is_err(),
+            "{invalid} should fail"
+        );
+    }
 }
