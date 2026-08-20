@@ -1,0 +1,14 @@
+[package]
+name = "document2html-native"
+version = "2.0.1"
+edition = "2024"
+description = "Native Office and PDF backends for document2html"
+license = "MIT"
+repository = "https://github.com/kim62210/pptx2html-turbo"
+keywords = ["document", "html", "converter", "office", "pdf"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+document2html-core = { path = "../document2html-core" }
+log = "0.4"
+thiserror = "2"
