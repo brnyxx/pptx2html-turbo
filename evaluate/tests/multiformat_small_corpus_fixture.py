@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from evaluate.multiformat_schema import JsonValue
+from evaluate.tests.multiformat_security_source_fixture import write_security_source
 from evaluate.tests.multiformat_source_fixture import write_positive_source
 
 
@@ -42,7 +43,12 @@ def ready_fixture(
         "strata": {"docx": ["text", "tables"]},
         "stratum_quotas": {"docx": {"text": 1, "tables": 1}},
         "legacy_paired_stratum_quotas": {},
-        "security_case_outcomes": {"docx": {"case-0": "reject", "case-1": "reject"}},
+        "security_case_outcomes": {
+            "docx": {
+                "malformed-zip": "reject",
+                "path-traversal": "reject",
+            }
+        },
     }
     _write_json(contract, contract_value)
     corpus_root = root / "corpus"
@@ -117,15 +123,16 @@ def ready_fixture(
         )
 
     security: list[dict[str, JsonValue]] = []
-    for index in range(2):
+    security_families = ("malformed-zip", "path-traversal")
+    for index, family in enumerate(security_families):
         path = sources / f"security-{index}.docx"
-        path.write_bytes(f"hostile-{index}".encode())
+        write_security_source(path, "docx", family)
         security.append(
             {
                 "id": f"security-{index}",
                 "path": f"sources/security-{index}.docx",
                 "sha256": _sha256(path),
-                "case_family": f"case-{index}",
+                "case_family": family,
                 "expected_outcome": "reject",
             }
         )

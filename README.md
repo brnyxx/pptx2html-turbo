@@ -61,6 +61,9 @@ uv run python -m evaluate.multiformat_corpus \
 Raw candidate/reference artifacts are deterministically scored and assembled
 with `python -m evaluate.assemble_multiformat_report`; the product gate
 recomputes the same report and rejects hand-edited aggregates.
+Security corpus labels are independently derived from the OOXML, CFBF, or PDF
+fixture structure before execution; hashes and expected-outcome labels alone
+cannot satisfy the security hard gate.
 Network-isolated two-run Chromium candidates are produced with
 `python -m evaluate.capture_multiformat_candidates`; see
 `evaluate/README.md` for the locked runtime and sandbox contract.

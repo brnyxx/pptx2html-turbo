@@ -230,6 +230,14 @@ uv run python -m evaluate.multiformat_gate \
   --evidence-root evaluate/multiformat/wave
 ```
 
+For every `READY` security track, corpus validation derives the declared attack
+family from the source bytes. It checks OOXML package relationships and
+payloads, CFBF FAT/DIFAT/directory/mini-stream structure and Office storages,
+and PDF cross-reference/object/page/action structure. This proves that a
+fixture contains the stated precondition; signed execution evidence remains
+separately required to prove rejection, safe conversion, isolation, and
+bounded resource use.
+
 Authoritative format references:
 
 - ECMA-376 OOXML:
@@ -240,5 +248,9 @@ Authoritative format references:
   https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xls/
 - Microsoft PPT:
   https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-ppt/
+- Microsoft Compound File Binary Format:
+  https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/
+- Microsoft Office VBA File Format:
+  https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-ovba/
 - ISO 32000-1 PDF:
   https://www.iso.org/standard/51502.html

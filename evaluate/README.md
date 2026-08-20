@@ -48,8 +48,15 @@ stratum quotas and contiguous unit ordinals, and requires canonicalized blind
 producer identities with unique source hashes, source URIs, and template
 families. Legacy sources bind their modern counterpart and independently
 authored binary coverage. Security cases must exactly match the format-specific
-families and expected outcomes in the contract. Exit codes are 0 for `READY`,
-1 for an invalid corpus, and 2 for an untouched `INCOMPLETE` scaffold.
+families and expected outcomes in the contract. The validator also derives the
+declared security precondition from the fixture bytes: OOXML package and
+relationship structure, CFBF allocation and storage structure, or PDF
+cross-reference, object graph, page tree, action, and payload structure. A
+renamed, relabeled, arbitrary, or trigger-free fixture is rejected even when
+its path and SHA-256 are updated. This source-level proof does not replace the
+signed runtime evidence for actual rejection, network isolation, active-content
+suppression, or resource bounds. Exit codes are 0 for `READY`, 1 for an invalid
+corpus, and 2 for an untouched `INCOMPLETE` scaffold.
 
 The product gate invokes this validator for every `READY` report. Corpus
 validation alone does not prove that native Office inventories and metric

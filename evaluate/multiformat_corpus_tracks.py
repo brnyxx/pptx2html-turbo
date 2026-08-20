@@ -11,6 +11,7 @@ from evaluate.multiformat_corpus_items import (
     validate_background,
 )
 from evaluate.multiformat_corpus_sources import (
+    resolve_source_path,
     validate_source,
 )
 from evaluate.multiformat_corpus_types import (
@@ -26,6 +27,7 @@ from evaluate.multiformat_schema import (
     string_list,
     string_value,
 )
+from evaluate.multiformat_security_fixture import validate_security_fixture
 
 
 def validate_incomplete_tracks(
@@ -146,6 +148,11 @@ def validate_security(
             root,
             document_format,
             require_valid_format=outcome is SecurityOutcome.SAFE_CONVERT,
+        )
+        validate_security_fixture(
+            resolve_source_path(root, source.relative_path),
+            document_format,
+            family,
         )
         add_unique(item_ids, source.item_id, "security.id")
         add_unique(source_paths, source.relative_path, "security.path")

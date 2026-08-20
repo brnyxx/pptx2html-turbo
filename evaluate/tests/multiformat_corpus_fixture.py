@@ -9,6 +9,7 @@ from evaluate.multiformat_schema import (
     integer_value,
     string_value,
 )
+from evaluate.tests.multiformat_security_source_fixture import write_security_source
 from evaluate.tests.multiformat_source_fixture import write_positive_source
 
 PAIRED_FORMATS = {"doc": "docx", "xls": "xlsx", "ppt": "pptx"}
@@ -198,10 +199,7 @@ def _security_sources(
     for index, family in enumerate(security_values):
         path = sources / f"security-{index}.{document_format}"
         outcome = string_value(security_values, family)
-        if outcome == "safe-convert":
-            write_positive_source(path, document_format, f"security-{family}")
-        else:
-            path.write_bytes(f"hostile-{document_format}-{index}".encode())
+        write_security_source(path, document_format, family)
         security.append(
             {
                 "id": f"{document_format}-security-{index}",

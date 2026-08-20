@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -46,18 +47,50 @@ def valid_ooxml(
         return False
     try:
         with zipfile.ZipFile(path) as archive:
-            infos = archive.infolist()
-            if not _valid_zip_inventory(infos):
-                return False
-            names = {info.filename for info in infos}
-            required = {"[Content_Types].xml", "_rels/.rels", main_part}
-            if not required.issubset(names):
-                return False
-            content_types = _bounded_zip_read(archive, "[Content_Types].xml")
-            relationships = _bounded_zip_read(archive, "_rels/.rels")
-            main_xml = _bounded_zip_read(archive, main_part)
+            return _valid_ooxml_archive(
+                archive,
+                main_part,
+                main_content_type,
+                main_root,
+            )
     except (OSError, KeyError, zipfile.BadZipFile, PackageValidationError):
         return False
+
+
+def valid_ooxml_bytes(
+    value: bytes,
+    main_part: str,
+    main_content_type: str,
+    main_root: str,
+) -> bool:
+    try:
+        with zipfile.ZipFile(io.BytesIO(value)) as archive:
+            return _valid_ooxml_archive(
+                archive,
+                main_part,
+                main_content_type,
+                main_root,
+            )
+    except (KeyError, zipfile.BadZipFile, PackageValidationError):
+        return False
+
+
+def _valid_ooxml_archive(
+    archive: zipfile.ZipFile,
+    main_part: str,
+    main_content_type: str,
+    main_root: str,
+) -> bool:
+    infos = archive.infolist()
+    if not _valid_zip_inventory(infos):
+        return False
+    names = {info.filename for info in infos}
+    required = {"[Content_Types].xml", "_rels/.rels", main_part}
+    if not required.issubset(names):
+        return False
+    content_types = _bounded_zip_read(archive, "[Content_Types].xml")
+    relationships = _bounded_zip_read(archive, "_rels/.rels")
+    main_xml = _bounded_zip_read(archive, main_part)
     return (
         _content_type_matches(content_types, main_part, main_content_type)
         and _root_relationship_matches(relationships, main_part)
