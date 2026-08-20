@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
+from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import (
     JsonValue,
     object_value,
@@ -14,6 +16,7 @@ from evaluate.tests.multiformat_corpus_fixture import (
     PAIRED_FORMATS,
     write_corpus,
 )
+from evaluate.tests.multiformat_metrics_fixture import write_metrics
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
@@ -33,7 +36,10 @@ class MultiFormatGateFixture:
                         "excel": "test-build",
                         "powerpoint": "test-build",
                     },
-                    "pdf": {"primary": "test-mupdf", "secondary": "test-renderer"},
+                    "pdf": {
+                        "primary": "test-mupdf",
+                        "secondary": "test-renderer",
+                    },
                     "browser": {"chromium": "test-revision"},
                     "font_bundle_sha256": "a" * 64,
                 },
@@ -47,16 +53,12 @@ class MultiFormatGateFixture:
         contract = read_object(CONTRACT_PATH)
         contract_hash = self._sha256(CONTRACT_PATH)
         lock_hash = self._sha256(lock)
-        evidence = reports.parent / "evidence"
+        evidence_root = reports.parent
+        evidence = evidence_root / "evidence"
         evidence.mkdir(exist_ok=True)
-        evaluator = evidence / "evaluator.py"
-        evaluator.write_text("evaluator\n", encoding="utf-8")
-        metrics = evidence / "metrics.json"
-        metrics.write_text("metrics\n", encoding="utf-8")
-        shared_bindings = {
-            "evaluator": self._binding(reports.parent, evaluator),
-            "metrics_evidence": self._binding(reports.parent, metrics),
-        }
+        evaluator = self._write_evaluator_manifest(evidence, contract)
+        evaluator_hash = self._sha256(evaluator)
+        evaluator_binding = self._binding(evidence_root, evaluator)
         strata_by_format = object_value(contract, "strata")
         quotas_by_format = object_value(contract, "stratum_quotas")
         security_by_format = object_value(contract, "security_case_outcomes")
@@ -75,24 +77,65 @@ class MultiFormatGateFixture:
                 object_value(security_by_format, document_format),
                 paired_quotas,
             )
-            bindings = {
-                **shared_bindings,
-                "corpus_manifest": self._binding(reports.parent, corpus_path),
-            }
-            strata = {
-                name: 96.5 for name in string_list(strata_by_format, document_format)
-            }
+            metrics_path = write_metrics(
+                CONTRACT_PATH,
+                corpus_path,
+                evaluator_hash,
+                lock_hash,
+                evidence_root,
+            )
             report = self._passing_report(
                 document_format,
                 contract_hash,
                 lock_hash,
-                strata,
-                bindings,
+                {
+                    name: 100.0
+                    for name in string_list(strata_by_format, document_format)
+                },
+                evaluator_binding,
+                self._binding(evidence_root, corpus_path),
+                self._binding(evidence_root, metrics_path),
             )
             (reports / f"{document_format}.json").write_text(
                 json.dumps(report, sort_keys=True),
                 encoding="utf-8",
             )
+
+    def _write_evaluator_manifest(
+        self,
+        evidence: Path,
+        contract: dict[str, JsonValue],
+    ) -> Path:
+        evaluator_lock = read_object(
+            PROJECT_ROOT / "evaluate" / "multiformat" / "evaluator-lock.v1.json"
+        )
+        path = evidence / "evaluator-manifest.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "contract_sha256": self._sha256(CONTRACT_PATH),
+                    "project_revision": current_project_revision(PROJECT_ROOT),
+                    "python": evaluator_lock["python"],
+                    "unicode_version": evaluator_lock["unicode_version"],
+                    "algorithm_parameters": object_value(
+                        contract,
+                        "metric_parameters",
+                    ),
+                    "dependencies": object_value(evaluator_lock, "dependencies"),
+                    "files": [
+                        {
+                            "path": relative_path,
+                            "sha256": self._sha256(PROJECT_ROOT / relative_path),
+                        }
+                        for relative_path in EVALUATOR_FILES
+                    ],
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        return path
 
     @staticmethod
     def _passing_report(
@@ -100,35 +143,38 @@ class MultiFormatGateFixture:
         contract_hash: str,
         lock_hash: str,
         strata: dict[str, float],
-        bindings: dict[str, dict[str, str]],
+        evaluator: dict[str, str],
+        corpus_manifest: dict[str, str],
+        metrics_evidence: dict[str, str],
     ) -> dict[str, JsonValue]:
-        track = {
-            "score": 96.5,
-            "visual": 96.0,
-            "content": 98.5,
-            "layout": 95.0,
-        }
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "READY",
             "format": document_format,
             "contract_sha256": contract_hash,
             "oracle_lock_sha256": lock_hash,
-            "evaluator": bindings["evaluator"],
-            "corpus_manifest": bindings["corpus_manifest"],
-            "metrics_evidence": bindings["metrics_evidence"],
+            "evaluator": evaluator,
+            "corpus_manifest": corpus_manifest,
+            "metrics_evidence": metrics_evidence,
             "conformance": {
-                **track,
+                "score": 100.0,
+                "visual": 100.0,
+                "content": 100.0,
+                "layout": 100.0,
                 "unit_count": 100,
-                "minimum_unit_score": 90.0,
+                "minimum_unit_score": 100.0,
+                "critical_defects": 0,
                 "strata": strata,
             },
             "blind": {
-                **track,
+                "score": 100.0,
+                "visual": 100.0,
+                "content": 100.0,
+                "layout": 100.0,
                 "file_count": 75,
                 "accepted_files": 75,
                 "critical_defects": 0,
-                "minimum_file_score": 92.0,
+                "minimum_file_score": 100.0,
             },
             "security": {"case_count": 10, "passed": 10},
             "determinism": {
@@ -138,6 +184,13 @@ class MultiFormatGateFixture:
                 "png_hashes_equal": True,
             },
             "review": {"reviewers": 2, "all_passed": True},
+            "quality": {
+                "tests_passed": True,
+                "builds_passed": True,
+                "diagnostics_passed": True,
+                "contract_checks_passed": True,
+            },
+            "performance": {"within_limits": True},
         }
 
     @classmethod

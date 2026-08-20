@@ -37,7 +37,11 @@ class ScaffoldMultiFormatEvidenceTests(unittest.TestCase):
             contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
             evaluator = output / "evidence" / "evaluator-manifest.json"
             evaluator_data = json.loads(evaluator.read_text(encoding="utf-8"))
-            self.assertEqual(evaluator_data["schema_version"], 1)
+            self.assertEqual(evaluator_data["schema_version"], 2)
+            self.assertEqual(
+                evaluator_data["algorithm_parameters"],
+                contract["metric_parameters"],
+            )
             self.assertGreaterEqual(len(evaluator_data["files"]), 4)
             for entry in evaluator_data["files"]:
                 source = PROJECT_ROOT / entry["path"]
@@ -63,6 +67,13 @@ class ScaffoldMultiFormatEvidenceTests(unittest.TestCase):
                 self.assertEqual(corpus["tracks"]["conformance"]["expected_count"], 100)
                 self.assertEqual(corpus["tracks"]["blind"]["expected_count"], 75)
                 self.assertEqual(corpus["tracks"]["security"]["expected_count"], 10)
+                metrics = json.loads(
+                    (output / "metrics" / f"{document_format}.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(metrics["schema_version"], 2)
+                self.assertEqual(metrics["status"], "INCOMPLETE")
 
             lock = self._write_valid_lock(output)
             summary = evaluate_reports(

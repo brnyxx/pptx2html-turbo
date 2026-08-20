@@ -172,6 +172,24 @@ families. Ten security cases must exactly match the format-specific contract.
 `INCOMPLETE` templates exit 2; malformed, unsafe, or quota-invalid manifests
 exit 1. The product gate runs this validation for every `READY` report.
 
+Reports are generated, not authored. Bound raw PNGs and semantic inventories
+are re-scored with the fixed five-scale MS-SSIM, active-tile SSIM, DeltaE00,
+edge F1, text/cell, object, IoU, reading-order, and baseline formulas. Values
+are retained to six decimals, and blind scores use unit mean within each file
+before the 75-file mean. The gate independently rebuilds the report and rejects
+any aggregate mismatch.
+
+```bash
+uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
+  python -m evaluate.assemble_multiformat_report \
+  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --evaluator-manifest evaluate/multiformat/wave/evidence/evaluator-manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/docx/manifest.json \
+  --metrics-evidence evaluate/multiformat/wave/metrics/docx.json \
+  --evidence-root evaluate/multiformat/wave \
+  --output evaluate/multiformat/wave/reports/docx.json
+```
+
 On a network-disabled Windows host with desktop Microsoft Office and Poppler,
 capture the positive native references:
 

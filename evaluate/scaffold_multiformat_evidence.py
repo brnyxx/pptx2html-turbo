@@ -7,26 +7,9 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from evaluate.multiformat_revision import current_project_revision
+from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_schema import JsonValue, read_object, string_list
-
-EVALUATOR_FILES = (
-    "evaluate/multiformat/contract.v1.json",
-    "evaluate/multiformat_gate.py",
-    "evaluate/multiformat_contract.py",
-    "evaluate/multiformat_checks.py",
-    "evaluate/multiformat_schema.py",
-    "evaluate/multiformat_evidence.py",
-    "evaluate/multiformat_corpus.py",
-    "evaluate/multiformat_corpus_conformance.py",
-    "evaluate/multiformat_corpus_contract.py",
-    "evaluate/multiformat_corpus_items.py",
-    "evaluate/multiformat_corpus_tracks.py",
-    "evaluate/multiformat_corpus_sources.py",
-    "evaluate/multiformat_corpus_types.py",
-    "evaluate/multiformat_package_validation.py",
-    "evaluate/multiformat_pdf.py",
-    "evaluate/multiformat_cfb.py",
-)
 
 
 class ScaffoldError(RuntimeError):
@@ -45,10 +28,20 @@ def scaffold_evidence(
     formats = string_list(contract, "required_formats")
     corpus = _required_object(contract, "corpus")
     stratum_quotas = _required_object(contract, "stratum_quotas")
+    metric_parameters = _required_object(contract, "metric_parameters")
+    evaluator_lock = read_object(
+        project_root / "evaluate" / "multiformat" / "evaluator-lock.v1.json"
+    )
     evaluator_path = output_dir / "evidence" / "evaluator-manifest.json"
     evaluator_path.parent.mkdir(parents=True)
     evaluator_manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "contract_sha256": _sha256(contract_path),
+        "project_revision": current_project_revision(project_root),
+        "python": evaluator_lock["python"],
+        "unicode_version": evaluator_lock["unicode_version"],
+        "algorithm_parameters": metric_parameters,
+        "dependencies": _required_object(evaluator_lock, "dependencies"),
         "files": [
             {
                 "path": relative_path,
@@ -103,10 +96,17 @@ def scaffold_evidence(
         _write_json(
             metrics_path,
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "status": "INCOMPLETE",
                 "format": document_format,
-                "units": [],
+                "bindings": {},
+                "conformance": {"units": []},
+                "blind": {"files": []},
+                "security": {"cases": []},
+                "determinism": {"runs": []},
+                "review": {"reviewers": []},
+                "quality": {},
+                "performance": {},
             },
         )
         _write_json(

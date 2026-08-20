@@ -58,6 +58,10 @@ uv run python -m evaluate.multiformat_corpus \
   --manifest evaluate/multiformat/wave/corpora/docx/manifest.json
 ```
 
+Raw candidate/reference artifacts are deterministically scored and assembled
+with `python -m evaluate.assemble_multiformat_report`; the product gate
+recomputes the same report and rejects hand-edited aggregates.
+
 The repository does not currently contain the required Windows Microsoft
 Office oracle lock or all seven native evidence batches, so the product-level
 gate reports `INCOMPLETE`; it must not be described as a verified 96% release

@@ -124,16 +124,16 @@ class MultiFormatGateTests(MultiFormatGateFixture, unittest.TestCase):
             reports.mkdir()
             lock = self._write_oracle_lock(root)
             self._write_reports(reports, lock)
-            (root / "evidence" / "metrics.json").unlink()
+            report = json.loads((reports / "pptx.json").read_text(encoding="utf-8"))
+            (root / report["metrics_evidence"]["path"]).unlink()
 
             # When
             summary = evaluate_reports(CONTRACT_PATH, reports, lock)
 
             # Then
             self.assertEqual(summary.status, GateStatus.FAIL)
-            self.assertTrue(
-                all("metrics_evidence" in result.reasons for result in summary.formats),
-            )
+            pptx = next(result for result in summary.formats if result.format == "pptx")
+            self.assertEqual(pptx.reasons, ("metrics_evidence",))
 
     def test_evidence_path_cannot_escape_root(self) -> None:
         # Given

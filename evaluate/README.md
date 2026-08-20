@@ -56,6 +56,33 @@ validation alone does not prove that native Office inventories and metric
 records are complete; those artifacts remain separately required and
 fail-closed.
 
+Metric evidence contains bound candidate/reference PNG and inventory paths,
+never caller-supplied scores. The evaluator re-hashes and parses every artifact,
+checks exact corpus unit/file/case coverage, computes the frozen visual,
+content, and layout formulas, applies file-then-format blind aggregation, and
+retains six decimals with `ROUND_HALF_EVEN`. It also recomputes security,
+per-file determinism, reviewer coverage, quality, and performance hard gates.
+
+After both capture manifests and all raw artifacts are present, assemble the
+only gate-accepted report:
+
+```bash
+uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
+  python -m evaluate.assemble_multiformat_report \
+  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --evaluator-manifest evaluate/multiformat/wave/evidence/evaluator-manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/docx/manifest.json \
+  --metrics-evidence evaluate/multiformat/wave/metrics/docx.json \
+  --evidence-root evaluate/multiformat/wave \
+  --output evaluate/multiformat/wave/reports/docx.json
+```
+
+The evaluator manifest binds exact NumPy, SciPy, scikit-image, and Pillow
+versions, Python 3.11, its Unicode database, and every scoring, schema,
+aggregation, capture, test, and gate source file. A
+manually edited aggregate report, stale dependency, missing unit, pooled blind
+score, changed raw artifact, incomplete reviewer, or unequal clean run fails.
+
 On a network-disabled Windows Office host, populate the positive native oracle
 batch with `evaluate/capture_multiformat_office_oracles.ps1`. The capture
 script opens the actual modern or binary source file read-only, disables

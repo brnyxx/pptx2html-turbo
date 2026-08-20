@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 from evaluate.multiformat_checks import (
@@ -17,46 +15,20 @@ from evaluate.multiformat_corpus import (
     validate_corpus_manifest,
 )
 from evaluate.multiformat_evidence import bound_evidence_path, oracle_lock_ready
+from evaluate.multiformat_gate_types import (
+    FormatGateResult,
+    GateStatus,
+    GateSummary,
+)
+from evaluate.multiformat_report_validation import validate_generated_report
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
     object_value,
-    read_object,
     sha256_file,
     string_list,
 )
-
-
-class GateStatus(StrEnum):
-    PASS = "PASS"
-    FAIL = "FAIL"
-    INCOMPLETE = "INCOMPLETE"
-
-
-@dataclass(frozen=True, slots=True)
-class FormatGateResult:
-    format: str
-    status: GateStatus
-    reasons: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class GateSummary:
-    status: GateStatus
-    formats: tuple[FormatGateResult, ...]
-
-    def to_json_value(self) -> dict[str, JsonValue]:
-        return {
-            "status": self.status.value,
-            "formats": [
-                {
-                    "format": result.format,
-                    "status": result.status.value,
-                    "reasons": list(result.reasons),
-                }
-                for result in self.formats
-            ],
-        }
+from evaluate.multiformat_strict_json import read_strict_object
 
 
 def evaluate_reports(
@@ -65,7 +37,7 @@ def evaluate_reports(
     oracle_lock_path: Path,
     evidence_root: Path | None = None,
 ) -> GateSummary:
-    contract = read_object(contract_path)
+    contract = read_strict_object(contract_path)
     required_formats = string_list(contract, "required_formats")
     if not oracle_lock_ready(oracle_lock_path):
         results = tuple(
@@ -115,7 +87,7 @@ def _evaluate_format(
     if not report_path.is_file():
         return FormatGateResult(document_format, GateStatus.INCOMPLETE, ("report",))
     try:
-        report = read_object(report_path)
+        report = read_strict_object(report_path)
         report_status = report.get("status")
         if report_status == "INCOMPLETE":
             missing = tuple(string_list(report, "missing"))
@@ -155,7 +127,7 @@ def _report_failures(
     evidence_root: Path,
 ) -> list[str]:
     failures: list[str] = []
-    _require_equal(report, "schema_version", 1, "schema_version", failures)
+    _require_equal(report, "schema_version", 2, "schema_version", failures)
     _require_equal(report, "format", document_format, "format", failures)
     _require_equal(
         report, "contract_sha256", contract_hash, "contract_sha256", failures
@@ -168,6 +140,7 @@ def _report_failures(
         for field in ["evaluator", "corpus_manifest", "metrics_evidence"]
     }
     corpus_path = evidence_paths["corpus_manifest"]
+    corpus_ready = False
     if corpus_path is not None:
         try:
             validation = validate_corpus_manifest(contract_path, corpus_path)
@@ -176,8 +149,31 @@ def _report_failures(
                 or validation.document_format.value != document_format
             ):
                 failures.append("corpus_manifest")
+            else:
+                corpus_ready = True
         except CorpusError:
             failures.append("corpus_manifest")
+    evaluator_path = evidence_paths["evaluator"]
+    metrics_path = evidence_paths["metrics_evidence"]
+    if (
+        corpus_ready
+        and corpus_path is not None
+        and evaluator_path is not None
+        and metrics_path is not None
+    ):
+        failures.extend(
+            validate_generated_report(
+                report,
+                contract_path,
+                contract,
+                contract_hash,
+                lock_hash,
+                evidence_root,
+                evaluator_path,
+                corpus_path,
+                metrics_path,
+            )
+        )
     corpus = object_value(contract, "corpus")
     thresholds = object_value(contract, "thresholds")
     conformance = object_value(report, "conformance")
