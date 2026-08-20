@@ -4,7 +4,8 @@ from pathlib import Path
 
 from evaluate.multiformat_capture_provenance import validate_capture_provenance
 from evaluate.multiformat_corpus_items import object_list, require_keys
-from evaluate.multiformat_evidence import resolve_evidence_path
+from evaluate.multiformat_corpus_types import CorpusError
+from evaluate.multiformat_evidence import EvidencePathError, resolve_evidence_path
 from evaluate.multiformat_capture_types import (
     ArtifactIdentity,
     CaptureFile,
@@ -36,30 +37,31 @@ def validate_capture_manifest(
     oracle_lock_sha256: str,
     project_revision: str,
     evidence_root: Path,
+    oracle_lock_path: Path | None = None,
 ) -> CaptureManifest:
     try:
         values = read_strict_object(path)
-        require_keys(
-            values,
-            {
-                "schema_version",
-                "status",
-                "role",
-                "format",
-                "producer",
-                "runtime_sha256",
-                "contract_sha256",
-                "corpus_manifest_sha256",
-                "evaluator_manifest_sha256",
-                "oracle_lock_sha256",
-                "network_isolation",
-                "rendering",
-                "upstream_manifest",
-                "units",
-                "files",
-            },
-            "capture.schema",
-        )
+        required_fields = {
+            "schema_version",
+            "status",
+            "role",
+            "format",
+            "producer",
+            "runtime_sha256",
+            "runtime_identity",
+            "contract_sha256",
+            "corpus_manifest_sha256",
+            "evaluator_manifest_sha256",
+            "oracle_lock_sha256",
+            "network_isolation",
+            "rendering",
+            "upstream_manifest",
+            "units",
+            "files",
+        }
+        if role == "candidate":
+            required_fields |= {"determinism_manifest", "execution_receipt"}
+        require_keys(values, required_fields, "capture.schema")
         if (
             integer_value(values, "schema_version") != 1
             or string_value(values, "status") != "READY"
@@ -82,6 +84,7 @@ def validate_capture_manifest(
             oracle_lock_sha256,
             project_revision,
             evidence_root,
+            oracle_lock_path,
         )
         units: dict[str, CaptureUnit] = {}
         artifact_paths: set[str] = set()
@@ -150,10 +153,28 @@ def validate_capture_manifest(
         }
         if actual_files != expected_files:
             raise MetricError("metrics.binding.capture", f"{role} file set")
-        return CaptureManifest(units, files)
+        determinism_path = (
+            resolve_evidence_path(
+                evidence_root,
+                string_value(
+                    object_value(values, "determinism_manifest"),
+                    "path",
+                ),
+            )
+            if role == "candidate"
+            else None
+        )
+        return CaptureManifest(units, files, determinism_path)
     except MetricError:
         raise
-    except (StrictJsonError, TypeError, ValueError) as error:
+    except (
+        CorpusError,
+        EvidencePathError,
+        StrictJsonError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         raise MetricError("metrics.binding.capture", role) from error
 
 

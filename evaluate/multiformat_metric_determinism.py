@@ -38,7 +38,7 @@ def compute_determinism(
         raise MetricError("determinism.runs", str(len(runs)))
     expected = _expected_files(spec)
     candidate_png = _candidate_png_by_file(candidate_capture.units, spec)
-    maps: list[dict[tuple[str, str], tuple[str, str, tuple[str, ...]]]] = []
+    maps: list[dict[tuple[str, str], tuple[str, tuple[str, ...], tuple[str, ...]]]] = []
     artifacts: set[Path] = set()
     run_ids: set[int] = set()
     for run in runs:
@@ -47,7 +47,10 @@ def compute_determinism(
         if run_id not in {1, 2} or run_id in run_ids:
             raise MetricError("determinism.runs", str(run_id))
         run_ids.add(run_id)
-        actual: dict[tuple[str, str], tuple[str, str, tuple[str, ...]]] = {}
+        actual: dict[
+            tuple[str, str],
+            tuple[str, tuple[str, ...], tuple[str, ...]],
+        ] = {}
         for file_record in object_list(run, "files", "determinism.files"):
             require_keys(
                 file_record,
@@ -103,15 +106,19 @@ def compute_determinism(
                 new_artifacts = {html, inventory}
             else:
                 new_artifacts = new_paths
+            inventory_hashes, inventory_paths = _inventory_hashes(
+                inventory,
+                candidate_capture,
+                key[1],
+                evidence_root,
+                require_capture_bindings=run_id == 1,
+            )
+            if run_id == 2:
+                new_artifacts.update(inventory_paths)
             if artifacts & new_artifacts:
                 raise MetricError("artifact.path", repr(key))
             artifacts.update(new_artifacts)
             png_hashes = tuple(sha256_file(path) for path in png)
-            _validate_inventory_manifest(
-                inventory,
-                candidate_capture,
-                key[1],
-            )
             if (
                 sha256_value(file_record, "source_sha256") != source_hash
                 or len(png_hashes) != unit_count
@@ -119,7 +126,7 @@ def compute_determinism(
                 raise MetricError("determinism.file_set", repr(key))
             actual[key] = (
                 sha256_file(html),
-                sha256_file(inventory),
+                inventory_hashes,
                 png_hashes,
             )
         if set(actual) != set(expected):
@@ -180,11 +187,14 @@ def _candidate_png_by_file(
     }
 
 
-def _validate_inventory_manifest(
+def _inventory_hashes(
     path: Path,
     capture: CaptureManifest,
     source_id: str,
-) -> None:
+    evidence_root: Path,
+    *,
+    require_capture_bindings: bool,
+) -> tuple[tuple[str, ...], set[Path]]:
     values = read_strict_object(path)
     require_keys(
         values,
@@ -198,20 +208,31 @@ def _validate_inventory_manifest(
             key=lambda unit: unit.ordinal,
         )
     ]
-    actual = [
-        _identity(binding)
-        for binding in object_list(
-            values,
-            "unit_inventories",
-            "determinism.unit_inventories",
-        )
-    ]
+    bindings = object_list(
+        values,
+        "unit_inventories",
+        "determinism.unit_inventories",
+    )
+    actual = [_identity(binding) for binding in bindings]
     if (
         integer_value(values, "schema_version") != 1
         or string_value(values, "source_id") != source_id
-        or actual != expected
+        or len(actual) != len(expected)
+        or (require_capture_bindings and actual != expected)
     ):
         raise MetricError("determinism.inventory", source_id)
+    ordered_paths = [
+        resolve_artifact_binding(
+            binding,
+            evidence_root,
+            "determinism.unit_inventory",
+        )
+        for binding in bindings
+    ]
+    paths = set(ordered_paths)
+    if len(paths) != len(ordered_paths):
+        raise MetricError("artifact.path", source_id)
+    return tuple(sha256_file(item) for item in ordered_paths), paths
 
 
 def _identity(values: dict[str, JsonValue]) -> ArtifactIdentity:

@@ -56,6 +56,52 @@ validation alone does not prove that native Office inventories and metric
 records are complete; those artifacts remain separately required and
 fail-closed.
 
+Capture candidate artifacts only in a clean, externally sandboxed checkout.
+The sandbox attestation must prove disabled network access and that oracle
+directories are absent from the candidate namespace. The runner performs two
+fresh converter/browser runs and publishes `READY` only when HTML, every
+inventory, and every PNG are byte-identical:
+
+```bash
+cargo build --release -p pptx2html-cli --bin document2html
+uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
+  python -m evaluate.capture_multiformat_candidates \
+  --contract evaluate/multiformat/contract.v1.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/docx/manifest.json \
+  --evaluator-manifest evaluate/multiformat/wave/evidence/evaluator-manifest.json \
+  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --evidence-root evaluate/multiformat/wave \
+  --output-dir evaluate/multiformat/wave/candidate/docx \
+  --converter target/release/document2html \
+  --soffice /locked/bin/soffice \
+  --pdftohtml /locked/bin/pdftohtml \
+  --pdfinfo /locked/bin/pdfinfo \
+  --chromium /locked/bin/chromium \
+  --font-bundle evaluate/multiformat/wave/font-bundle-manifest.json \
+  --sandbox-attestation evaluate/multiformat/wave/candidate-sandbox-attestation.json \
+  --sandbox-public-key evaluate/multiformat/wave/sandbox-verifier.pub \
+  --openssl /locked/bin/openssl \
+  --receipt-signer /locked/bin/candidate-receipt-signer
+```
+
+Browser loading uses one intercepted synthetic HTTP document and rejects every
+other resource request. The sandbox attestation must carry a lock-bound Ed25519
+signature from the trusted host verifier; self-authored JSON is rejected.
+The signature carries a per-run nonce, and the evidence package hardlinks or
+copies every executed converter/native/Chromium/OpenSSL binary so the product
+gate re-hashes the exact bytes instead of trusting reported versions.
+After both runs, the lock-bound host signer emits a second signed receipt that
+binds the nonce, runtime identity, execution log, determinism manifest, and the
+canonical root of every HTML, inventory, PNG, runtime binary, and package file.
+Scripts, active objects, service workers, popups,
+downloads, animations, unstable geometry, broken images, unpinned runtime
+bytes, and noncanonical presentation dimensions fail closed. Paged native HTML
+is generated at 144 DPI; 16:9 PPT/PPTX evidence is exactly 960x540. Spreadsheet
+Chromium is launched with a generated fontconfig that contains only the
+hash-locked font bundle, and the signed host attestation binds the effective
+font-environment digest. Cells are emitted only when the DOM carries independently derived worksheet
+and coordinate metadata—coordinates are never invented from visual position.
+
 Metric evidence contains bound candidate/reference PNG and inventory paths,
 never caller-supplied scores. The evaluator re-hashes and parses every artifact,
 checks exact corpus unit/file/case coverage, computes the frozen visual,
@@ -77,8 +123,8 @@ uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
   --output evaluate/multiformat/wave/reports/docx.json
 ```
 
-The evaluator manifest binds exact NumPy, SciPy, scikit-image, and Pillow
-versions, Python 3.11, its Unicode database, and every scoring, schema,
+The evaluator manifest binds exact NumPy, SciPy, scikit-image, Pillow, and
+Playwright versions, Python 3.11, its Unicode database, and every scoring, schema,
 aggregation, capture, test, and gate source file. A
 manually edited aggregate report, stale dependency, missing unit, pooled blind
 score, changed raw artifact, incomplete reviewer, or unequal clean run fails.

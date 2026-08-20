@@ -16,6 +16,9 @@ from evaluate.tests.multiformat_corpus_fixture import (
     PAIRED_FORMATS,
     write_corpus,
 )
+from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
+    write_gate_oracle_lock,
+)
 from evaluate.tests.multiformat_metrics_fixture import write_metrics
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -24,30 +27,7 @@ CONTRACT_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
 
 class MultiFormatGateFixture:
     def _write_oracle_lock(self, root: Path) -> Path:
-        lock = root / "oracle-lock.json"
-        lock.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "status": "locked",
-                    "office": {
-                        "os": "Windows 11 23H2",
-                        "word": "test-build",
-                        "excel": "test-build",
-                        "powerpoint": "test-build",
-                    },
-                    "pdf": {
-                        "primary": "test-mupdf",
-                        "secondary": "test-renderer",
-                    },
-                    "browser": {"chromium": "test-revision"},
-                    "font_bundle_sha256": "a" * 64,
-                },
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
-        return lock
+        return write_gate_oracle_lock(root, PROJECT_ROOT)
 
     def _write_reports(self, reports: Path, lock: Path) -> None:
         contract = read_object(CONTRACT_PATH)

@@ -10,6 +10,9 @@ from evaluate.tests.multiformat_gate_fixture import (
     MultiFormatGateFixture,
 )
 from evaluate.tests.multiformat_metric_artifact_fixture import write_checkerboard_png
+from evaluate.tests.multiformat_candidate_receipt_fixture import (
+    refresh_candidate_receipt,
+)
 
 
 class MultiFormatMetricsGateTests(MultiFormatGateFixture, unittest.TestCase):
@@ -138,6 +141,7 @@ class MultiFormatMetricsGateTests(MultiFormatGateFixture, unittest.TestCase):
         report_path: Path,
         report: dict[str, JsonValue],
     ) -> None:
+        refresh_candidate_receipt(metrics_path.parent, metrics)
         metrics_path.write_text(
             json.dumps(metrics, sort_keys=True),
             encoding="utf-8",

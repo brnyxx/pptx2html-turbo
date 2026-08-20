@@ -141,13 +141,67 @@ def scaffold_evidence(
                 "powerpoint": "",
             },
             "pdf": {"primary": "", "secondary": ""},
-            "browser": {"chromium": ""},
+            "browser": {
+                "chromium": "",
+                "executable_sha256": "",
+                "playwright": "1.62.0",
+                "viewport_width": 1920,
+                "viewport_height": 2400,
+                "device_scale_factor": 1,
+                "locale": "en-US",
+                "timezone": "UTC",
+                "color_profile": "srgb",
+                "reduced_motion": "reduce",
+                "animations": "disabled",
+                "os": "",
+                "architecture": "",
+                "font_environment_sha256": "",
+            },
+            "candidate_runtime": {
+                "build_revision": "",
+                "converter_sha256": "",
+                "converter_version": "",
+                "soffice_sha256": "",
+                "soffice_version": "",
+                "pdftohtml_sha256": "",
+                "pdftohtml_version": "",
+                "pdfinfo_sha256": "",
+                "pdfinfo_version": "",
+                "receipt_signer_sha256": "",
+                "receipt_signer_version": "",
+            },
+            "sandbox_verifier": {
+                "algorithm": "ed25519",
+                "verifier_id": "",
+                "public_key_sha256": "",
+                "openssl_sha256": "",
+            },
             "font_bundle_sha256": "",
         },
     )
     _write_json(
         output_dir / "office-input-manifest.json",
         {"schema_version": 1, "files": []},
+    )
+    _write_json(
+        output_dir / "candidate-sandbox-attestation.template.json",
+        {
+            "schema_version": 1,
+            "status": "INCOMPLETE",
+            "network_isolation": "",
+            "golden_access": "",
+            "project_revision": "",
+            "scope_sha256": "",
+            "font_environment_sha256": "",
+            "font_isolation": "",
+            "run_nonce": "",
+            "verifier_id": "",
+            "signature": "",
+        },
+    )
+    _write_json(
+        output_dir / "font-bundle-manifest.template.json",
+        {"schema_version": 1, "fonts": []},
     )
 
 

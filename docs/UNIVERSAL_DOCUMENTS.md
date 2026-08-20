@@ -179,6 +179,23 @@ are retained to six decimals, and blind scores use unit mean within each file
 before the 75-file mean. The gate independently rebuilds the report and rejects
 any aggregate mismatch.
 
+Candidate evidence is captured by `evaluate.capture_multiformat_candidates`.
+It requires a release converter, exact Chromium/Playwright/font/runtime hashes,
+a clean Git revision, a network-disabled/no-golden sandbox attestation, and a
+READY frozen corpus. The host attestation is Ed25519-signed by a public key
+bound in the oracle lock; converter/native runtime hashes, versions, build
+revision, Chromium, Playwright, OpenSSL, and the isolated font environment are
+also lock-checked. Executed binary bytes are materialized into evidence and
+re-hashed by the gate; the signed host claim carries a per-run nonce. It runs
+every conformance and blind source twice in fresh
+converter and Chromium workspaces. Candidate HTML is served from an intercepted
+synthetic origin with scripts and external resources blocked; unit discovery,
+native dimensions, DOM inventories, and all run-2 artifacts are fail-closed and
+digest-bound.
+The trusted host receipt signer runs only after capture and signs the runtime,
+execution, determinism, and complete artifact root; replayed preflight
+attestations cannot authorize a different evidence set.
+
 ```bash
 uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
   python -m evaluate.assemble_multiformat_report \

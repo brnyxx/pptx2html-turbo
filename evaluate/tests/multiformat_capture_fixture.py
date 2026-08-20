@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 
 from evaluate.multiformat_schema import JsonValue
-from evaluate.tests.multiformat_metric_artifact_fixture import binding
+from evaluate.tests.multiformat_candidate_runtime_evidence_fixture import (
+    runtime_evidence,
+)
+from evaluate.tests.multiformat_candidate_receipt_fixture import (
+    write_candidate_receipt,
+)
+from evaluate.tests.multiformat_metric_artifact_fixture import binding, sha256
 
 
 def add_capture_units(
@@ -37,14 +43,44 @@ def write_capture_manifests(
     evaluator_hash: str,
     oracle_hash: str,
     project_revision: str,
+    determinism_value: dict[str, JsonValue],
 ) -> tuple[dict[str, JsonValue], list[dict[str, JsonValue]]]:
     result: dict[str, JsonValue] = {}
-    candidate_files = _candidate_files(
+    candidate_files = candidate_capture_files(
         root, document_format, capture_units["candidate"]
     )
     for role in ["oracle", "candidate"]:
         producer = _producer(role, document_format)
-        runtime_hash = ("6" if role == "oracle" else "7") * 64
+        runtime_tools, runtime_artifacts = runtime_evidence(
+            root,
+            document_format,
+            role,
+            project_revision,
+            contract_hash,
+            corpus_hash,
+            evaluator_hash,
+            oracle_hash,
+        )
+        runtime_identity = root / f"{document_format}-{role}-runtime.json"
+        runtime_identity.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "role": role,
+                    "producer": producer,
+                    "project_revision": project_revision,
+                    "os": "test-os",
+                    "architecture": "test-architecture",
+                    "python": "3.11.0" if role == "candidate" else "test-python",
+                    "tools": runtime_tools,
+                    "artifacts": runtime_artifacts,
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        runtime_binding = binding(root, runtime_identity)
+        runtime_hash = sha256(runtime_identity)
         execution_log = root / f"{document_format}-{role}-execution.json"
         execution_log.write_text(
             json.dumps(
@@ -52,11 +88,41 @@ def write_capture_manifests(
                     "schema_version": 1,
                     "status": "PASS",
                     "role": role,
+                    "project_revision": project_revision,
+                    "evaluator_manifest_sha256": evaluator_hash,
+                    "corpus_manifest_sha256": corpus_hash,
+                    "network_isolation": "disabled",
+                    "source_count": len(
+                        {str(unit["source_id"]) for unit in capture_units[role]}
+                    ),
+                    "unit_count": len(capture_units[role]),
+                    "external_requests": [],
+                    "determinism_runs": 2 if role == "candidate" else 1,
                 },
                 sort_keys=True,
             ),
             encoding="utf-8",
         )
+        candidate_provenance: dict[str, JsonValue] = {}
+        if role == "candidate":
+            determinism_binding, receipt_binding = write_candidate_receipt(
+                root,
+                document_format,
+                runtime_identity,
+                execution_log,
+                determinism_value,
+                runtime_artifacts,
+                run_nonce=str(runtime_tools["run_nonce"]),
+                project_revision=project_revision,
+                contract_hash=contract_hash,
+                corpus_hash=corpus_hash,
+                evaluator_hash=evaluator_hash,
+                oracle_hash=oracle_hash,
+            )
+            candidate_provenance = {
+                "determinism_manifest": determinism_binding,
+                "execution_receipt": receipt_binding,
+            }
         upstream = root / f"{document_format}-{role}-upstream.json"
         upstream.write_text(
             json.dumps(
@@ -67,6 +133,7 @@ def write_capture_manifests(
                     "format": document_format,
                     "producer": producer,
                     "runtime_sha256": runtime_hash,
+                    "runtime_identity": runtime_binding,
                     "project_revision": project_revision,
                     "contract_sha256": contract_hash,
                     "corpus_manifest_sha256": corpus_hash,
@@ -75,6 +142,7 @@ def write_capture_manifests(
                     "units": capture_units[role],
                     "files": candidate_files if role == "candidate" else [],
                     "execution_log": binding(root, execution_log),
+                    **candidate_provenance,
                 },
                 sort_keys=True,
             ),
@@ -90,6 +158,7 @@ def write_capture_manifests(
                     "format": document_format,
                     "producer": producer,
                     "runtime_sha256": runtime_hash,
+                    "runtime_identity": runtime_binding,
                     "contract_sha256": contract_hash,
                     "corpus_manifest_sha256": corpus_hash,
                     "evaluator_manifest_sha256": evaluator_hash,
@@ -99,6 +168,7 @@ def write_capture_manifests(
                     "upstream_manifest": binding(root, upstream),
                     "units": capture_units[role],
                     "files": candidate_files if role == "candidate" else [],
+                    **candidate_provenance,
                 },
                 sort_keys=True,
             ),
@@ -108,7 +178,7 @@ def write_capture_manifests(
     return result, candidate_files
 
 
-def _candidate_files(
+def candidate_capture_files(
     root: Path,
     document_format: str,
     units: list[dict[str, JsonValue]],

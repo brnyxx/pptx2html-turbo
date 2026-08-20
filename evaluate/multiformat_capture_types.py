@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,3 +31,4 @@ class CaptureFile:
 class CaptureManifest:
     units: dict[str, CaptureUnit]
     files: dict[str, CaptureFile]
+    determinism_path: Path | None

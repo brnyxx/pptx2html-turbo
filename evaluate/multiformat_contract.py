@@ -61,6 +61,7 @@ def evaluate_reports(
             contract=contract,
             contract_hash=contract_hash,
             lock_hash=lock_hash,
+            oracle_lock_path=oracle_lock_path,
             evidence_root=resolved_evidence_root,
         )
         for document_format in required_formats
@@ -82,6 +83,7 @@ def _evaluate_format(
     contract: dict[str, JsonValue],
     contract_hash: str,
     lock_hash: str,
+    oracle_lock_path: Path,
     evidence_root: Path,
 ) -> FormatGateResult:
     if not report_path.is_file():
@@ -109,6 +111,7 @@ def _evaluate_format(
             contract,
             contract_hash,
             lock_hash,
+            oracle_lock_path,
             evidence_root,
         )
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError):
@@ -124,6 +127,7 @@ def _report_failures(
     contract: dict[str, JsonValue],
     contract_hash: str,
     lock_hash: str,
+    oracle_lock_path: Path,
     evidence_root: Path,
 ) -> list[str]:
     failures: list[str] = []
@@ -172,6 +176,7 @@ def _report_failures(
                 evaluator_path,
                 corpus_path,
                 metrics_path,
+                oracle_lock_path,
             )
         )
     corpus = object_value(contract, "corpus")

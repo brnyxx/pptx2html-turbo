@@ -6,7 +6,8 @@
     "numpy": "2.4.6",
     "scipy": "1.17.1",
     "scikit-image": "0.26.0",
-    "Pillow": "12.3.0"
+    "Pillow": "12.3.0",
+    "playwright": "1.62.0"
   },
   "algorithm_parameters": {
     "visual": {"ms_ssim": 0.35, "active_tile_ssim": 0.25, "color_similarity": 0.20, "edge_f1": 0.20},

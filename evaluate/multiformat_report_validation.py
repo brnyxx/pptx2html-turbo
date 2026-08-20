@@ -19,6 +19,7 @@ def validate_generated_report(
     evaluator_path: Path,
     corpus_path: Path,
     metrics_path: Path,
+    oracle_lock_path: Path,
 ) -> list[str]:
     try:
         evaluator_hash = validate_evaluator_manifest(
@@ -33,6 +34,7 @@ def validate_generated_report(
             evaluator_hash,
             lock_hash,
             evidence_root,
+            oracle_lock_path,
         )
         generated = build_report(
             summary,

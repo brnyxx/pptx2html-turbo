@@ -7,6 +7,7 @@ from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import JsonValue
 from evaluate.tests.multiformat_capture_fixture import (
     add_capture_units,
+    candidate_capture_files,
     write_capture_manifests,
 )
 from evaluate.tests.multiformat_hard_gate_fixture import (
@@ -113,6 +114,31 @@ def write_metrics(
         evaluator_hash,
         corpus_hash,
     )
+    candidate_files = candidate_capture_files(
+        root,
+        document_format,
+        capture_units["candidate"],
+    )
+    determinism_value: dict[str, JsonValue] = {
+        "runs": [
+            determinism_run(
+                root,
+                1,
+                tracks,
+                document_format,
+                capture_units["candidate"],
+                candidate_files,
+            ),
+            determinism_run(
+                root,
+                2,
+                tracks,
+                document_format,
+                capture_units["candidate"],
+                candidate_files,
+            ),
+        ]
+    }
     capture_bindings, candidate_files = write_capture_manifests(
         root,
         document_format,
@@ -122,6 +148,7 @@ def write_metrics(
         evaluator_hash,
         oracle_hash,
         project_revision,
+        determinism_value,
     )
     quality, performance = quality_evidence(
         root,
@@ -145,26 +172,7 @@ def write_metrics(
         "conformance": {"units": conformance},
         "blind": {"files": blind},
         "security": {"cases": security},
-        "determinism": {
-            "runs": [
-                determinism_run(
-                    root,
-                    1,
-                    tracks,
-                    document_format,
-                    capture_units["candidate"],
-                    candidate_files,
-                ),
-                determinism_run(
-                    root,
-                    2,
-                    tracks,
-                    document_format,
-                    capture_units["candidate"],
-                    candidate_files,
-                ),
-            ]
-        },
+        "determinism": determinism_value,
         "review": {
             "reviewers": [
                 reviewer(

@@ -41,6 +41,7 @@ def assemble_report(
         evaluator_hash,
         oracle_hash,
         evidence_root,
+        oracle_lock_path,
     )
     return build_report(
         summary,

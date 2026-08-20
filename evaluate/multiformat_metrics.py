@@ -42,6 +42,7 @@ def validate_metrics_evidence(
     evaluator_manifest_sha256: str,
     oracle_lock_sha256: str,
     evidence_root: Path | None = None,
+    oracle_lock_path: Path | None = None,
 ) -> MetricsSummary:
     try:
         corpus_validation = validate_corpus_manifest(contract_path, corpus_path)
@@ -122,6 +123,7 @@ def validate_metrics_evidence(
             oracle_lock_sha256,
             project_revision,
             root,
+            oracle_lock_path,
         )
         candidate_units = validate_capture_manifest(
             candidate_capture,
@@ -133,7 +135,12 @@ def validate_metrics_evidence(
             oracle_lock_sha256,
             project_revision,
             root,
+            oracle_lock_path,
         )
+        if candidate_units.determinism_path is None or read_strict_object(
+            candidate_units.determinism_path
+        ) != object_value(metrics, "determinism"):
+            raise MetricError("determinism.binding", "candidate manifest")
         validate_metric_capture_links(metrics, oracle_units, candidate_units)
         thresholds = object_value(read_strict_object(contract_path), "thresholds")
         conformance = compute_conformance(

@@ -91,14 +91,21 @@ def determinism_run(
             )
             if len(source_units) != unit_count:
                 raise HardGateFixtureError("candidate fixture unit mismatch")
+            unit_inventories: list[dict[str, JsonValue]] = []
+            for ordinal, unit in enumerate(source_units, start=1):
+                if run_id == 1:
+                    unit_inventories.append(unit["inventory"])
+                else:
+                    candidate_inventory = root / unit["inventory"]["path"]
+                    run_inventory = run_root / f"{stem}-{ordinal}-inventory.json"
+                    run_inventory.write_bytes(candidate_inventory.read_bytes())
+                    unit_inventories.append(binding(root, run_inventory))
             inventory.write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
                         "source_id": source["id"],
-                        "unit_inventories": [
-                            unit["inventory"] for unit in source_units
-                        ],
+                        "unit_inventories": unit_inventories,
                     },
                     sort_keys=True,
                 ),
