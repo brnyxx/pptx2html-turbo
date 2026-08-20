@@ -1,7 +1,9 @@
+use std::fs;
+
 use document2html_core::{
     BackendIdentity, CoreDocumentConverter, DocumentConversionOptions, DocumentConversionResult,
-    DocumentDiagnostic, DocumentError, DocumentFormat, DocumentInput, RuntimeCapability,
-    RuntimeSupport, UnitKind, detect_format,
+    DocumentDiagnostic, DocumentFormat, DocumentInput, RuntimeCapability, RuntimeSupport, UnitKind,
+    detect_format,
 };
 
 use crate::config::NativeBackendConfig;
@@ -48,10 +50,7 @@ impl NativeDocumentConverter {
             }
             DocumentFormat::Ppt => self.convert_office(input, format, UnitKind::SlidePage, options),
             DocumentFormat::Pptx => unreachable!("PPTX returns through the core adapter"),
-            DocumentFormat::Pdf => Err(NativeError::Document(DocumentError::BackendUnavailable {
-                format,
-                runtime: "native",
-            })),
+            DocumentFormat::Pdf => self.convert_pdf(input, options),
         }
     }
 
@@ -84,6 +83,42 @@ impl NativeDocumentConverter {
                     "{}; {}",
                     self.runtime.libreoffice.version, self.runtime.pdftohtml.version
                 ),
+            },
+            capabilities: native_runtime_capabilities(),
+        })
+    }
+
+    fn convert_pdf(
+        &self,
+        input: &DocumentInput<'_>,
+        options: &DocumentConversionOptions,
+    ) -> NativeResult<DocumentConversionResult> {
+        if input.data.len() as u64 > self.config.max_input_bytes {
+            return Err(NativeError::ResourceLimitExceeded {
+                resource: "input",
+                limit: self.config.max_input_bytes,
+            });
+        }
+        let workspace = TemporaryWorkspace::create()?;
+        let pdf = workspace.root().join("input").join("input.pdf");
+        fs::write(&pdf, input.data)?;
+        let normalized = convert_pdf_to_html(
+            &pdf,
+            options.asset_mode,
+            &self.config,
+            &self.runtime,
+            &workspace,
+        )?;
+        Ok(DocumentConversionResult {
+            format: DocumentFormat::Pdf,
+            html: normalized.html,
+            external_assets: normalized.assets,
+            diagnostics: native_diagnostics(&self.config),
+            unit_count: normalized.page_count,
+            unit_kind: UnitKind::Page,
+            backend: BackendIdentity {
+                name: "poppler".to_owned(),
+                version: self.runtime.pdftohtml.version.clone(),
             },
             capabilities: native_runtime_capabilities(),
         })
@@ -123,7 +158,7 @@ const fn native_runtime_capabilities() -> [RuntimeCapability; 7] {
         available(DocumentFormat::Xlsx, "libreoffice+poppler"),
         available(DocumentFormat::Xls, "libreoffice+poppler"),
         available(DocumentFormat::Ppt, "libreoffice+poppler"),
-        unavailable(DocumentFormat::Pdf),
+        available(DocumentFormat::Pdf, "poppler"),
     ]
 }
 
@@ -132,13 +167,5 @@ const fn available(format: DocumentFormat, backend: &'static str) -> RuntimeCapa
         format,
         support: RuntimeSupport::Available,
         backend: Some(backend),
-    }
-}
-
-const fn unavailable(format: DocumentFormat) -> RuntimeCapability {
-    RuntimeCapability {
-        format,
-        support: RuntimeSupport::BackendUnavailable,
-        backend: None,
     }
 }
