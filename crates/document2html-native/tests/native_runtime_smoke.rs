@@ -7,7 +7,9 @@ fn probes_installed_native_runtime_versions() {
     let runtime = NativeRuntime::new(NativeBackendConfig::default());
 
     // When
-    let info = runtime.probe().expect("installed native runtime should probe");
+    let info = runtime
+        .probe()
+        .expect("installed native runtime should probe");
 
     // Then
     assert!(info.libreoffice.version.starts_with("LibreOffice "));

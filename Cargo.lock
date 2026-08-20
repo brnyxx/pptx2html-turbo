@@ -315,9 +315,11 @@ dependencies = [
 name = "document2html-native"
 version = "2.0.1"
 dependencies = [
+ "base64",
  "document2html-core",
  "log",
  "thiserror",
+ "zip",
 ]
 
 [[package]]

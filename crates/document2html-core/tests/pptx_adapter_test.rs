@@ -23,8 +23,8 @@ fn generic_converter_routes_pptx_through_existing_core() {
     assert_eq!(
         result.backend,
         BackendIdentity {
-            name: "pptx2html-core",
-            version: env!("CARGO_PKG_VERSION"),
+            name: "pptx2html-core".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
         }
     );
 }

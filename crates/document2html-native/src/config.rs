@@ -1,10 +1,18 @@
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProcessIsolation {
     StrictAuto,
+    Explicit(IsolationLauncher),
     AllowUnisolated,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IsolationLauncher {
+    pub executable: PathBuf,
+    pub argument_prefix: Vec<OsString>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

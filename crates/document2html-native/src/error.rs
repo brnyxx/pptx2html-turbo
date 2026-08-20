@@ -6,6 +6,9 @@ pub type NativeResult<T> = Result<T, NativeError>;
 
 #[derive(Debug, Error)]
 pub enum NativeError {
+    #[error("Document conversion error: {0}")]
+    Document(#[from] document2html_core::DocumentError),
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -40,6 +43,9 @@ pub enum NativeError {
 
     #[error("Unsafe output entry: {0}")]
     UnsafeOutput(PathBuf),
+
+    #[error("Native backend unavailable: {0}")]
+    BackendUnavailable(String),
 }
 
 impl NativeError {

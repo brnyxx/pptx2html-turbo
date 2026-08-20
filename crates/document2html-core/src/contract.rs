@@ -34,10 +34,10 @@ pub struct RuntimeCapability {
     pub backend: Option<&'static str>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackendIdentity {
-    pub name: &'static str,
-    pub version: &'static str,
+    pub name: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

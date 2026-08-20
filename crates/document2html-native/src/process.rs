@@ -1,6 +1,5 @@
-use std::ffi::{OsStr, OsString};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
@@ -9,44 +8,11 @@ use std::time::{Duration, Instant};
 use crate::{NativeError, NativeResult};
 
 mod output_limit;
+mod spec;
 use output_limit::enforce_output_limit;
+pub(crate) use spec::CommandSpec;
 
 const OBSERVATION_INTERVAL: Duration = Duration::from_millis(25);
-
-#[derive(Debug, Clone)]
-pub(crate) struct CommandSpec {
-    executable: PathBuf,
-    arguments: Vec<OsString>,
-    environment: Vec<(OsString, OsString)>,
-    working_directory: Option<PathBuf>,
-}
-
-impl CommandSpec {
-    pub(crate) fn new(executable: impl AsRef<Path>) -> Self {
-        Self {
-            executable: executable.as_ref().to_owned(),
-            arguments: Vec::new(),
-            environment: Vec::new(),
-            working_directory: None,
-        }
-    }
-
-    pub(crate) fn arg(mut self, argument: impl AsRef<OsStr>) -> Self {
-        self.arguments.push(argument.as_ref().to_owned());
-        self
-    }
-
-    pub(crate) fn working_directory(mut self, directory: impl AsRef<Path>) -> Self {
-        self.working_directory = Some(directory.as_ref().to_owned());
-        self
-    }
-
-    pub(crate) fn environment(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
-        self.environment
-            .push((key.as_ref().to_owned(), value.as_ref().to_owned()));
-        self
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ProcessLimits {

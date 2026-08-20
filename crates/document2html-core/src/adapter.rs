@@ -58,8 +58,8 @@ impl CoreDocumentConverter {
             unit_count: result.slide_count,
             unit_kind: UnitKind::Slide,
             backend: BackendIdentity {
-                name: "pptx2html-core",
-                version: env!("CARGO_PKG_VERSION"),
+                name: "pptx2html-core".to_owned(),
+                version: env!("CARGO_PKG_VERSION").to_owned(),
             },
             capabilities: core_runtime_capabilities(),
         })

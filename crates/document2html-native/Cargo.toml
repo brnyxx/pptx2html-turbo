@@ -9,6 +9,10 @@ keywords = ["document", "html", "converter", "office", "pdf"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+base64 = "0.22"
 document2html-core = { path = "../document2html-core" }
 log = "0.4"
 thiserror = "2"
+
+[dev-dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }

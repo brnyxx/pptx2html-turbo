@@ -356,9 +356,12 @@ the same source file reuse one name, so collisions are impossible.
 Canonical HTML keeps Poppler's tag and attribute order, rewrites only validated
 resource/link tokens, converts CRLF and CR to LF, removes trailing ASCII
 spaces from each line, and emits exactly one final LF. The locked Poppler
-grammar forbids timestamps and temporary absolute paths. Any such token is a
-grammar mismatch rather than text to scrub. These rules and deterministic asset
-names make clean-run HTML hashes comparable without hiding backend drift.
+grammar permits its generated `<title>` to equal the conversion-owned output
+prefix and permits one generated date meta element. The normalizer replaces
+that exact title with `document` and removes that exact date element. Any other
+timestamp or temporary absolute path is a grammar mismatch. These rules and
+deterministic asset names make clean-run HTML hashes comparable without hiding
+backend drift.
 
 The normalizer parses only the bounded Poppler HTML grammar produced by the
 locked runtime. A grammar mismatch is `MalformedBackendOutput`, not a best-effort
@@ -420,8 +423,8 @@ the support matrix.
 
 `StrictAuto` wraps every native process in a platform isolation launcher:
 
-- macOS uses `/usr/bin/sandbox-exec` with an inline profile that allows normal
-  process/file access but denies every network operation;
+- macOS uses `/usr/bin/sandbox-exec` with an inline profile that allows local
+  LibreOffice IPC but denies outbound remote-IP connections;
 - Linux uses `bwrap` with `--unshare-net`, a read-only bind of `/`, and a
   writable bind only for the conversion root;
 - Windows requires an `Explicit(IsolationLauncher)` supplied by the
