@@ -1,0 +1,15 @@
+[package]
+name = "document2html-core"
+version = "2.0.1"
+edition = "2024"
+description = "Format-neutral document-to-HTML conversion core"
+license = "MIT"
+repository = "https://github.com/kim62210/pptx2html-turbo"
+keywords = ["document", "html", "converter", "office", "pdf"]
+categories = ["parser-implementations"]
+
+[dependencies]
+pptx2html-core = { path = "../pptx2html-core" }
+quick-xml = "0.37"
+thiserror = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }

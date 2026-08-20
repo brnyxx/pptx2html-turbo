@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/document2html-core",
     "crates/pptx2html-core",
     "crates/pptx2html-cli",
     "crates/pptx2html-py",
