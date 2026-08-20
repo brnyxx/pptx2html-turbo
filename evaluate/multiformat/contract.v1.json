@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "required_formats": ["pptx", "docx", "doc", "xlsx", "xls", "ppt", "pdf"],
+  "corpus": {
+    "conformance_units": 100,
+    "blind_files": 75,
+    "security_cases": 10,
+    "reviewers": 2,
+    "deterministic_runs": 2
+  },
+  "thresholds": {
+    "format_score": 96.0,
+    "visual_score": 95.0,
+    "content_score": 98.0,
+    "layout_score": 94.0,
+    "stratum_score": 94.0,
+    "minimum_unit_score": 85.0,
+    "minimum_blind_file_score": 90.0
+  },
+  "strata": {
+    "pptx": ["text", "shapes-connectors", "images-effects", "tables-charts", "masters-layouts-groups", "international", "fallback-edge"],
+    "docx": ["text-typography", "sections-headers-footers", "tables-images-shapes", "lists-fields-references", "international", "mixed-stress"],
+    "doc": ["paired-legacy", "binary-specific"],
+    "xlsx": ["values-formulas", "styles-conditional-formats", "print-layout", "charts-images-shapes", "international-formats", "mixed-stress"],
+    "xls": ["paired-legacy", "binary-specific"],
+    "ppt": ["paired-legacy", "binary-specific"],
+    "pdf": ["text-fonts", "vector-transparency", "raster-color-space", "page-geometry", "forms-annotations-links", "international", "mixed-edge"]
+  }
+}
