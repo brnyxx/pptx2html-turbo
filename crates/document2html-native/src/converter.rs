@@ -46,13 +46,12 @@ impl NativeDocumentConverter {
             DocumentFormat::Xlsx | DocumentFormat::Xls => {
                 self.convert_office(input, format, UnitKind::SheetPage, options)
             }
+            DocumentFormat::Ppt => self.convert_office(input, format, UnitKind::SlidePage, options),
             DocumentFormat::Pptx => unreachable!("PPTX returns through the core adapter"),
-            DocumentFormat::Ppt | DocumentFormat::Pdf => {
-                Err(NativeError::Document(DocumentError::BackendUnavailable {
-                    format,
-                    runtime: "native",
-                }))
-            }
+            DocumentFormat::Pdf => Err(NativeError::Document(DocumentError::BackendUnavailable {
+                format,
+                runtime: "native",
+            })),
         }
     }
 
@@ -123,7 +122,7 @@ const fn native_runtime_capabilities() -> [RuntimeCapability; 7] {
         available(DocumentFormat::Doc, "libreoffice+poppler"),
         available(DocumentFormat::Xlsx, "libreoffice+poppler"),
         available(DocumentFormat::Xls, "libreoffice+poppler"),
-        unavailable(DocumentFormat::Ppt),
+        available(DocumentFormat::Ppt, "libreoffice+poppler"),
         unavailable(DocumentFormat::Pdf),
     ]
 }
