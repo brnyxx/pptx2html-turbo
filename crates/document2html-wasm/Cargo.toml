@@ -1,0 +1,16 @@
+[package]
+name = "document2html-wasm"
+version = "2.0.1"
+edition = "2024"
+description = "Browser WASM bindings for format detection and PPTX document conversion"
+license = "MIT"
+repository = "https://github.com/kim62210/pptx2html-turbo"
+keywords = ["document", "html", "wasm", "office", "pptx"]
+categories = ["wasm"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+document2html-core = { path = "../document2html-core" }
+wasm-bindgen = "0.2"

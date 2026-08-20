@@ -324,6 +324,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "document2html-py"
+version = "2.0.1"
+dependencies = [
+ "document2html-core",
+ "document2html-native",
+ "pyo3",
+ "zip",
+]
+
+[[package]]
+name = "document2html-wasm"
+version = "2.0.1"
+dependencies = [
+ "document2html-core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -658,10 +676,13 @@ name = "pptx2html-cli"
 version = "2.0.1"
 dependencies = [
  "clap",
+ "document2html-core",
+ "document2html-native",
  "env_logger",
  "log",
  "pptx2html-core",
  "same-file",
+ "tempfile",
  "zip",
 ]
 

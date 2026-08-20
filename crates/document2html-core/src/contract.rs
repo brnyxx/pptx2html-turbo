@@ -89,6 +89,67 @@ pub struct DocumentConversionResult {
     pub capabilities: [RuntimeCapability; 7],
 }
 
+impl DocumentConversionResult {
+    pub fn diagnostics_json(&self) -> String {
+        let entries = self
+            .diagnostics
+            .iter()
+            .map(DocumentDiagnostic::to_json)
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("[{entries}]")
+    }
+}
+
+impl DocumentDiagnostic {
+    fn to_json(&self) -> String {
+        format!(
+            concat!(
+                "{{",
+                "\"code\":{},",
+                "\"family\":{},",
+                "\"support_tier\":{},",
+                "\"stage\":{},",
+                "\"raw_reference\":{},",
+                "\"fallback_kind\":{},",
+                "\"reason\":{}",
+                "}}"
+            ),
+            json_string(&self.code),
+            json_string(&self.family),
+            json_string(&self.support_tier),
+            optional_json_string(self.stage.as_deref()),
+            optional_json_string(self.raw_reference.as_deref()),
+            json_string(&self.fallback_kind),
+            json_string(&self.reason),
+        )
+    }
+}
+
+fn optional_json_string(value: Option<&str>) -> String {
+    value.map(json_string).unwrap_or_else(|| "null".to_owned())
+}
+
+fn json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() + 2);
+    escaped.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            character if character <= '\u{001f}' => {
+                escaped.push_str(&format!("\\u{:04x}", character as u32));
+            }
+            character => escaped.push(character),
+        }
+    }
+    escaped.push('"');
+    escaped
+}
+
 pub const fn core_runtime_capabilities() -> [RuntimeCapability; 7] {
     [
         RuntimeCapability {

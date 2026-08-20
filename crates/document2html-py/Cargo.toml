@@ -1,0 +1,25 @@
+[package]
+name = "document2html-py"
+version = "2.0.1"
+edition = "2024"
+description = "Python bindings for universal Office and PDF to HTML conversion"
+license = "MIT"
+repository = "https://github.com/kim62210/pptx2html-turbo"
+keywords = ["document", "html", "python", "office", "pdf"]
+categories = ["parser-implementations"]
+
+[lib]
+name = "document2html"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+document2html-core = { path = "../document2html-core" }
+document2html-native = { path = "../document2html-native" }
+pyo3 = { version = "0.25" }
+
+[dev-dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
