@@ -1,14 +1,61 @@
-# pptx-to-html
+# pptx-to-html and document2html
 
 Convert PPTX slides to HTML in pure Rust with direct rendering and structured fallbacks.
 
-Built on the ECMA-376 open standard — no Microsoft dependencies, no C/C++ bindings, just Rust.
+The existing PPTX engine remains a pure-Rust ECMA-376 implementation. The
+workspace now also provides a format-neutral engine and an optional native
+pipeline for DOCX, DOC, XLSX, XLS, PPT, and PDF using installed LibreOffice and
+Poppler executables.
 
 The primary npm package is `@briank-dev/pptx-to-html`. The repository and
 internal Rust crate names remain `pptx2html-*` for compatibility.
 
 **[Live Demo](https://kim62210.github.io/pptx2html-turbo/)** — try it in your browser, no installation needed.
 **[Releases](https://github.com/kim62210/pptx2html-turbo/releases)** — download CLI artifacts and read versioned release notes.
+
+## Universal document engine
+
+`document2html-core` owns content-based format detection, common results,
+capability reporting, and the existing PPTX adapter. `document2html-native`
+adds a bounded Office-to-PDF-to-HTML pipeline for native applications.
+
+| Format | Native CLI/Python | Browser WASM | Backend |
+|---|---|---|---|
+| PPTX | available | available | existing pure-Rust renderer |
+| DOCX | available | backend unavailable | LibreOffice + Poppler |
+| DOC | available | backend unavailable | LibreOffice + Poppler |
+| XLSX | available | backend unavailable | LibreOffice + Poppler |
+| XLS | available | backend unavailable | LibreOffice + Poppler |
+| PPT | available | backend unavailable | LibreOffice + Poppler |
+| PDF | available | backend unavailable | Poppler |
+
+The native path requires `soffice`, `pdftohtml`, and `pdfinfo`. It uses an
+isolated LibreOffice profile, bounded temporary workspace, process timeout,
+log/output limits, deterministic asset names, and strict remote-network
+blocking where a supported launcher is available.
+
+```bash
+cargo run -p pptx2html-cli --bin document2html -- report.docx -o report.html
+cargo run -p pptx2html-cli --bin document2html -- workbook.xls --no-embed
+cargo run -p pptx2html-cli --bin document2html -- document.pdf --info
+```
+
+The original `pptx2html` binary and all existing Rust, Python, and npm/WASM
+PPTX APIs remain unchanged.
+
+The seven-format 96% acceptance gate is intentionally fail-closed:
+
+```bash
+uv run python -m evaluate.multiformat_gate \
+  --reports-dir evaluate/multiformat/reports \
+  --oracle-lock evaluate/multiformat/oracle-lock.json
+```
+
+The repository does not currently contain the required Windows Microsoft
+Office oracle lock or all seven native evidence batches, so the product-level
+gate reports `INCOMPLETE`; it must not be described as a verified 96% release
+until those external artifacts are captured and all reports pass together.
+See [Universal document conversion](docs/UNIVERSAL_DOCUMENTS.md).
 
 ## Features
 
@@ -42,6 +89,12 @@ cd crates/pptx2html-py && maturin develop
 
 # WASM (build from source)
 cd crates/pptx2html-wasm && wasm-pack build --target web
+
+# Universal Python module (requires maturin)
+cd crates/document2html-py && maturin develop
+
+# Universal browser WASM package
+wasm-pack build crates/document2html-wasm --target web --release
 ```
 
 Existing `@briank-dev/pptx2html-turbo` installations remain supported and

@@ -10,6 +10,27 @@ The evaluation strategy now has three tracks:
 
 The existing composite score remains useful for regression control, but it is no longer the only fidelity signal.
 
+## Seven-format acceptance gate
+
+The universal document engine has a separate fail-closed product gate for
+PPTX, DOCX, DOC, XLSX, XLS, PPT, and PDF:
+
+```bash
+uv run python -m evaluate.multiformat_gate \
+  --reports-dir evaluate/multiformat/reports \
+  --oracle-lock evaluate/multiformat/oracle-lock.json
+```
+
+The machine-consumed contract is
+`evaluate/multiformat/contract.v1.json`. Every format must independently pass
+the conformance, blind, component, stratum, minimum-unit, security,
+determinism, review, and SHA-256 evidence-binding checks in the same wave.
+Missing native Microsoft Office evidence is `INCOMPLETE`, never `PASS`.
+
+See `docs/UNIVERSAL_DOCUMENTS.md` and
+`docs/superpowers/specs/2026-08-20-universal-document-engine-design.md` for the
+runtime architecture and full evidence rationale.
+
 ## Strict PowerPoint Pixel Gate
 
 The strict gate is intentionally binary. It validates the PowerPoint-native

@@ -5,12 +5,19 @@
 **Branch:** main
 
 ## OVERVIEW
-Pure Rust PPTX-to-HTML converter built on ECMA-376. A four-crate Cargo workspace exposes one core conversion pipeline through CLI, Python, and browser WASM adapters.
+The pure-Rust ECMA-376 PPTX engine now sits behind a format-neutral document
+core. Native CLI/Python adapters add bounded LibreOffice/Poppler conversion,
+while browser WASM exposes format detection, PPTX conversion, and an explicit
+runtime capability matrix.
 
 ## STRUCTURE
 ```text
 .
 ├── crates/
+│   ├── document2html-core/   # Format detection, contracts, PPTX adapter
+│   ├── document2html-native/ # Bounded LibreOffice/Poppler pipeline
+│   ├── document2html-py/     # Universal PyO3 adapter
+│   ├── document2html-wasm/   # Browser detection and PPTX conversion
 │   ├── pptx2html-core/       # Parse, model, resolve, render
 │   ├── pptx2html-cli/        # clap/file-system adapter
 │   ├── pptx2html-py/         # PyO3/maturin adapter

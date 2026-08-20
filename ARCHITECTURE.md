@@ -1,5 +1,48 @@
 # Architecture
 
+## Universal routing layer
+
+The legacy PPTX pipeline below remains intact. A format-neutral layer now sits
+above it:
+
+```text
+Document bytes + optional filename
+            |
+            v
+    document2html-core
+      - signature/OPC detection
+      - common result contract
+      - runtime capabilities
+      - PPTX adapter
+            |
+            +--------------------------> pptx2html-core
+            |
+            v
+    document2html-native
+      - isolated LibreOffice profile
+      - Office -> PDF export
+      - pdfinfo inventory check
+      - Poppler PDF -> HTML
+      - deterministic asset normalization
+            |
+            +--> document2html CLI
+            +--> document2html Python
+
+    document2html-wasm
+      - format detection for all seven formats
+      - PPTX conversion only
+      - explicit backend-unavailable capabilities for native formats
+```
+
+Dependency direction is one-way:
+
+```text
+CLI/Python -> document2html-native -> document2html-core -> pptx2html-core
+WASM --------------------------------> document2html-core -> pptx2html-core
+```
+
+Native process code is never a dependency of the WASM crate.
+
 ## Pipeline Overview
 
 ```
