@@ -5,8 +5,9 @@ use std::process::Command;
 use document2html_core::{DocumentConversionOptions, DocumentFormat, DocumentInput, UnitKind};
 use document2html_native::{NativeBackendConfig, NativeDocumentConverter};
 
-mod support;
-use support::build_minimal_docx;
+#[path = "support/docx.rs"]
+mod docx_support;
+use docx_support::build_minimal_docx;
 
 #[test]
 #[ignore = "requires LibreOffice and Poppler executables"]
