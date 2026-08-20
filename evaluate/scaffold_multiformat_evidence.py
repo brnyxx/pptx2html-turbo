@@ -15,6 +15,17 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_contract.py",
     "evaluate/multiformat_checks.py",
     "evaluate/multiformat_schema.py",
+    "evaluate/multiformat_evidence.py",
+    "evaluate/multiformat_corpus.py",
+    "evaluate/multiformat_corpus_conformance.py",
+    "evaluate/multiformat_corpus_contract.py",
+    "evaluate/multiformat_corpus_items.py",
+    "evaluate/multiformat_corpus_tracks.py",
+    "evaluate/multiformat_corpus_sources.py",
+    "evaluate/multiformat_corpus_types.py",
+    "evaluate/multiformat_package_validation.py",
+    "evaluate/multiformat_pdf.py",
+    "evaluate/multiformat_cfb.py",
 )
 
 
@@ -33,7 +44,7 @@ def scaffold_evidence(
     contract = read_object(contract_path)
     formats = string_list(contract, "required_formats")
     corpus = _required_object(contract, "corpus")
-    strata = _required_object(contract, "strata")
+    stratum_quotas = _required_object(contract, "stratum_quotas")
     evaluator_path = output_dir / "evidence" / "evaluator-manifest.json"
     evaluator_path.parent.mkdir(parents=True)
     evaluator_manifest = {
@@ -59,9 +70,14 @@ def scaffold_evidence(
         _write_json(
             corpus_path,
             {
-                "schema_version": 1,
+                "schema_version": 2,
+                "status": "INCOMPLETE",
                 "format": document_format,
-                "strata": _required_string_list(strata, document_format),
+                "contract_sha256": _sha256(contract_path),
+                "stratum_quotas": _required_object(
+                    stratum_quotas,
+                    document_format,
+                ),
                 "tracks": {
                     "conformance": {
                         "expected_count": _required_int(
@@ -152,7 +168,7 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_json(path: Path, value: object) -> None:
+def _write_json(path: Path, value: JsonValue) -> None:
     path.write_text(
         json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -167,16 +183,6 @@ def _required_object(
     if not isinstance(value, dict):
         raise ScaffoldError(f"{field} must be an object")
     return value
-
-
-def _required_string_list(
-    values: dict[str, JsonValue],
-    field: str,
-) -> list[str]:
-    value = values.get(field)
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ScaffoldError(f"{field} must be a string array")
-    return [item for item in value if isinstance(item, str)]
 
 
 def _required_int(values: dict[str, JsonValue], field: str) -> int:

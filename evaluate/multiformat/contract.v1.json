@@ -25,5 +25,28 @@
     "xls": ["paired-legacy", "binary-specific"],
     "ppt": ["paired-legacy", "binary-specific"],
     "pdf": ["text-fonts", "vector-transparency", "raster-color-space", "page-geometry", "forms-annotations-links", "international", "mixed-edge"]
+  },
+  "stratum_quotas": {
+    "pptx": {"text": 20, "shapes-connectors": 20, "images-effects": 15, "tables-charts": 15, "masters-layouts-groups": 15, "international": 10, "fallback-edge": 5},
+    "docx": {"text-typography": 25, "sections-headers-footers": 20, "tables-images-shapes": 20, "lists-fields-references": 15, "international": 10, "mixed-stress": 10},
+    "doc": {"paired-legacy": 60, "binary-specific": 40},
+    "xlsx": {"values-formulas": 25, "styles-conditional-formats": 20, "print-layout": 20, "charts-images-shapes": 15, "international-formats": 10, "mixed-stress": 10},
+    "xls": {"paired-legacy": 60, "binary-specific": 40},
+    "ppt": {"paired-legacy": 60, "binary-specific": 40},
+    "pdf": {"text-fonts": 20, "vector-transparency": 20, "raster-color-space": 15, "page-geometry": 15, "forms-annotations-links": 10, "international": 10, "mixed-edge": 10}
+  },
+  "legacy_paired_stratum_quotas": {
+    "doc": {"text-typography": 15, "sections-headers-footers": 12, "tables-images-shapes": 12, "lists-fields-references": 9, "international": 6, "mixed-stress": 6},
+    "xls": {"values-formulas": 15, "styles-conditional-formats": 12, "print-layout": 12, "charts-images-shapes": 9, "international-formats": 6, "mixed-stress": 6},
+    "ppt": {"text": 12, "shapes-connectors": 12, "images-effects": 9, "tables-charts": 9, "masters-layouts-groups": 9, "international": 6, "fallback-edge": 3}
+  },
+  "security_case_outcomes": {
+    "pptx": {"malformed-zip": "reject", "zip-bomb": "reject", "path-traversal": "reject", "external-relationship": "safe-convert", "macro-content": "safe-convert", "embedded-object": "safe-convert", "oversized-xml": "reject", "entity-expansion": "reject", "relationship-cycle": "safe-convert", "corrupt-media": "safe-convert"},
+    "docx": {"malformed-zip": "reject", "zip-bomb": "reject", "path-traversal": "reject", "external-relationship": "safe-convert", "macro-content": "safe-convert", "embedded-object": "safe-convert", "oversized-xml": "reject", "entity-expansion": "reject", "relationship-cycle": "safe-convert", "corrupt-media": "safe-convert"},
+    "xlsx": {"malformed-zip": "reject", "zip-bomb": "reject", "path-traversal": "reject", "external-relationship": "safe-convert", "macro-content": "safe-convert", "embedded-object": "safe-convert", "oversized-xml": "reject", "entity-expansion": "reject", "relationship-cycle": "safe-convert", "corrupt-media": "safe-convert"},
+    "doc": {"malformed-cfbf": "reject", "fat-cycle": "reject", "difat-overflow": "reject", "directory-cycle": "reject", "mini-stream-corruption": "reject", "truncated-stream": "reject", "external-link": "safe-convert", "macro-storage": "safe-convert", "embedded-object": "safe-convert", "oversized-stream": "reject"},
+    "xls": {"malformed-cfbf": "reject", "fat-cycle": "reject", "difat-overflow": "reject", "directory-cycle": "reject", "mini-stream-corruption": "reject", "truncated-stream": "reject", "external-link": "safe-convert", "macro-storage": "safe-convert", "embedded-object": "safe-convert", "oversized-stream": "reject"},
+    "ppt": {"malformed-cfbf": "reject", "fat-cycle": "reject", "difat-overflow": "reject", "directory-cycle": "reject", "mini-stream-corruption": "reject", "truncated-stream": "reject", "external-link": "safe-convert", "macro-storage": "safe-convert", "embedded-object": "safe-convert", "oversized-stream": "reject"},
+    "pdf": {"malformed-xref": "reject", "xref-cycle": "reject", "object-stream-bomb": "reject", "deep-page-tree": "reject", "embedded-file": "safe-convert", "javascript-action": "safe-convert", "launch-action": "safe-convert", "external-uri": "safe-convert", "oversized-image": "reject", "encrypted-document": "reject"}
   }
 }

@@ -16,11 +16,24 @@ class ScaffoldMultiFormatEvidenceTests(unittest.TestCase):
         # Given
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "wave"
+            second_output = Path(temp_dir) / "second-wave"
 
             # When
             scaffold_evidence(PROJECT_ROOT, CONTRACT_PATH, output)
+            scaffold_evidence(PROJECT_ROOT, CONTRACT_PATH, second_output)
 
             # Then
+            first_files = {
+                path.relative_to(output): path.read_bytes()
+                for path in output.rglob("*")
+                if path.is_file()
+            }
+            second_files = {
+                path.relative_to(second_output): path.read_bytes()
+                for path in second_output.rglob("*")
+                if path.is_file()
+            }
+            self.assertEqual(first_files, second_files)
             contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
             evaluator = output / "evidence" / "evaluator-manifest.json"
             evaluator_data = json.loads(evaluator.read_text(encoding="utf-8"))

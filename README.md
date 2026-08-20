@@ -51,6 +51,13 @@ uv run python -m evaluate.multiformat_gate \
   --oracle-lock evaluate/multiformat/oracle-lock.json
 ```
 
+Corpus manifests are validated independently before candidate execution:
+
+```bash
+uv run python -m evaluate.multiformat_corpus \
+  --manifest evaluate/multiformat/wave/corpora/docx/manifest.json
+```
+
 The repository does not currently contain the required Windows Microsoft
 Office oracle lock or all seven native evidence batches, so the product-level
 gate reports `INCOMPLETE`; it must not be described as a verified 96% release

@@ -11,15 +11,19 @@ from evaluate.multiformat_checks import (
     check_track,
     minimum,
 )
+from evaluate.multiformat_corpus import (
+    CorpusError,
+    CorpusStatus,
+    validate_corpus_manifest,
+)
+from evaluate.multiformat_evidence import bound_evidence_path, oracle_lock_ready
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
     object_value,
     read_object,
     sha256_file,
-    sha256_value,
     string_list,
-    string_value,
 )
 
 
@@ -63,7 +67,7 @@ def evaluate_reports(
 ) -> GateSummary:
     contract = read_object(contract_path)
     required_formats = string_list(contract, "required_formats")
-    if not _oracle_lock_ready(oracle_lock_path):
+    if not oracle_lock_ready(oracle_lock_path):
         results = tuple(
             FormatGateResult(
                 format=document_format,
@@ -81,6 +85,7 @@ def evaluate_reports(
         _evaluate_format(
             document_format=document_format,
             report_path=reports_dir / f"{document_format}.json",
+            contract_path=contract_path,
             contract=contract,
             contract_hash=contract_hash,
             lock_hash=lock_hash,
@@ -101,6 +106,7 @@ def _evaluate_format(
     *,
     document_format: str,
     report_path: Path,
+    contract_path: Path,
     contract: dict[str, JsonValue],
     contract_hash: str,
     lock_hash: str,
@@ -127,6 +133,7 @@ def _evaluate_format(
         reasons = _report_failures(
             document_format,
             report,
+            contract_path,
             contract,
             contract_hash,
             lock_hash,
@@ -141,6 +148,7 @@ def _evaluate_format(
 def _report_failures(
     document_format: str,
     report: dict[str, JsonValue],
+    contract_path: Path,
     contract: dict[str, JsonValue],
     contract_hash: str,
     lock_hash: str,
@@ -155,8 +163,21 @@ def _report_failures(
     _require_equal(
         report, "oracle_lock_sha256", lock_hash, "oracle_lock_sha256", failures
     )
-    for field in ["evaluator", "corpus_manifest", "metrics_evidence"]:
-        _check_evidence_binding(report, field, evidence_root, failures)
+    evidence_paths = {
+        field: bound_evidence_path(report, field, evidence_root, failures)
+        for field in ["evaluator", "corpus_manifest", "metrics_evidence"]
+    }
+    corpus_path = evidence_paths["corpus_manifest"]
+    if corpus_path is not None:
+        try:
+            validation = validate_corpus_manifest(contract_path, corpus_path)
+            if (
+                validation.status is not CorpusStatus.READY
+                or validation.document_format.value != document_format
+            ):
+                failures.append("corpus_manifest")
+        except CorpusError:
+            failures.append("corpus_manifest")
     corpus = object_value(contract, "corpus")
     thresholds = object_value(contract, "thresholds")
     conformance = object_value(report, "conformance")
@@ -206,44 +227,6 @@ def _report_failures(
     return failures
 
 
-def _check_evidence_binding(
-    report: dict[str, JsonValue],
-    field: str,
-    evidence_root: Path,
-    failures: list[str],
-) -> None:
-    try:
-        binding = object_value(report, field)
-        relative_path = string_value(binding, "path")
-        expected_hash = sha256_value(binding, "sha256")
-        evidence_path = _resolve_evidence_path(evidence_root, relative_path)
-        if sha256_file(evidence_path) != expected_hash:
-            failures.append(field)
-    except (OSError, TypeError, ValueError):
-        failures.append(field)
-
-
-def _resolve_evidence_path(root: Path, relative_path: str) -> Path:
-    relative = Path(relative_path)
-    if (
-        relative.is_absolute()
-        or "\\" in relative_path
-        or relative_path != relative.as_posix()
-        or any(part in {"", ".", ".."} for part in relative.parts)
-    ):
-        raise ValueError("evidence path must be normalized and relative")
-    resolved_root = root.resolve(strict=True)
-    candidate = resolved_root
-    for part in relative.parts:
-        candidate /= part
-        if candidate.is_symlink():
-            raise ValueError("evidence path cannot contain symlinks")
-    candidate = candidate.resolve(strict=True)
-    if not candidate.is_relative_to(resolved_root) or not candidate.is_file():
-        raise ValueError("evidence path escapes the evidence root")
-    return candidate
-
-
 def _require_equal(
     values: dict[str, JsonValue],
     field: str,
@@ -253,26 +236,3 @@ def _require_equal(
 ) -> None:
     if values.get(field) != expected:
         failures.append(reason)
-
-
-def _oracle_lock_ready(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    try:
-        lock = read_object(path)
-        if lock.get("schema_version") != 1 or lock.get("status") != "locked":
-            return False
-        office = object_value(lock, "office")
-        pdf = object_value(lock, "pdf")
-        browser = object_value(lock, "browser")
-        for field in ["os", "word", "excel", "powerpoint"]:
-            string_value(office, field)
-        for field in ["primary", "secondary"]:
-            string_value(pdf, field)
-        string_value(browser, "chromium")
-        font_hash = string_value(lock, "font_bundle_sha256")
-        return len(font_hash) == 64 and all(
-            character in "0123456789abcdef" for character in font_hash
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError):
-        return False

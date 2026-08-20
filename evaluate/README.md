@@ -34,6 +34,28 @@ uv run python -m evaluate.scaffold_multiformat_evidence \
   --output-dir evaluate/multiformat/wave
 ```
 
+Populate each schema-v2 corpus manifest, set its status to `READY`, and validate
+it before any candidate conversion:
+
+```bash
+uv run python -m evaluate.multiformat_corpus \
+  --manifest evaluate/multiformat/wave/corpora/docx/manifest.json
+```
+
+The validator streams every source hash below the manifest directory, rejects
+path traversal and symlinks, bounds OOXML/CFBF/PDF structure, enforces exact
+stratum quotas and contiguous unit ordinals, and requires canonicalized blind
+producer identities with unique source hashes, source URIs, and template
+families. Legacy sources bind their modern counterpart and independently
+authored binary coverage. Security cases must exactly match the format-specific
+families and expected outcomes in the contract. Exit codes are 0 for `READY`,
+1 for an invalid corpus, and 2 for an untouched `INCOMPLETE` scaffold.
+
+The product gate invokes this validator for every `READY` report. Corpus
+validation alone does not prove that native Office inventories and metric
+records are complete; those artifacts remain separately required and
+fail-closed.
+
 On a network-disabled Windows Office host, populate the positive native oracle
 batch with `evaluate/capture_multiformat_office_oracles.ps1`. The capture
 script opens the actual modern or binary source file read-only, disables

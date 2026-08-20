@@ -1,17 +1,16 @@
-import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any
 
 from evaluate.multiformat_gate import GateStatus, evaluate_reports
+from evaluate.tests.multiformat_gate_fixture import (
+    CONTRACT_PATH,
+    MultiFormatGateFixture,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CONTRACT_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
 
-
-class MultiFormatGateTests(unittest.TestCase):
+class MultiFormatGateTests(MultiFormatGateFixture, unittest.TestCase):
     def test_all_formats_pass_only_with_complete_bound_evidence(self) -> None:
         # Given
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -157,105 +156,82 @@ class MultiFormatGateTests(unittest.TestCase):
             pptx = next(result for result in summary.formats if result.format == "pptx")
             self.assertEqual(pptx.reasons, ("evaluator",))
 
-    def _write_oracle_lock(self, root: Path) -> Path:
-        lock = root / "oracle-lock.json"
-        lock.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "status": "locked",
-                    "office": {
-                        "os": "Windows 11 23H2",
-                        "word": "test-build",
-                        "excel": "test-build",
-                        "powerpoint": "test-build",
-                    },
-                    "pdf": {"primary": "test-mupdf", "secondary": "test-renderer"},
-                    "browser": {"chromium": "test-revision"},
-                    "font_bundle_sha256": "a" * 64,
-                },
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
-        return lock
+    def test_ready_report_cannot_bind_an_incomplete_corpus(self) -> None:
+        # Given
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            reports = root / "reports"
+            reports.mkdir()
+            lock = self._write_oracle_lock(root)
+            self._write_reports(reports, lock)
+            corpus_path = root / "evidence" / "corpora" / "pdf" / "manifest.json"
+            corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+            corpus["status"] = "INCOMPLETE"
+            for track in corpus["tracks"].values():
+                track["items"] = []
+            corpus_path.write_text(json.dumps(corpus, sort_keys=True), encoding="utf-8")
+            report_path = reports / "pdf.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["corpus_manifest"]["sha256"] = self._sha256(corpus_path)
+            report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
 
-    def _write_reports(self, reports: Path, lock: Path) -> None:
-        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-        contract_hash = hashlib.sha256(CONTRACT_PATH.read_bytes()).hexdigest()
-        lock_hash = hashlib.sha256(lock.read_bytes()).hexdigest()
-        evidence = reports.parent / "evidence"
-        evidence.mkdir(exist_ok=True)
-        evidence_files = {
-            "evaluator": evidence / "evaluator.py",
-            "corpus_manifest": evidence / "corpus.json",
-            "metrics_evidence": evidence / "metrics.json",
-        }
-        for name, path in evidence_files.items():
-            path.write_text(f"{name}\n", encoding="utf-8")
-        bindings = {
-            name: {
-                "path": path.relative_to(reports.parent).as_posix(),
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-            }
-            for name, path in evidence_files.items()
-        }
-        for document_format in contract["required_formats"]:
-            strata = {name: 96.5 for name in contract["strata"][document_format]}
-            report = self._passing_report(
-                document_format,
-                contract_hash,
-                lock_hash,
-                strata,
-                bindings,
-            )
-            (reports / f"{document_format}.json").write_text(
-                json.dumps(report, sort_keys=True),
-                encoding="utf-8",
-            )
+            # When
+            summary = evaluate_reports(CONTRACT_PATH, reports, lock)
 
-    @staticmethod
-    def _passing_report(
-        document_format: str,
-        contract_hash: str,
-        lock_hash: str,
-        strata: dict[str, float],
-        bindings: dict[str, dict[str, str]],
-    ) -> dict[str, Any]:
-        track = {
-            "score": 96.5,
-            "visual": 96.0,
-            "content": 98.5,
-            "layout": 95.0,
-        }
-        return {
-            "schema_version": 1,
-            "status": "READY",
-            "format": document_format,
-            "contract_sha256": contract_hash,
-            "oracle_lock_sha256": lock_hash,
-            "evaluator": bindings["evaluator"],
-            "corpus_manifest": bindings["corpus_manifest"],
-            "metrics_evidence": bindings["metrics_evidence"],
-            "conformance": {
-                **track,
-                "unit_count": 100,
-                "minimum_unit_score": 90.0,
-                "strata": strata,
-            },
-            "blind": {
-                **track,
-                "file_count": 75,
-                "accepted_files": 75,
-                "critical_defects": 0,
-                "minimum_file_score": 92.0,
-            },
-            "security": {"case_count": 10, "passed": 10},
-            "determinism": {
-                "runs": 2,
-                "html_hashes_equal": True,
-                "inventory_hashes_equal": True,
-                "png_hashes_equal": True,
-            },
-            "review": {"reviewers": 2, "all_passed": True},
-        }
+            # Then
+            self.assertEqual(summary.status, GateStatus.FAIL)
+            pdf = next(result for result in summary.formats if result.format == "pdf")
+            self.assertIn("corpus_manifest", pdf.reasons)
+
+    def test_legacy_corpus_requires_a_bound_modern_pair(self) -> None:
+        # Given
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            reports = root / "reports"
+            reports.mkdir()
+            lock = self._write_oracle_lock(root)
+            self._write_reports(reports, lock)
+            corpus_path = root / "evidence" / "corpora" / "doc" / "manifest.json"
+            corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+            corpus["tracks"]["conformance"]["items"][0]["paired_source"] = None
+            corpus_path.write_text(json.dumps(corpus, sort_keys=True), encoding="utf-8")
+            report_path = reports / "doc.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["corpus_manifest"]["sha256"] = self._sha256(corpus_path)
+            report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+
+            # When
+            summary = evaluate_reports(CONTRACT_PATH, reports, lock)
+
+            # Then
+            self.assertEqual(summary.status, GateStatus.FAIL)
+            doc = next(result for result in summary.formats if result.format == "doc")
+            self.assertIn("corpus_manifest", doc.reasons)
+
+    def test_legacy_paired_labels_cannot_move_to_binary_units(self) -> None:
+        # Given
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            reports = root / "reports"
+            reports.mkdir()
+            lock = self._write_oracle_lock(root)
+            self._write_reports(reports, lock)
+            corpus_path = root / "evidence" / "corpora" / "doc" / "manifest.json"
+            corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+            items = corpus["tracks"]["conformance"]["items"]
+            moved_stratum = items[0]["units"][0]["paired_stratum"]
+            items[0]["units"][0]["paired_stratum"] = None
+            items[1]["units"][0]["paired_stratum"] = moved_stratum
+            corpus_path.write_text(json.dumps(corpus, sort_keys=True), encoding="utf-8")
+            report_path = reports / "doc.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["corpus_manifest"]["sha256"] = self._sha256(corpus_path)
+            report_path.write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
+
+            # When
+            summary = evaluate_reports(CONTRACT_PATH, reports, lock)
+
+            # Then
+            self.assertEqual(summary.status, GateStatus.FAIL)
+            doc = next(result for result in summary.formats if result.format == "doc")
+            self.assertIn("corpus_manifest", doc.reasons)

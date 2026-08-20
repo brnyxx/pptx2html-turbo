@@ -155,6 +155,23 @@ The scaffolder refuses to overlay a non-empty directory and never writes
 passing scores. Every report remains `INCOMPLETE` until real corpus, metric,
 security, determinism, review, and oracle artifacts replace the templates.
 
+Before candidate execution, validate every populated corpus manifest:
+
+```bash
+uv run python -m evaluate.multiformat_corpus \
+  --manifest evaluate/multiformat/wave/corpora/docx/manifest.json
+```
+
+Schema-v2 manifests bind the contract and every streamed source digest,
+enforce bounded OOXML/CFBF/PDF structure and format-specific 100-unit quotas,
+and assign contiguous source-relative unit ordinals. Legacy paired coverage
+binds the modern counterpart and its underlying strata; binary-specific
+coverage requires independent provenance. The 75 blind declarations use
+canonicalized producer identities and unique hashes, source URIs, and template
+families. Ten security cases must exactly match the format-specific contract.
+`INCOMPLETE` templates exit 2; malformed, unsafe, or quota-invalid manifests
+exit 1. The product gate runs this validation for every `READY` report.
+
 On a network-disabled Windows host with desktop Microsoft Office and Poppler,
 capture the positive native references:
 
