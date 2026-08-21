@@ -94,6 +94,20 @@ SHA-256 provenance. `COLLECTED` is not `READY`: trusted Windows Office capture
 must still freeze each source's native page or slide count before the files can
 enter a corpus manifest.
 
+Build the exact 700-case conformance identity plan from the same contract:
+
+```bash
+uv run python -m evaluate.build_multiformat_conformance_plan \
+  --contract evaluate/multiformat/contract.v1.json \
+  --output artifacts/multiformat-conformance-plan.json
+```
+
+The plan expands every modern/PDF stratum quota into 400 generated cases and
+binds the three legacy formats to 180 paired cases plus 120 independently
+authored binary-specific cases. Case IDs, ordinals, pair links, strata, and
+feature seeds are byte-deterministic. A plan does not claim corpus readiness;
+the corresponding source documents and native unit counts remain required.
+
 The product gate invokes this validator for every `READY` report. Corpus
 validation alone does not prove that native Office inventories and metric
 records are complete; those artifacts remain separately required and
