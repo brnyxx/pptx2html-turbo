@@ -197,7 +197,7 @@ def _validate_output_set(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate deterministic one-page PDF conformance sources.",
+        description="Materialize a one-page PDF conformance snapshot.",
     )
     parser.add_argument("--contract", type=Path, required=True)
     parser.add_argument("--plan", type=Path, required=True)
