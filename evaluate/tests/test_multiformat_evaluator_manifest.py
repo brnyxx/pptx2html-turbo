@@ -22,6 +22,23 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/tests/test_multiformat_portable_lock.py",
             EVALUATOR_FILES,
         )
+        for path in (
+            "evaluate/jcs.py",
+            "evaluate/multiformat_atomic_publish.py",
+            "evaluate/multiformat_corpus_identity.py",
+            "evaluate/multiformat_corpus_qualification.py",
+            "evaluate/multiformat_corpus_admission.py",
+            "evaluate/multiformat_corpus_admission_sources.py",
+            "evaluate/multiformat_corpus_admission_types.py",
+            "evaluate/admit_multiformat_corpus.py",
+            "evaluate/tests/test_jcs.py",
+            "evaluate/tests/test_admit_multiformat_corpus.py",
+            "evaluate/tests/test_multiformat_atomic_publish.py",
+            "evaluate/tests/test_multiformat_corpus_identity.py",
+            "evaluate/tests/test_multiformat_corpus_admission.py",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, EVALUATOR_FILES)
 
     def test_manifest_binds_exact_code_parameters_and_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

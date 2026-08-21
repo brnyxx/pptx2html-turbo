@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence, assert_never
+from typing import TYPE_CHECKING, assert_never
 
 from evaluate.multiformat_corpus_conformance import validate_conformance
 from evaluate.multiformat_corpus_contract import corpus_rules, integer_map
@@ -30,12 +31,28 @@ from evaluate.multiformat_schema import (
 )
 from evaluate.multiformat_strict_json import read_strict_object
 
+if TYPE_CHECKING:
+    from evaluate.multiformat_corpus_identity import AdmittedCorpusValidation
+
 __all__ = [
     "CorpusError",
     "CorpusStatus",
     "CorpusValidation",
     "validate_corpus_manifest",
+    "validate_frozen_corpus",
 ]
+
+
+def validate_frozen_corpus(
+    contract_path: Path,
+    corpus_path: Path,
+) -> CorpusValidation | AdmittedCorpusValidation:
+    """Validate an aggregate corpus directory or legacy per-format manifest."""
+    if corpus_path.is_dir():
+        from evaluate.multiformat_corpus_identity import validate_admitted_corpus
+
+        return validate_admitted_corpus(contract_path, corpus_path)
+    return validate_corpus_manifest(contract_path, corpus_path)
 
 
 def validate_corpus_manifest(

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
+from evaluate.jcs import canonicalize
 from evaluate.multiformat_checks import (
     check_hard_gates,
     check_strata,
@@ -29,6 +31,11 @@ from evaluate.multiformat_schema import (
     string_list,
 )
 from evaluate.multiformat_strict_json import read_strict_object
+
+
+def contract_digest(contract_path: Path) -> str:
+    """Return the RFC 8785 identity of every contract field."""
+    return hashlib.sha256(canonicalize(read_strict_object(contract_path))).hexdigest()
 
 
 def evaluate_reports(

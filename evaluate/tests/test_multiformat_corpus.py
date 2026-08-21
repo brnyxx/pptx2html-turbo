@@ -7,6 +7,7 @@ from evaluate.multiformat_corpus import (
     CorpusError,
     CorpusStatus,
     validate_corpus_manifest,
+    validate_frozen_corpus,
 )
 from evaluate.scaffold_multiformat_evidence import scaffold_evidence
 from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
@@ -21,7 +22,7 @@ class MultiFormatCorpusTests(unittest.TestCase):
             root = Path(temp_dir)
             contract, manifest = ready_fixture(root)
 
-            result = validate_corpus_manifest(contract, manifest)
+            result = validate_frozen_corpus(contract, manifest)
 
             self.assertEqual(result.status, CorpusStatus.READY)
             self.assertEqual(result.conformance_units, 2)
@@ -51,13 +52,15 @@ class MultiFormatCorpusTests(unittest.TestCase):
             ({"duplicate_blind_hash": True}, "blind.sha256"),
             ({"duplicate_template": True}, "blind.template_family"),
         ]:
-            with self.subTest(reason=reason):
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    root = Path(temp_dir)
-                    contract, manifest_path = ready_fixture(root, **option)
+            with (
+                self.subTest(reason=reason),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                root = Path(temp_dir)
+                contract, manifest_path = ready_fixture(root, **option)
 
-                    with self.assertRaisesRegex(CorpusError, reason):
-                        validate_corpus_manifest(contract, manifest_path)
+                with self.assertRaisesRegex(CorpusError, reason):
+                    validate_corpus_manifest(contract, manifest_path)
 
     def test_blind_track_requires_five_independent_producers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
