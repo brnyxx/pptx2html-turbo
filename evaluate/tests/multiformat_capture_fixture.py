@@ -4,13 +4,16 @@ import json
 from pathlib import Path
 
 from evaluate.multiformat_schema import JsonValue
-from evaluate.tests.multiformat_candidate_runtime_evidence_fixture import (
-    runtime_evidence,
-)
 from evaluate.tests.multiformat_candidate_receipt_fixture import (
     write_candidate_receipt,
 )
+from evaluate.tests.multiformat_candidate_runtime_evidence_fixture import (
+    runtime_evidence,
+)
 from evaluate.tests.multiformat_metric_artifact_fixture import binding, sha256
+from evaluate.tests.multiformat_office_oracle_capture_fixture import (
+    office_oracle_provenance,
+)
 
 
 def add_capture_units(
@@ -69,7 +72,7 @@ def write_capture_manifests(
                     "role": role,
                     "producer": producer,
                     "project_revision": project_revision,
-                    "os": "test-os",
+                    "os": ("test-os" if role == "candidate" else "Windows 11 23H2"),
                     "architecture": "test-architecture",
                     "python": "3.11.0" if role == "candidate" else "test-python",
                     "tools": runtime_tools,
@@ -104,6 +107,7 @@ def write_capture_manifests(
             encoding="utf-8",
         )
         candidate_provenance: dict[str, JsonValue] = {}
+        oracle_provenance: dict[str, JsonValue] = {}
         if role == "candidate":
             determinism_binding, receipt_binding = write_candidate_receipt(
                 root,
@@ -123,6 +127,21 @@ def write_capture_manifests(
                 "determinism_manifest": determinism_binding,
                 "execution_receipt": receipt_binding,
             }
+        else:
+            oracle_provenance = office_oracle_provenance(
+                root,
+                document_format,
+                capture_units[role],
+                runtime_tools,
+                runtime_artifacts,
+                runtime_identity,
+                execution_log,
+                project_revision=project_revision,
+                contract_hash=contract_hash,
+                corpus_hash=corpus_hash,
+                evaluator_hash=evaluator_hash,
+                oracle_hash=oracle_hash,
+            )
         upstream = root / f"{document_format}-{role}-upstream.json"
         upstream.write_text(
             json.dumps(
@@ -143,6 +162,7 @@ def write_capture_manifests(
                     "files": candidate_files if role == "candidate" else [],
                     "execution_log": binding(root, execution_log),
                     **candidate_provenance,
+                    **oracle_provenance,
                 },
                 sort_keys=True,
             ),
@@ -169,6 +189,7 @@ def write_capture_manifests(
                     "units": capture_units[role],
                     "files": candidate_files if role == "candidate" else [],
                     **candidate_provenance,
+                    **oracle_provenance,
                 },
                 sort_keys=True,
             ),

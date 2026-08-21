@@ -79,12 +79,12 @@ class MultiFormatGateTests(MultiFormatGateFixture, unittest.TestCase):
             root = Path(temp_dir)
             reports = root / "reports"
             reports.mkdir()
-            lock = root / "oracle-lock.json"
+            lock = self._write_oracle_lock(root)
+            self._write_reports(reports, lock)
             lock.write_text(
                 json.dumps({"schema_version": 1, "status": "locked"}),
                 encoding="utf-8",
             )
-            self._write_reports(reports, lock)
 
             # When
             summary = evaluate_reports(CONTRACT_PATH, reports, lock)

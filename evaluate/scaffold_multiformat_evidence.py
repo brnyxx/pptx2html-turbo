@@ -4,11 +4,11 @@ import argparse
 import hashlib
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
-from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
+from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import JsonValue, read_object, string_list
 
 
@@ -136,11 +136,12 @@ def scaffold_evidence(
             "status": "INCOMPLETE",
             "office": {
                 "os": "",
+                "channel": "",
                 "word": "",
                 "excel": "",
                 "powerpoint": "",
             },
-            "pdf": {"primary": "", "secondary": ""},
+            "pdf": {"primary": "", "secondary": "", "text": ""},
             "browser": {
                 "chromium": "",
                 "executable_sha256": "",
@@ -170,12 +171,8 @@ def scaffold_evidence(
                 "receipt_signer_sha256": "",
                 "receipt_signer_version": "",
             },
-            "sandbox_verifier": {
-                "algorithm": "ed25519",
-                "verifier_id": "",
-                "public_key_sha256": "",
-                "openssl_sha256": "",
-            },
+            "sandbox_verifier": _verifier_template(),
+            "office_oracle_verifier": _verifier_template(),
             "font_bundle_sha256": "",
         },
     )
@@ -203,6 +200,15 @@ def scaffold_evidence(
         output_dir / "font-bundle-manifest.template.json",
         {"schema_version": 1, "fonts": []},
     )
+
+
+def _verifier_template() -> dict[str, JsonValue]:
+    return {
+        "algorithm": "ed25519",
+        "verifier_id": "",
+        "public_key_sha256": "",
+        "openssl_sha256": "",
+    }
 
 
 def _prepare_output(output_dir: Path) -> None:

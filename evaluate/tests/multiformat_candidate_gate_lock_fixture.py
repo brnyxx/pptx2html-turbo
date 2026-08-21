@@ -38,6 +38,7 @@ def write_gate_oracle_lock(root: Path, project_root: Path) -> Path:
         root / "test-font-runtime",
     ).environment_sha256
     verifier = create_test_verifier(root)
+    office_verifier = create_test_verifier(root, name="office-oracle")
     receipt_signer = write_receipt_signer(root, verifier)
     binaries: dict[str, Path] = {}
     for name in [
@@ -62,6 +63,7 @@ def write_gate_oracle_lock(root: Path, project_root: Path) -> Path:
                 "status": "locked",
                 "office": {
                     "os": "Windows 11 23H2",
+                    "channel": "test",
                     "word": "test-build",
                     "excel": "test-build",
                     "powerpoint": "test-build",
@@ -69,6 +71,7 @@ def write_gate_oracle_lock(root: Path, project_root: Path) -> Path:
                 "pdf": {
                     "primary": "test-mupdf",
                     "secondary": "test-renderer",
+                    "text": "test-pdftotext",
                 },
                 "browser": {
                     "chromium": "test-revision",
@@ -111,6 +114,13 @@ def write_gate_oracle_lock(root: Path, project_root: Path) -> Path:
                 },
                 "sandbox_verifier": {
                     **verifier_lock(verifier),
+                    "openssl_sha256": sha256_file(binaries["openssl_binary"]),
+                },
+                "office_oracle_verifier": {
+                    **verifier_lock(
+                        office_verifier,
+                        verifier_id="test-office-oracle",
+                    ),
                     "openssl_sha256": sha256_file(binaries["openssl_binary"]),
                 },
                 "font_bundle_sha256": sha256_file(font_bundle),

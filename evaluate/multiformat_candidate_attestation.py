@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -18,6 +17,7 @@ from evaluate.multiformat_schema import (
     string_value,
 )
 from evaluate.multiformat_strict_json import read_strict_object
+from evaluate.multiformat_subprocess import clean_subprocess_environment
 
 
 class CandidateAttestationError(CandidateCaptureError):
@@ -37,6 +37,8 @@ def verify_signed_payload(
     openssl_path: Path,
     oracle_lock_path: Path,
     expected: dict[str, JsonValue],
+    *,
+    verifier_field: str = "sandbox_verifier",
 ) -> None:
     values = read_strict_object(signed_path.resolve(strict=True))
     signature_value = values.pop("signature", None)
@@ -50,6 +52,7 @@ def verify_signed_payload(
         public_key_path,
         openssl_path,
         oracle_lock_path,
+        verifier_field,
     )
 
 
@@ -149,9 +152,10 @@ def _verify_signature(
     public_key_path: Path,
     openssl_path: Path,
     oracle_lock_path: Path,
+    verifier_field: str = "sandbox_verifier",
 ) -> None:
     lock = read_strict_object(oracle_lock_path)
-    verifier = object_value(lock, "sandbox_verifier")
+    verifier = object_value(lock, verifier_field)
     public_key = public_key_path.resolve(strict=True)
     openssl = openssl_path.resolve(strict=True)
     if (
@@ -159,7 +163,7 @@ def _verify_signature(
         or sha256_file(public_key) != sha256_value(verifier, "public_key_sha256")
         or sha256_file(openssl) != sha256_value(verifier, "openssl_sha256")
     ):
-        raise CandidateAttestationError("sandbox verifier lock mismatch")
+        raise CandidateAttestationError(f"{verifier_field} lock mismatch")
     try:
         signature = base64.b64decode(signature_value, validate=True)
     except ValueError as error:
@@ -186,7 +190,7 @@ def _verify_signature(
             ],
             check=False,
             capture_output=True,
-            env={"PATH": os.defpath},
+            env=clean_subprocess_environment(),
             timeout=15,
         )
     if result.returncode != 0:

@@ -5,14 +5,14 @@ from pathlib import Path
 
 from evaluate.multiformat_gate import GateStatus, evaluate_reports
 from evaluate.multiformat_schema import JsonValue
+from evaluate.tests.multiformat_candidate_receipt_fixture import (
+    refresh_candidate_receipt,
+)
 from evaluate.tests.multiformat_gate_fixture import (
     CONTRACT_PATH,
     MultiFormatGateFixture,
 )
 from evaluate.tests.multiformat_metric_artifact_fixture import write_checkerboard_png
-from evaluate.tests.multiformat_candidate_receipt_fixture import (
-    refresh_candidate_receipt,
-)
 
 
 class MultiFormatMetricsGateTests(MultiFormatGateFixture, unittest.TestCase):
@@ -126,6 +126,38 @@ class MultiFormatMetricsGateTests(MultiFormatGateFixture, unittest.TestCase):
 
             xlsx = next(result for result in summary.formats if result.format == "xlsx")
             self.assertIn("review", xlsx.reasons)
+
+    def test_oracle_capture_requires_signed_execution_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, reports, lock = self._fixture(Path(temp_dir))
+            report_path = reports / "docx.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            metrics_path = root / report["metrics_evidence"]["path"]
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            capture_binding = metrics["bindings"]["oracle_capture"]
+            capture_path = root / capture_binding["path"]
+            capture = json.loads(capture_path.read_text(encoding="utf-8"))
+            upstream_binding = capture["upstream_manifest"]
+            upstream_path = root / upstream_binding["path"]
+            upstream = json.loads(upstream_path.read_text(encoding="utf-8"))
+            del capture["execution_receipt"]
+            del upstream["execution_receipt"]
+            upstream_path.write_text(
+                json.dumps(upstream, sort_keys=True),
+                encoding="utf-8",
+            )
+            upstream_binding["sha256"] = self._sha256(upstream_path)
+            capture_path.write_text(
+                json.dumps(capture, sort_keys=True),
+                encoding="utf-8",
+            )
+            capture_binding["sha256"] = self._sha256(capture_path)
+            self._rewrite_metrics(metrics_path, metrics, report_path, report)
+
+            summary = evaluate_reports(CONTRACT_PATH, reports, lock)
+
+            docx = next(result for result in summary.formats if result.format == "docx")
+            self.assertIs(docx.status, GateStatus.FAIL)
 
     def _fixture(self, root: Path) -> tuple[Path, Path, Path]:
         reports = root / "reports"

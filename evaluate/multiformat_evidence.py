@@ -70,15 +70,26 @@ def oracle_lock_ready(path: Path) -> bool:
         browser = object_value(lock, "browser")
         candidate_runtime = object_value(lock, "candidate_runtime")
         sandbox_verifier = object_value(lock, "sandbox_verifier")
-        for field in ["os", "word", "excel", "powerpoint"]:
+        office_oracle_verifier = object_value(lock, "office_oracle_verifier")
+        for field in ["os", "channel", "word", "excel", "powerpoint"]:
             string_value(office, field)
-        for field in ["primary", "secondary"]:
+        for field in ["primary", "secondary", "text"]:
             string_value(pdf, field)
         if not _browser_lock_ready(browser):
             return False
         if not _candidate_runtime_ready(candidate_runtime):
             return False
         if not _sandbox_verifier_ready(sandbox_verifier):
+            return False
+        if not _sandbox_verifier_ready(office_oracle_verifier):
+            return False
+        if sha256_value(
+            sandbox_verifier,
+            "public_key_sha256",
+        ) == sha256_value(
+            office_oracle_verifier,
+            "public_key_sha256",
+        ):
             return False
         font_hash = string_value(lock, "font_bundle_sha256")
         return len(font_hash) == 64 and all(

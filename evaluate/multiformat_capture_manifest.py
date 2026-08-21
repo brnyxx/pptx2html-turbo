@@ -3,15 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from evaluate.multiformat_capture_provenance import validate_capture_provenance
-from evaluate.multiformat_corpus_items import object_list, require_keys
-from evaluate.multiformat_corpus_types import CorpusError
-from evaluate.multiformat_evidence import EvidencePathError, resolve_evidence_path
 from evaluate.multiformat_capture_types import (
     ArtifactIdentity,
     CaptureFile,
     CaptureManifest,
     CaptureUnit,
 )
+from evaluate.multiformat_corpus_items import object_list, require_keys
+from evaluate.multiformat_corpus_types import CorpusError
+from evaluate.multiformat_evidence import EvidencePathError, resolve_evidence_path
 from evaluate.multiformat_metric_types import (
     CorpusMetricSpec,
     MetricError,
@@ -61,6 +61,11 @@ def validate_capture_manifest(
         }
         if role == "candidate":
             required_fields |= {"determinism_manifest", "execution_receipt"}
+        elif oracle_lock_path is not None:
+            required_fields |= {
+                "office_batch_manifest",
+                "execution_receipt",
+            }
         require_keys(values, required_fields, "capture.schema")
         if (
             integer_value(values, "schema_version") != 1

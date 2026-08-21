@@ -24,9 +24,13 @@ class TestVerifier:
     openssl: Path
 
 
-def create_test_verifier(root: Path) -> TestVerifier:
-    private_key = root / "test-sandbox-private.pem"
-    public_key = root / "test-sandbox-public.pem"
+def create_test_verifier(
+    root: Path,
+    *,
+    name: str = "sandbox",
+) -> TestVerifier:
+    private_key = root / f"test-{name}-private.pem"
+    public_key = root / f"test-{name}-public.pem"
     openssl_value = shutil.which("openssl")
     if openssl_value is None:
         raise AttestationFixtureError("OpenSSL is required for test attestations")
@@ -61,10 +65,14 @@ def create_test_verifier(root: Path) -> TestVerifier:
     return TestVerifier(private_key, public_key, openssl)
 
 
-def verifier_lock(verifier: TestVerifier) -> dict[str, JsonValue]:
+def verifier_lock(
+    verifier: TestVerifier,
+    *,
+    verifier_id: str = "test-verifier",
+) -> dict[str, JsonValue]:
     return {
         "algorithm": "ed25519",
-        "verifier_id": "test-verifier",
+        "verifier_id": verifier_id,
         "public_key_sha256": sha256_file(verifier.public_key),
         "openssl_sha256": sha256_file(verifier.openssl),
     }
@@ -103,8 +111,13 @@ def write_signed_attestation(
     )
 
 
-def write_receipt_signer(root: Path, verifier: TestVerifier) -> Path:
-    path = root / "receipt-signer.py"
+def write_receipt_signer(
+    root: Path,
+    verifier: TestVerifier,
+    *,
+    name: str = "receipt",
+) -> Path:
+    path = root / f"{name}-signer.py"
     script = (
         f"#!{sys.executable}\n"
         "import base64,json,pathlib,subprocess,sys,tempfile\n"

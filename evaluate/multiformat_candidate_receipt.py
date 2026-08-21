@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import subprocess
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from evaluate.multiformat_schema import (
     string_value,
 )
 from evaluate.multiformat_strict_json import read_strict_object
+from evaluate.multiformat_subprocess import clean_subprocess_environment
 
 
 class CandidateReceiptError(CandidateCaptureError):
@@ -86,7 +86,7 @@ def write_execution_receipt(
             ],
             check=False,
             capture_output=True,
-            env={"PATH": os.defpath},
+            env=clean_subprocess_environment(),
             timeout=30,
         )
     except (OSError, subprocess.SubprocessError) as error:

@@ -11,8 +11,8 @@ from playwright.sync_api import sync_playwright
 from evaluate.multiformat_candidate_attestation import (
     attestation_scope_sha256,
 )
-from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_candidate_fonts import prepare_font_environment
+from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -20,7 +20,6 @@ from evaluate.multiformat_schema import (
     read_object,
     sha256_file,
 )
-from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 from evaluate.tests.multiformat_attestation_fixture import (
     create_test_verifier,
     verifier_lock,
@@ -31,6 +30,7 @@ from evaluate.tests.multiformat_candidate_fake_runtime import (
     write_converter,
     write_tool,
 )
+from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +127,10 @@ def prepare_pipeline_fixture(
     pdftohtml = write_tool(root, "pdftohtml")
     pdfinfo = write_tool(root, "pdfinfo")
     verifier = create_test_verifier(evidence_root)
+    office_verifier = create_test_verifier(
+        evidence_root,
+        name="office-oracle",
+    )
     receipt_signer = write_receipt_signer(root, verifier)
     public_key = verifier.public_key
     openssl = verifier.openssl
@@ -138,11 +142,16 @@ def prepare_pipeline_fixture(
             "status": "locked",
             "office": {
                 "os": "test",
+                "channel": "test",
                 "word": "test",
                 "excel": "test",
                 "powerpoint": "test",
             },
-            "pdf": {"primary": "test", "secondary": "test"},
+            "pdf": {
+                "primary": "test",
+                "secondary": "test",
+                "text": "test",
+            },
             "browser": {
                 "chromium": browser_version,
                 "executable_sha256": sha256_file(chromium),
@@ -172,7 +181,17 @@ def prepare_pipeline_fixture(
                 "receipt_signer_sha256": sha256_file(receipt_signer),
                 "receipt_signer_version": "receipt-signer test-version",
             },
-            "sandbox_verifier": verifier_lock(verifier),
+            "sandbox_verifier": {
+                **verifier_lock(verifier),
+                "openssl_sha256": sha256_file(openssl),
+            },
+            "office_oracle_verifier": {
+                **verifier_lock(
+                    office_verifier,
+                    verifier_id="test-office-oracle",
+                ),
+                "openssl_sha256": sha256_file(openssl),
+            },
             "font_bundle_sha256": sha256_file(font_bundle),
         },
     )

@@ -8,11 +8,14 @@ from evaluate.multiformat_candidate_attestation import (
     attestation_scope_from_hashes,
     verify_signed_attestation,
 )
-from evaluate.multiformat_corpus_items import require_keys
 from evaluate.multiformat_capture_runtime_artifacts import (
     validate_runtime_artifacts,
 )
+from evaluate.multiformat_corpus_items import require_keys
 from evaluate.multiformat_metric_types import MetricError
+from evaluate.multiformat_office_oracle_runtime import (
+    validate_office_oracle_runtime,
+)
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
@@ -65,6 +68,13 @@ def validate_capture_runtime(
         raise MetricError("metrics.binding.capture", "candidate Python")
     tools = object_value(runtime, "tools")
     if role != "candidate":
+        if oracle_lock_path is not None:
+            validate_office_oracle_runtime(
+                runtime_path,
+                oracle_lock_path,
+                evidence_root,
+                producer,
+            )
         return
     _validate_candidate_tools(tools)
     if oracle_lock_path is None:

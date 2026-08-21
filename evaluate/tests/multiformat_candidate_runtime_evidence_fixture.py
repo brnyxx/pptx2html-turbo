@@ -29,7 +29,7 @@ def runtime_evidence(
     oracle_hash: str,
 ) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
     if role != "candidate":
-        return {}, {}
+        return _oracle_runtime_evidence(root)
     verifier = create_test_verifier(root)
     receipt_signer = write_receipt_signer(root, verifier)
     font_bundle = _font_bundle(root)
@@ -104,6 +104,41 @@ def runtime_evidence(
         "run_nonce": run_nonce,
     }
     return tools, {name: binding(root, path) for name, path in artifact_paths.items()}
+
+
+def _oracle_runtime_evidence(
+    root: Path,
+) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
+    verifier = create_test_verifier(root, name="office-oracle")
+    signer = write_receipt_signer(
+        root,
+        verifier,
+        name="office-oracle",
+    )
+    openssl = root / "test-office-oracle-openssl.bin"
+    if not openssl.exists():
+        shutil.copy2(verifier.openssl, openssl)
+    artifacts = {
+        "office_oracle_public_key": verifier.public_key,
+        "openssl_binary": openssl,
+        "receipt_signer_binary": signer,
+    }
+    tools: dict[str, JsonValue] = {
+        "word_version": "test-build",
+        "office_channel": "test",
+        "excel_version": "test-build",
+        "powerpoint_version": "test-build",
+        "pdf_primary_version": "test-mupdf",
+        "pdf_secondary_version": "test-renderer",
+        "pdf_text_version": "test-pdftotext",
+        "office_oracle_public_key_sha256": sha256(verifier.public_key),
+        "openssl_sha256": sha256(openssl),
+        "receipt_signer_sha256": sha256(signer),
+        "receipt_signer_version": "test",
+        "office_oracle_verifier_id": "test-office-oracle",
+        "run_nonce": hashlib.sha256(b"office-oracle-test").hexdigest(),
+    }
+    return tools, {name: binding(root, path) for name, path in artifacts.items()}
 
 
 def _font_bundle(root: Path) -> Path:
