@@ -108,6 +108,30 @@ authored binary-specific cases. Case IDs, ordinals, pair links, strata, and
 feature seeds are byte-deterministic. A plan does not claim corpus readiness;
 the corresponding source documents and native unit counts remain required.
 
+Materialize the 100 planned PDF sources once with locked LibreOffice, Poppler,
+and font artifacts:
+
+```bash
+uv run --python 3.11 python -m evaluate.generate_multiformat_pdf_conformance \
+  --contract evaluate/multiformat/contract.v1.json \
+  --plan artifacts/multiformat-conformance-plan.json \
+  --output-dir artifacts/multiformat-pdf-conformance \
+  --soffice /locked/bin/soffice \
+  --pdfinfo /locked/bin/pdfinfo \
+  --pdftocairo /locked/bin/pdftocairo \
+  --font-bundle artifacts/font-bundle.json
+```
+
+The materializer validates the exact 100-case set, one-page structure, stratum
+quotas, source hashes, tool hashes and versions, and font-bundle hash. It
+canonicalizes Poppler PDF xref/object streams and bounded runtime metadata and
+adds a deterministic PDF link annotation for the forms stratum.
+
+The accepted output is a provenance-bound fixed corpus snapshot. Evaluation
+binds and reuses its exact source SHA-256 values; it does not regenerate the
+snapshot. Determinism is measured by two clean converter runs consuming those
+same frozen input bytes, not by rerunning the historical corpus materializer.
+
 The product gate invokes this validator for every `READY` report. Corpus
 validation alone does not prove that native Office inventories and metric
 records are complete; those artifacts remain separately required and
