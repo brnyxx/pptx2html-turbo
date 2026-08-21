@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "formats": {
+    "docx": {
+      "expected_count": 75,
+      "groups": [
+        {
+          "producer": "apache-poi",
+          "repository": "apache/poi",
+          "commit": "003ef4b8add74e9c8bce57a68d86356cee2cd466",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["test-data/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-tika",
+          "repository": "apache/tika",
+          "commit": "7eae3ba3bafa1c5a2ce8cca51a85a8b411d9ecd8",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["tika-parsers/"],
+          "static_paths": []
+        },
+        {
+          "producer": "openxml-sdk",
+          "repository": "dotnet/Open-XML-SDK",
+          "commit": "431ab05cf160248cc3885a4a766026d4f8243792",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["test/"],
+          "static_paths": []
+        },
+        {
+          "producer": "python-docx",
+          "repository": "python-openxml/python-docx",
+          "commit": "e45454602b53e8e572b179ccf1c91093ec9f4ed7",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["features/steps/test_files/"],
+          "static_paths": []
+        },
+        {
+          "producer": "aspose-words",
+          "repository": "aspose-words/Aspose.Words-for-Java",
+          "commit": "836bf78158d7a7f91ba7178ae7224cd8f968b48d",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["Examples/"],
+          "static_paths": []
+        }
+      ]
+    },
+    "xlsx": {
+      "expected_count": 75,
+      "groups": [
+        {
+          "producer": "apache-poi",
+          "repository": "apache/poi",
+          "commit": "003ef4b8add74e9c8bce57a68d86356cee2cd466",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["test-data/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-tika",
+          "repository": "apache/tika",
+          "commit": "7eae3ba3bafa1c5a2ce8cca51a85a8b411d9ecd8",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["tika-parsers/"],
+          "static_paths": []
+        },
+        {
+          "producer": "openxml-sdk",
+          "repository": "dotnet/Open-XML-SDK",
+          "commit": "431ab05cf160248cc3885a4a766026d4f8243792",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["test/"],
+          "static_paths": []
+        },
+        {
+          "producer": "closedxml",
+          "repository": "ClosedXML/ClosedXML",
+          "commit": "6762b849342809be95467cdfbe426a64ad11d2bd",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["ClosedXML.Tests/"],
+          "static_paths": []
+        },
+        {
+          "producer": "exceljs",
+          "repository": "exceljs/exceljs",
+          "commit": "5bed18b45e824f409b08456b59b87430ded023ab",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["spec/"],
+          "static_paths": []
+        }
+      ]
+    },
+    "pptx": {
+      "expected_count": 75,
+      "groups": [
+        {
+          "producer": "apache-poi",
+          "repository": "apache/poi",
+          "commit": "003ef4b8add74e9c8bce57a68d86356cee2cd466",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["test-data/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-tika",
+          "repository": "apache/tika",
+          "commit": "7eae3ba3bafa1c5a2ce8cca51a85a8b411d9ecd8",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["tika-parsers/"],
+          "static_paths": []
+        },
+        {
+          "producer": "openxml-sdk",
+          "repository": "dotnet/Open-XML-SDK",
+          "commit": "431ab05cf160248cc3885a4a766026d4f8243792",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["test/"],
+          "static_paths": []
+        },
+        {
+          "producer": "python-pptx",
+          "repository": "scanny/python-pptx",
+          "commit": "278b47b1dedd5b46ee84c286e77cdfb0bf4594be",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["features/steps/test_files/"],
+          "static_paths": []
+        },
+        {
+          "producer": "aspose-slides",
+          "repository": "aspose-slides/Aspose.Slides-for-Java",
+          "commit": "18cf3796d1873cfe167ede4bef4a2010c14824d7",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["Examples/"],
+          "static_paths": []
+        }
+      ]
+    },
+    "doc": {
+      "expected_count": 75,
+      "groups": [
+        {
+          "producer": "apache-poi",
+          "repository": "apache/poi",
+          "commit": "003ef4b8add74e9c8bce57a68d86356cee2cd466",
+          "license_spdx": "Apache-2.0",
+          "quota": 19,
+          "path_prefixes": ["test-data/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-tika",
+          "repository": "apache/tika",
+          "commit": "7eae3ba3bafa1c5a2ce8cca51a85a8b411d9ecd8",
+          "license_spdx": "Apache-2.0",
+          "quota": 19,
+          "path_prefixes": ["tika-parsers/"],
+          "static_paths": []
+        },
+        {
+          "producer": "aspose-words",
+          "repository": "aspose-words/Aspose.Words-for-Java",
+          "commit": "836bf78158d7a7f91ba7178ae7224cd8f968b48d",
+          "license_spdx": "MIT",
+          "quota": 19,
+          "path_prefixes": [],
+          "static_paths": []
+        },
+        {
+          "producer": "npoi",
+          "repository": "nissl-lab/npoi",
+          "commit": "30569a82f1f4b3fb0232edcf9eb886a6a63cb9a1",
+          "license_spdx": "Apache-2.0",
+          "quota": 17,
+          "path_prefixes": ["testcases/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-openoffice",
+          "repository": "apache/openoffice",
+          "commit": "1454d898fe9186f2d19c5a5ef8a8fe6b7bd96032",
+          "license_spdx": "Apache-2.0",
+          "quota": 1,
+          "path_prefixes": [],
+          "static_paths": [
+            "main/migrationanalysis/src/driver_docs/sources/Stripped_OOoDocAnalysisWordDriver.doc"
+          ]
+        }
+      ]
+    },
+    "xls": {
+      "expected_count": 75,
+      "groups": [
+        {
+          "producer": "apache-poi",
+          "repository": "apache/poi",
+          "commit": "003ef4b8add74e9c8bce57a68d86356cee2cd466",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["test-data/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-tika",
+          "repository": "apache/tika",
+          "commit": "7eae3ba3bafa1c5a2ce8cca51a85a8b411d9ecd8",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["tika-parsers/"],
+          "static_paths": []
+        },
+        {
+          "producer": "npoi",
+          "repository": "nissl-lab/npoi",
+          "commit": "30569a82f1f4b3fb0232edcf9eb886a6a63cb9a1",
+          "license_spdx": "Apache-2.0",
+          "quota": 15,
+          "path_prefixes": ["testcases/"],
+          "static_paths": []
+        },
+        {
+          "producer": "exceldatareader",
+          "repository": "ExcelDataReader/ExcelDataReader",
+          "commit": "c4acb4b95467ec6ec9df83f3eb9d8f84edaabec8",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["src/TestData/"],
+          "static_paths": []
+        },
+        {
+          "producer": "phpspreadsheet",
+          "repository": "PHPOffice/PhpSpreadsheet",
+          "commit": "1f3ed4977a2cc8eb9574471df2a95232dfb5667f",
+          "license_spdx": "MIT",
+          "quota": 15,
+          "path_prefixes": ["tests/"],
+          "static_paths": []
+        }
+      ]
+    },
+    "ppt": {
+      "expected_count": 75,
+      "groups": [
+        {
+          "producer": "apache-poi",
+          "repository": "apache/poi",
+          "commit": "003ef4b8add74e9c8bce57a68d86356cee2cd466",
+          "license_spdx": "Apache-2.0",
+          "quota": 19,
+          "path_prefixes": ["test-data/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-tika",
+          "repository": "apache/tika",
+          "commit": "7eae3ba3bafa1c5a2ce8cca51a85a8b411d9ecd8",
+          "license_spdx": "Apache-2.0",
+          "quota": 19,
+          "path_prefixes": ["tika-parsers/"],
+          "static_paths": []
+        },
+        {
+          "producer": "aspose-slides",
+          "repository": "aspose-slides/Aspose.Slides-for-Java",
+          "commit": "18cf3796d1873cfe167ede4bef4a2010c14824d7",
+          "license_spdx": "MIT",
+          "quota": 6,
+          "path_prefixes": [],
+          "static_paths": []
+        },
+        {
+          "producer": "npoi",
+          "repository": "nissl-lab/npoi",
+          "commit": "30569a82f1f4b3fb0232edcf9eb886a6a63cb9a1",
+          "license_spdx": "Apache-2.0",
+          "quota": 30,
+          "path_prefixes": ["testcases/"],
+          "static_paths": []
+        },
+        {
+          "producer": "apache-openoffice",
+          "repository": "apache/openoffice",
+          "commit": "1454d898fe9186f2d19c5a5ef8a8fe6b7bd96032",
+          "license_spdx": "Apache-2.0",
+          "quota": 1,
+          "path_prefixes": [],
+          "static_paths": [
+            "main/migrationanalysis/src/driver_docs/sources/Stripped_OOoDocAnalysisPPTDriver.ppt"
+          ]
+        }
+      ]
+    },
+    "pdf": {
+      "expected_count": 75,
+      "groups": [
+        {
+          "producer": "pdfjs",
+          "repository": "mozilla/pdf.js",
+          "commit": "d63ef00412a42d2fb8404b92c8f0ee7fd787f465",
+          "license_spdx": "Apache-2.0",
+          "quota": 22,
+          "path_prefixes": ["test/pdfs/"],
+          "static_paths": []
+        },
+        {
+          "producer": "pdfbox",
+          "repository": "apache/pdfbox",
+          "commit": "9211c7929fb87d28e456bdf569f560b18ee5b3d4",
+          "license_spdx": "Apache-2.0",
+          "quota": 20,
+          "path_prefixes": ["pdfbox/src/test/resources/input/"],
+          "static_paths": []
+        },
+        {
+          "producer": "pikepdf",
+          "repository": "pikepdf/pikepdf",
+          "commit": "96ab3e100cd941c46993aca4c3e852833b7f2bc5",
+          "license_spdx": "MPL-2.0",
+          "quota": 10,
+          "path_prefixes": ["tests/resources/"],
+          "static_paths": []
+        },
+        {
+          "producer": "pypdf",
+          "repository": "py-pdf/pypdf",
+          "commit": "c646ef24857f152afdf84f8b5f8a9d4097bae258",
+          "license_spdx": "BSD-3-Clause",
+          "quota": 18,
+          "path_prefixes": ["resources/"],
+          "static_paths": []
+        },
+        {
+          "producer": "pdfcpu",
+          "repository": "pdfcpu/pdfcpu",
+          "commit": "105c0c28727afe7f85eb3179d03e9810d8774981",
+          "license_spdx": "Apache-2.0",
+          "quota": 5,
+          "path_prefixes": ["pkg/testdata/"],
+          "static_paths": []
+        }
+      ]
+    }
+  }
+}

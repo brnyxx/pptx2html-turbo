@@ -58,6 +58,32 @@ signed runtime evidence for actual rejection, network isolation, active-content
 suppression, or resource bounds. Exit codes are 0 for `READY`, 1 for an invalid
 corpus, and 2 for an untouched `INCOMPLETE` scaffold.
 
+Collect the blind-source candidates from the pinned public repository catalog:
+
+```bash
+GITHUB_TOKEN="$(gh auth token)" \
+  uv run python -m evaluate.collect_multiformat_public_pool \
+  --config evaluate/multiformat/public-pool-sources.v1.json \
+  --output-dir artifacts/multiformat-public-pool
+```
+
+Recompute the exact file set and every source binding independently:
+
+```bash
+uv run python -m evaluate.validate_multiformat_public_pool \
+  --config evaluate/multiformat/public-pool-sources.v1.json \
+  --manifest artifacts/multiformat-public-pool/public-pool.json
+```
+
+The catalog fixes 75 candidates per format across five independent producers.
+The collector fetches each repository tree at an exact commit, excludes known
+crash, fuzz, encryption, and malformed-fixture paths, validates the downloaded
+OOXML, CFBF, or PDF structure, removes duplicate bytes, and publishes an exact
+`COLLECTED` file set with source URI, repository path, commit, license, and
+SHA-256 provenance. `COLLECTED` is not `READY`: trusted Windows Office capture
+must still freeze each source's native page or slide count before the files can
+enter a corpus manifest.
+
 The product gate invokes this validator for every `READY` report. Corpus
 validation alone does not prove that native Office inventories and metric
 records are complete; those artifacts remain separately required and
