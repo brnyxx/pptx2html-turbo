@@ -140,8 +140,54 @@ On a network-disabled Windows Office host, populate the positive native oracle
 batch with `evaluate/capture_multiformat_office_oracles.ps1`. The capture
 script opens the actual modern or binary source file read-only, disables
 macros and link updates, exports native Office PDFs, exports PowerPoint slides
-directly at 960x540, rasterizes page formats at 144 DPI, records semantic
-inventories, and SHA-256-binds every artifact.
+directly at 960x540, rasterizes page formats at 144 DPI, records Poppler
+bounding-box layout plus Office semantic inventories, and SHA-256-binds every
+artifact. `evaluate.finalize_multiformat_office_oracles` converts that schema-2
+batch into the product gate's per-format capture manifest. It creates
+page/slide inventories, materializes the exact verifier runtime, and requires
+an Ed25519 receipt from a key distinct from the candidate sandbox signer.
+
+The manual GitHub Actions entry point is
+`.github/workflows/capture-office-oracles.yml`. It only targets a runner labeled
+`self-hosted`, `Windows`, `X64`, and `office-oracle`; GitHub-hosted Windows
+images do not provide desktop Microsoft Office. The runner must preconfigure
+these trusted paths:
+
+- `OFFICE_ORACLE_CAPTURE_WRAPPER`: host-owned wrapper that disables network
+  access for the complete capture/finalize command and restores it only after
+  the signed evidence is closed.
+- `OFFICE_ORACLE_RECEIPT_SIGNER`: signer whose private key is unavailable to
+  repository code outside that wrapper.
+- `OFFICE_ORACLE_PUBLIC_KEY` and `OFFICE_ORACLE_OPENSSL`: exact verifier bytes
+  pinned by `office_oracle_verifier` in `oracle-lock.json`.
+
+The downloaded `multiformat-office-input` artifact must contain
+`contract.json`, `oracle-lock.json`, `evaluator-manifest.json`,
+`office-input-manifest.json`, every referenced source, and
+`corpora/<format>/manifest.json` for all seven required formats. The wrapper
+runs `evaluate/run_multiformat_office_oracle_pipeline.ps1`, which captures once
+and finalizes every contract-required format. A missing dedicated runner,
+wrapper, signed receipt, exact Office/Poppler version, corpus source, page, or
+artifact remains `INCOMPLETE`; the workflow never substitutes LibreOffice or a
+GitHub-hosted image.
+
+Build that frozen artifact directory only after all seven corpus manifests are
+READY:
+
+```bash
+python -m evaluate.build_multiformat_office_input \
+  --contract evaluate/multiformat/wave/contract.json \
+  --evaluator-manifest evaluate/multiformat/wave/evidence/evaluator-manifest.json \
+  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/pptx/manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/docx/manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/doc/manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/xlsx/manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/xls/manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/ppt/manifest.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/pdf/manifest.json \
+  --output-dir artifacts/multiformat-office-input
+```
 
 When evaluating a scaffolded wave, pass
 `--evidence-root evaluate/multiformat/wave`. Report evidence paths must remain

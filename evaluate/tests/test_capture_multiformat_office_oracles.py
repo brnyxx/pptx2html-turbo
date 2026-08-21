@@ -25,6 +25,17 @@ class CaptureMultiFormatOfficeOraclesTests(unittest.TestCase):
         self.assertIn('.Export($slidePath, "PNG", 960, 540)', script)
         self.assertIn("ExportAsFixedFormat($pdfPath, 2)", script)
         self.assertIn("network_isolation = $HostNetworkIsolation", script)
+        self.assertIn("schema_version = 2", script)
+        self.assertIn("Invoke-PdfTextLayout", script)
+        self.assertIn('"pdftotext"', script)
+        self.assertIn("pdf_text = Get-NativeToolVersion", script)
+        self.assertIn("Source hash does not match frozen input", script)
+        self.assertIn(
+            "office_oracle_verifier",
+            (PROJECT_ROOT / "evaluate" / "scaffold_multiformat_evidence.py").read_text(
+                encoding="utf-8"
+            ),
+        )
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is not installed")
     def test_powershell_files_parse_without_syntax_errors(self) -> None:

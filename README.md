@@ -72,6 +72,14 @@ The repository does not currently contain the required Windows Microsoft
 Office oracle lock or all seven native evidence batches, so the product-level
 gate reports `INCOMPLETE`; it must not be described as a verified 96% release
 until those external artifacts are captured and all reports pass together.
+The signed closure path consists of the schema-2
+`capture_multiformat_office_oracles.ps1` batch,
+`finalize_multiformat_office_oracles.py` gate-ready captures, and the manual
+`.github/workflows/capture-office-oracles.yml` workflow. That workflow only
+routes to a dedicated self-hosted Windows runner labeled `office-oracle`;
+candidate and Office evidence use distinct Ed25519 verifier keys. No such
+runner is currently registered, so the automation does not change the real
+gate from `INCOMPLETE`.
 See [Universal document conversion](docs/UNIVERSAL_DOCUMENTS.md).
 
 ## Features

@@ -208,7 +208,9 @@ uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
 ```
 
 On a network-disabled Windows host with desktop Microsoft Office and Poppler,
-capture the positive native references:
+capture the positive native references. Schema 2 also records `pdftotext
+-bbox-layout` output so the finalizer can build page-bound text geometry and
+worksheet/cell inventories:
 
 ```powershell
 pwsh -File evaluate/capture_multiformat_office_oracles.ps1 `
@@ -218,6 +220,36 @@ pwsh -File evaluate/capture_multiformat_office_oracles.ps1 `
   -FontBundleSha256 <64-lowercase-hex> `
   -HostNetworkIsolation disabled
 ```
+
+Finalize one format into a signed product-gate capture:
+
+```bash
+uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
+  python -m evaluate.finalize_multiformat_office_oracles \
+  --batch-manifest evaluate/multiformat/wave/office-oracles/manifest.json \
+  --contract evaluate/multiformat/wave/contract.json \
+  --corpus-manifest evaluate/multiformat/wave/corpora/docx/manifest.json \
+  --evaluator-manifest evaluate/multiformat/wave/evidence/evaluator-manifest.json \
+  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --output-dir evaluate/multiformat/wave/oracle/docx \
+  --receipt-signer <trusted-signer> \
+  --public-key <office-oracle-public-key> \
+  --openssl <locked-openssl> \
+  --project-revision <commit-sha> \
+  --run-nonce <64-lowercase-hex>
+```
+
+For remote execution, dispatch `.github/workflows/capture-office-oracles.yml`.
+It deliberately requires a dedicated self-hosted runner labeled
+`office-oracle`; the host-owned `OFFICE_ORACLE_CAPTURE_WRAPPER` must enforce
+network isolation around both raw capture and finalization. The lock uses a
+separate `office_oracle_verifier` key, and pins the Office channel, Word,
+Excel, PowerPoint, `pdfinfo`, `pdftoppm`, and `pdftotext` identities. See
+GitHub's official
+[self-hosted runner workflow documentation](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)
+for label routing. No self-hosted Office runner is currently registered in this
+repository, so actual native batches remain external prerequisites rather than
+claimed evidence.
 
 Ready reports bind relative evaluator, corpus-manifest, and metrics-evidence
 paths to their real SHA-256 digests. The gate resolves every path under the

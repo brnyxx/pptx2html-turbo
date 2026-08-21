@@ -1,0 +1,82 @@
+name: Capture Office oracles
+
+on:
+  workflow_dispatch:
+    inputs:
+      corpus_run_id:
+        description: Run ID containing the frozen Office input bundle
+        required: true
+        type: string
+      corpus_artifact_name:
+        description: Frozen Office input artifact name
+        required: true
+        default: multiformat-office-input
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: office-oracle-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: [self-hosted, Windows, X64, office-oracle]
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.corpus_artifact_name }}
+          path: oracle-input
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.corpus_run_id }}
+
+      - name: Capture in trusted network-disabled wrapper
+        shell: pwsh
+        run: |
+          $required = @(
+            "OFFICE_ORACLE_CAPTURE_WRAPPER",
+            "OFFICE_ORACLE_RECEIPT_SIGNER",
+            "OFFICE_ORACLE_PUBLIC_KEY",
+            "OFFICE_ORACLE_OPENSSL"
+          )
+          foreach ($name in $required) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ([string]::IsNullOrWhiteSpace($value) -or -not (Test-Path -LiteralPath $value)) {
+              throw "Trusted runner variable is missing: $name"
+            }
+          }
+          $nonce = [Convert]::ToHexString(
+            [Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+          ).ToLowerInvariant()
+          $arguments = @(
+            "-InputBundleDir", (Resolve-Path "oracle-input").Path,
+            "-OutputDir", (Join-Path $env:RUNNER_TEMP "office-oracle-output"),
+            "-ProjectRevision", "${{ github.sha }}",
+            "-RunNonce", $nonce,
+            "-PythonPath", (Get-Command python).Source
+          )
+          & $env:OFFICE_ORACLE_CAPTURE_WRAPPER `
+            -ScriptPath (Resolve-Path "evaluate/run_multiformat_office_oracle_pipeline.ps1").Path `
+            -Arguments $arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "Trusted capture wrapper failed"
+          }
+
+      - name: Upload signed Office evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: multiformat-office-oracles-${{ github.run_id }}
+          path: ${{ runner.temp }}/office-oracle-output
+          if-no-files-found: error
+          retention-days: 30

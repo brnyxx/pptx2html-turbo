@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 EVALUATOR_FILES = (
+    ".github/workflows/capture-office-oracles.yml",
     "evaluate/build_multiformat_office_input.py",
     "evaluate/multiformat/contract.v1.json",
     "evaluate/multiformat/evaluator-lock.v1.json",
@@ -8,6 +9,7 @@ EVALUATOR_FILES = (
     "evaluate/requirements-test.txt",
     "evaluate/capture_multiformat_office_oracles.ps1",
     "evaluate/finalize_multiformat_office_oracles.py",
+    "evaluate/run_multiformat_office_oracle_pipeline.ps1",
     "evaluate/capture_multiformat_candidates.py",
     "evaluate/multiformat/OfficeOracle.psm1",
     "evaluate/multiformat_gate.py",
@@ -131,6 +133,7 @@ EVALUATOR_FILES = (
     "evaluate/tests/test_multiformat_office_oracle_receipt.py",
     "evaluate/tests/test_multiformat_office_oracle_provenance.py",
     "evaluate/tests/test_multiformat_office_oracle_runtime.py",
+    "evaluate/tests/test_multiformat_office_oracle_workflow.py",
     "evaluate/tests/test_multiformat_subprocess.py",
     "evaluate/tests/test_capture_multiformat_candidates.py",
     "evaluate/tests/test_multiformat_candidate_browser.py",

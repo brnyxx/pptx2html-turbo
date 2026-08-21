@@ -20,6 +20,7 @@ param(
     [string]$OfficeChannel = "Unknown",
     [string]$PdfInfoPath = "pdfinfo",
     [string]$PdfToPpmPath = "pdftoppm",
+    [string]$PdfToTextPath = "pdftotext",
     [int]$MaxSemanticCells = 1000000,
     [string]$CaptureTimestamp = (Get-Date).ToUniversalTime().ToString("o"),
     [string]$BatchId = ("office-" + [Guid]::NewGuid().ToString("N"))
@@ -64,10 +65,14 @@ $powerPoint = $null
 $presentations = $null
 $runtime = [ordered]@{
     windows = $WindowsVersion
+    architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
     office_channel = $OfficeChannel
     word = $null
     excel = $null
     powerpoint = $null
+    pdf_primary = Get-NativeToolVersion -Path $PdfInfoPath
+    pdf_secondary = Get-NativeToolVersion -Path $PdfToPpmPath
+    pdf_text = Get-NativeToolVersion -Path $PdfToTextPath
 }
 $results = @()
 
@@ -112,6 +117,13 @@ try {
         $sourceExtension = [System.IO.Path]::GetExtension($sourcePath).TrimStart(".").ToLowerInvariant()
         if ($sourceExtension -ne $format) {
             throw "Source extension does not match format for $id"
+        }
+        $declaredSourceSha256 = [string]$entry.sha256
+        if (
+            $declaredSourceSha256 -notmatch "^[0-9a-f]{64}$" -or
+            (Get-FileSha256 -Path $sourcePath) -ne $declaredSourceSha256
+        ) {
+            throw "Source hash does not match frozen input for $id"
         }
         $itemOutput = Join-Path $resolvedOutput $id
         New-Item -ItemType Directory -Path $itemOutput | Out-Null
@@ -160,16 +172,18 @@ try {
                     for ($slideIndex = 1; $slideIndex -le $presentation.Slides.Count; $slideIndex++) {
                         $slide = $null
                         try {
-                        $slide = $presentation.Slides.Item($slideIndex)
-                        if ($slide.SlideShowTransition.Hidden -ne 0) {
-                            continue
-                        }
-                        $slidePath = Join-Path $itemOutput ("slide-" + $slideIndex + ".png")
+                            $slide = $presentation.Slides.Item($slideIndex)
+                            if ($slide.SlideShowTransition.Hidden -ne 0) {
+                                continue
+                            }
+                            $slidePath = Join-Path $itemOutput ("slide-" + $slideIndex + ".png")
                             $slide.Export($slidePath, "PNG", 960, 540)
                             $dimensions = Get-PngDimensions -Path $slidePath
                             $directSlides += [ordered]@{
-                                path = [System.IO.Path]::GetFileName($slidePath)
-                                sha256 = Get-FileSha256 -Path $slidePath
+                                png = [ordered]@{
+                                    path = "$id/$([System.IO.Path]::GetFileName($slidePath))"
+                                    sha256 = Get-FileSha256 -Path $slidePath
+                                }
                                 width = $dimensions.width
                                 height = $dimensions.height
                             }
@@ -207,7 +221,17 @@ try {
                 Invoke-PdfRaster `
                     -PdfToPpmPath $PdfToPpmPath `
                     -PdfPath $pdfPath `
-                    -OutputDir $itemOutput
+                    -OutputDir $itemOutput |
+                    ForEach-Object {
+                        [ordered]@{
+                            png = [ordered]@{
+                                path = "$id/$($_.path)"
+                                sha256 = $_.sha256
+                            }
+                            width = $_.width
+                            height = $_.height
+                        }
+                    }
             )
         }
         if ($visualUnits.Count -ne $pdfPageCount) {
@@ -215,21 +239,27 @@ try {
         }
 
         $semanticPath = Join-Path $itemOutput "semantic.json"
+        $layoutPath = Join-Path $itemOutput "layout.xml"
+        Invoke-PdfTextLayout `
+            -PdfToTextPath $PdfToTextPath `
+            -PdfPath $pdfPath `
+            -OutputPath $layoutPath
         Write-Utf8Json -Value $semantic -Path $semanticPath
         $results += [ordered]@{
             id = $id
             format = $format
-            track = [string]$entry.track
-            source_path = [string]$entry.path
             source_sha256 = Get-FileSha256 -Path $sourcePath
             pdf = [ordered]@{
                 path = "$id/reference.pdf"
                 sha256 = Get-FileSha256 -Path $pdfPath
-                page_count = $pdfPageCount
             }
             semantic = [ordered]@{
                 path = "$id/semantic.json"
                 sha256 = Get-FileSha256 -Path $semanticPath
+            }
+            layout = [ordered]@{
+                path = "$id/layout.xml"
+                sha256 = Get-FileSha256 -Path $layoutPath
             }
             visual_units = $visualUnits
         }
@@ -256,7 +286,7 @@ finally {
 }
 
 $batch = [ordered]@{
-    schema_version = 1
+    schema_version = 2
     batch_id = $BatchId
     capture_timestamp = $CaptureTimestamp
     golden_set_revision = $GoldenSetRevision

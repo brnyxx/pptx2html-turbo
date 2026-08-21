@@ -32,6 +32,23 @@ function Get-FileSha256 {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
 }
 
+function Get-NativeToolVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $lines = @(& $Path "-v" 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Native tool version probe failed: $Path"
+    }
+    $version = @($lines | ForEach-Object { "$_".Trim() } | Where-Object { $_ })[0]
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "Native tool emitted no version: $Path"
+    }
+    return $version
+}
+
 function Resolve-SafeCorpusPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -138,6 +155,27 @@ function Invoke-PdfRaster {
             }
         }
     )
+}
+
+function Invoke-PdfTextLayout {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PdfToTextPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PdfPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$OutputPath
+    )
+
+    & $PdfToTextPath "-bbox-layout" "-enc" "UTF-8" $PdfPath $OutputPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "pdftotext failed for $PdfPath"
+    }
+    if (-not (Test-Path -LiteralPath $OutputPath -PathType Leaf)) {
+        throw "pdftotext emitted no layout file for $PdfPath"
+    }
 }
 
 function Get-WordSemanticInventory {
@@ -295,10 +333,12 @@ Export-ModuleMember -Function @(
     "Release-ComObject",
     "Write-Utf8Json",
     "Get-FileSha256",
+    "Get-NativeToolVersion",
     "Resolve-SafeCorpusPath",
     "Get-PngDimensions",
     "Get-PdfPageCount",
     "Invoke-PdfRaster",
+    "Invoke-PdfTextLayout",
     "Get-WordSemanticInventory",
     "Get-ExcelSemanticInventory",
     "Get-PowerPointSemanticInventory"
