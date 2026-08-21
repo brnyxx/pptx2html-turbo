@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_evaluator_manifest import validate_evaluator_manifest
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.scaffold_multiformat_evidence import scaffold_evidence
@@ -10,6 +11,18 @@ from evaluate.tests.multiformat_gate_fixture import CONTRACT_PATH, PROJECT_ROOT
 
 
 class MultiFormatEvaluatorManifestTests(unittest.TestCase):
+    def test_manifest_boundary_includes_portable_lock_validation(self) -> None:
+        self.assertIn("evaluate/multiformat_reference_profile.py", EVALUATOR_FILES)
+        self.assertIn("evaluate/multiformat_portable_lock.py", EVALUATOR_FILES)
+        self.assertIn(
+            "evaluate/tests/test_multiformat_reference_profile.py",
+            EVALUATOR_FILES,
+        )
+        self.assertIn(
+            "evaluate/tests/test_multiformat_portable_lock.py",
+            EVALUATOR_FILES,
+        )
+
     def test_manifest_binds_exact_code_parameters_and_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "wave"

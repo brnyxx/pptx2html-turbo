@@ -2,16 +2,56 @@ import hashlib
 import json
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from evaluate.multiformat_contract import GateStatus, evaluate_reports
-from evaluate.scaffold_multiformat_evidence import ScaffoldError, scaffold_evidence
+from evaluate.scaffold_multiformat_evidence import (
+    ScaffoldError,
+    main,
+    scaffold_evidence,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
 
 
 class ScaffoldMultiFormatEvidenceTests(unittest.TestCase):
+    def test_cli_returns_failure_for_nonempty_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "wave"
+            output.mkdir()
+            (output / "keep.txt").write_text("user data", encoding="utf-8")
+
+            with patch("sys.stderr", StringIO()):
+                result = main(
+                    [
+                        "--project-root",
+                        PROJECT_ROOT.as_posix(),
+                        "--contract",
+                        CONTRACT_PATH.as_posix(),
+                        "--output-dir",
+                        output.as_posix(),
+                    ]
+                )
+
+            self.assertEqual(result, 1)
+
+    def test_malformed_evaluator_lock_leaves_output_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_root = root / "project"
+            lock = project_root / "evaluate" / "multiformat" / "evaluator-lock.v1.json"
+            lock.parent.mkdir(parents=True)
+            lock.write_text("{}\n", encoding="utf-8")
+            output = root / "wave"
+
+            with self.assertRaises(ScaffoldError):
+                scaffold_evidence(project_root, CONTRACT_PATH, output)
+
+            self.assertFalse(output.exists())
+
     def test_scaffold_is_deterministic_incomplete_and_hash_bound(self) -> None:
         # Given
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -88,6 +128,16 @@ class ScaffoldMultiFormatEvidenceTests(unittest.TestCase):
                     result.status is GateStatus.INCOMPLETE for result in summary.formats
                 )
             )
+            portable_lock = json.loads(
+                (output / "portable-lock.template.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(portable_lock["schema_version"], 2)
+            self.assertEqual(
+                portable_lock["reference_profile"],
+                "libreoffice-poppler",
+            )
+            self.assertNotIn("office", portable_lock)
+            self.assertNotIn("Windows", json.dumps(portable_lock))
 
     def test_refuses_to_overlay_existing_output(self) -> None:
         # Given

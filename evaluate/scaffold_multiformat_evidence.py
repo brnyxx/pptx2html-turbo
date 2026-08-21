@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 import hashlib
 import json
@@ -8,8 +6,18 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
+from evaluate.multiformat_portable_lock import portable_lock_template
 from evaluate.multiformat_revision import current_project_revision
-from evaluate.multiformat_schema import JsonValue, read_object, string_list
+from evaluate.multiformat_scaffold_templates import (
+    candidate_sandbox_attestation_template,
+    office_lock_template,
+)
+from evaluate.multiformat_schema import (
+    JsonValue,
+    read_object,
+    string_list,
+    string_value,
+)
 
 
 class ScaffoldError(RuntimeError):
@@ -21,34 +29,51 @@ def scaffold_evidence(
     contract_path: Path,
     output_dir: Path,
 ) -> None:
-    project_root = project_root.resolve(strict=True)
-    contract_path = contract_path.resolve(strict=True)
-    _prepare_output(output_dir)
-    contract = read_object(contract_path)
-    formats = string_list(contract, "required_formats")
-    corpus = _required_object(contract, "corpus")
-    stratum_quotas = _required_object(contract, "stratum_quotas")
-    metric_parameters = _required_object(contract, "metric_parameters")
-    evaluator_lock = read_object(
-        project_root / "evaluate" / "multiformat" / "evaluator-lock.v1.json"
-    )
-    evaluator_path = output_dir / "evidence" / "evaluator-manifest.json"
-    evaluator_path.parent.mkdir(parents=True)
-    evaluator_manifest = {
-        "schema_version": 2,
-        "contract_sha256": _sha256(contract_path),
-        "project_revision": current_project_revision(project_root),
-        "python": evaluator_lock["python"],
-        "unicode_version": evaluator_lock["unicode_version"],
-        "algorithm_parameters": metric_parameters,
-        "dependencies": _required_object(evaluator_lock, "dependencies"),
-        "files": [
+    try:
+        project_root = project_root.resolve(strict=True)
+        contract_path = contract_path.resolve(strict=True)
+        contract = read_object(contract_path)
+        formats = string_list(contract, "required_formats")
+        corpus = _required_object(contract, "corpus")
+        stratum_quotas = _required_object(contract, "stratum_quotas")
+        metric_parameters = _required_object(contract, "metric_parameters")
+        evaluator_lock = read_object(
+            project_root / "evaluate" / "multiformat" / "evaluator-lock.v1.json"
+        )
+        evaluator_python = string_value(evaluator_lock, "python")
+        unicode_version = string_value(evaluator_lock, "unicode_version")
+        dependencies = _required_object(evaluator_lock, "dependencies")
+        format_quotas = {
+            document_format: _required_object(stratum_quotas, document_format)
+            for document_format in formats
+        }
+        conformance_units = _required_int(corpus, "conformance_units")
+        blind_files = _required_int(corpus, "blind_files")
+        security_cases = _required_int(corpus, "security_cases")
+        contract_sha256 = _sha256(contract_path)
+        project_revision = current_project_revision(project_root)
+        evaluator_files = [
             {
                 "path": relative_path,
                 "sha256": _sha256(project_root / relative_path),
             }
             for relative_path in EVALUATOR_FILES
-        ],
+        ]
+    except (OSError, TypeError, ValueError) as error:
+        raise ScaffoldError("scaffold input validation failed") from error
+
+    _prepare_output(output_dir)
+    evaluator_path = output_dir / "evidence" / "evaluator-manifest.json"
+    evaluator_path.parent.mkdir(parents=True)
+    evaluator_manifest = {
+        "schema_version": 2,
+        "contract_sha256": contract_sha256,
+        "project_revision": project_revision,
+        "python": evaluator_python,
+        "unicode_version": unicode_version,
+        "algorithm_parameters": metric_parameters,
+        "dependencies": dependencies,
+        "files": evaluator_files,
     }
     _write_json(evaluator_path, evaluator_manifest)
     evaluator_binding = _binding(output_dir, evaluator_path)
@@ -66,28 +91,19 @@ def scaffold_evidence(
                 "schema_version": 2,
                 "status": "INCOMPLETE",
                 "format": document_format,
-                "contract_sha256": _sha256(contract_path),
-                "stratum_quotas": _required_object(
-                    stratum_quotas,
-                    document_format,
-                ),
+                "contract_sha256": contract_sha256,
+                "stratum_quotas": format_quotas[document_format],
                 "tracks": {
                     "conformance": {
-                        "expected_count": _required_int(
-                            corpus,
-                            "conformance_units",
-                        ),
+                        "expected_count": conformance_units,
                         "items": [],
                     },
                     "blind": {
-                        "expected_count": _required_int(corpus, "blind_files"),
+                        "expected_count": blind_files,
                         "items": [],
                     },
                     "security": {
-                        "expected_count": _required_int(
-                            corpus,
-                            "security_cases",
-                        ),
+                        "expected_count": security_cases,
                         "items": [],
                     },
                 },
@@ -115,7 +131,7 @@ def scaffold_evidence(
                 "schema_version": 1,
                 "status": "INCOMPLETE",
                 "format": document_format,
-                "contract_sha256": _sha256(contract_path),
+                "contract_sha256": contract_sha256,
                 "evaluator": evaluator_binding,
                 "corpus_manifest": _binding(output_dir, corpus_path),
                 "metrics_evidence": _binding(output_dir, metrics_path),
@@ -131,84 +147,20 @@ def scaffold_evidence(
 
     _write_json(
         output_dir / "oracle-lock.template.json",
-        {
-            "schema_version": 1,
-            "status": "INCOMPLETE",
-            "office": {
-                "os": "",
-                "channel": "",
-                "word": "",
-                "excel": "",
-                "powerpoint": "",
-            },
-            "pdf": {"primary": "", "secondary": "", "text": ""},
-            "browser": {
-                "chromium": "",
-                "executable_sha256": "",
-                "playwright": "1.62.0",
-                "viewport_width": 1920,
-                "viewport_height": 2400,
-                "device_scale_factor": 1,
-                "locale": "en-US",
-                "timezone": "UTC",
-                "color_profile": "srgb",
-                "reduced_motion": "reduce",
-                "animations": "disabled",
-                "os": "",
-                "architecture": "",
-                "font_environment_sha256": "",
-            },
-            "candidate_runtime": {
-                "build_revision": "",
-                "converter_sha256": "",
-                "converter_version": "",
-                "soffice_sha256": "",
-                "soffice_version": "",
-                "pdftohtml_sha256": "",
-                "pdftohtml_version": "",
-                "pdfinfo_sha256": "",
-                "pdfinfo_version": "",
-                "receipt_signer_sha256": "",
-                "receipt_signer_version": "",
-            },
-            "sandbox_verifier": _verifier_template(),
-            "office_oracle_verifier": _verifier_template(),
-            "font_bundle_sha256": "",
-        },
+        office_lock_template(),
     )
+    _write_json(output_dir / "portable-lock.template.json", portable_lock_template())
     _write_json(
-        output_dir / "office-input-manifest.json",
-        {"schema_version": 1, "files": []},
+        output_dir / "office-input-manifest.json", {"schema_version": 1, "files": []}
     )
     _write_json(
         output_dir / "candidate-sandbox-attestation.template.json",
-        {
-            "schema_version": 1,
-            "status": "INCOMPLETE",
-            "network_isolation": "",
-            "golden_access": "",
-            "project_revision": "",
-            "scope_sha256": "",
-            "font_environment_sha256": "",
-            "font_isolation": "",
-            "run_nonce": "",
-            "verifier_id": "",
-            "signature": "",
-        },
+        candidate_sandbox_attestation_template(),
     )
     _write_json(
         output_dir / "font-bundle-manifest.template.json",
         {"schema_version": 1, "fonts": []},
     )
-
-
-def _verifier_template() -> dict[str, JsonValue]:
-    return {
-        "algorithm": "ed25519",
-        "verifier_id": "",
-        "public_key_sha256": "",
-        "openssl_sha256": "",
-    }
 
 
 def _prepare_output(output_dir: Path) -> None:
@@ -268,7 +220,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    scaffold_evidence(args.project_root, args.contract, args.output_dir)
+    try:
+        scaffold_evidence(args.project_root, args.contract, args.output_dir)
+    except ScaffoldError as error:
+        sys.stderr.write(f"error: {error}\n")
+        return 1
     sys.stdout.write(f"Scaffolded incomplete evidence at {args.output_dir}\n")
     return 0
 

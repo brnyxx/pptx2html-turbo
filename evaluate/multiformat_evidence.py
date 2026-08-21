@@ -63,6 +63,17 @@ def oracle_lock_ready(path: Path) -> bool:
         return False
     try:
         lock = read_strict_object(path)
+        if lock.get("schema_version") == 2:
+            from evaluate.multiformat_portable_lock import (
+                PortableLockError,
+                validate_reference_lock,
+            )
+
+            try:
+                validate_reference_lock(path, path.parent)
+            except PortableLockError:
+                return False
+            return True
         if lock.get("schema_version") != 1 or lock.get("status") != "locked":
             return False
         office = object_value(lock, "office")
