@@ -75,6 +75,16 @@ uv run python -m evaluate.validate_multiformat_public_pool \
   --manifest artifacts/multiformat-public-pool/public-pool.json
 ```
 
+Materialize the validated sources into the exact manifest layout consumed by
+the Windows Office capture script:
+
+```bash
+uv run python -m evaluate.build_multiformat_public_pool_input \
+  --config evaluate/multiformat/public-pool-sources.v1.json \
+  --pool-manifest artifacts/multiformat-public-pool/public-pool.json \
+  --output-dir artifacts/multiformat-public-input
+```
+
 The catalog fixes 75 candidates per format across five independent producers.
 The collector fetches each repository tree at an exact commit, excludes known
 crash, fuzz, encryption, and malformed-fixture paths, validates the downloaded
