@@ -13,7 +13,12 @@ from evaluate.multiformat_portable_lock import (
     validate_reference_lock,
 )
 from evaluate.multiformat_reference_profile import ReferenceProfile
+from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, sha256_file
+
+ROUTING_TABLE = (
+    Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
+)
 
 
 class MultiFormatPortableLockTests(unittest.TestCase):
@@ -36,7 +41,20 @@ class MultiFormatPortableLockTests(unittest.TestCase):
             self.assertEqual(identity.schema_version, 2)
             self.assertIs(identity.profile, ReferenceProfile.LIBREOFFICE_POPPLER)
             self.assertEqual(identity.sha256, sha256_file(path))
+            self.assertEqual(identity.routing, load_reference_routing(ROUTING_TABLE))
             self.assertTrue(oracle_lock_ready(path))
+
+    def test_routing_digest_substitution_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, path, lock = self._portable_lock(Path(temp_dir))
+            lock["routing_table_sha256"] = "0" * 64
+            self._write(path, lock)
+
+            with self.assertRaisesRegex(
+                PortableLockError,
+                "routing table digest mismatch",
+            ):
+                validate_reference_lock(path, root)
 
     def test_linux_lock_and_attestation_return_typed_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -150,20 +168,9 @@ class MultiFormatPortableLockTests(unittest.TestCase):
     @classmethod
     def _portable_lock(cls, root: Path) -> tuple[Path, Path, dict[str, JsonValue]]:
         names = (
-            "soffice",
-            "pdftoppm",
-            "pdftotext",
-            "pdfinfo",
-            "canonicalizer",
-            "fonts",
-            "configuration",
-            "chromium",
-            "candidate-runtime-lock",
-            "public-key",
-            "executor",
-            "contract",
-            "evaluator",
-            "corpus",
+            ("soffice", "pdftoppm", "pdftotext", "pdfinfo", "canonicalizer")
+            + ("fonts", "configuration", "chromium", "candidate-runtime-lock")
+            + ("public-key", "executor", "contract", "evaluator", "corpus")
         )
         artifacts = {name: cls._artifact(root, name, name.encode()) for name in names}
         attestation = cls._artifact(root, "attestation", b"")
@@ -193,7 +200,7 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                 "poppler_text": {"version": "test", **bindings["pdftotext"]},
                 "poppler_metadata": {"version": "test", **bindings["pdfinfo"]},
             },
-            "routing_table_sha256": "a" * 64,
+            "routing_table_sha256": load_reference_routing(ROUTING_TABLE).sha256,
             "canonicalizer": {"version": "1", **bindings["canonicalizer"]},
             "font_bundle": bindings["fonts"],
             "configuration": bindings["configuration"],

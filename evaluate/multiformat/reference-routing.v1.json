@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "reference_profile": "libreoffice-poppler",
+  "canonicalizer_version": "1",
+  "runtime": {
+    "environment_whitelist": ["HOME", "LANG", "LC_ALL", "TZ"],
+    "locale": "en-US",
+    "timezone": "UTC",
+    "network_isolation": true
+  },
+  "routes": [
+    {
+      "format": "doc",
+      "normative_input": "source",
+      "commands": [
+        {
+          "tool_role": "libreoffice",
+          "arguments": ["--headless", "--nologo", "--nodefault", "--nolockcheck", "--nofirststartwizard", "-env:UserInstallation={profile_uri}", "--convert-to", "pdf", "--outdir", "{output_dir}", "{source}"],
+          "timeout_seconds": 120,
+          "output_name": "reference.pdf"
+        },
+        {
+          "tool_role": "poppler_metadata",
+          "arguments": ["{reference_pdf}"],
+          "timeout_seconds": 120,
+          "output_name": "pdfinfo.txt"
+        },
+        {
+          "tool_role": "poppler_render",
+          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "timeout_seconds": 120,
+          "output_name": "page"
+        },
+        {
+          "tool_role": "poppler_text",
+          "arguments": ["-bbox-layout", "-enc", "UTF-8", "{reference_pdf}", "{text_output}"],
+          "timeout_seconds": 120,
+          "output_name": "text-layout.html"
+        }
+      ]
+    },
+    {
+      "format": "docx",
+      "normative_input": "source",
+      "commands": [
+        {
+          "tool_role": "libreoffice",
+          "arguments": ["--headless", "--nologo", "--nodefault", "--nolockcheck", "--nofirststartwizard", "-env:UserInstallation={profile_uri}", "--convert-to", "pdf", "--outdir", "{output_dir}", "{source}"],
+          "timeout_seconds": 120,
+          "output_name": "reference.pdf"
+        },
+        {
+          "tool_role": "poppler_metadata",
+          "arguments": ["{reference_pdf}"],
+          "timeout_seconds": 120,
+          "output_name": "pdfinfo.txt"
+        },
+        {
+          "tool_role": "poppler_render",
+          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "timeout_seconds": 120,
+          "output_name": "page"
+        },
+        {
+          "tool_role": "poppler_text",
+          "arguments": ["-bbox-layout", "-enc", "UTF-8", "{reference_pdf}", "{text_output}"],
+          "timeout_seconds": 120,
+          "output_name": "text-layout.html"
+        }
+      ]
+    },
+    {
+      "format": "xls",
+      "normative_input": "source",
+      "commands": [
+        {
+          "tool_role": "libreoffice",
+          "arguments": ["--headless", "--nologo", "--nodefault", "--nolockcheck", "--nofirststartwizard", "-env:UserInstallation={profile_uri}", "--convert-to", "pdf", "--outdir", "{output_dir}", "{source}"],
+          "timeout_seconds": 120,
+          "output_name": "reference.pdf"
+        },
+        {
+          "tool_role": "poppler_metadata",
+          "arguments": ["{reference_pdf}"],
+          "timeout_seconds": 120,
+          "output_name": "pdfinfo.txt"
+        },
+        {
+          "tool_role": "poppler_render",
+          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "timeout_seconds": 120,
+          "output_name": "page"
+        },
+        {
+          "tool_role": "poppler_text",
+          "arguments": ["-bbox-layout", "-enc", "UTF-8", "{reference_pdf}", "{text_output}"],
+          "timeout_seconds": 120,
+          "output_name": "text-layout.html"
+        }
+      ]
+    },
+    {
+      "format": "xlsx",
+      "normative_input": "source",
+      "commands": [
+        {
+          "tool_role": "libreoffice",
+          "arguments": ["--headless", "--nologo", "--nodefault", "--nolockcheck", "--nofirststartwizard", "-env:UserInstallation={profile_uri}", "--convert-to", "pdf", "--outdir", "{output_dir}", "{source}"],
+          "timeout_seconds": 120,
+          "output_name": "reference.pdf"
+        },
+        {
+          "tool_role": "poppler_metadata",
+          "arguments": ["{reference_pdf}"],
+          "timeout_seconds": 120,
+          "output_name": "pdfinfo.txt"
+        },
+        {
+          "tool_role": "poppler_render",
+          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "timeout_seconds": 120,
+          "output_name": "page"
+        },
+        {
+          "tool_role": "poppler_text",
+          "arguments": ["-bbox-layout", "-enc", "UTF-8", "{reference_pdf}", "{text_output}"],
+          "timeout_seconds": 120,
+          "output_name": "text-layout.html"
+        }
+      ]
+    },
+    {
+      "format": "ppt",
+      "normative_input": "source",
+      "commands": [
+        {
+          "tool_role": "libreoffice",
+          "arguments": ["--headless", "--nologo", "--nodefault", "--nolockcheck", "--nofirststartwizard", "-env:UserInstallation={profile_uri}", "--convert-to", "pdf", "--outdir", "{output_dir}", "{source}"],
+          "timeout_seconds": 120,
+          "output_name": "reference.pdf"
+        },
+        {
+          "tool_role": "poppler_metadata",
+          "arguments": ["{reference_pdf}"],
+          "timeout_seconds": 120,
+          "output_name": "pdfinfo.txt"
+        },
+        {
+          "tool_role": "poppler_render",
+          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "timeout_seconds": 120,
+          "output_name": "page"
+        },
+        {
+          "tool_role": "poppler_text",
+          "arguments": ["-bbox-layout", "-enc", "UTF-8", "{reference_pdf}", "{text_output}"],
+          "timeout_seconds": 120,
+          "output_name": "text-layout.html"
+        }
+      ]
+    },
+    {
+      "format": "pptx",
+      "normative_input": "source",
+      "commands": [
+        {
+          "tool_role": "libreoffice",
+          "arguments": ["--headless", "--nologo", "--nodefault", "--nolockcheck", "--nofirststartwizard", "-env:UserInstallation={profile_uri}", "--convert-to", "pdf", "--outdir", "{output_dir}", "{source}"],
+          "timeout_seconds": 120,
+          "output_name": "reference.pdf"
+        },
+        {
+          "tool_role": "poppler_metadata",
+          "arguments": ["{reference_pdf}"],
+          "timeout_seconds": 120,
+          "output_name": "pdfinfo.txt"
+        },
+        {
+          "tool_role": "poppler_render",
+          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "timeout_seconds": 120,
+          "output_name": "page"
+        },
+        {
+          "tool_role": "poppler_text",
+          "arguments": ["-bbox-layout", "-enc", "UTF-8", "{reference_pdf}", "{text_output}"],
+          "timeout_seconds": 120,
+          "output_name": "text-layout.html"
+        }
+      ]
+    },
+    {
+      "format": "pdf",
+      "normative_input": "source",
+      "commands": [
+        {
+          "tool_role": "poppler_metadata",
+          "arguments": ["{source}"],
+          "timeout_seconds": 120,
+          "output_name": "pdfinfo.txt"
+        },
+        {
+          "tool_role": "poppler_render",
+          "arguments": ["-png", "-r", "144", "{source}", "{render_prefix}"],
+          "timeout_seconds": 120,
+          "output_name": "page"
+        },
+        {
+          "tool_role": "poppler_text",
+          "arguments": ["-bbox-layout", "-enc", "UTF-8", "{source}", "{text_output}"],
+          "timeout_seconds": 120,
+          "output_name": "text-layout.html"
+        }
+      ]
+    }
+  ]
+}

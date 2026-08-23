@@ -36,6 +36,9 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/tests/test_multiformat_atomic_publish.py",
             "evaluate/tests/test_multiformat_corpus_identity.py",
             "evaluate/tests/test_multiformat_corpus_admission.py",
+            "evaluate/multiformat/reference-routing.v1.json",
+            "evaluate/multiformat_reference_routing.py",
+            "evaluate/tests/test_multiformat_reference_routing.py",
         ):
             with self.subTest(path=path):
                 self.assertIn(path, EVALUATOR_FILES)

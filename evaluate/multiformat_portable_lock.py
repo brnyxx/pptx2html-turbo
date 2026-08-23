@@ -9,6 +9,10 @@ from evaluate.multiformat_reference_profile import (
     ReferenceLockIdentity,
     ReferenceProfile,
 )
+from evaluate.multiformat_reference_routing import (
+    RoutingIdentity,
+    load_reference_routing,
+)
 from evaluate.multiformat_schema import (
     JsonValue,
     boolean_value,
@@ -24,6 +28,7 @@ JsonObject: TypeAlias = dict[str, JsonValue]
 _SUPPORTED_SYSTEMS: Final = frozenset({"Darwin", "Linux"})
 _SUPPORTED_ARCHITECTURES: Final = frozenset({"arm64", "x86_64"})
 _SIGNER_ID: Final = "multiformat-portable-reference-v1"
+_ROUTING_TABLE: Final = Path(__file__).parent / "multiformat/reference-routing.v1.json"
 
 
 class PortableLockError(ValueError):
@@ -32,6 +37,11 @@ class PortableLockError(ValueError):
 
 class PortableLockIncompleteError(PortableLockError):
     """Raised when a portable reference lock has not reached READY state."""
+
+
+@dataclass(frozen=True, slots=True)
+class PortableReferenceLockIdentity(ReferenceLockIdentity):
+    routing: RoutingIdentity
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +56,7 @@ class _RuntimeIdentity:
 def validate_reference_lock(
     path: Path,
     evidence_root: Path,
-) -> ReferenceLockIdentity:
+) -> PortableReferenceLockIdentity:
     """Validate a schema-2 portable lock and return its content identity."""
     try:
         lock = read_strict_object(path)
@@ -71,7 +81,9 @@ def validate_reference_lock(
             tool = object_value(tools, name)
             string_value(tool, "version")
             _artifact_path(tool, evidence_root)
-        sha256_value(lock, "routing_table_sha256")
+        routing = load_reference_routing(_ROUTING_TABLE)
+        if sha256_value(lock, "routing_table_sha256") != routing.sha256:
+            raise PortableLockError("portable routing table digest mismatch")
 
         canonicalizer = object_value(lock, "canonicalizer")
         string_value(canonicalizer, "version")
@@ -116,10 +128,11 @@ def validate_reference_lock(
             attestation_path,
             _RuntimeIdentity(system, architecture, locale, timezone, dpi),
         )
-        return ReferenceLockIdentity(
+        return PortableReferenceLockIdentity(
             schema_version=2,
             profile=ReferenceProfile.LIBREOFFICE_POPPLER,
             sha256=sha256_file(path),
+            routing=routing,
         )
     except PortableLockIncompleteError:
         raise
