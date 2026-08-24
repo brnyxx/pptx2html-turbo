@@ -5,7 +5,6 @@ import tempfile
 import unittest
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
 from unittest.mock import patch
 
 from evaluate import multiformat_ready_tree_fs
@@ -59,10 +58,10 @@ class MultiFormatReadyTreeRaceTests(unittest.TestCase):
             source = root / "source.bin"
             _ = source.write_bytes(b"a" * (2 * 1024 * 1024))
             read_count = 0
-            real_read = cast(
-                Callable[[int, str], tuple[str, os.stat_result, os.stat_result]],
-                getattr(multiformat_ready_tree_fs, "_read_descriptor_hash"),
-            )
+            real_read: Callable[
+                [int, str],
+                tuple[str, os.stat_result, os.stat_result],
+            ] = multiformat_ready_tree_fs._read_descriptor_hash
 
             def read_then_mutate(
                 descriptor: int,
