@@ -92,6 +92,23 @@ def acquire_lock(
     return descriptor, identity
 
 
+def open_owned_directory(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> int:
+    descriptor = os.open(path, _DIRECTORY_FLAGS | _NOFOLLOW_FLAGS)
+    try:
+        if _identity(os.fstat(descriptor)) != expected_identity:
+            raise OSError(errno.ESTALE, "staging directory identity changed")
+    except OSError as error:
+        try:
+            os.close(descriptor)
+        except OSError as cleanup_error:
+            error.add_note(f"snapshot cleanup failed: {cleanup_error}")
+        raise
+    return descriptor
+
+
 def verify_directory_identity(
     path: Path,
     expected_identity: tuple[int, int],
@@ -176,6 +193,36 @@ def _remove_owned_entry(
             except OSError as restore_error:
                 raise restore_error from error
         raise
+
+
+def remove_owned_empty_directory(
+    path: Path,
+    identity: tuple[int, int],
+    parent_descriptor: int,
+) -> None:
+    information = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+    if not stat.S_ISDIR(information.st_mode) or _identity(information) != identity:
+        raise OSError(errno.ESTALE, "staging path ownership changed")
+    os.rmdir(path.name, dir_fd=parent_descriptor)
+
+
+def remove_owned_staging(
+    staging: Path | None,
+    target: Path,
+    descriptor: int | None,
+    identity: tuple[int, int] | None,
+    renamed: bool,
+    parent_descriptor: int,
+    matches: Callable[[Path | None, tuple[int, int] | None], bool],
+) -> None:
+    if descriptor is None:
+        if staging is not None and identity is not None:
+            remove_owned_empty_directory(staging, identity, parent_descriptor)
+        return
+    path = target if renamed else staging
+    if path is None or identity is None:
+        raise OSError(errno.ESTALE, "staging path ownership changed")
+    remove_owned_directory(path, identity, descriptor, parent_descriptor, matches)
 
 
 def remove_owned_directory(

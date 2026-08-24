@@ -13,7 +13,8 @@ from pathlib import Path
 from evaluate.multiformat_snapshot_filesystem import (
     acquire_lock,
     atomic_rename_noreplace,
-    remove_owned_directory,
+    open_owned_directory,
+    remove_owned_staging,
     unlink_owned_file,
     valid_lock_namespace,
     verify_directory_identity,
@@ -111,11 +112,17 @@ def publish_snapshot(
         staging = Path(
             tempfile.mkdtemp(prefix=f".{target.name}.stage-", dir=resolved_parent)
         )
-        staging_descriptor = os.open(
-            staging,
-            _DIRECTORY_FLAGS | _NOFOLLOW_FLAGS,
-        )
-        staging_identity = _identity(os.fstat(staging_descriptor))
+        staging_identity = _identity(staging.lstat())
+        try:
+            staging_descriptor = open_owned_directory(
+                staging,
+                (staging_identity.device, staging_identity.inode),
+            )
+        except OSError as error:
+            raise SnapshotPublishError(
+                staging,
+                SnapshotPublishFailure.PUBLICATION_FAILED,
+            ) from error
         writer(staging)
         if not _matches(staging, staging_identity, stat.S_ISDIR):
             raise SnapshotPublishError(
@@ -198,34 +205,42 @@ def _atomic_rename_noreplace(
 
 def _cleanup(state: _CleanupState) -> tuple[OSError, ...]:
     errors: list[OSError] = []
-    if not state.published and state.staging_descriptor is not None:
+    if not state.published:
         try:
-            owned_path = state.target if state.renamed else state.staging
-            _remove_owned_directory(
-                owned_path,
-                state.staging_identity,
+            remove_owned_staging(
+                state.staging,
+                state.target,
                 state.staging_descriptor,
+                None
+                if state.staging_identity is None
+                else (
+                    state.staging_identity.device,
+                    state.staging_identity.inode,
+                ),
+                state.renamed,
                 state.parent_descriptor,
+                lambda candidate, expected: _matches(
+                    candidate,
+                    None if expected is None else _Identity(*expected),
+                    stat.S_ISDIR,
+                ),
             )
-        except OSError as error:
-            errors.append(error)
-    if state.staging_descriptor is not None:
-        try:
-            os.close(state.staging_descriptor)
         except OSError as error:
             errors.append(error)
     try:
         _unlink_owned_file(state.lock, state.lock_identity, state.parent_descriptor)
     except OSError as error:
         errors.append(error)
-    try:
-        os.close(state.lock_descriptor)
-    except OSError as error:
-        errors.append(error)
-    try:
-        os.close(state.parent_descriptor)
-    except OSError as error:
-        errors.append(error)
+    for descriptor in (
+        state.staging_descriptor,
+        state.lock_descriptor,
+        state.parent_descriptor,
+    ):
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError as error:
+                errors.append(error)
     return tuple(errors)
 
 
@@ -241,25 +256,6 @@ def _matches(
     except FileNotFoundError:
         return False
     return expected_mode(value.st_mode) and _identity(value) == identity
-
-
-def _remove_owned_directory(
-    path: Path | None,
-    identity: _Identity | None,
-    descriptor: int,
-    parent_descriptor: int,
-) -> None:
-    remove_owned_directory(
-        path,
-        None if identity is None else (identity.device, identity.inode),
-        descriptor,
-        parent_descriptor,
-        lambda candidate, expected: _matches(
-            candidate,
-            None if expected is None else _Identity(*expected),
-            stat.S_ISDIR,
-        ),
-    )
 
 
 def _unlink_owned_file(
