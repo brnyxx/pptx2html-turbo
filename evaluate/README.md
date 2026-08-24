@@ -159,6 +159,35 @@ publishes only after the exact source and provenance set passes an independent
 validation pass. This pool has status `COLLECTED`, not `READY`; native unit
 inventories and candidate/reference captures are still required.
 
+Generate the contract-defined security-source snapshot outside Git:
+
+```bash
+uv run --python 3.11 python -m \
+  evaluate.generate_multiformat_security_sources \
+  --contract evaluate/multiformat/contract.v1.json \
+  --output-dir artifacts/multiformat-security-sources
+```
+
+Then independently validate its canonical manifest, exact tree, hashes, normal
+container validity where required, and one proved semantic family per source:
+
+```bash
+uv run --python 3.11 python -m \
+  evaluate.validate_multiformat_security_sources \
+  --contract evaluate/multiformat/contract.v1.json \
+  --manifest \
+  artifacts/multiformat-security-sources/security-sources.json
+```
+
+The output contains exactly 70 binary sources (10 each for PPTX, DOCX, DOC,
+XLSX, XLS, PPT, and PDF) plus `security-sources.json`. Generated binaries stay
+under `artifacts/`; only their deterministic writers and validators are
+committed. The validated snapshot manifest SHA-256 is
+`355ac5b0e99b7e47f92bd42c1f04a3fb947add30a2c85a45f889e32504529116`.
+Two clean Python processes produced byte-identical 71-file trees. This snapshot
+has status `GENERATED`, not `READY`: later corpus assembly and sandboxed runtime
+capture must still prove every declared security outcome.
+
 Materialize the 100 planned PDF sources once with locked LibreOffice, Poppler,
 and font artifacts:
 
