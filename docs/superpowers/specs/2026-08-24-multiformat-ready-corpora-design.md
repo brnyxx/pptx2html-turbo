@@ -202,14 +202,20 @@ Each execution record contains:
 - run index `1` or `2`;
 - a distinct 64-lowercase-hex workspace nonce;
 - the exact tool roles and argument-vector template identity;
-- routing-table, tool, and font-environment SHA-256 values;
+- the routing-table SHA-256 and identities for exactly the tools invoked;
+- the font-environment SHA-256 only for the six Office formats;
 - process exit code;
 - an exact environment-contract object containing the sorted allowlisted key
-  names, locale, timezone, font-environment SHA-256, and booleans proving
-  isolated home and temporary roots, but no volatile absolute paths;
+  names, locale, timezone, and booleans proving isolated home and temporary
+  roots, plus the font-environment SHA-256 only for Office observations, but no
+  volatile absolute paths;
 - bounded stdout and stderr SHA-256 values;
 - retained PDF and `pdfinfo.txt` paths and SHA-256 values; and
 - the parsed positive unit count.
+
+PDF observations neither resolve nor record LibreOffice or font identities.
+The batch-level inventory still binds them because the same inventory contains
+the six Office formats.
 
 The validator requires exactly run indexes `{1, 2}`, distinct nonces and
 evidence paths, complete artifact bindings, and matching accepted counts. This
@@ -229,6 +235,66 @@ portable-reference receipt.
 - validated font-environment SHA-256;
 - OS, architecture, locale, timezone, and worker count;
 - 525 source records ordered by format and source ID.
+
+### Closed inventory schema
+
+`native-unit-inventory.json` has the following exact field sets. No object may
+contain an additional field:
+
+- root: `schema_version`, `status`, `contract_sha256`, `public_pool`,
+  `routing`, `tools`, `font`, `runtime`, and `sources`;
+- `public_pool`: `config_sha256` and `manifest_sha256`;
+- `routing`: `sha256`;
+- `tools`: `libreoffice` and `pdfinfo`;
+- each tool: `name`, `sha256`, and `version`;
+- `font`: `manifest_sha256` and `environment_sha256`;
+- `runtime`: `os`, `architecture`, `locale`, `timezone`, `worker_count`, and
+  `environment_keys`;
+- `environment_keys`: `office` and `pdf`;
+- each source: `id`, `format`, `path`, `sha256`, `unit_count`, and
+  `observations`;
+- each observation: `run`, `workspace_nonce`, `path`, `execution`,
+  `reference_pdf`, and `pdfinfo`; and
+- each execution/evidence binding: `path` and `sha256`.
+
+The root has `schema_version` `1` and status `CAPTURED`. Every SHA-256 is 64
+lowercase hexadecimal characters. Tool versions are non-empty single-line
+strings. `worker_count` is in `1..8`.
+
+`sources` is sorted by `(format, id)`. Every source has exactly two
+observations sorted by run, with run indexes `{1, 2}`. Observation nonces are
+preallocated by the capture orchestrator before worker submission and passed
+into the runtime; the runtime does not generate hidden randomness. Nonces are
+distinct 64-lowercase-hex values.
+
+Source paths are safe POSIX paths relative to the validated public-pool
+snapshot. Observation and binding paths are safe POSIX paths relative to the
+inventory root. An observation path is exactly
+`observations/{format}/{id}/run-{run}`. Its three bindings name
+`execution.json`, `reference.pdf`, and `pdfinfo.txt` beneath that path.
+
+`environment_keys.office` and `environment_keys.pdf` are sorted, duplicate-free
+lists of the actual child-environment key names for those routes. Office
+observations require the locked font environment. PDF observations use only
+the PDF route environment and must not require a LibreOffice executable or font
+bundle at observation time.
+
+The validator returns a separate aggregate value:
+
+```python
+@dataclass(frozen=True, slots=True)
+class NativeUnitInventorySummary:
+    files: int
+    sources: int
+    observations: int
+    total_units: int
+    manifest_sha256: str
+```
+
+`files` is exactly `3,151`, `sources` is `525`, and `observations` is `1,050`.
+`total_units` is the sum of the accepted positive source `unit_count` values.
+The existing `NativeUnitSummary` remains the per-source runtime value and is
+not overloaded for aggregate inventory validation.
 
 Locale is `en-US`, timezone is `UTC`, and the subprocess environment is
 allowlisted. Native conversion uses bounded output, a per-command timeout, and

@@ -386,6 +386,10 @@ def capture_native_observation(
 ) -> NativeObservation: ...
 ```
 
+`NativeUnitRequest` carries the preallocated 64-lowercase-hex
+`workspace_nonce`. The runtime records that value and never generates its own
+random nonce.
+
 The capture layer owns the observation directory and supplies its staged
 destination to `NativeUnitRequest`. The runtime owns isolated workspaces,
 process requests, retained `reference.pdf`/`pdfinfo.txt`, temporary log
@@ -447,6 +451,7 @@ retained one-page observations per source. Assert:
 - exactly runs `{1, 2}` and distinct injected nonces;
 - sorted canonical manifest records despite reversed worker completion;
 - source/config/pool/routing/tool/font/runtime identities;
+- the exact closed inventory field sets frozen in the approved design;
 - disagreement, duplicate nonce/path, source mutation, runner error, and
   writer error leave no output.
 
@@ -471,12 +476,16 @@ validate_public_pool(public_config_path, blind_manifest_path)
 
 Preallocate two nonces per sorted source before submitting work. Use
 `ThreadPoolExecutor` with a validated worker range `1..8`. Each task has a
-unique workspace. Sort completed observations by `(format, source_id, run)`.
-Write `native-unit-inventory.json` only after all counts agree.
+unique workspace and receives its preallocated nonce through
+`NativeUnitRequest`. Sort completed observations by
+`(format, source_id, run)`. Write `native-unit-inventory.json` only after all
+counts agree.
 
 All inventory and execution JSON has a closed exact schema, schema version
 `1`, duplicate-key rejection on read, UTF-8 JCS canonical bytes, and one
-trailing LF. Build the complete observation tree inside the generic
+trailing LF. The exact inventory object field sets are normative in the
+approved design's **Closed inventory schema** section. Build the complete
+observation tree inside the generic
 `publish_snapshot` staging directory. Run independent validation on immutable
 final staged bytes before the one rename. Destination existence, lock
 contention, any worker failure, disagreement, or cleanup failure publishes
@@ -505,7 +514,7 @@ Expose:
 ```python
 def validate_native_unit_inventory(
     inputs: NativeUnitValidationInputs,
-) -> NativeUnitSummary: ...
+) -> NativeUnitInventorySummary: ...
 ```
 
 The typed input holds contract, public config, blind manifest, routing, font
@@ -514,6 +523,10 @@ all trusted inputs. Validate the exact 3,151-file tree:
 
 - 1 inventory manifest;
 - 525 x 2 x (`execution.json`, `reference.pdf`, `pdfinfo.txt`).
+
+`NativeUnitInventorySummary` has exactly `files`, `sources`, `observations`,
+`total_units`, and `manifest_sha256`. It is distinct from the existing
+per-source `NativeUnitSummary`.
 
 Use the retained file bindings and rerun `pdfinfo` for count confirmation.
 
