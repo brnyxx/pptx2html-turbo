@@ -4,23 +4,94 @@ import os
 import shutil
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
-from evaluate import multiformat_corpus_sources
+from evaluate import multiformat_corpus_sources, multiformat_public_pool_fs
 from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_public_pool import load_validated_public_pool_sources
+from evaluate.multiformat_public_pool_bindings import ExpectedFileBinding
 from evaluate.multiformat_public_pool_types import PublicPoolError
 from evaluate.multiformat_schema import object_value, string_value
 from evaluate.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.tests.multiformat_public_pool_fixture import (
     write_multiformat_public_pool_fixture,
 )
-from evaluate.multiformat_strict_json import read_strict_object
 
 
 class MultiFormatPublicPoolFilesystemTests(unittest.TestCase):
+    def test_symlink_source_replacement_at_exact_tree_boundary_is_rejected(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = write_multiformat_public_pool_fixture(Path(temp_dir))
+            source = self._first_source_path(fixture.manifest)
+            relative_path = source.relative_to(fixture.manifest.parent).as_posix()
+            attacker = Path(temp_dir) / "attacker-source.docx"
+            shutil.copyfile(source, attacker)
+            attacker_bytes = attacker.read_bytes()
+            attacker_identity = _entry_identity(attacker)
+
+            with (
+                patch.object(
+                    multiformat_public_pool_fs,
+                    "_before_exact_tree_validation",
+                    side_effect=partial(
+                        _replace_source_with_symlink,
+                        relative_path=relative_path,
+                        attacker=attacker,
+                    ),
+                    create=True,
+                ),
+                self.assertRaisesRegex(PublicPoolError, "public pool symlink"),
+            ):
+                _ = load_validated_public_pool_sources(
+                    fixture.config,
+                    fixture.manifest,
+                )
+
+            self.assertTrue(source.is_symlink())
+            self.assertEqual(attacker.read_bytes(), attacker_bytes)
+            self.assertEqual(_entry_identity(attacker), attacker_identity)
+
+    def test_hard_link_source_replacement_at_exact_tree_boundary_is_rejected(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = write_multiformat_public_pool_fixture(Path(temp_dir))
+            source = self._first_source_path(fixture.manifest)
+            relative_path = source.relative_to(fixture.manifest.parent).as_posix()
+            attacker = Path(temp_dir) / "attacker-source.docx"
+            shutil.copyfile(source, attacker)
+            attacker_bytes = attacker.read_bytes()
+            attacker_inode = attacker.stat().st_ino
+
+            with (
+                patch.object(
+                    multiformat_public_pool_fs,
+                    "_before_exact_tree_validation",
+                    side_effect=partial(
+                        _replace_source_with_hard_link,
+                        relative_path=relative_path,
+                        attacker=attacker,
+                    ),
+                    create=True,
+                ),
+                self.assertRaisesRegex(PublicPoolError, "hard link"),
+            ):
+                _ = load_validated_public_pool_sources(
+                    fixture.config,
+                    fixture.manifest,
+                )
+
+            self.assertEqual(source.stat().st_ino, attacker_inode)
+            self.assertEqual(source.stat().st_nlink, 2)
+            self.assertEqual(attacker.read_bytes(), attacker_bytes)
+            self.assertEqual(attacker.stat().st_ino, attacker_inode)
+
     def test_source_symlink_is_rejected_as_typed_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = write_multiformat_public_pool_fixture(Path(temp_dir))
@@ -55,7 +126,7 @@ class MultiFormatPublicPoolFilesystemTests(unittest.TestCase):
 
             cause = raised.exception.__cause__
             if not isinstance(cause, CorpusError):
-                raise AssertionError("source link failure was not chained")
+                self.fail("source link failure was not chained")
             self.assertEqual(cause.reason, "source.link")
             self.assertEqual(source.stat().st_nlink, 2)
             self.assertEqual(hard_link.stat().st_ino, source.stat().st_ino)
@@ -133,6 +204,35 @@ class MultiFormatPublicPoolFilesystemTests(unittest.TestCase):
         formats = object_value(values, "formats")
         source_values = object_list(object_value(formats, "docx"), "sources", "test")
         return manifest.parent / string_value(source_values[0], "path")
+
+
+def _replace_source_with_symlink(
+    root: Path,
+    _expected: tuple[ExpectedFileBinding, ...],
+    *,
+    relative_path: str,
+    attacker: Path,
+) -> None:
+    source = root / relative_path
+    source.unlink()
+    source.symlink_to(attacker)
+
+
+def _replace_source_with_hard_link(
+    root: Path,
+    _expected: tuple[ExpectedFileBinding, ...],
+    *,
+    relative_path: str,
+    attacker: Path,
+) -> None:
+    source = root / relative_path
+    source.unlink()
+    os.link(attacker, source)
+
+
+def _entry_identity(path: Path) -> tuple[int, int, int, int]:
+    value = path.stat()
+    return value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns
 
 
 if __name__ == "__main__":

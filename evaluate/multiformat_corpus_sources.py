@@ -7,6 +7,7 @@ from typing import Final, assert_never
 
 from evaluate.multiformat_cfb import cfb_root_streams
 from evaluate.multiformat_corpus_source_fs import (
+    FileIdentity,
     descriptor_path,
     rewind_descriptor,
     stable_source_descriptor,
@@ -33,6 +34,22 @@ def validate_source(
     *,
     require_valid_format: bool,
 ) -> SourceRecord:
+    record, _ = _validate_source_with_binding(
+        item,
+        root,
+        document_format,
+        require_valid_format=require_valid_format,
+    )
+    return record
+
+
+def _validate_source_with_binding(
+    item: dict[str, JsonValue],
+    root: Path,
+    document_format: DocumentFormat,
+    *,
+    require_valid_format: bool,
+) -> tuple[SourceRecord, FileIdentity]:
     item_id = string_value(item, "id")
     validate_identifier(item_id, "source.id")
     relative_path = string_value(item, "path")
@@ -52,7 +69,8 @@ def validate_source(
             raise CorpusError("source.format", relative_path)
         _after_source_validation(source_path)
         _before_source_final_verification(source_path)
-    return SourceRecord(item_id, relative_path, expected_digest)
+        identity = opened.identity
+    return SourceRecord(item_id, relative_path, expected_digest), identity
 
 
 def _after_source_validation(_path: Path) -> None:

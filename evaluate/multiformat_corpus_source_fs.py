@@ -5,21 +5,24 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator
 
 from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_package_validation import MAX_SOURCE_BYTES
 from evaluate.multiformat_ready_tree_io import fd_scope
 from evaluate.multiformat_ready_tree_types import TreeIdentityError
 
+FileIdentity = tuple[int, int, int, int, int, int]
+
 
 @dataclass(frozen=True, slots=True)
 class SourceDescriptor:
     descriptor: int
     digest: str
+    identity: FileIdentity
 
 
 @contextmanager
@@ -37,6 +40,7 @@ def stable_source_descriptor(
     except OSError as error:
         raise CorpusError("source.path", relative_path) from error
     _require_regular(path_before, relative_path)
+    initial_identity = file_identity(path_before)
     try:
         with fd_scope(path, os.O_RDONLY | no_follow, None) as descriptor:
             opened = _stat_descriptor(descriptor, relative_path)
@@ -45,7 +49,7 @@ def stable_source_descriptor(
             digest, before, after = _hash_descriptor(descriptor, relative_path)
             if not all(_same_identity(path_before, value) for value in (before, after)):
                 raise CorpusError("source.changed", relative_path)
-            yield SourceDescriptor(descriptor, digest)
+            yield SourceDescriptor(descriptor, digest, initial_identity)
             final_descriptor = _stat_descriptor(descriptor, relative_path)
             final_path = _stat_path(path, relative_path)
             if not _same_identity(
@@ -110,6 +114,17 @@ def _require_regular(value: os.stat_result, relative_path: str) -> None:
         raise CorpusError("source.link", relative_path)
     if not 0 < value.st_size <= MAX_SOURCE_BYTES:
         raise CorpusError("source.size", relative_path)
+
+
+def file_identity(value: os.stat_result) -> FileIdentity:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+        value.st_nlink,
+    )
 
 
 def _same_identity(first: os.stat_result, second: os.stat_result) -> bool:

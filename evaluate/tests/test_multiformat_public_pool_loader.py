@@ -8,13 +8,13 @@ from pathlib import Path
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
 from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_corpus_types import DocumentFormat
-from evaluate.multiformat_schema import object_value, string_value
 from evaluate.multiformat_public_pool import load_validated_public_pool_sources
 from evaluate.multiformat_public_pool_types import ValidatedPublicPoolSource
+from evaluate.multiformat_schema import object_value, string_value
+from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.tests.multiformat_public_pool_fixture import (
     write_multiformat_public_pool_fixture,
 )
-from evaluate.multiformat_strict_json import read_strict_object
 
 
 class MultiFormatPublicPoolLoaderTests(unittest.TestCase):
@@ -51,10 +51,10 @@ class MultiFormatPublicPoolLoaderTests(unittest.TestCase):
             expected: list[tuple[str, str]] = []
             for format_name, format_value in formats.items():
                 if not isinstance(format_value, dict):
-                    raise AssertionError("format must be an object")
+                    self.fail("format must be an object")
                 sources = format_value.get("sources")
                 if not isinstance(sources, list):
-                    raise AssertionError("sources must be an array")
+                    self.fail("sources must be an array")
                 sources.reverse()
                 expected.extend(
                     (format_name, string_value(source, "id"))

@@ -6,7 +6,8 @@ from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
 from evaluate.multiformat_corpus_items import object_list, require_keys
-from evaluate.multiformat_corpus_sources import validate_source
+from evaluate.multiformat_corpus_source_fs import FileIdentity
+from evaluate.multiformat_corpus_sources import _validate_source_with_binding
 from evaluate.multiformat_corpus_types import (
     CorpusError,
     DocumentFormat,
@@ -160,7 +161,7 @@ def _load_validated_public_pool_sources(
         groups = {group.producer: group for group in plan.groups}
         group_counts: Counter[str] = Counter()
         for item in sources:
-            source = _validate_pool_source(item, root, plan, groups)
+            source, source_identity = _validate_pool_source(item, root, plan, groups)
             key = (plan.document_format, source.item_id)
             if key in seen_keys:
                 raise PublicPoolError("public pool source key is duplicated")
@@ -173,7 +174,11 @@ def _load_validated_public_pool_sources(
             seen_hashes.add(source.digest)
             group_counts[string_value(item, "producer")] += 1
             expected_files.append(
-                ExpectedFileBinding(source.relative_path, source.digest, None)
+                ExpectedFileBinding(
+                    source.relative_path,
+                    source.digest,
+                    source_identity,
+                )
             )
             result.append(
                 ValidatedPublicPoolSource(
@@ -201,7 +206,7 @@ def _validate_pool_source(
     root: Path,
     plan: PublicFormatPlan,
     groups: dict[str, PublicSourceGroup],
-) -> SourceRecord:
+) -> tuple[SourceRecord, FileIdentity]:
     require_keys(
         values,
         {
@@ -228,7 +233,7 @@ def _validate_pool_source(
         or string_value(values, "license_spdx") != group.license_spdx
     ):
         raise PublicPoolError("public pool source provenance differs")
-    return validate_source(
+    return _validate_source_with_binding(
         values,
         root,
         plan.document_format,

@@ -12,9 +12,9 @@ from evaluate.multiformat_public_pool_bindings import (
     file_identity,
     verify_file_binding,
 )
+from evaluate.multiformat_public_pool_types import PublicPoolError
 from evaluate.multiformat_ready_tree_io import fd_scope
 from evaluate.multiformat_ready_tree_types import TreeIdentityError
-from evaluate.multiformat_public_pool_types import PublicPoolError
 
 
 def snapshot_root(manifest_path: Path) -> tuple[Path, Path, FileIdentity]:

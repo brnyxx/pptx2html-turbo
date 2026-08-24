@@ -8,13 +8,12 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluate.multiformat_corpus_source_fs import FileIdentity, file_identity
 from evaluate.multiformat_package_validation import MAX_SOURCE_BYTES
 from evaluate.multiformat_public_pool_types import PublicPoolError
 from evaluate.multiformat_ready_tree_io import fd_scope
 from evaluate.multiformat_ready_tree_types import TreeIdentityError
 from evaluate.multiformat_strict_json import MAX_JSON_BYTES
-
-FileIdentity = tuple[int, int, int, int, int, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,17 +180,6 @@ def _require_regular(
     if not 0 < value.st_size <= limit:
         raise PublicPoolError(f"public pool {role} size is invalid")
     return value
-
-
-def file_identity(value: os.stat_result) -> FileIdentity:
-    return (
-        value.st_dev,
-        value.st_ino,
-        value.st_size,
-        value.st_mtime_ns,
-        value.st_ctime_ns,
-        value.st_nlink,
-    )
 
 
 def _same_file_identity(first: os.stat_result, second: os.stat_result) -> bool:
