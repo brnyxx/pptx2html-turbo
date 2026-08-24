@@ -139,6 +139,26 @@ separate 75-file blind track, and the 10 security cases. Corpus identity is the
 eventually admitted frozen source bytes and hashes; historical generator byte
 reproducibility is not part of that identity.
 
+Collect the pinned independently authored binary-specific pool while excluding
+every source identity already admitted to the validated blind pool:
+
+```bash
+GITHUB_TOKEN="$(gh auth token)" \
+  uv run --python 3.11 python -m evaluate.collect_multiformat_legacy_binary_pool \
+  --config evaluate/multiformat/legacy-binary-sources.v1.json \
+  --public-config evaluate/multiformat/public-pool-sources.v1.json \
+  --blind-manifest artifacts/multiformat-public-pool/public-pool.json \
+  --output-dir artifacts/multiformat-legacy-binary-pool
+```
+
+The selection overlay binds the pinned public catalog and fixes exactly 40 DOC,
+40 XLS, and 40 PPT sources across independent producers. The collector
+revalidates the blind pool, rejects overlapping repository origins and source
+hashes, validates CFBF structure, removes duplicate bytes across formats, and
+publishes only after the exact source and provenance set passes an independent
+validation pass. This pool has status `COLLECTED`, not `READY`; native unit
+inventories and candidate/reference captures are still required.
+
 Materialize the 100 planned PDF sources once with locked LibreOffice, Poppler,
 and font artifacts:
 
