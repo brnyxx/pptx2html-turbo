@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import socket
-import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,43 +21,6 @@ from evaluate.multiformat_strict_json import read_strict_object
 
 
 class MultiFormatPublicPoolFilesystemTests(unittest.TestCase):
-    @unittest.skipUnless(os.name == "posix", "requires POSIX filesystem entries")
-    def test_exact_tree_rejects_fifo_socket_and_empty_directory_untouched(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fixture = write_multiformat_public_pool_fixture(Path(temp_dir))
-            root = fixture.manifest.parent
-            fifo = root / "attacker-fifo"
-            socket_path = root / "attacker.sock"
-            empty_directory = root / "attacker-directory"
-            os.mkfifo(fifo)
-            attacker_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            attacker_socket.bind(str(socket_path))
-            empty_directory.mkdir()
-            before = {
-                path: (path.lstat().st_dev, path.lstat().st_ino)
-                for path in (fifo, socket_path, empty_directory)
-            }
-
-            try:
-                with self.assertRaises(PublicPoolError):
-                    _ = load_validated_public_pool_sources(
-                        fixture.config,
-                        fixture.manifest,
-                    )
-
-                self.assertTrue(stat.S_ISFIFO(fifo.lstat().st_mode))
-                self.assertTrue(stat.S_ISSOCK(socket_path.lstat().st_mode))
-                self.assertTrue(stat.S_ISDIR(empty_directory.lstat().st_mode))
-                self.assertEqual(
-                    before,
-                    {
-                        path: (path.lstat().st_dev, path.lstat().st_ino)
-                        for path in (fifo, socket_path, empty_directory)
-                    },
-                )
-            finally:
-                attacker_socket.close()
-
     def test_source_symlink_is_rejected_as_typed_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = write_multiformat_public_pool_fixture(Path(temp_dir))

@@ -12,6 +12,10 @@ from evaluate.multiformat_corpus_types import (
     DocumentFormat,
     SourceRecord,
 )
+from evaluate.multiformat_public_pool_bindings import (
+    ExpectedFileBinding,
+    read_manifest_bytes,
+)
 from evaluate.multiformat_public_pool_config import load_public_pool_plans
 from evaluate.multiformat_public_pool_fs import snapshot_root, validate_exact_tree
 from evaluate.multiformat_public_pool_sources import collect_public_source_group
@@ -29,7 +33,10 @@ from evaluate.multiformat_schema import (
     object_value,
     string_value,
 )
-from evaluate.multiformat_strict_json import StrictJsonError, read_strict_object
+from evaluate.multiformat_strict_json import (
+    StrictJsonError,
+    parse_strict_object_bytes,
+)
 
 
 def collect_public_pool(
@@ -116,8 +123,13 @@ def _load_validated_public_pool_sources(
     manifest_path: Path,
 ) -> tuple[ValidatedPublicPoolSource, ...]:
     plans = load_public_pool_plans(config_path)
-    root, canonical_manifest = snapshot_root(manifest_path)
-    values = read_strict_object(canonical_manifest)
+    root, canonical_manifest, manifest_identity = snapshot_root(manifest_path)
+    manifest_bytes, manifest_binding = read_manifest_bytes(
+        root,
+        canonical_manifest,
+        manifest_identity,
+    )
+    values = parse_strict_object_bytes(manifest_bytes)
     require_keys(values, {"schema_version", "status", "formats"}, "public.pool")
     if (
         integer_value(values, "schema_version") != 1
@@ -127,7 +139,7 @@ def _load_validated_public_pool_sources(
     formats = object_value(values, "formats")
     if set(formats) != {plan.document_format.value for plan in plans}:
         raise PublicPoolError("public pool format set differs")
-    expected_files = {canonical_manifest}
+    expected_files: list[ExpectedFileBinding] = [manifest_binding]
     seen_keys: set[tuple[DocumentFormat, str]] = set()
     seen_paths: set[str] = set()
     seen_hashes: set[str] = set()
@@ -160,7 +172,9 @@ def _load_validated_public_pool_sources(
             seen_paths.add(source.relative_path)
             seen_hashes.add(source.digest)
             group_counts[string_value(item, "producer")] += 1
-            expected_files.add(root / source.relative_path)
+            expected_files.append(
+                ExpectedFileBinding(source.relative_path, source.digest, None)
+            )
             result.append(
                 ValidatedPublicPoolSource(
                     plan.document_format,
@@ -173,7 +187,7 @@ def _load_validated_public_pool_sources(
             {group.producer: group.quota for group in plan.groups}
         ):
             raise PublicPoolError("public pool producer quota differs")
-    validate_exact_tree(root, expected_files)
+    validate_exact_tree(root, tuple(expected_files))
     return tuple(
         sorted(
             result,

@@ -6,12 +6,18 @@ import os
 import stat
 from pathlib import Path
 
+from evaluate.multiformat_public_pool_bindings import (
+    ExpectedFileBinding,
+    FileIdentity,
+    file_identity,
+    verify_file_binding,
+)
 from evaluate.multiformat_ready_tree_io import fd_scope
 from evaluate.multiformat_ready_tree_types import TreeIdentityError
 from evaluate.multiformat_public_pool_types import PublicPoolError
 
 
-def snapshot_root(manifest_path: Path) -> tuple[Path, Path]:
+def snapshot_root(manifest_path: Path) -> tuple[Path, Path, FileIdentity]:
     try:
         root_entry = manifest_path.parent.lstat()
         manifest_entry = manifest_path.lstat()
@@ -33,10 +39,13 @@ def snapshot_root(manifest_path: Path) -> tuple[Path, Path]:
         raise PublicPoolError("public pool manifest is unavailable") from error
     if not _same_identity(manifest_entry, canonical_entry):
         raise PublicPoolError("public pool manifest changed before reading")
-    return root, manifest
+    return root, manifest, file_identity(manifest_entry)
 
 
-def validate_exact_tree(root: Path, expected_files: set[Path]) -> None:
+def validate_exact_tree(
+    root: Path,
+    expected_files: tuple[ExpectedFileBinding, ...],
+) -> None:
     """Reject any physical entry not represented by the expected file set."""
     try:
         no_follow = os.O_NOFOLLOW
@@ -51,8 +60,10 @@ def validate_exact_tree(root: Path, expected_files: set[Path]) -> None:
         raise PublicPoolError("public pool root is unavailable") from error
     if not stat.S_ISDIR(root_stat.st_mode):
         raise PublicPoolError("public pool root is not a directory")
-    expected_paths = _expected_paths(root, expected_files)
+    expected_bindings = _expected_bindings(expected_files)
+    expected_paths = set(expected_bindings)
     expected_directories = _expected_directories(expected_paths)
+    _before_exact_tree_validation(root, expected_files)
     flags = os.O_RDONLY | no_follow | directory
     try:
         with fd_scope(root, flags, None) as root_fd:
@@ -64,7 +75,7 @@ def validate_exact_tree(root: Path, expected_files: set[Path]) -> None:
                 root_stat,
                 (),
                 None,
-                expected_paths,
+                expected_bindings,
                 expected_directories,
                 no_follow,
                 directory,
@@ -86,7 +97,7 @@ def _walk_directory(
     expected: os.stat_result,
     relative_parts: tuple[str, ...],
     parent_descriptor: int | None,
-    expected_files: set[str],
+    expected_files: dict[str, ExpectedFileBinding],
     expected_directories: set[str],
     no_follow: int,
     directory: int,
@@ -138,10 +149,16 @@ def _walk_directory(
             continue
         if not stat.S_ISREG(entry_stat.st_mode):
             raise PublicPoolError("public pool special file is not allowed")
-        if entry_stat.st_nlink != 1:
-            raise PublicPoolError("public pool hard link is not allowed")
-        if relative_path not in expected_files:
+        binding = expected_files.get(relative_path)
+        if binding is None:
             raise PublicPoolError("public pool file set is not exact")
+        verify_file_binding(
+            descriptor,
+            name,
+            relative_path,
+            binding,
+            no_follow,
+        )
         files.add(relative_path)
     try:
         final_descriptor = os.fstat(descriptor)
@@ -181,19 +198,21 @@ def _verify_directory_boundary(
         )
 
 
-def _expected_paths(root: Path, expected_files: set[Path]) -> set[str]:
-    result: set[str] = set()
-    for path in expected_files:
-        try:
-            relative = path.relative_to(root)
-        except ValueError as error:
-            raise PublicPoolError("public pool expected file escaped root") from error
-        value = relative.as_posix()
-        if relative.is_absolute() or any(
-            part in {"", ".", ".."} for part in relative.parts
+def _expected_bindings(
+    expected_files: tuple[ExpectedFileBinding, ...],
+) -> dict[str, ExpectedFileBinding]:
+    result: dict[str, ExpectedFileBinding] = {}
+    for binding in expected_files:
+        relative = Path(binding.relative_path)
+        if (
+            relative.is_absolute()
+            or binding.relative_path != relative.as_posix()
+            or any(part in {"", ".", ".."} for part in relative.parts)
         ):
             raise PublicPoolError("public pool expected path is unsafe")
-        result.add(value)
+        if binding.relative_path in result:
+            raise PublicPoolError("public pool expected path is duplicated")
+        result[binding.relative_path] = binding
     return result
 
 
@@ -203,6 +222,13 @@ def _expected_directories(expected_files: set[str]) -> set[str]:
         parts = value.split("/")
         result.update("/".join(parts[:index]) for index in range(1, len(parts)))
     return result
+
+
+def _before_exact_tree_validation(
+    _root: Path,
+    _expected_files: tuple[ExpectedFileBinding, ...],
+) -> None:
+    """Deterministic final-boundary race-test seam; production performs no action."""
 
 
 def _same_identity(first: os.stat_result, second: os.stat_result) -> bool:
