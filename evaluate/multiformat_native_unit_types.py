@@ -7,7 +7,7 @@ from typing import Protocol
 
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_reference_routing import RoutedCommand, RoutingIdentity
-from evaluate.multiformat_schema import JsonValue, sha256_file
+from evaluate.multiformat_schema import JsonValue
 
 
 class NativeUnitFailure(StrEnum):
@@ -45,6 +45,14 @@ class NativeUnitSource:
     document_format: DocumentFormat
     path: Path
     relative_path: str
+
+
+def _add_native_unit_note(error: NativeUnitError, note: str) -> None:
+    notes = getattr(error, "__notes__", ())
+    object.__setattr__(error, "__notes__", [*notes, note])
+
+
+NativeUnitError.add_note = _add_native_unit_note
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +132,7 @@ class NativeStableFile:
     inode: int
     size: int
     modified_ns: int
+    changed_ns: int
     sha256: str
 
 
@@ -161,8 +170,8 @@ class NativeExecutionData:
     processes: tuple[NativeProcessRecord, ...]
     workspace_nonce: str
     unit_count: int
-    reference_pdf: Path
-    pdfinfo_path: Path
+    reference_pdf_sha256: str
+    pdfinfo_evidence_sha256: str
 
 
 def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
@@ -209,11 +218,11 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
         "evidence": {
             "reference_pdf": {
                 "path": _evidence_path(request, "reference.pdf"),
-                "sha256": sha256_file(data.reference_pdf),
+                "sha256": data.reference_pdf_sha256,
             },
             "pdfinfo": {
                 "path": _evidence_path(request, "pdfinfo.txt"),
-                "sha256": sha256_file(data.pdfinfo_path),
+                "sha256": data.pdfinfo_evidence_sha256,
             },
         },
         "unit_count": data.unit_count,

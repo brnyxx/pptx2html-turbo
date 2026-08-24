@@ -14,7 +14,6 @@ from evaluate.multiformat_native_unit_files import (
     identity,
     output_file,
     stable_bytes,
-    stable_file,
     tool_identity,
     tool_path,
     verify_file,
@@ -234,14 +233,15 @@ def _workspace(
         tuple(processes),
         request.nonce,
         count,
-        reference,
-        retained_info,
+        reference_file.sha256,
+        info_file.sha256,
     )
     execution_path = staging / "execution.json"
-    _ = execution_path.write_bytes(canonicalize(execution_record(data)) + b"\n")
-    execution_file = stable_file(
-        execution_path, request, NativeUnitFailure.OUTPUT_INVALID
+    execution_file = write_snapshot(
+        execution_path, canonicalize(execution_record(data)) + b"\n", request
     )
+    verify_file(reference_file, reference, request)
+    verify_file(info_file, retained_info, request)
     return Captured(
         count,
         execution_file.sha256,

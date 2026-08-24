@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
+import shutil as _shutil
 import stat
-import sys
 from pathlib import Path
 
 from evaluate.multiformat_candidate_fonts import (
     CandidateFontEnvironment,
     CandidateFontError,
     prepare_font_environment,
+)
+from evaluate.multiformat_native_unit_cleanup import (
+    cleanup_workspace as _cleanup_workspace,
 )
 from evaluate.multiformat_native_unit_io import (
     no_follow,
@@ -24,6 +26,9 @@ from evaluate.multiformat_native_unit_types import (
     NativeUnitFailure,
     NativeUnitRequest,
 )
+
+cleanup_workspace = _cleanup_workspace
+shutil = _shutil
 
 MAX_LOG_BYTES = 1024 * 1024
 MAX_PDF_BYTES = 64 * 1024 * 1024
@@ -44,7 +49,7 @@ def file_path(
         value = path.lstat()
         if stat.S_ISLNK(value.st_mode) or not stat.S_ISREG(value.st_mode):
             raise fail(request, failure, "path is not a regular file")
-        return path.resolve(strict=True)
+        return path.parent.resolve(strict=True) / path.name
     except FileNotFoundError as error:
         raise fail(request, failure, "path is missing") from error
     except OSError as error:
@@ -119,6 +124,7 @@ def stable_bytes(
                 before.st_ino,
                 before.st_size,
                 before.st_mtime_ns,
+                before.st_ctime_ns,
                 digest,
             ),
             content,
@@ -134,20 +140,13 @@ def stable_bytes(
 
 
 def output_file(path: Path, request: NativeUnitRequest) -> NativeStableFile:
-    value = stable_file(path, request, NativeUnitFailure.OUTPUT_MISSING, MAX_PDF_BYTES)
-    if value.size == 0:
+    value, content = stable_bytes(
+        path, request, NativeUnitFailure.OUTPUT_MISSING, MAX_PDF_BYTES
+    )
+    if not content:
         raise fail(request, NativeUnitFailure.OUTPUT_MISSING, "PDF output is empty")
-    try:
-        with path.open("rb") as handle:
-            header = handle.read(5)
-        if header != b"%PDF-":
-            raise fail(
-                request, NativeUnitFailure.OUTPUT_INVALID, "PDF output is malformed"
-            )
-    except OSError as error:
-        raise fail(
-            request, NativeUnitFailure.OUTPUT_INVALID, "PDF output is unreadable"
-        ) from error
+    if not content.startswith(b"%PDF-"):
+        raise fail(request, NativeUnitFailure.OUTPUT_INVALID, "PDF output is malformed")
     return value
 
 
@@ -209,40 +208,3 @@ def font_environment(
 
 def identity(value: os.stat_result) -> tuple[int, int]:
     return value.st_dev, value.st_ino
-
-
-def cleanup_workspace(
-    path: Path, expected: tuple[int, int], request: NativeUnitRequest
-) -> None:
-    active = sys.exception()
-    cleanup_error: NativeUnitError | None = None
-    cleanup_cause: OSError | None = None
-    try:
-        value = path.lstat()
-        if identity(value) != expected or not stat.S_ISDIR(value.st_mode):
-            cleanup_error = fail(
-                request, NativeUnitFailure.OUTPUT_INVALID, "workspace identity changed"
-            )
-        else:
-            _ = shutil.rmtree(path)
-            if os.path.lexists(path):
-                cleanup_error = fail(
-                    request, NativeUnitFailure.OUTPUT_INVALID, "workspace remains"
-                )
-    except FileNotFoundError as error:
-        cleanup_error = fail(
-            request, NativeUnitFailure.OUTPUT_INVALID, "workspace disappeared"
-        )
-        cleanup_cause = error
-    except OSError as error:
-        cleanup_error = fail(
-            request, NativeUnitFailure.OUTPUT_INVALID, "workspace cleanup failed"
-        )
-        cleanup_cause = error
-    if cleanup_error is not None:
-        if active is not None:
-            active.add_note(f"{cleanup_error}: {cleanup_cause}")
-        else:
-            if cleanup_cause is not None:
-                raise cleanup_error from cleanup_cause
-            raise cleanup_error

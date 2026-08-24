@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import io
 import os
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -46,41 +48,87 @@ class MultiFormatSubprocessTests(unittest.TestCase):
         ):
             _ = multiformat_subprocess.clean_subprocess_environment()
 
-    def test_bounded_process_kills_real_descendant_after_pid_ready_event(self) -> None:
+    def test_normal_exit_kills_ready_descendant_without_closing_active_pipe(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             child_pid = root / "child.pid"
+            parent_pid = root / "parent.pid"
+            ready_socket = root / "ready.sock"
             child_script = root / "child.py"
             _ = child_script.write_text(
                 "import os, signal, sys\nfrom pathlib import Path\n"
                 + f"Path({str(child_pid)!r}).write_text(str(os.getpid()))\n"
-                + "os.write(int(sys.argv[1]), str(os.getpid()).encode())\n"
-                + "os.close(int(sys.argv[1]))\nsignal.pause()\n",
+                + "os.write(int(sys.argv[2]), b'ready')\n"
+                + "os.close(int(sys.argv[2]))\nsignal.pause()\n",
                 encoding="utf-8",
             )
             parent_script = root / "parent.py"
             _ = parent_script.write_text(
-                "import os, signal, subprocess, sys\n"
+                "import os, socket, subprocess, sys\nfrom pathlib import Path\n"
+                + f"Path({str(parent_pid)!r}).write_text(str(os.getpid()))\n"
                 + "read_fd, write_fd = os.pipe()\n"
-                + f"subprocess.Popen([sys.executable, {str(child_script)!r}, str(write_fd)], pass_fds=(write_fd,))\n"
-                + "os.close(write_fd)\nos.read(read_fd, 64)\nsignal.pause()\n",
+                + f"subprocess.Popen([sys.executable, {str(child_script)!r}, 'child', str(write_fd)], pass_fds=(write_fd,))\n"
+                + "os.close(write_fd)\nos.read(read_fd, 64)\n"
+                + f"with socket.socket(socket.AF_UNIX) as ready:\n    ready.connect({str(ready_socket)!r})\n    ready.sendall(b'ready')\n",
                 encoding="utf-8",
             )
-            stdout, stderr = root / "stdout", root / "stderr"
-            with self.assertRaises(CandidateProcessError) as raised:
-                _ = run_bounded_process(
-                    (sys.executable, parent_script.as_posix()),
-                    root,
-                    {"PATH": os.defpath},
-                    stdout,
-                    stderr,
-                    timeout_seconds=0.1,
-                    max_log_bytes=1024,
-                )
-            self.assertIs(raised.exception.failure, CandidateProcessFailure.TIMEOUT)
+            listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            listener.bind(ready_socket.as_posix())
+            listener.listen(1)
+            listener.settimeout(5.0)
+            result: dict[str, int] = {}
+            errors: list[Exception] = []
+            finished = threading.Event()
+
+            def invoke() -> None:
+                try:
+                    result["value"] = run_bounded_process(
+                        (sys.executable, parent_script.as_posix()),
+                        root,
+                        {"PATH": os.defpath},
+                        root / "stdout",
+                        root / "stderr",
+                        timeout_seconds=5.0,
+                        max_log_bytes=1024,
+                    )
+                except CandidateProcessError as error:
+                    errors.append(error)
+                finally:
+                    finished.set()
+
+            worker = threading.Thread(target=invoke, daemon=True)
+            worker.start()
+            try:
+                connection = listener.accept()[0]
+                with connection:
+                    self.assertEqual(connection.recv(64), b"ready")
+                self.assertTrue(finished.wait(timeout=5.0))
+            finally:
+                listener.close()
+            if errors:
+                raise errors[0]
+            self.assertEqual(result.get("value"), 0)
             descendant = int(child_pid.read_text(encoding="utf-8"))
             with self.assertRaises(ProcessLookupError):
                 os.kill(descendant, 0)
+
+    def test_normal_exit_without_descendants_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertEqual(
+                run_bounded_process(
+                    (sys.executable, "-c", "import sys; sys.exit(0)"),
+                    root,
+                    {"PATH": os.defpath},
+                    root / "stdout",
+                    root / "stderr",
+                    timeout_seconds=5.0,
+                    max_log_bytes=1024,
+                ),
+                0,
+            )
 
     def test_reader_io_failure_is_typed_and_not_log_overflow(self) -> None:
         class BrokenReader:

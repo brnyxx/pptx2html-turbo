@@ -33,6 +33,7 @@ def write_new(
             value.st_ino,
             value.st_size,
             value.st_mtime_ns,
+            value.st_ctime_ns,
             hashlib.sha256(content).hexdigest(),
         )
     except NativeUnitError:
@@ -53,6 +54,7 @@ def same_file(left: os.stat_result, right: os.stat_result) -> bool:
         _identity(left) == _identity(right)
         and left.st_size == right.st_size
         and left.st_mtime_ns == right.st_mtime_ns
+        and left.st_ctime_ns == right.st_ctime_ns
     )
 
 
@@ -63,7 +65,10 @@ def no_follow() -> int:
 def _write_descriptor(descriptor: int, content: bytes) -> None:
     offset = 0
     while offset < len(content):
-        offset += os.write(descriptor, content[offset:])
+        written = os.write(descriptor, content[offset:])
+        if written <= 0:
+            raise OSError("descriptor write made no progress")
+        offset += written
 
 
 def _identity(value: os.stat_result) -> tuple[int, int]:

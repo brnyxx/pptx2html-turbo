@@ -87,6 +87,7 @@ def run_bounded_process(
                     termination_failures,
                     max_log_bytes,
                 ),
+                daemon=True,
             ),
             threading.Thread(
                 target=_drain_bounded,
@@ -99,14 +100,16 @@ def run_bounded_process(
                     termination_failures,
                     max_log_bytes,
                 ),
+                daemon=True,
             ),
         ]
         for reader in readers:
             reader.start()
-        deadline = time.monotonic() + timeout_seconds
         exit_code = 0
         try:
             exit_code = process.wait(timeout=timeout_seconds)
+            if not _kill_process_group(process):
+                termination_failures.append(RuntimeError("process group survived exit"))
         except subprocess.TimeoutExpired as error:
             timeout_error = error
             if not _kill_process_group(process):
@@ -119,13 +122,12 @@ def run_bounded_process(
         except (OSError, ValueError) as error:
             termination_failures.append(error)
         finally:
+            deadline = time.monotonic() + _termination_timeout(timeout_seconds)
             for reader in readers:
                 reader.join(timeout=max(0.0, deadline - time.monotonic()))
-            if any(reader.is_alive() for reader in readers):
+            if not any(reader.is_alive() for reader in readers):
                 _close_pipe(process.stdout)
                 _close_pipe(process.stderr)
-            _close_pipe(process.stdout)
-            _close_pipe(process.stderr)
         if termination_failures:
             raise CandidateProcessError(
                 CandidateProcessFailure.TERMINATION_FAILED
@@ -192,8 +194,6 @@ def _close_pipe(pipe: _Closeable) -> None:
 
 
 def _kill_process_group(process: subprocess.Popen[bytes]) -> bool:
-    if process.poll() is not None:
-        return True
     try:
         os.killpg(process.pid, signal.SIGKILL)
         return True
