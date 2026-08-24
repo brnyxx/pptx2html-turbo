@@ -45,3 +45,11 @@ class PublicFormatPlan:
     document_format: DocumentFormat
     expected_count: int
     groups: tuple[PublicSourceGroup, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedPublicPoolSource:
+    document_format: DocumentFormat
+    source_id: str
+    relative_path: str
+    source_sha256: str
