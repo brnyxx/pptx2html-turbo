@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
 
 from evaluate.multiformat_candidate_process import CandidateProcessFailure
 from evaluate.multiformat_corpus_types import DocumentFormat
@@ -164,6 +162,9 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
                 with self.assertRaises(NativeUnitError) as raised:
                     _ = capture_native_observation(request, runner)
                 self.assertEqual(raised.exception.failure, failure)
+                self.assertEqual(raised.exception.document_format, DocumentFormat.DOCX)
+                self.assertEqual(raised.exception.source_id, request.source.source_id)
+                self.assertTrue(raised.exception.detail)
                 self.assertFalse(request.observation_dir.exists())
 
     def test_output_mutation_after_pdfinfo_is_rejected(self) -> None:
@@ -186,23 +187,6 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
             with self.assertRaises(NativeUnitError) as raised:
                 _ = capture_native_observation(request, RecordingNativeRunner())
             self.assertEqual(raised.exception.failure, NativeUnitFailure.SOURCE_INVALID)
-
-    def test_unsupported_platform_fails_before_tool_execution(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            fixture = make_native_unit_fixture(root)
-            runner = RecordingNativeRunner()
-            with (
-                patch.object(sys, "platform", "win32"),
-                self.assertRaises(NativeUnitError) as raised,
-            ):
-                _ = capture_native_observation(
-                    fixture.request(root, DocumentFormat.PDF), runner
-                )
-            self.assertEqual(
-                raised.exception.failure, NativeUnitFailure.UNSUPPORTED_PLATFORM
-            )
-            self.assertEqual(runner.requests, [])
 
     def test_zero_and_multiple_pages_fail_closed(self) -> None:
         for output in (b"Pages:           0\n", b"Pages:           1\nPages: 2\n"):

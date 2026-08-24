@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-import sys
+import platform
 from pathlib import Path
 
 from evaluate.multiformat_corpus_types import DocumentFormat
-from evaluate.multiformat_native_unit_capture import Captured, capture
 from evaluate.multiformat_native_unit_files import fail as _fail
 from evaluate.multiformat_native_unit_files import file_path, stable_file
+from evaluate.multiformat_native_unit_observation import Captured, capture
 from evaluate.multiformat_native_unit_process import run_native_process
 from evaluate.multiformat_native_unit_types import (
     NativeObservation,
@@ -126,9 +126,21 @@ def _route(request: NativeUnitRequest) -> NativeRouteSelection:
 
 
 def _validate(request: NativeUnitRequest) -> None:
-    if sys.platform not in {"darwin", "linux"}:
-        raise _fail(
-            request, NativeUnitFailure.UNSUPPORTED_PLATFORM, "platform is unsupported"
+    operating_system = platform.system().lower()
+    architecture = platform.machine().lower()
+    normalized_os = {"darwin": "macos", "linux": "linux"}.get(operating_system)
+    normalized_architecture = {
+        "aarch64": "arm64",
+        "arm64": "arm64",
+        "amd64": "x86_64",
+        "x86_64": "x86_64",
+    }.get(architecture)
+    if normalized_os is None or normalized_architecture is None:
+        raise NativeUnitError(
+            NativeUnitFailure.UNSUPPORTED_PLATFORM,
+            None,
+            None,
+            f"unsupported platform: {operating_system}/{architecture}",
         )
     relative = Path(request.source.relative_path)
     invalid_nonce = len(request.nonce) != 64 or any(

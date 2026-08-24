@@ -6,6 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from evaluate.jcs import canonicalize
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_native_unit_runtime import capture_native_observation
 from evaluate.multiformat_schema import object_value, string_list
@@ -86,6 +87,8 @@ class MultiFormatNativeUnitSchemaTests(unittest.TestCase):
                 {
                     "keys",
                     "locale",
+                    "lang",
+                    "lc_all",
                     "timezone",
                     "home_isolated",
                     "temporary_root_isolated",
@@ -93,9 +96,16 @@ class MultiFormatNativeUnitSchemaTests(unittest.TestCase):
                 },
             )
             self.assertEqual(
-                set(string_list(environment, "keys")),
-                {"HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"},
+                string_list(environment, "keys"),
+                ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"],
             )
+            self.assertEqual(environment["locale"], "en-US")
+            self.assertEqual(environment["lang"], "en_US.UTF-8")
+            self.assertEqual(environment["lc_all"], "en_US.UTF-8")
+            self.assertEqual(environment["timezone"], "UTC")
+            self.assertIs(environment["home_isolated"], True)
+            self.assertIs(environment["temporary_root_isolated"], True)
+            self.assertIs(environment["profile_isolated"], False)
             self.assertNotIn("font", execution)
             self.assertNotIn("logs", execution)
             serialized = json.dumps(execution)
@@ -107,6 +117,18 @@ class MultiFormatNativeUnitSchemaTests(unittest.TestCase):
                     set(object_value(evidence, name)) == BINDING_FIELDS
                     for name in evidence
                 )
+            )
+            self.assertIs(type(execution["schema_version"]), int)
+            self.assertIs(type(execution["run"]), int)
+            self.assertIs(type(execution["unit_count"]), int)
+            self.assertIs(type(processes), list)
+            for item in records:
+                self.assertIs(type(item["arguments"]), list)
+                self.assertIs(type(item["timeout_seconds"]), int)
+                self.assertIs(type(item["exit_code"]), int)
+            self.assertEqual(
+                request.observation_dir.joinpath("execution.json").read_bytes(),
+                canonicalize(execution) + b"\n",
             )
 
     def test_office_schema_records_only_two_locked_route_processes(self) -> None:
@@ -128,7 +150,7 @@ class MultiFormatNativeUnitSchemaTests(unittest.TestCase):
             )
 
             self.assertEqual(set(execution), COMMON_FIELDS)
-            self.assertEqual(set(tools), {"soffice", "pdfinfo"})
+            self.assertEqual(set(tools), {"libreoffice", "pdfinfo"})
             self.assertTrue(
                 all(set(object_value(tools, name)) == TOOL_FIELDS for name in tools)
             )
@@ -137,6 +159,8 @@ class MultiFormatNativeUnitSchemaTests(unittest.TestCase):
                 {
                     "keys",
                     "locale",
+                    "lang",
+                    "lc_all",
                     "timezone",
                     "font_environment_sha256",
                     "home_isolated",
@@ -145,6 +169,17 @@ class MultiFormatNativeUnitSchemaTests(unittest.TestCase):
                 },
             )
             self.assertEqual(
+                string_list(environment, "keys"),
+                ["FONTCONFIG_FILE", "HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"],
+            )
+            self.assertEqual(environment["locale"], "en-US")
+            self.assertEqual(environment["lang"], "en_US.UTF-8")
+            self.assertEqual(environment["lc_all"], "en_US.UTF-8")
+            self.assertEqual(environment["timezone"], "UTC")
+            self.assertIs(environment["home_isolated"], True)
+            self.assertIs(environment["temporary_root_isolated"], True)
+            self.assertIs(environment["profile_isolated"], True)
+            self.assertEqual(
                 [item["role"] for item in records],
                 [
                     "libreoffice_version",
@@ -152,6 +187,18 @@ class MultiFormatNativeUnitSchemaTests(unittest.TestCase):
                     "libreoffice",
                     "poppler_metadata",
                 ],
+            )
+            for item in records:
+                self.assertIs(type(item["arguments"]), list)
+                self.assertIs(type(item["timeout_seconds"]), int)
+                self.assertIs(type(item["exit_code"]), int)
+            self.assertEqual(records[0]["timeout_seconds"], 120)
+            self.assertEqual(records[1]["timeout_seconds"], 120)
+            self.assertEqual(
+                records[2]["timeout_seconds"], route.commands[0].timeout_seconds
+            )
+            self.assertEqual(
+                records[3]["timeout_seconds"], route.commands[1].timeout_seconds
             )
             self.assertEqual(records[2]["arguments"], list(route.commands[0].arguments))
             self.assertNotIn(root.as_posix(), json.dumps(execution, sort_keys=True))

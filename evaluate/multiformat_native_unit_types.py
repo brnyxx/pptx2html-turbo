@@ -28,15 +28,15 @@ class NativeUnitFailure(StrEnum):
 @dataclass(frozen=True, slots=True)
 class NativeUnitError(Exception):
     failure: NativeUnitFailure
-    document_format: DocumentFormat
-    source_id: str
+    document_format: DocumentFormat | None
+    source_id: str | None
     detail: str
 
     def __post_init__(self) -> None:
-        Exception.__init__(
-            self,
-            f"{self.failure.value} for {self.document_format.value}/{self.source_id}: {self.detail}",
-        )
+        scope = ""
+        if self.document_format is not None and self.source_id is not None:
+            scope = f" for {self.document_format.value}/{self.source_id}"
+        Exception.__init__(self, f"{self.failure.value}{scope}: {self.detail}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +62,7 @@ class NativeProcessRequest:
     environment: tuple[tuple[str, str], ...]
     stdout_path: Path
     stderr_path: Path
-    timeout_seconds: float
+    timeout_seconds: int
     max_log_bytes: int
 
 
@@ -86,7 +86,7 @@ class NativeProcessSpec:
     cwd: Path
     environment: tuple[tuple[str, str], ...]
     prefix: Path
-    timeout: float = 120.0
+    timeout: int = 120
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,7 +139,7 @@ class NativeProcessLog:
 class NativeProcessRecord:
     role: str
     arguments: tuple[str, ...]
-    timeout_seconds: float
+    timeout_seconds: int
     exit_code: int
 
 
@@ -155,6 +155,8 @@ class NativeExecutionData:
     font_environment_sha256: str | None
     environment_keys: tuple[str, ...]
     environment_locale: str
+    environment_lang: str
+    environment_lc_all: str
     environment_timezone: str
     processes: tuple[NativeProcessRecord, ...]
     workspace_nonce: str
@@ -175,10 +177,12 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
     environment: dict[str, JsonValue] = {
         "keys": list(data.environment_keys),
         "locale": data.environment_locale,
+        "lang": data.environment_lang,
+        "lc_all": data.environment_lc_all,
         "timezone": data.environment_timezone,
         "home_isolated": True,
         "temporary_root_isolated": True,
-        "profile_isolated": True,
+        "profile_isolated": data.route_kind is NativeRouteKind.OFFICE,
     }
     record: dict[str, JsonValue] = {
         "schema_version": 1,
@@ -204,11 +208,11 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
         ],
         "evidence": {
             "reference_pdf": {
-                "path": data.reference_pdf.name,
+                "path": _evidence_path(request, "reference.pdf"),
                 "sha256": sha256_file(data.reference_pdf),
             },
             "pdfinfo": {
-                "path": data.pdfinfo_path.name,
+                "path": _evidence_path(request, "pdfinfo.txt"),
                 "sha256": sha256_file(data.pdfinfo_path),
             },
         },
@@ -216,7 +220,7 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
     }
     if data.route_kind is NativeRouteKind.OFFICE:
         environment["font_environment_sha256"] = data.font_environment_sha256
-        tools["soffice"] = {
+        tools["libreoffice"] = {
             "name": request.runtime.soffice.name,
             "sha256": data.soffice_sha256,
             "version": data.soffice_version,
@@ -239,8 +243,8 @@ class NativeObservation:
     pdfinfo_sha256: str
 
 
-@dataclass(frozen=True, slots=True)
-class NativeUnitSummary:
-    source: NativeUnitSource
-    unit_count: int
-    observations: tuple[NativeObservation, ...]
+def _evidence_path(request: NativeUnitRequest, name: str) -> str:
+    return (
+        f"observations/{request.source.document_format.value}/"
+        f"{request.source.source_id}/run-{request.run}/{name}"
+    )

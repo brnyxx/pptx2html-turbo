@@ -91,10 +91,22 @@ def version(log: NativeProcessLog, request: NativeUnitRequest) -> str:
         raise fail(
             request, NativeUnitFailure.OUTPUT_INVALID, "version output is unreadable"
         ) from error
-    lines = tuple(line.strip() for line in output.splitlines() if line.strip())
-    if not lines:
-        raise fail(request, NativeUnitFailure.OUTPUT_INVALID, "version output is empty")
-    return lines[0]
+    if "\x00" in output:
+        raise fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "version output contains NUL"
+        )
+    whitespace = " \t\n\r\v\f"
+    for raw_line in output.split("\n"):
+        line = raw_line.strip(whitespace)
+        if line:
+            if "\r" in line or "\n" in line:
+                raise fail(
+                    request,
+                    NativeUnitFailure.OUTPUT_INVALID,
+                    "version output contains embedded line break",
+                )
+            return line
+    raise fail(request, NativeUnitFailure.OUTPUT_INVALID, "version output is empty")
 
 
 def pages(path: Path, request: NativeUnitRequest) -> int:

@@ -41,6 +41,8 @@ from evaluate.multiformat_native_unit_types import (
 )
 from evaluate.multiformat_schema import sha256_file
 
+VERSION_TIMEOUT_SECONDS = 120
+
 
 @dataclass(frozen=True, slots=True)
 class Captured:
@@ -91,11 +93,6 @@ def _workspace(
     )
     env = environment(folders[3], folders[4], font)
     env_values = dict(env)
-    route_timeout = (
-        route.office.timeout_seconds
-        if route.office is not None
-        else route.metadata.timeout_seconds
-    )
     processes: list[NativeProcessRecord] = []
     office_version: str | None = None
     if office is not None:
@@ -110,7 +107,7 @@ def _workspace(
                         workspace,
                         env,
                         folders[2] / "soffice-version",
-                        timeout=route_timeout,
+                        timeout=VERSION_TIMEOUT_SECONDS,
                     )
                 ),
                 "soffice-version",
@@ -131,7 +128,7 @@ def _workspace(
                     workspace,
                     env,
                     folders[2] / "pdfinfo-version",
-                    timeout=route_timeout,
+                    timeout=VERSION_TIMEOUT_SECONDS,
                 )
             ),
             "pdfinfo-version",
@@ -164,7 +161,7 @@ def _workspace(
                         workspace,
                         env,
                         folders[2] / "libreoffice",
-                        timeout=route_timeout,
+                        timeout=route.office.timeout_seconds,
                     )
                 ),
                 "libreoffice",
@@ -190,7 +187,7 @@ def _workspace(
                     workspace,
                     env,
                     folders[2] / "pdfinfo",
-                    timeout=route_timeout,
+                    timeout=route.metadata.timeout_seconds,
                 )
             ),
             "pdfinfo",
@@ -218,8 +215,10 @@ def _workspace(
         sha256_file(pdfinfo),
         pdfinfo_version,
         font.environment_sha256 if font else None,
-        tuple(env_values),
+        tuple(sorted(env_values)),
         request.runtime.routing.locale,
+        "en_US.UTF-8",
+        "en_US.UTF-8",
         request.runtime.routing.timezone,
         tuple(processes),
         request.nonce,

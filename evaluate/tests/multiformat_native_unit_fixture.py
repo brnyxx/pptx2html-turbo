@@ -70,6 +70,8 @@ class RecordingNativeRunner:
         self.pdfinfo_output: bytes = b"Pages:           1\n"
         self.stdout_output: bytes = b""
         self.stderr_output: bytes = b""
+        self.office_version_output: bytes = b"LibreOffice 26.2.2.2\n"
+        self.pdfinfo_version_output: bytes = b"pdfinfo version 26.03.0\n"
         self.pdf_output: bytes = b"%PDF-1.4\nfixture-native-reference\n"
         self.mutate_pdf: bool = False
 
@@ -81,9 +83,9 @@ class RecordingNativeRunner:
         _ = request.stderr_path.write_bytes(self.stderr_output)
         command = request.command
         if command[-1:] == ("--version",):
-            _ = request.stdout_path.write_bytes(b"LibreOffice 26.2.2.2\n")
+            _ = request.stdout_path.write_bytes(self.office_version_output)
         elif command[-1:] == ("-v",):
-            _ = request.stdout_path.write_bytes(b"pdfinfo version 26.03.0\n")
+            _ = request.stdout_path.write_bytes(self.pdfinfo_version_output)
         elif "--convert-to" in command:
             if self.write_pdf:
                 output_dir = Path(command[command.index("--outdir") + 1])
