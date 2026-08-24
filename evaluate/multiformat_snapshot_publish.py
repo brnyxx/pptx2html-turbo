@@ -11,10 +11,12 @@ from enum import StrEnum
 from pathlib import Path
 
 from evaluate.multiformat_snapshot_filesystem import (
-    _clean_directory_fd,
-    _remove_owned_entry,
+    acquire_lock,
     atomic_rename_noreplace,
+    remove_owned_directory,
     unlink_owned_file,
+    valid_lock_namespace,
+    verify_directory_identity,
 )
 
 _DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
@@ -57,8 +59,10 @@ class _Identity:
 class _CleanupState:
     parent_descriptor: int
     staging: Path | None
+    target: Path
     staging_descriptor: int | None
     staging_identity: _Identity | None
+    renamed: bool
     lock_descriptor: int
     lock: Path
     lock_identity: _Identity
@@ -72,7 +76,8 @@ def publish_snapshot(
     lock_namespace: str = "snapshot",
 ) -> None:
     """Publish a complete directory tree without a readiness marker."""
-    _validate_lock_namespace(lock_namespace)
+    if not valid_lock_namespace(lock_namespace):
+        raise _InvalidLockNamespaceError(lock_namespace)
     parent = destination.parent
     parent.mkdir(parents=True, exist_ok=True)
     resolved_parent = parent.resolve(strict=True)
@@ -85,10 +90,18 @@ def publish_snapshot(
         os.close(parent_descriptor)
         raise SnapshotPublishError(target, SnapshotPublishFailure.DESTINATION_EXISTS)
     lock = resolved_parent / f".{target.name}.{lock_namespace}.lock"
-    lock_descriptor, lock_identity = _acquire_lock(lock, parent_descriptor)
+    try:
+        lock_descriptor, lock_identity = _acquire_lock(lock, parent_descriptor)
+    except SnapshotPublishError as error:
+        try:
+            os.close(parent_descriptor)
+        except OSError as cleanup_error:
+            error.add_note(f"snapshot cleanup failed: {cleanup_error}")
+        raise
     staging: Path | None = None
     staging_descriptor: int | None = None
     staging_identity: _Identity | None = None
+    renamed = False
     published = False
     try:
         if os.path.lexists(target):
@@ -110,23 +123,23 @@ def publish_snapshot(
             )
         try:
             _atomic_rename_noreplace(staging, target, parent_descriptor)
+            renamed = True
         except OSError as error:
             raise SnapshotPublishError(
                 target,
                 SnapshotPublishFailure.PUBLICATION_FAILED,
             ) from error
-        target_descriptor = os.open(
-            target,
-            _DIRECTORY_FLAGS | _NOFOLLOW_FLAGS,
-        )
         try:
-            if _identity(os.fstat(target_descriptor)) != staging_identity:
-                raise SnapshotPublishError(
-                    target,
-                    SnapshotPublishFailure.PUBLICATION_FAILED,
-                )
-        finally:
-            os.close(target_descriptor)
+            assert staging_identity is not None
+            verify_directory_identity(
+                target,
+                (staging_identity.device, staging_identity.inode),
+            )
+        except OSError as error:
+            raise SnapshotPublishError(
+                target,
+                SnapshotPublishFailure.PUBLICATION_FAILED,
+            ) from error
         published = True
     finally:
         active_error = sys.exception()
@@ -134,8 +147,10 @@ def publish_snapshot(
             _CleanupState(
                 parent_descriptor,
                 staging,
+                target,
                 staging_descriptor,
                 staging_identity,
+                renamed,
                 lock_descriptor,
                 lock,
                 lock_identity,
@@ -155,31 +170,12 @@ def publish_snapshot(
             raise publication_error from errors[0]
 
 
-def _validate_lock_namespace(value: str) -> None:
-    if not value or value[0] == "-" or value[-1] == "-":
-        raise _InvalidLockNamespaceError(value)
-    previous_was_separator = False
-    for character in value:
-        is_letter = "a" <= character <= "z"
-        is_digit = "0" <= character <= "9"
-        if character == "-":
-            if previous_was_separator:
-                raise _InvalidLockNamespaceError(value)
-            previous_was_separator = True
-        elif is_letter or is_digit:
-            previous_was_separator = False
-        else:
-            raise _InvalidLockNamespaceError(value)
-
-
 def _acquire_lock(path: Path, parent_descriptor: int) -> tuple[int, _Identity]:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW_FLAGS
-    flags |= getattr(os, "O_CLOEXEC", 0)
     try:
-        descriptor = os.open(path.name, flags, 0o600, dir_fd=parent_descriptor)
+        descriptor, identity = acquire_lock(path, parent_descriptor)
     except OSError as error:
         raise SnapshotPublishError(path, SnapshotPublishFailure.LOCKED) from error
-    return descriptor, _identity(os.fstat(descriptor))
+    return descriptor, _Identity(*identity)
 
 
 def _identity(value: os.stat_result) -> _Identity:
@@ -204,8 +200,9 @@ def _cleanup(state: _CleanupState) -> tuple[OSError, ...]:
     errors: list[OSError] = []
     if not state.published and state.staging_descriptor is not None:
         try:
+            owned_path = state.target if state.renamed else state.staging
             _remove_owned_directory(
-                state.staging,
+                owned_path,
                 state.staging_identity,
                 state.staging_descriptor,
                 state.parent_descriptor,
@@ -252,19 +249,16 @@ def _remove_owned_directory(
     descriptor: int,
     parent_descriptor: int,
 ) -> None:
-    if not _matches(path, identity, stat.S_ISDIR):
-        _clean_directory_fd(descriptor)
-        raise OSError(errno.ESTALE, "staging path ownership changed")
-    _clean_directory_fd(descriptor)
-    if not _matches(path, identity, stat.S_ISDIR):
-        raise OSError(errno.ESTALE, "staging path ownership changed")
-    assert path is not None
-    assert identity is not None
-    _remove_owned_entry(
+    remove_owned_directory(
+        path,
+        None if identity is None else (identity.device, identity.inode),
+        descriptor,
         parent_descriptor,
-        path.name,
-        (identity.device, identity.inode),
-        directory=True,
+        lambda candidate, expected: _matches(
+            candidate,
+            None if expected is None else _Identity(*expected),
+            stat.S_ISDIR,
+        ),
     )
 
 

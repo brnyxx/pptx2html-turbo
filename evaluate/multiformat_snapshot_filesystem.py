@@ -6,6 +6,7 @@ import os
 import stat
 import sys
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 _RENAME_EXCL = 0x00000004  # macOS SDK sys/stdio.h
@@ -53,6 +54,54 @@ def atomic_rename_noreplace(
     if error.errno == errno.EEXIST:
         raise FileExistsError(error.errno, error.strerror) from error
     raise error
+
+
+def valid_lock_namespace(value: str) -> bool:
+    if not value or value[0] == "-" or value[-1] == "-":
+        return False
+    previous_was_separator = False
+    for character in value:
+        is_letter = "a" <= character <= "z"
+        is_digit = "0" <= character <= "9"
+        if character == "-":
+            if previous_was_separator:
+                return False
+            previous_was_separator = True
+        elif is_letter or is_digit:
+            previous_was_separator = False
+        else:
+            return False
+    return True
+
+
+def acquire_lock(
+    path: Path,
+    parent_descriptor: int,
+) -> tuple[int, tuple[int, int]]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW_FLAGS
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(path.name, flags, 0o600, dir_fd=parent_descriptor)
+    try:
+        identity = _identity(os.fstat(descriptor))
+    except OSError as error:
+        try:
+            os.close(descriptor)
+        except OSError as cleanup_error:
+            error.add_note(f"snapshot cleanup failed: {cleanup_error}")
+        raise
+    return descriptor, identity
+
+
+def verify_directory_identity(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> None:
+    descriptor = os.open(path, _DIRECTORY_FLAGS | _NOFOLLOW_FLAGS)
+    try:
+        if _identity(os.fstat(descriptor)) != expected_identity:
+            raise OSError(errno.ESTALE, "published directory identity changed")
+    finally:
+        os.close(descriptor)
 
 
 def _clean_directory_fd(descriptor: int) -> None:
@@ -114,17 +163,42 @@ def _remove_owned_entry(
             os.rmdir(tombstone, dir_fd=parent_descriptor)
         else:
             os.unlink(tombstone, dir_fd=parent_descriptor)
-    except OSError:
+    except OSError as error:
         try:
             os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
         except FileNotFoundError:
-            os.rename(
-                tombstone,
-                name,
-                src_dir_fd=parent_descriptor,
-                dst_dir_fd=parent_descriptor,
-            )
+            try:
+                atomic_rename_noreplace(
+                    Path(tombstone),
+                    Path(name),
+                    parent_descriptor,
+                )
+            except OSError as restore_error:
+                raise restore_error from error
         raise
+
+
+def remove_owned_directory(
+    path: Path | None,
+    identity: tuple[int, int] | None,
+    descriptor: int,
+    parent_descriptor: int,
+    matches: Callable[[Path | None, tuple[int, int] | None], bool],
+) -> None:
+    if not matches(path, identity):
+        _clean_directory_fd(descriptor)
+        raise OSError(errno.ESTALE, "staging path ownership changed")
+    _clean_directory_fd(descriptor)
+    if not matches(path, identity):
+        raise OSError(errno.ESTALE, "staging path ownership changed")
+    if path is None or identity is None:
+        raise OSError(errno.ESTALE, "staging path ownership changed")
+    _remove_owned_entry(
+        parent_descriptor,
+        path.name,
+        identity,
+        directory=True,
+    )
 
 
 def unlink_owned_file(
