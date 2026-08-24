@@ -89,8 +89,10 @@ def validate_reference_lock(
         if string_value(canonicalizer, "version") != routing.canonicalizer_version:
             raise PortableLockError("portable canonicalizer version differs")
         _artifact_path(canonicalizer, evidence_root)
-        _artifact_path(object_value(lock, "font_bundle"), evidence_root)
-        _artifact_path(object_value(lock, "configuration"), evidence_root)
+        for field in ("font_bundle", "configuration"):
+            binding = object_value(lock, field)
+            string_value(binding, "version")
+            _artifact_path(binding, evidence_root)
 
         browser = object_value(lock, "browser")
         chromium = object_value(browser, "chromium")
@@ -160,8 +162,8 @@ def portable_lock_template() -> JsonObject:
         },
         "routing_table_sha256": "",
         "canonicalizer": {**versioned},
-        "font_bundle": {**binding},
-        "configuration": {**binding},
+        "font_bundle": {**versioned},
+        "configuration": {**versioned},
         "browser": {"chromium": {**versioned}, "lock": {**binding}},
         "candidate_runtime_lock": {**binding},
         "signer": {

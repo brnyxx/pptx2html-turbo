@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate import multiformat_portable_receipt as portable_receipt
 from evaluate.multiformat_capture_contract import (
     capture_counts,
     expected_capture_producer,
@@ -24,6 +25,8 @@ from evaluate.multiformat_schema import (
     string_value,
 )
 from evaluate.multiformat_strict_json import read_strict_object
+
+validate_portable_capture_provenance = portable_receipt.verify_portable_receipt
 
 
 def validate_capture_provenance(

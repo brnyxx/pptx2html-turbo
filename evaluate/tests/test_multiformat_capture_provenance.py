@@ -4,13 +4,29 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from evaluate.multiformat_capture_provenance import (
+    validate_portable_capture_provenance,
+)
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_metrics import validate_metrics_evidence
 from evaluate.tests.multiformat_metrics_fixture import write_metrics
+from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
 from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 
 class MultiFormatCaptureProvenanceTests(unittest.TestCase):
+    def test_portable_provenance_delegates_to_strict_receipt_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = ReceiptFixture(Path(temp_dir))
+            fixture.sign()
+
+            verified = validate_portable_capture_provenance(
+                fixture.receipt,
+                fixture.verification(),
+            )
+
+            self.assertEqual(verified.nonce, "a" * 64)
+
     def test_outer_roles_cannot_swap_artifacts_bound_by_upstream_producers(
         self,
     ) -> None:

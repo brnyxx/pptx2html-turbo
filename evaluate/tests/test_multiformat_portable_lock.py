@@ -202,8 +202,8 @@ class MultiFormatPortableLockTests(unittest.TestCase):
             },
             "routing_table_sha256": load_reference_routing(ROUTING_TABLE).sha256,
             "canonicalizer": {"version": "1", **bindings["canonicalizer"]},
-            "font_bundle": bindings["fonts"],
-            "configuration": bindings["configuration"],
+            "font_bundle": {"version": "test", **bindings["fonts"]},
+            "configuration": {"version": "test", **bindings["configuration"]},
             "browser": {
                 "chromium": {"version": "test", **bindings["chromium"]},
                 "lock": bindings["configuration"],

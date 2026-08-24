@@ -3,6 +3,7 @@
   "python": "3.11",
   "unicode_version": "14.0.0",
   "dependencies": {
+    "cryptography": "46.0.7",
     "numpy": "2.4.6",
     "scipy": "1.17.1",
     "scikit-image": "0.26.0",

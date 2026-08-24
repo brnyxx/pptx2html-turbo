@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_evaluator_manifest import validate_evaluator_manifest
@@ -39,6 +40,13 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/multiformat/reference-routing.v1.json",
             "evaluate/multiformat_reference_routing.py",
             "evaluate/tests/test_multiformat_reference_routing.py",
+            "evaluate/multiformat_portable_receipt.py",
+            "evaluate/multiformat_portable_receipt_context.py",
+            "evaluate/multiformat_portable_receipt_trust.py",
+            "evaluate/multiformat_portable_receipt_validation.py",
+            "evaluate/tests/multiformat_portable_receipt_fixture.py",
+            "evaluate/tests/test_multiformat_portable_receipt.py",
+            "evaluate/tests/test_multiformat_portable_receipt_trust_flow.py",
         ):
             with self.subTest(path=path):
                 self.assertIn(path, EVALUATOR_FILES)
@@ -75,6 +83,26 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
                     CONTRACT_PATH,
                     manifest,
                 )
+
+    def test_cryptography_dependency_version_mismatch_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "wave"
+            scaffold_evidence(PROJECT_ROOT, CONTRACT_PATH, output)
+            manifest = output / "evidence" / "evaluator-manifest.json"
+            dependencies = json.loads(manifest.read_text(encoding="utf-8"))[
+                "dependencies"
+            ]
+
+            with (
+                mock.patch(
+                    "evaluate.multiformat_evaluator_manifest.importlib.metadata.version",
+                    side_effect=lambda name: (
+                        "0.0.0" if name == "cryptography" else dependencies[name]
+                    ),
+                ),
+                self.assertRaisesRegex(MetricError, "cryptography"),
+            ):
+                validate_evaluator_manifest(PROJECT_ROOT, CONTRACT_PATH, manifest)
 
     def test_malformed_manifest_raises_typed_metric_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
