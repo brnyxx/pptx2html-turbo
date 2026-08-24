@@ -604,6 +604,13 @@ support relationships. Mutate:
 - exact file set;
 - blind/security upstream identity.
 
+For each legacy support, validate the upstream ID and digest against the
+selected modern plan case, then return a typed relation containing both
+`modern_case_id` and the final collision-free support ID
+`{owner_format}-support-{modern_case_id}`. Add a regression proving that
+reusing the modern case ID as the final support ID would collide in
+`load_admission_sources`.
+
 Each mutation must fail before copying bytes.
 
 - [ ] **Step 3: Verify RED**
@@ -673,6 +680,8 @@ For all seven formats assert:
 - 100 conformance units with source-relative ordinal `1`;
 - 60 paired + 40 binary legacy unit mappings;
 - closed `paired_source` `{id,path,sha256}` shape;
+- owner-prefixed final support IDs/basenames derived from the preserved
+  `modern_case_id`;
 - binary provenance;
 - 75 blind records with `#ffffff` and inventory-derived counts;
 - 10 security families/outcomes;
@@ -808,6 +817,7 @@ Mutate one concern per test:
 - root READY marker;
 - cross-track duplicate digest;
 - support relationship mismatch;
+- final support ID reuse of a modern primary `(format, id)` identity;
 - per-format manifest or unit-count tampering.
 
 Also inject lock contention, staging inode substitution, lock substitution,

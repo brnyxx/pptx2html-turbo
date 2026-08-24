@@ -307,10 +307,14 @@ top-level track and contributes no additional conformance unit.
 `paired_source` uses the already-supported exact schema
 `{"id", "path", "sha256"}`. Its format is implied by the contract's
 `paired_format` for the owning legacy format; no `format`, provenance, or
-relationship field is added. The assembler requires its ID and digest to
-match the plan-selected modern conformance case. The root assembly's support
-relation record has exactly `owner_format`, `owner_source_id`,
-`support_format`, `support_id`, `path`, and `sha256`.
+relationship field is added. During input validation, the upstream support ID
+and digest must match the plan-selected modern conformance case. During
+assembly, the final support ID and basename are derived as
+`{owner_format}-support-{modern_case_id}` so later aggregate admission cannot
+collide with the modern format's primary `(format, id)` identity. The root
+assembly's support relation record has exactly `owner_format`,
+`owner_source_id`, `support_format`, `modern_case_id`, `support_id`, `path`,
+and `sha256`.
 
 Digest uniqueness is mandatory across conformance, blind, and security tracks
 within each per-format manifest. Paired support bytes intentionally equal the
