@@ -17,16 +17,25 @@ def read_strict_object(path: Path) -> dict[str, JsonValue]:
     try:
         if not 0 < path.stat().st_size <= MAX_JSON_BYTES:
             raise StrictJsonError("JSON file exceeds the bounded size")
+        return parse_strict_object_bytes(path.read_bytes())
+    except OSError as error:
+        raise StrictJsonError(path.as_posix()) from error
+
+
+def parse_strict_object_bytes(source: bytes) -> dict[str, JsonValue]:
+    if not 0 < len(source) <= MAX_JSON_BYTES:
+        raise StrictJsonError("JSON file exceeds the bounded size")
+    try:
         value = cast(
             JsonValue,
             json.loads(
-                path.read_text(encoding="utf-8"),
+                source.decode("utf-8"),
                 object_pairs_hook=_unique_object,
                 parse_constant=_reject_constant,
             ),
         )
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise StrictJsonError(path.as_posix()) from error
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise StrictJsonError("invalid JSON bytes") from error
     if not isinstance(value, dict):
         raise StrictJsonError("expected a JSON object")
     return value
