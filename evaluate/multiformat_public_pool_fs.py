@@ -148,10 +148,12 @@ def _walk_directory(
             )
             continue
         if not stat.S_ISREG(entry_stat.st_mode):
+            _before_special_entry_rejection(entry_stat.st_mode)
             raise PublicPoolError("public pool special file is not allowed")
         binding = expected_files.get(relative_path)
         if binding is None:
             raise PublicPoolError("public pool file set is not exact")
+        _before_file_binding_open(descriptor, name, relative_path)
         verify_file_binding(
             descriptor,
             name,
@@ -229,6 +231,18 @@ def _before_exact_tree_validation(
     _expected_files: tuple[ExpectedFileBinding, ...],
 ) -> None:
     """Deterministic final-boundary race-test seam; production performs no action."""
+
+
+def _before_file_binding_open(
+    _parent_descriptor: int,
+    _name: str,
+    _relative_path: str,
+) -> None:
+    """Deterministic check-open race-test seam; production performs no action."""
+
+
+def _before_special_entry_rejection(_mode: int) -> None:
+    """Deterministic special-entry classification seam; production performs no action."""
 
 
 def _same_identity(first: os.stat_result, second: os.stat_result) -> bool:

@@ -78,6 +78,7 @@ def verify_file_binding(
                 MAX_SOURCE_BYTES,
                 relative_path,
             )
+            digest, before, after = _hash_descriptor(descriptor, relative_path)
             if (
                 binding.identity is not None
                 and file_identity(opened) != binding.identity
@@ -85,7 +86,6 @@ def verify_file_binding(
                 raise PublicPoolError(
                     f"public pool file identity differs: {relative_path}"
                 )
-            digest, before, after = _hash_descriptor(descriptor, relative_path)
             final_path = _stat_entry(parent_descriptor, name, relative_path)
             if not _same_file_identity(before, after) or not _same_file_identity(
                 before, final_path

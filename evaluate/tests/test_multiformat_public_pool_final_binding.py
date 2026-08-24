@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
-from evaluate import multiformat_public_pool_fs
+from evaluate import multiformat_public_pool_bindings, multiformat_public_pool_fs
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
 from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_public_pool import load_validated_public_pool_sources
@@ -83,6 +83,72 @@ class MultiFormatPublicPoolFinalBindingTests(unittest.TestCase):
                         fixture.config,
                         fixture.manifest,
                     )
+
+    def test_no_follow_blocks_symlink_at_check_open_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = write_multiformat_public_pool_fixture(Path(temp_dir))
+            source = _first_source_path(fixture.manifest)
+            relative_path = string_value(_first_source(fixture.manifest), "path")
+            external = Path(temp_dir) / "external-source.docx"
+            shutil.copyfile(source, external)
+            external_bytes = external.read_bytes()
+            external_inode = external.stat().st_ino
+            opened_inodes: list[int] = []
+            read_inodes: list[int] = []
+            original_open = multiformat_public_pool_bindings.os.open
+            original_read = multiformat_public_pool_bindings.os.read
+
+            def recording_open(
+                path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+                flags: int,
+                mode: int = 0o777,
+                *,
+                dir_fd: int | None = None,
+            ) -> int:
+                descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+                if os.fstat(descriptor).st_ino == external_inode:
+                    opened_inodes.append(external_inode)
+                return descriptor
+
+            def recording_read(descriptor: int, size: int) -> bytes:
+                if os.fstat(descriptor).st_ino == external_inode:
+                    read_inodes.append(external_inode)
+                return original_read(descriptor, size)
+
+            with (
+                patch.object(
+                    multiformat_public_pool_fs,
+                    "_before_file_binding_open",
+                    side_effect=partial(
+                        _replace_source_with_symlink_before_open,
+                        target_relative_path=relative_path,
+                        source=source,
+                        external=external,
+                    ),
+                    create=True,
+                ),
+                patch.object(
+                    multiformat_public_pool_bindings.os,
+                    "open",
+                    side_effect=recording_open,
+                ),
+                patch.object(
+                    multiformat_public_pool_bindings.os,
+                    "read",
+                    side_effect=recording_read,
+                ),
+                self.assertRaises(PublicPoolError),
+            ):
+                _ = load_validated_public_pool_sources(
+                    fixture.config,
+                    fixture.manifest,
+                )
+
+            self.assertEqual(opened_inodes, [])
+            self.assertEqual(read_inodes, [])
+            self.assertTrue(source.is_symlink())
+            self.assertEqual(external.read_bytes(), external_bytes)
+            self.assertEqual(external.stat().st_ino, external_inode)
 
     def test_same_byte_source_replacement_at_exact_tree_boundary_is_rejected(
         self,
@@ -167,6 +233,20 @@ def _mutate_manifest_at_boundary(
         replacement = root / "replacement.json"
         shutil.copyfile(manifest, replacement)
         os.replace(replacement, manifest)
+
+
+def _replace_source_with_symlink_before_open(
+    _parent_descriptor: int,
+    _name: str,
+    relative_path: str,
+    *,
+    target_relative_path: str,
+    source: Path,
+    external: Path,
+) -> None:
+    if relative_path == target_relative_path:
+        source.unlink()
+        source.symlink_to(external)
 
 
 def _replace_source_with_identical_copy(

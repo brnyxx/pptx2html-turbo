@@ -6,7 +6,9 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from evaluate import multiformat_public_pool_fs
 from evaluate.multiformat_public_pool import load_validated_public_pool_sources
 from evaluate.multiformat_public_pool_types import PublicPoolError
 from evaluate.tests.multiformat_public_pool_fixture import (
@@ -22,13 +24,24 @@ class MultiFormatPublicPoolEntryTests(unittest.TestCase):
             attacker = fixture.manifest.parent / "attacker-fifo"
             os.mkfifo(attacker)
             before = _entry_identity(attacker)
+            classifications: list[int] = []
 
-            with self.assertRaises(PublicPoolError):
+            with (
+                patch.object(
+                    multiformat_public_pool_fs,
+                    "_before_special_entry_rejection",
+                    side_effect=classifications.append,
+                    create=True,
+                ),
+                self.assertRaises(PublicPoolError),
+            ):
                 _ = load_validated_public_pool_sources(
                     fixture.config,
                     fixture.manifest,
                 )
 
+            self.assertEqual(len(classifications), 1)
+            self.assertTrue(stat.S_ISFIFO(classifications[0]))
             self.assertTrue(stat.S_ISFIFO(attacker.lstat().st_mode))
             self.assertEqual(_entry_identity(attacker), before)
 
@@ -40,13 +53,24 @@ class MultiFormatPublicPoolEntryTests(unittest.TestCase):
             listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             listener.bind(str(attacker))
             before = _entry_identity(attacker)
+            classifications: list[int] = []
             try:
-                with self.assertRaises(PublicPoolError):
+                with (
+                    patch.object(
+                        multiformat_public_pool_fs,
+                        "_before_special_entry_rejection",
+                        side_effect=classifications.append,
+                        create=True,
+                    ),
+                    self.assertRaises(PublicPoolError),
+                ):
                     _ = load_validated_public_pool_sources(
                         fixture.config,
                         fixture.manifest,
                     )
 
+                self.assertEqual(len(classifications), 1)
+                self.assertTrue(stat.S_ISSOCK(classifications[0]))
                 self.assertTrue(stat.S_ISSOCK(attacker.lstat().st_mode))
                 self.assertEqual(_entry_identity(attacker), before)
             finally:
