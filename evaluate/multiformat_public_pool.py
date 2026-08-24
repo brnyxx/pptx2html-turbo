@@ -13,6 +13,7 @@ from evaluate.multiformat_corpus_types import (
     SourceRecord,
 )
 from evaluate.multiformat_public_pool_config import load_public_pool_plans
+from evaluate.multiformat_public_pool_fs import snapshot_root, validate_exact_tree
 from evaluate.multiformat_public_pool_sources import collect_public_source_group
 from evaluate.multiformat_public_pool_types import (
     BlobFetcher,
@@ -115,8 +116,8 @@ def _load_validated_public_pool_sources(
     manifest_path: Path,
 ) -> tuple[ValidatedPublicPoolSource, ...]:
     plans = load_public_pool_plans(config_path)
-    root = manifest_path.resolve(strict=True).parent
-    values = read_strict_object(manifest_path)
+    root, canonical_manifest = snapshot_root(manifest_path)
+    values = read_strict_object(canonical_manifest)
     require_keys(values, {"schema_version", "status", "formats"}, "public.pool")
     if (
         integer_value(values, "schema_version") != 1
@@ -126,7 +127,7 @@ def _load_validated_public_pool_sources(
     formats = object_value(values, "formats")
     if set(formats) != {plan.document_format.value for plan in plans}:
         raise PublicPoolError("public pool format set differs")
-    expected_files = {manifest_path.resolve(strict=True)}
+    expected_files = {canonical_manifest}
     seen_keys: set[tuple[DocumentFormat, str]] = set()
     seen_paths: set[str] = set()
     seen_hashes: set[str] = set()
@@ -159,7 +160,7 @@ def _load_validated_public_pool_sources(
             seen_paths.add(source.relative_path)
             seen_hashes.add(source.digest)
             group_counts[string_value(item, "producer")] += 1
-            expected_files.add((root / source.relative_path).resolve(strict=True))
+            expected_files.add(root / source.relative_path)
             result.append(
                 ValidatedPublicPoolSource(
                     plan.document_format,
@@ -172,11 +173,7 @@ def _load_validated_public_pool_sources(
             {group.producer: group.quota for group in plan.groups}
         ):
             raise PublicPoolError("public pool producer quota differs")
-    actual_files = {
-        path for path in root.rglob("*") if path.is_file() or path.is_symlink()
-    }
-    if actual_files != expected_files:
-        raise PublicPoolError("public pool file set is not exact")
+    validate_exact_tree(root, expected_files)
     return tuple(
         sorted(
             result,
