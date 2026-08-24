@@ -31,6 +31,13 @@ corpora (Poppler is used directly for PDF). A schema-2 portable lock, signed
 receipt, and every bound artifact must validate; missing, stale, substituted, or
 tampered evidence remains `INCOMPLETE` or `FAIL`.
 
+The approved general claim wording is
+`96% under the documented general conversion evaluation contract`. It is
+permitted only after one complete signed profile wave passes all seven formats.
+This wording describes the machine contract, not Microsoft Office pixel
+accuracy, PowerPoint pixel matching, byte-identical output, or the separate
+PPTX `exact`-promotion tier.
+
 The signed `microsoft-office` profile remains supported for optional
 Windows/Office oracle evidence. It is not a prerequisite for the default
 portable profile. Selecting it does not weaken fail-closed behavior: its

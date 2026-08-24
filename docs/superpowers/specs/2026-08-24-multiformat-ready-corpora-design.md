@@ -24,8 +24,8 @@ remain outside Git.
 
 This work establishes source-corpus readiness only. It does not perform the
 later signed aggregate admission, prove runtime security outcomes, capture
-candidate or reference pixels, compute fidelity metrics, or support a 96%
-claim.
+candidate or reference pixels, compute fidelity metrics, or support the
+claim `96% under the documented general conversion evaluation contract`.
 
 ## Existing Inputs
 

@@ -1065,7 +1065,9 @@ Document:
 - READY assembly and independent validation;
 - external artifact locations;
 - `CAPTURED` / per-format `READY` / root `VALIDATED` / later aggregate READY;
-- no runtime security, metric, or 96% claim at this stage.
+- no runtime security, metric, or
+  `96% under the documented general conversion evaluation contract` claim at
+  this stage.
 
 Do not add prose-pinning tests.
 
@@ -1312,8 +1314,8 @@ deterministic assembly comparison, and Rust workspace gates on `main`.
 
 Mark `seven per-format READY manifests 조립 검증` done only after every real
 artifact and main gate passes. Remove the integrated feature/review worktrees.
-Leave aggregate signed admission, runtime security outcomes, metrics, and 96%
-reports open.
+Leave aggregate signed admission, runtime security outcomes, metrics, and
+`96% under the documented general conversion evaluation contract` reports open.
 
 ### Chunk 4 Review Gate
 

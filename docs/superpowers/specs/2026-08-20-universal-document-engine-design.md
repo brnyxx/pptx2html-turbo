@@ -6,9 +6,13 @@ Evolve the PPTX-specific workspace into a document-to-HTML tool that accepts
 PPTX, DOCX, DOC, XLSX, XLS, PPT, and PDF while preserving every existing
 PPTX API and fidelity contract.
 
-The project succeeds only when every format independently passes the
-versioned 96% acceptance gate defined below. Scores are never pooled across
-formats, modern and legacy variants, or metric families.
+The project succeeds only when every format independently satisfies the
+approved claim
+`96% under the documented general conversion evaluation contract`. Scores are
+never pooled across formats, modern and legacy variants, or metric families.
+This is a general conversion-evaluation claim, not Microsoft Office pixel
+accuracy, PowerPoint pixel matching, byte-identical output, or the separate
+PPTX `exact`-promotion tier.
 
 `.docs` is not a Microsoft Office file format. The requested Word formats are
 therefore interpreted as `.docx` and `.doc`.
@@ -20,8 +24,10 @@ therefore interpreted as `.docx` and `.doc`.
 - The existing pure-Rust PPTX implementation remains the preferred PPTX
   backend.
 - `evaluate/evaluate_fidelity.py` remains human-owned and unchanged.
-- A native Office or PDF renderer is regression evidence, not evidence for an
-  `exact` capability claim.
+- The selected LibreOffice/Poppler or optional Office/PDF reference workflow
+  supplies general conversion-evaluation evidence; Microsoft Office pixel
+  output is not a requirement for the general claim. Native PowerPoint pixel
+  evidence remains reserved for the separate `exact` capability claim.
 - Browser WASM cannot launch native processes. Unsupported runtime/format
   combinations must be reported explicitly rather than silently degraded.
 - New format support must preserve unsupported content through typed
@@ -38,7 +44,7 @@ This gives the best theoretical portability, including browser WASM. It is not
 the selected first path because Word pagination, Excel print layout, legacy
 CFBF formats, and PDF painting each require a separate rendering engine. A
 small implementation could parse content but could not honestly satisfy the
-96% visual and layout gate.
+claim `96% under the documented general conversion evaluation contract`.
 
 ### 2. Delegate every format directly to LibreOffice
 
@@ -438,10 +444,12 @@ vector; it is configured by trusted operators, never from document content.
 The evaluator additionally applies host-level CPU and memory limits. Runtime
 code enforces input, cumulative output, log, and time bounds on every platform.
 
-## 96% acceptance contract
+## General conversion evaluation contract
 
-The gate is an acceptance gate, not an `exact` promotion. Its default required
-reference profile is `libreoffice-poppler`: supported macOS/Linux hosts use
+The standardized claim is
+`96% under the documented general conversion evaluation contract`. The gate is
+an acceptance gate, not an `exact` promotion. Its default required reference
+profile is `libreoffice-poppler`: supported macOS/Linux hosts use
 locked LibreOffice and Poppler over the seven frozen format corpora, with PDF
 entering Poppler directly. Existing PPTX exactness remains a separate,
 stricter PowerPoint-native zero-RGBA-difference contract. A signed
@@ -620,6 +628,17 @@ A format passes only when all of these hold:
 9. Two clean runs produce identical HTML, inventory, and screenshot hashes.
 10. Two independent reviewers pass every full-resolution pair.
 11. Relevant tests, release builds, diagnostics, and contract checks pass.
+
+For the standardized claim, 96.00 applies only to the conformance and blind
+aggregate scores. Structural validity, exact unit/file/security quotas,
+review outcomes, determinism, and SHA-256 evidence bindings are hard gates;
+they are not averaged into a 96% promise. Textual/content similarity is `C`
+(minimum 98.00), layout is `L` (minimum 94.00), and visual similarity is `V`
+(minimum 95.00). Two clean runs must produce identical HTML, inventories, and
+screenshot hashes. Frozen source bytes and signed hashes bind the evaluator,
+corpora, tools, runtimes, and admitted outputs; they establish evidence
+identity, not byte-identical output across separate capture environments.
+Microsoft Office pixel-accuracy wording is prohibited for this general claim.
 
 The product passes only when all seven format results are `PASS` in the same
 evaluation wave.

@@ -11,7 +11,8 @@ semantic detectors for every contract family and deterministic writers under
 This design promotes the existing deterministic writers into evaluator
 production modules and materializes an external snapshot under `artifacts/`.
 The snapshot is input to later corpus assembly. It does not make a corpus
-`READY`, prove runtime security outcomes, or support a 96% claim.
+`READY`, prove runtime security outcomes, or support the claim
+`96% under the documented general conversion evaluation contract`.
 
 ## Decision
 
@@ -320,8 +321,10 @@ The executable workflow is:
 There is deliberately no product evidence file beyond
 `security-sources.json`; the validator's canonical stdout is captured by CI or
 the task log. Snapshot A remains `GENERATED`. READY-manifest assembly, signed
-admission, runtime outcome capture, conversion determinism, metrics, and 96%
-reporting are later phases.
+admission, runtime outcome capture, conversion determinism, metrics, and
+reporting for the claim
+`96% under the documented general conversion evaluation contract` are later
+phases.
 
 Focused and full multiformat tests are implementation quality gates. Atomic
 commits and cherry-pick integration are separate delivery gates, not properties

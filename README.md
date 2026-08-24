@@ -51,6 +51,13 @@ seven frozen format corpora and requires a signed, hash-bound portable lock,
 reports, and receipts; a missing, stale, substituted, or tampered input stays
 `INCOMPLETE` or `FAIL`.
 
+The approved general claim wording is
+`96% under the documented general conversion evaluation contract`. Use it only
+after one complete signed profile wave passes all seven formats. It is not a
+Microsoft Office pixel-accuracy, PowerPoint pixel-match, byte-identical-output,
+or exact-tier claim; the separate PPTX `exact` promotion contract remains
+stricter.
+
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/reports \

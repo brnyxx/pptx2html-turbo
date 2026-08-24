@@ -120,10 +120,14 @@ can be converted because browser WASM cannot launch LibreOffice or Poppler.
 Native-only requests return a backend-unavailable error instead of silently
 degrading.
 
-## 96% acceptance gate
+## General conversion evaluation contract
 
-The contract is `evaluate/multiformat/contract.v1.json`. Every format must pass
-in the same evaluation wave. Scores cannot be pooled.
+The approved general claim wording is
+`96% under the documented general conversion evaluation contract`. The contract
+is `evaluate/multiformat/contract.v1.json`; every format must pass in the same
+evaluation wave, and scores cannot be pooled. This is not a Microsoft Office
+pixel-accuracy, PowerPoint pixel-match, byte-identical-output, or PPTX
+`exact`-promotion claim.
 
 Each format requires:
 
@@ -144,6 +148,17 @@ Thresholds include:
 - no conformance unit below 85.00,
 - no blind file below 90.00,
 - zero critical defects.
+
+For the standardized claim, 96.00 applies to the conformance and blind
+aggregate scores only. Structural validity, exact unit/file/security quotas,
+review outcomes, determinism, and SHA-256 evidence bindings are hard gates;
+they are not averaged into a 96% promise. Textual/content similarity is `C`
+(minimum 98.00), layout is `L` (minimum 94.00), and visual similarity is `V`
+(minimum 95.00). Two clean runs must produce identical HTML, inventories, and
+screenshot hashes. Frozen source bytes and signed hashes bind the evaluator,
+corpora, tools, runtimes, and admitted outputs; they establish evidence
+identity, not byte-identical output across separate capture environments.
+Microsoft Office pixel-accuracy wording is prohibited for this general claim.
 
 The default `libreoffice-poppler` profile uses the locked macOS/Linux
 LibreOffice + Poppler route for the six Office formats and locked Poppler
