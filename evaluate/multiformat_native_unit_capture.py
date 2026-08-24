@@ -28,6 +28,7 @@ from evaluate.multiformat_native_unit_types import (
     NativeExecutionData,
     NativeProcessContext,
     NativeProcessLog,
+    NativeProcessRecord,
     NativeProcessRunner,
     NativeProcessSpec,
     NativeRouteKind,
@@ -95,10 +96,10 @@ def _workspace(
         if route.office is not None
         else route.metadata.timeout_seconds
     )
-    logs: list[NativeProcessLog] = []
+    processes: list[NativeProcessRecord] = []
     office_version: str | None = None
     if office is not None:
-        office_log = process(
+        office_log = invoke(
             NativeProcessContext(
                 runner,
                 request,
@@ -113,11 +114,13 @@ def _workspace(
                     )
                 ),
                 "soffice-version",
-            )
+            ),
+            "libreoffice_version",
+            ("--version",),
+            processes,
         )
-        logs.append(office_log)
         office_version = version(office_log, request)
-    version_log = process(
+    version_log = invoke(
         NativeProcessContext(
             runner,
             request,
@@ -132,9 +135,11 @@ def _workspace(
                 )
             ),
             "pdfinfo-version",
-        )
+        ),
+        "pdfinfo_version",
+        ("-v",),
+        processes,
     )
-    logs.append(version_log)
     pdfinfo_version = version(version_log, request)
     if route.office is None:
         pdf = folders[1] / "source.pdf"
@@ -148,24 +153,25 @@ def _workspace(
             route.office.arguments,
             NativeRoutePaths(staged, folders[1], folders[5], staged),
         )
-        logs.append(
-            process(
-                NativeProcessContext(
-                    runner,
-                    request,
-                    make_request(
-                        NativeProcessSpec(
-                            office,
-                            conversion,
-                            workspace,
-                            env,
-                            folders[2] / "libreoffice",
-                            timeout=route_timeout,
-                        )
-                    ),
-                    "libreoffice",
-                )
-            )
+        _ = invoke(
+            NativeProcessContext(
+                runner,
+                request,
+                make_request(
+                    NativeProcessSpec(
+                        office,
+                        conversion,
+                        workspace,
+                        env,
+                        folders[2] / "libreoffice",
+                        timeout=route_timeout,
+                    )
+                ),
+                "libreoffice",
+            ),
+            "libreoffice",
+            route.office.arguments,
+            processes,
         )
         pdf = folders[1] / "source.pdf"
     output = output_file(pdf, request)
@@ -173,7 +179,7 @@ def _workspace(
         route.metadata.arguments,
         NativeRoutePaths(pdf, folders[1], folders[5], pdf),
     )
-    metadata_log = process(
+    metadata_log = invoke(
         NativeProcessContext(
             runner,
             request,
@@ -188,9 +194,11 @@ def _workspace(
                 )
             ),
             "pdfinfo",
-        )
+        ),
+        "poppler_metadata",
+        route.metadata.arguments,
+        processes,
     )
-    logs.append(metadata_log)
     verify_file(output, pdf, request)
     verify_file(source_file, source, request)
     count = pages(metadata_log.stdout, request)
@@ -205,19 +213,15 @@ def _workspace(
         request,
         route.kind,
         source_file.sha256,
-        tuple(
-            (command.tool_role.value, command.arguments) for command in route.commands
-        ),
         sha256_file(office) if office is not None else None,
         office_version,
         sha256_file(pdfinfo),
         pdfinfo_version,
-        font.config_path.name if font else None,
         font.environment_sha256 if font else None,
         tuple(env_values),
-        env_values["LANG"],
-        env_values["TZ"],
-        tuple(logs),
+        request.runtime.routing.locale,
+        request.runtime.routing.timezone,
+        tuple(processes),
         request.nonce,
         count,
         reference,
@@ -227,3 +231,18 @@ def _workspace(
         canonicalize(execution_record(data)) + b"\n"
     )
     return Captured(count)
+
+
+def invoke(
+    context: NativeProcessContext,
+    role: str,
+    arguments: tuple[str, ...],
+    processes: list[NativeProcessRecord],
+) -> NativeProcessLog:
+    log = process(context)
+    processes.append(
+        NativeProcessRecord(
+            role, arguments, context.process.timeout_seconds, log.exit_code
+        )
+    )
+    return log

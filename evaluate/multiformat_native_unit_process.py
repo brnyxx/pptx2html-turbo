@@ -20,7 +20,6 @@ from evaluate.multiformat_native_unit_types import (
     NativeUnitFailure,
     NativeUnitRequest,
 )
-from evaluate.multiformat_schema import sha256_file
 from evaluate.multiformat_subprocess import clean_subprocess_environment
 
 _PAGE_PATTERN = re.compile(r"^Pages:\s+([0-9]+)\s*$", re.MULTILINE)
@@ -59,26 +58,26 @@ def process(context: NativeProcessContext) -> NativeProcessLog:
             NativeUnitFailure.PROCESS_FAILED,
             f"{context.role}: exit {exit_code}",
         )
+    bounded(context.process.stdout_path, context.request)
+    bounded(context.process.stderr_path, context.request)
     return NativeProcessLog(
         context.role,
         context.process.stdout_path,
         context.process.stderr_path,
         exit_code,
-        bounded(context.process.stdout_path, context.request),
-        bounded(context.process.stderr_path, context.request),
     )
 
 
-def bounded(path: Path, request: NativeUnitRequest) -> str:
+def bounded(path: Path, request: NativeUnitRequest) -> None:
     try:
         value = path.lstat()
         if not stat.S_ISREG(value.st_mode):
             raise fail(request, NativeUnitFailure.OUTPUT_INVALID, "log is not regular")
         if value.st_size > MAX_LOG_BYTES:
             raise fail(request, NativeUnitFailure.LOG_OVERSIZE, "log exceeds 1 MiB")
-        return sha256_file(path)
+        return
     except FileNotFoundError:
-        return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        return
     except OSError as error:
         raise fail(
             request, NativeUnitFailure.OUTPUT_INVALID, "log cannot be read"
@@ -133,8 +132,8 @@ def environment(
     values.update(
         {
             "HOME": home.as_posix(),
-            "LANG": "en-US",
-            "LC_ALL": "en-US",
+            "LANG": "en_US.UTF-8",
+            "LC_ALL": "en_US.UTF-8",
             "TMPDIR": temporary.as_posix(),
             "TZ": "UTC",
         }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from evaluate.multiformat_corpus_types import DocumentFormat
@@ -125,6 +126,10 @@ def _route(request: NativeUnitRequest) -> NativeRouteSelection:
 
 
 def _validate(request: NativeUnitRequest) -> None:
+    if sys.platform not in {"darwin", "linux"}:
+        raise _fail(
+            request, NativeUnitFailure.UNSUPPORTED_PLATFORM, "platform is unsupported"
+        )
     relative = Path(request.source.relative_path)
     invalid_nonce = len(request.nonce) != 64 or any(
         character not in "0123456789abcdef" for character in request.nonce

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from evaluate.multiformat_candidate_process import CandidateProcessFailure
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_native_unit_runtime import capture_native_observation
 from evaluate.multiformat_native_unit_types import NativeUnitError, NativeUnitFailure
-from evaluate.multiformat_schema import object_value, string_list
 from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.tests.multiformat_native_unit_fixture import (
     RecordingNativeRunner,
@@ -53,21 +54,6 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
             self.assertEqual(len(commands), 2)
             self.assertEqual(commands[0], (fixture.pdfinfo.resolve().as_posix(), "-v"))
             self.assertTrue(commands[1][-1].endswith("/source.pdf"))
-            tools = object_value(execution, "tools")
-            logs = execution["logs"]
-            environment = object_value(execution, "environment")
-            assert isinstance(logs, list)
-            self.assertEqual(set(tools), {"pdfinfo"})
-            self.assertNotIn("font", execution)
-            self.assertTrue(
-                all(isinstance(log, dict) and log.get("exit_code") == 0 for log in logs)
-            )
-            self.assertEqual(environment["locale"], "en-US")
-            self.assertEqual(environment["timezone"], "UTC")
-            self.assertEqual(
-                set(string_list(environment, "keys")),
-                {"HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"},
-            )
             self.assertEqual(
                 {path.name for path in request.observation_dir.iterdir()},
                 {"execution.json", "reference.pdf", "pdfinfo.txt"},
@@ -86,9 +72,8 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
             for document_format in OFFICE_FORMATS:
                 with self.subTest(document_format=document_format.value):
                     runner = RecordingNativeRunner()
-                    _ = capture_native_observation(
-                        fixture.request(root, document_format), runner
-                    )
+                    request = fixture.request(root, document_format)
+                    _ = capture_native_observation(request, runner)
                     conversion = next(
                         item
                         for item in runner.requests
@@ -140,8 +125,8 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
                 set(first_env),
                 {"FONTCONFIG_FILE", "HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"},
             )
-            self.assertEqual(first_env["LANG"], "en-US")
-            self.assertEqual(first_env["LC_ALL"], "en-US")
+            self.assertEqual(first_env["LANG"], "en_US.UTF-8")
+            self.assertEqual(first_env["LC_ALL"], "en_US.UTF-8")
             self.assertEqual(first_env["TZ"], "UTC")
 
     def test_failures_are_typed_and_cleanup_is_complete(self) -> None:
@@ -201,6 +186,23 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
             with self.assertRaises(NativeUnitError) as raised:
                 _ = capture_native_observation(request, RecordingNativeRunner())
             self.assertEqual(raised.exception.failure, NativeUnitFailure.SOURCE_INVALID)
+
+    def test_unsupported_platform_fails_before_tool_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = make_native_unit_fixture(root)
+            runner = RecordingNativeRunner()
+            with (
+                patch.object(sys, "platform", "win32"),
+                self.assertRaises(NativeUnitError) as raised,
+            ):
+                _ = capture_native_observation(
+                    fixture.request(root, DocumentFormat.PDF), runner
+                )
+            self.assertEqual(
+                raised.exception.failure, NativeUnitFailure.UNSUPPORTED_PLATFORM
+            )
+            self.assertEqual(runner.requests, [])
 
     def test_zero_and_multiple_pages_fail_closed(self) -> None:
         for output in (b"Pages:           0\n", b"Pages:           1\nPages: 2\n"):

@@ -22,6 +22,7 @@ class NativeUnitFailure(StrEnum):
     OUTPUT_INVALID = "output-invalid"
     OUTPUT_OVERSIZE = "output-oversize"
     PAGES_MALFORMED = "pages-malformed"
+    UNSUPPORTED_PLATFORM = "unsupported-platform"
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,8 +133,14 @@ class NativeProcessLog:
     stdout: Path
     stderr: Path
     exit_code: int
-    stdout_sha256: str
-    stderr_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class NativeProcessRecord:
+    role: str
+    arguments: tuple[str, ...]
+    timeout_seconds: float
+    exit_code: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,17 +148,15 @@ class NativeExecutionData:
     request: NativeUnitRequest
     route_kind: NativeRouteKind
     source_sha256: str
-    routes: tuple[tuple[str, tuple[str, ...]], ...]
     soffice_sha256: str | None
     soffice_version: str | None
     pdfinfo_sha256: str
     pdfinfo_version: str
-    font_config_name: str | None
     font_environment_sha256: str | None
     environment_keys: tuple[str, ...]
     environment_locale: str
     environment_timezone: str
-    logs: tuple[NativeProcessLog, ...]
+    processes: tuple[NativeProcessRecord, ...]
     workspace_nonce: str
     unit_count: int
     reference_pdf: Path
@@ -177,26 +182,25 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
     }
     record: dict[str, JsonValue] = {
         "schema_version": 1,
-        "source_id": request.source.source_id,
-        "format": request.source.document_format.value,
-        "source": {"path": request.source.relative_path, "sha256": data.source_sha256},
+        "source": {
+            "id": request.source.source_id,
+            "format": request.source.document_format.value,
+            "path": request.source.relative_path,
+            "sha256": data.source_sha256,
+        },
         "run": request.run,
         "workspace_nonce": data.workspace_nonce,
         "routing_sha256": request.runtime.routing.sha256,
-        "routes": [
-            {"tool_role": role, "arguments": list(arguments)}
-            for role, arguments in data.routes
-        ],
         "tools": tools,
         "environment": environment,
-        "logs": [
+        "processes": [
             {
-                "role": log.role,
-                "exit_code": log.exit_code,
-                "stdout_sha256": log.stdout_sha256,
-                "stderr_sha256": log.stderr_sha256,
+                "role": process.role,
+                "arguments": list(process.arguments),
+                "timeout_seconds": process.timeout_seconds,
+                "exit_code": process.exit_code,
             }
-            for log in data.logs
+            for process in data.processes
         ],
         "evidence": {
             "reference_pdf": {
@@ -216,10 +220,6 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
             "name": request.runtime.soffice.name,
             "sha256": data.soffice_sha256,
             "version": data.soffice_version,
-        }
-        record["font"] = {
-            "config": data.font_config_name,
-            "environment_sha256": data.font_environment_sha256,
         }
     return record
 
