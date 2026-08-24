@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import os
-import shutil
-import stat
 import sys
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import NoReturn
+
+from evaluate.multiformat_snapshot_publish import (
+    SnapshotPublishError,
+    publish_snapshot,
+)
 
 SnapshotWriter = Callable[[Path], None]
 
@@ -28,167 +31,49 @@ class SecurityPublishError(Exception):
         return f"security snapshot publication failed: {self.failure.value}"
 
 
-@dataclass(frozen=True, slots=True)
-class _Identity:
-    device: int
-    inode: int
-
-
 def publish_security_snapshot(
     destination: Path,
     writer: SnapshotWriter,
 ) -> None:
-    parent = destination.parent
-    parent.mkdir(parents=True, exist_ok=True)
-    resolved_parent = parent.resolve(strict=True)
-    target = resolved_parent / destination.name
-    if os.path.lexists(target):
-        raise SecurityPublishError(
-            target,
-            SecurityPublishFailure.DESTINATION_EXISTS,
-        )
-    lock = resolved_parent / f".{target.name}.security-sources.lock"
-    lock_descriptor, lock_identity = _acquire_lock(lock)
-    staging: Path | None = None
-    staging_descriptor: int | None = None
-    staging_identity: _Identity | None = None
-    published = False
-    try:
-        if os.path.lexists(target):
+    """Publish a security snapshot through the format-neutral publisher."""
+
+    def write_compatibility_snapshot(staging: Path) -> None:
+        legacy_lock = staging.parent / (f".{destination.name}.security-sources.lock")
+        if os.path.lexists(legacy_lock):
             raise SecurityPublishError(
-                target,
-                SecurityPublishFailure.DESTINATION_EXISTS,
+                legacy_lock,
+                SecurityPublishFailure.LOCKED,
             )
-        staging = Path(
-            tempfile.mkdtemp(
-                prefix=f".{target.name}.stage-",
-                dir=resolved_parent,
-            )
-        )
-        # Hold an open descriptor on the staging directory so the kernel
-        # cannot recycle its inode number while publication is in flight;
-        # otherwise the (device, inode) ownership checks are unsound on
-        # filesystems that promptly reuse inode numbers (e.g. ext4).
-        staging_descriptor, staging_identity = _open_staging(staging)
         writer(staging)
-        if os.path.lexists(target):
-            raise SecurityPublishError(
-                target,
-                SecurityPublishFailure.DESTINATION_EXISTS,
+
+    try:
+        try:
+            publish_snapshot(
+                destination,
+                write_compatibility_snapshot,
+                lock_namespace="security-snapshot",
             )
-        if not _matches(staging, staging_identity, stat.S_ISDIR):
-            raise SecurityPublishError(
-                staging,
-                SecurityPublishFailure.PUBLICATION_FAILED,
-            )
-        try:
-            os.rename(staging, target)
-        except OSError as error:
-            raise SecurityPublishError(
-                target,
-                SecurityPublishFailure.PUBLICATION_FAILED,
-            ) from error
-        published = True
-    finally:
-        active_error = sys.exception()
-        cleanup_error = _cleanup(
-            published,
-            staging,
-            staging_descriptor,
-            staging_identity,
-            lock_descriptor,
-            lock,
-            lock_identity,
-        )
-        if cleanup_error is not None:
-            if active_error is not None:
-                active_error.add_note(
-                    f"security snapshot cleanup failed: {cleanup_error}"
-                )
-            else:
-                raise SecurityPublishError(
-                    lock,
-                    SecurityPublishFailure.PUBLICATION_FAILED,
-                ) from cleanup_error
+        finally:
+            active_error = sys.exception()
+            if active_error is not None and hasattr(active_error, "__notes__"):
+                for index, note in enumerate(active_error.__notes__):
+                    prefix = "snapshot cleanup failed:"
+                    if note.startswith(prefix):
+                        active_error.__notes__[index] = (
+                            f"security snapshot cleanup failed:{note[len(prefix) :]}"
+                        )
+    except SnapshotPublishError as error:
+        _raise_security_error(error)
 
 
-def _acquire_lock(path: Path) -> tuple[int, _Identity]:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(path, flags, 0o600)
-    except OSError as error:
-        raise SecurityPublishError(
-            path,
-            SecurityPublishFailure.LOCKED,
-        ) from error
-    return descriptor, _identity(os.fstat(descriptor))
-
-
-def _identity(value: os.stat_result) -> _Identity:
-    return _Identity(value.st_dev, value.st_ino)
-
-
-def _open_staging(path: Path) -> tuple[int, _Identity]:
-    flags = os.O_RDONLY
-    flags |= getattr(os, "O_DIRECTORY", 0)
-    flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
-    return descriptor, _identity(os.fstat(descriptor))
-
-
-def _cleanup(
-    published: bool,
-    staging: Path | None,
-    staging_descriptor: int | None,
-    staging_identity: _Identity | None,
-    lock_descriptor: int,
-    lock: Path,
-    lock_identity: _Identity,
-) -> OSError | None:
-    first_error: OSError | None = None
-    if not published and staging is not None and staging_identity is not None:
-        try:
-            _remove_owned_directory(staging, staging_identity)
-        except OSError as error:
-            first_error = error
-    if staging_descriptor is not None:
-        try:
-            os.close(staging_descriptor)
-        except OSError as error:
-            first_error = first_error or error
-    try:
-        os.close(lock_descriptor)
-    except OSError as error:
-        first_error = first_error or error
-    try:
-        _unlink_owned_file(lock, lock_identity)
-    except OSError as error:
-        first_error = first_error or error
-    return first_error
-
-
-def _matches(
-    path: Path,
-    identity: _Identity,
-    expected_mode: Callable[[int], bool],
-) -> bool:
-    try:
-        value = path.lstat()
-    except FileNotFoundError:
-        return False
-    return (
-        expected_mode(value.st_mode)
-        and value.st_dev == identity.device
-        and value.st_ino == identity.inode
+def _raise_security_error(error: SnapshotPublishError) -> NoReturn:
+    security_error = SecurityPublishError(
+        error.path,
+        SecurityPublishFailure(error.failure.value),
     )
-
-
-def _remove_owned_directory(path: Path, identity: _Identity) -> None:
-    if _matches(path, identity, stat.S_ISDIR):
-        shutil.rmtree(path)
-
-
-def _unlink_owned_file(path: Path, identity: _Identity) -> None:
-    if _matches(path, identity, stat.S_ISREG):
-        path.unlink()
+    if hasattr(error, "__notes__"):
+        for note in error.__notes__:
+            security_error.add_note(note)
+    if error.__cause__ is not None:
+        raise security_error from error.__cause__
+    raise security_error from None
