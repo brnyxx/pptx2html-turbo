@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import stat
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -84,10 +85,25 @@ def publish_security_snapshot(
             ) from error
         published = True
     finally:
-        if not published and staging is not None and staging_identity is not None:
-            _remove_owned_directory(staging, staging_identity)
-        os.close(lock_descriptor)
-        _unlink_owned_file(lock, lock_identity)
+        active_error = sys.exception()
+        cleanup_error = _cleanup(
+            published,
+            staging,
+            staging_identity,
+            lock_descriptor,
+            lock,
+            lock_identity,
+        )
+        if cleanup_error is not None:
+            if active_error is not None:
+                active_error.add_note(
+                    f"security snapshot cleanup failed: {cleanup_error}"
+                )
+            else:
+                raise SecurityPublishError(
+                    lock,
+                    SecurityPublishFailure.PUBLICATION_FAILED,
+                ) from cleanup_error
 
 
 def _acquire_lock(path: Path) -> tuple[int, _Identity]:
@@ -105,6 +121,31 @@ def _acquire_lock(path: Path) -> tuple[int, _Identity]:
 
 def _identity(value: os.stat_result) -> _Identity:
     return _Identity(value.st_dev, value.st_ino)
+
+
+def _cleanup(
+    published: bool,
+    staging: Path | None,
+    staging_identity: _Identity | None,
+    lock_descriptor: int,
+    lock: Path,
+    lock_identity: _Identity,
+) -> OSError | None:
+    first_error: OSError | None = None
+    if not published and staging is not None and staging_identity is not None:
+        try:
+            _remove_owned_directory(staging, staging_identity)
+        except OSError as error:
+            first_error = error
+    try:
+        os.close(lock_descriptor)
+    except OSError as error:
+        first_error = first_error or error
+    try:
+        _unlink_owned_file(lock, lock_identity)
+    except OSError as error:
+        first_error = first_error or error
+    return first_error
 
 
 def _matches(

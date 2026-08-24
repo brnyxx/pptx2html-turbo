@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from evaluate.multiformat_security_publish import (
     SecurityPublishError,
@@ -12,7 +13,33 @@ from evaluate.multiformat_security_publish import (
 )
 
 
+class PrimaryWriterError(Exception):
+    pass
+
+
 class MultiFormatSecurityPublishTests(unittest.TestCase):
+    def test_cleanup_failure_never_masks_primary_writer_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            destination = root / "security"
+
+            with (
+                mock.patch(
+                    "evaluate.multiformat_security_publish._unlink_owned_file",
+                    side_effect=OSError("cleanup"),
+                ),
+                self.assertRaisesRegex(PrimaryWriterError, "primary") as raised,
+            ):
+                publish_security_snapshot(
+                    destination,
+                    lambda staging: self._raise_primary(staging),
+                )
+
+            self.assertTrue(
+                any("cleanup" in note for note in raised.exception.__notes__)
+            )
+            self.assertFalse(destination.exists())
+
     def test_writer_failure_releases_owned_staging_and_lock(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -120,6 +147,10 @@ class MultiFormatSecurityPublishTests(unittest.TestCase):
     def _fail(self, staging: Path) -> None:
         (staging / "partial").write_bytes(b"partial")
         raise OSError("injected")
+
+    def _raise_primary(self, staging: Path) -> None:
+        (staging / "partial").write_bytes(b"partial")
+        raise PrimaryWriterError("primary")
 
     def _lock(self, root: Path) -> Path:
         return root / ".security.security-sources.lock"
