@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 SECURITY_ENGINE_FILES = (
+    "evaluate/generate_multiformat_security_sources.py",
     "evaluate/multiformat_security_fixture.py",
     "evaluate/multiformat_security_ooxml.py",
     "evaluate/multiformat_security_ooxml_relationships.py",
@@ -14,7 +15,9 @@ SECURITY_ENGINE_FILES = (
     "evaluate/multiformat_security_pdf_tokens.py",
     "evaluate/multiformat_security_publish.py",
     "evaluate/multiformat_security_snapshot.py",
+    "evaluate/multiformat_security_snapshot_cli.py",
     "evaluate/multiformat_security_snapshot_validation.py",
+    "evaluate/validate_multiformat_security_sources.py",
 )
 
 SECURITY_WRITER_FILES = (
@@ -33,5 +36,6 @@ SECURITY_TEST_FILES = (
     "evaluate/tests/test_multiformat_security_pdf_container_adversarial.py",
     "evaluate/tests/test_generate_multiformat_security_sources.py",
     "evaluate/tests/test_multiformat_security_publish.py",
+    "evaluate/tests/test_multiformat_security_sources_cli.py",
     "evaluate/tests/test_validate_multiformat_security_sources.py",
 )

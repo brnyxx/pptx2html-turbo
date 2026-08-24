@@ -37,6 +37,13 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/tests/test_collect_multiformat_legacy_binary_pool_cli.py",
         ):
             self.assertIn(path, EVALUATOR_FILES)
+        for path in (
+            "evaluate/generate_multiformat_security_sources.py",
+            "evaluate/validate_multiformat_security_sources.py",
+            "evaluate/multiformat_security_snapshot_cli.py",
+            "evaluate/tests/test_multiformat_security_sources_cli.py",
+        ):
+            self.assertIn(path, EVALUATOR_FILES)
         self.assertIn(
             "evaluate/tests/test_multiformat_reference_profile.py",
             EVALUATOR_FILES,
