@@ -342,7 +342,9 @@ Define an injected low-level `NativeProcessRunner` protocol. Tests must prove:
 - PDF observations copy the source and invoke only `pdfinfo`;
 - six Office formats use exact routing arguments, unique profile/home/tmp
   roots, and the locked font config;
-- output PDF, stdout, stderr, and `pdfinfo.txt` are retained and hashed;
+- output PDF and `pdfinfo.txt` are retained and hashed;
+- process stdout/stderr are bounded temporary files and are neither retained
+  nor persisted as unverifiable hashes;
 - version commands are exactly LibreOffice `--version` and `pdfinfo -v`;
 - zero/missing/multiple page fields, nonzero exit, timeout, missing PDF, and
   outputs over 1 MiB raise typed errors;
@@ -402,15 +404,25 @@ boundary.
 Reuse `run_bounded_process` for process-group timeout and log bounds. Resolve
 tool paths strictly, hash them, capture versions, use
 `clean_subprocess_environment`, and add only isolated runtime keys. Apply
-`prepare_font_environment` for every platform. Parse exactly one positive
-`Pages:` record from `pdfinfo`.
+`prepare_font_environment` only for the six Office formats on supported
+macOS/Linux hosts. PDF must not resolve LibreOffice or the font bundle. Parse
+exactly one positive `Pages:` record from `pdfinfo`.
 
-LibreOffice and pdfinfo stdout/stderr live only in isolated temporary files.
-Hash them into `execution.json` and discard them. The only retained files are
+LibreOffice and pdfinfo stdout/stderr live only in isolated temporary files
+and are discarded without persisted hash claims. The only retained files are
 `execution.json`, `reference.pdf`, and `pdfinfo.txt`; the latter is the bounded
-raw pdfinfo stdout. Add tests proving timeout kills the full process group,
-there are no retries/skips/fallback counts, and every failure carries format
-and source ID.
+raw pdfinfo stdout.
+
+For the six Office formats, invoke only the exact version commands plus the
+route's `libreoffice` and `poppler_metadata` commands. For PDF, invoke only
+`pdfinfo -v` plus `poppler_metadata`. Never invoke `poppler_render` or
+`poppler_text` in this runtime.
+
+The exact root/nested execution field sets, process-role order, tool variants,
+path bases, and Office/PDF environment variants are normative in the approved
+design's **Closed execution schema** section. Add tests proving timeout kills
+the full process group, there are no retries/skips/fallback counts, and every
+failure carries format and source ID.
 
 This source-level inventory records execution but does not claim the signed
 network-isolation proof owned by the later portable-reference receipt.
@@ -435,6 +447,9 @@ git commit -m "feat: capture bounded native unit observations" \
 ### Task 4: Capture and independently validate all blind units
 
 **Files:**
+- Modify: `evaluate/multiformat_public_pool.py`
+- Modify: `evaluate/multiformat_public_pool_types.py`
+- Modify: `evaluate/tests/test_collect_multiformat_public_pool.py`
 - Create: `evaluate/multiformat_native_unit_capture.py`
 - Create: `evaluate/multiformat_native_unit_validation.py`
 - Create: `evaluate/capture_multiformat_native_units.py`
@@ -452,6 +467,8 @@ retained one-page observations per source. Assert:
 - sorted canonical manifest records despite reversed worker completion;
 - source/config/pool/routing/tool/font/runtime identities;
 - the exact closed inventory field sets frozen in the approved design;
+- typed public-pool source loading sorted by `(format, id)`;
+- global path/digest/nonce/binding uniqueness;
 - disagreement, duplicate nonce/path, source mutation, runner error, and
   writer error leave no output.
 
@@ -468,10 +485,13 @@ Expected: missing capture module.
 
 - [ ] **Step 3: Implement capture orchestration**
 
-Validate the public pool with:
+Validate and enumerate the public pool with:
 
 ```python
-validate_public_pool(public_config_path, blind_manifest_path)
+sources = load_validated_public_pool_sources(
+    public_config_path,
+    blind_manifest_path,
+)
 ```
 
 Preallocate two nonces per sorted source before submitting work. Use
@@ -484,8 +504,9 @@ counts agree.
 All inventory and execution JSON has a closed exact schema, schema version
 `1`, duplicate-key rejection on read, UTF-8 JCS canonical bytes, and one
 trailing LF. The exact inventory object field sets are normative in the
-approved design's **Closed inventory schema** section. Build the complete
-observation tree inside the generic
+approved design's **Closed inventory schema** section. Execution records use
+the design's exact **Closed execution schema** and contain no discarded-log
+hash claims. Build the complete observation tree inside the generic
 `publish_snapshot` staging directory. Run independent validation on immutable
 final staged bytes before the one rename. Destination existence, lock
 contention, any worker failure, disagreement, or cleanup failure publishes
@@ -499,7 +520,7 @@ Start from a complete captured fixture and mutate one concern per test:
 - execution environment;
 - source hash;
 - run index/nonce/evidence path;
-- retained PDF or log bytes;
+- retained PDF or `pdfinfo.txt` bytes;
 - parsed or accepted count;
 - symlink, hard link, special file, extra, or missing file;
 - noncanonical or duplicate-key JSON.
@@ -515,18 +536,29 @@ Expose:
 def validate_native_unit_inventory(
     inputs: NativeUnitValidationInputs,
 ) -> NativeUnitInventorySummary: ...
+
+def load_native_unit_inventory(
+    inputs: NativeUnitValidationInputs,
+) -> NativeUnitInventory: ...
 ```
 
-The typed input holds contract, public config, blind manifest, routing, font
-bundle, LibreOffice, pdfinfo, and inventory root paths. Rehash and re-version
-all trusted inputs. Validate the exact 3,151-file tree:
+The typed input has exactly the `Path` fields `contract`, `public_config`,
+`public_pool_manifest`, `routing`, `font_manifest`, `libreoffice`, `pdfinfo`,
+and `inventory_root`. Rehash and re-version all trusted inputs. Validate the
+exact 3,151-file tree:
 
 - 1 inventory manifest;
 - 525 x 2 x (`execution.json`, `reference.pdf`, `pdfinfo.txt`).
 
 `NativeUnitInventorySummary` has exactly `files`, `sources`, `observations`,
 `total_units`, and `manifest_sha256`. It is distinct from the existing
-per-source `NativeUnitSummary`.
+per-source `NativeUnitSummary`. `manifest_sha256` hashes the exact manifest
+bytes including the trailing LF.
+
+`NativeUnitInventory` contains that summary plus a sorted tuple of
+`NativeUnitCount` records carrying exact format, source ID, relative path,
+source SHA-256, and accepted unit count. The validator delegates to this typed
+loader and returns its summary.
 
 Use the retained file bindings and rerun `pdfinfo` for count confirmation.
 
@@ -547,6 +579,7 @@ Run:
 uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
   python -m unittest \
   evaluate.tests.test_multiformat_native_unit_runtime \
+  evaluate.tests.test_collect_multiformat_public_pool \
   evaluate.tests.test_multiformat_native_unit_capture \
   evaluate.tests.test_multiformat_native_unit_validation \
   evaluate.tests.test_capture_multiformat_native_units -v
@@ -560,9 +593,12 @@ Then run Ruff, format, no-excuse, LOC, and LSP on all native-unit files.
 git add evaluate/multiformat_native_unit_capture.py \
   evaluate/multiformat_native_unit_validation.py \
   evaluate/capture_multiformat_native_units.py \
+  evaluate/multiformat_public_pool.py \
+  evaluate/multiformat_public_pool_types.py \
   evaluate/multiformat_native_unit_types.py \
   evaluate/multiformat_native_unit_runtime.py \
   evaluate/tests/multiformat_native_unit_fixture.py \
+  evaluate/tests/test_collect_multiformat_public_pool.py \
   evaluate/tests/test_multiformat_native_unit_capture.py \
   evaluate/tests/test_multiformat_native_unit_validation.py \
   evaluate/tests/test_capture_multiformat_native_units.py
@@ -655,14 +691,20 @@ def load_ready_inputs(paths: ReadyInputPaths) -> ReadySourceSet: ...
 Regenerate and validate the plan. Reuse:
 
 - `validate_public_pool`;
+- `load_validated_public_pool_sources`;
 - `validate_legacy_binary_pool`;
 - `validate_security_snapshot`;
 - `validate_native_unit_inventory`;
+- `load_native_unit_inventory`;
 - existing OOXML, CFBF, PDF, conformance package, and source validators.
 
 For conformance snapshots, require their exact closed manifests, statuses,
 contract/plan bindings, source hashes, exact file sets, and format-specific
 100/60 counts. Do not invoke any source generator.
+
+Join blind public-pool records to native unit counts only by
+`(document_format, source_id)` and require exact relative-path and SHA-256
+equality. Missing, extra, or duplicate keys fail before copying bytes.
 
 - [ ] **Step 5: Run GREEN/static/LSP and commit**
 

@@ -196,26 +196,79 @@ not need to match across runs; each retained PDF is independently bound and
 recounted. The manifest records the source identity, two observation bindings,
 the accepted `unit_count`, and the exact runtime identities.
 
-Each execution record contains:
+### Closed execution schema
 
-- source ID, format, path, and SHA-256;
-- run index `1` or `2`;
-- a distinct 64-lowercase-hex workspace nonce;
-- the exact tool roles and argument-vector template identity;
-- the routing-table SHA-256 and identities for exactly the tools invoked;
-- the font-environment SHA-256 only for the six Office formats;
-- process exit code;
-- an exact environment-contract object containing the sorted allowlisted key
-  names, locale, timezone, and booleans proving isolated home and temporary
-  roots, plus the font-environment SHA-256 only for Office observations, but no
-  volatile absolute paths;
-- bounded stdout and stderr SHA-256 values;
-- retained PDF and `pdfinfo.txt` paths and SHA-256 values; and
-- the parsed positive unit count.
+Every `execution.json` uses UTF-8 JCS bytes plus one LF and has exactly these
+root fields:
 
+```text
+schema_version, source, run, workspace_nonce, routing_sha256,
+tools, processes, environment, evidence, unit_count
+```
+
+Their exact nested field sets are:
+
+- `source`: `id`, `format`, `path`, and `sha256`;
+- each tool: `name`, `sha256`, and `version`;
+- each process: `role`, `arguments`, `timeout_seconds`, and `exit_code`;
+- `evidence`: `reference_pdf` and `pdfinfo`; and
+- each evidence binding: `path` and `sha256`.
+
+`schema_version` is `1`. `run` is `1` or `2`; `workspace_nonce` is a
+64-lowercase-hex value supplied by the capture orchestrator; `unit_count` is
+positive. Every SHA-256 is 64 lowercase hexadecimal characters. Tool names and
+versions are non-empty single-line strings. Every accepted process has exit
+code `0` and a positive bounded timeout.
+
+The six Office formats have exactly the `libreoffice` and `pdfinfo` tool keys.
+Their process roles and order are:
+
+```text
+libreoffice_version, pdfinfo_version, libreoffice, poppler_metadata
+```
+
+PDF has exactly the `pdfinfo` tool key and these process roles:
+
+```text
+pdfinfo_version, poppler_metadata
+```
+
+Version arguments are exactly `["--version"]` and `["-v"]`. The
+`libreoffice` and `poppler_metadata` process arguments are the exact
+unrendered argument templates from the locked routing table. No rendered
+workspace path is persisted.
+
+The runtime selects only `libreoffice` plus `poppler_metadata` from an Office
+route, and only `poppler_metadata` from a PDF route. It never invokes or
+records the routing table's `poppler_render` or `poppler_text` commands for
+native unit inventory capture.
+
+The common `environment` field set is:
+
+```text
+keys, locale, lang, lc_all, timezone,
+home_isolated, temporary_root_isolated, profile_isolated
+```
+
+Office adds exactly `font_environment_sha256`; PDF omits that field.
+`profile_isolated` is `true` for Office and `false` for PDF. The other two
+isolation booleans are always `true`.
+
+`source.path` is relative to the validated public-pool snapshot.
+`evidence.reference_pdf.path` and `evidence.pdfinfo.path` are relative to the
+inventory root and name the two retained files in the observation directory.
+For observation root `observations/{format}/{id}/run-{run}`, those paths are
+exactly `{observation-root}/reference.pdf` and
+`{observation-root}/pdfinfo.txt`.
 PDF observations neither resolve nor record LibreOffice or font identities.
 The batch-level inventory still binds them because the same inventory contains
 the six Office formats.
+
+Converter/version stdout and stderr are bounded temporary capture mechanics.
+They are discarded and are not persisted as hashes or independent evidence.
+The retained `pdfinfo.txt` is the bounded raw metadata stdout and is fully
+bound by the evidence object. Tool versions are independently re-read during
+inventory validation.
 
 The validator requires exactly run indexes `{1, 2}`, distinct nonces and
 evidence paths, complete artifact bindings, and matching accepted counts. This
@@ -248,8 +301,8 @@ contain an additional field:
 - `tools`: `libreoffice` and `pdfinfo`;
 - each tool: `name`, `sha256`, and `version`;
 - `font`: `manifest_sha256` and `environment_sha256`;
-- `runtime`: `os`, `architecture`, `locale`, `timezone`, `worker_count`, and
-  `environment_keys`;
+- `runtime`: `os`, `architecture`, `locale`, `lang`, `lc_all`, `timezone`,
+  `worker_count`, and `environment_keys`;
 - `environment_keys`: `office` and `pdf`;
 - each source: `id`, `format`, `path`, `sha256`, `unit_count`, and
   `observations`;
@@ -265,7 +318,13 @@ strings. `worker_count` is in `1..8`.
 observations sorted by run, with run indexes `{1, 2}`. Observation nonces are
 preallocated by the capture orchestrator before worker submission and passed
 into the runtime; the runtime does not generate hidden randomness. Nonces are
-distinct 64-lowercase-hex values.
+globally unique across all 1,050 observations and are 64-lowercase-hex values.
+
+Source identity is keyed by `(format, id)`, not by bare ID. All 525 keys are
+unique. Source paths and source SHA-256 values are each globally unique across
+all formats. All 1,050 observation paths are globally unique. The 3,150
+execution/evidence binding paths are globally unique and their set equals the
+physical observation file set exactly.
 
 Source paths are safe POSIX paths relative to the validated public-pool
 snapshot. Observation and binding paths are safe POSIX paths relative to the
@@ -273,11 +332,23 @@ inventory root. An observation path is exactly
 `observations/{format}/{id}/run-{run}`. Its three bindings name
 `execution.json`, `reference.pdf`, and `pdfinfo.txt` beneath that path.
 
-`environment_keys.office` and `environment_keys.pdf` are sorted, duplicate-free
-lists of the actual child-environment key names for those routes. Office
-observations require the locked font environment. PDF observations use only
-the PDF route environment and must not require a LibreOffice executable or font
+Native inventory capture for this acceptance profile supports only macOS and
+Linux. Every other platform fails with a typed unsupported-platform error
+before a tool is invoked. The exact sorted environment key sets are:
+
+```text
+office = [FONTCONFIG_FILE, HOME, LANG, LC_ALL, PATH, TMPDIR, TZ]
+pdf    = [HOME, LANG, LC_ALL, PATH, TMPDIR, TZ]
+```
+
+`locale` is `en-US`, `lang` and `lc_all` are `en_US.UTF-8`, and `timezone` is
+`UTC`. `PATH` comes only from the clean subprocess environment. Office
+observations require `FONTCONFIG_FILE` and the locked font environment. PDF
+observations omit both and must not require a LibreOffice executable or font
 bundle at observation time.
+
+`runtime.os` is exactly `macos` or `linux`. `runtime.architecture` is normalized
+to `arm64` or `x86_64`; every other architecture fails typed before capture.
 
 The validator returns a separate aggregate value:
 
@@ -296,6 +367,60 @@ class NativeUnitInventorySummary:
 The existing `NativeUnitSummary` remains the per-source runtime value and is
 not overloaded for aggregate inventory validation.
 
+The manifest digest is SHA-256 over the exact canonical
+`native-unit-inventory.json` bytes including the trailing LF. Task 4 exposes:
+
+```python
+@dataclass(frozen=True, slots=True)
+class NativeUnitCount:
+    document_format: DocumentFormat
+    source_id: str
+    relative_path: str
+    source_sha256: str
+    unit_count: int
+
+@dataclass(frozen=True, slots=True)
+class NativeUnitInventory:
+    summary: NativeUnitInventorySummary
+    sources: tuple[NativeUnitCount, ...]
+
+def load_native_unit_inventory(
+    inputs: NativeUnitValidationInputs,
+) -> NativeUnitInventory: ...
+```
+
+`NativeUnitValidationInputs` has exactly these `Path` fields:
+
+```text
+contract, public_config, public_pool_manifest, routing,
+font_manifest, libreoffice, pdfinfo, inventory_root
+```
+
+The source tuple is sorted by `(document_format.value, source_id)`.
+`validate_native_unit_inventory` delegates to this loader and returns only its
+summary.
+
+Public-pool validation exposes a matching typed source boundary:
+
+```python
+@dataclass(frozen=True, slots=True)
+class ValidatedPublicPoolSource:
+    document_format: DocumentFormat
+    source_id: str
+    relative_path: str
+    source_sha256: str
+
+def load_validated_public_pool_sources(
+    config_path: Path,
+    manifest_path: Path,
+) -> tuple[ValidatedPublicPoolSource, ...]: ...
+```
+
+The loader performs the complete existing validation, enforces unique
+`(format, id)` keys plus globally unique paths and digests, and returns sources
+in that key order. The existing `validate_public_pool` delegates to the loader
+and discards the tuple.
+
 Locale is `en-US`, timezone is `UTC`, and the subprocess environment is
 allowlisted. Native conversion uses bounded output, a per-command timeout, and
 unique profiles. Bounded parallel workers may be used because workspaces and
@@ -312,7 +437,8 @@ The capture fails without publication when:
 - output exceeds its bound;
 - a page count is zero or missing;
 - the two clean runs disagree;
-- an ID, path, or digest is duplicated; or
+- a `(format, id)` key, source path, source digest, nonce, observation path, or
+  binding path is duplicated; or
 - the destination already exists.
 
 The error identifies the failed format and source ID. There are no retries,
@@ -338,6 +464,11 @@ over every retained `reference.pdf`. Merely recording a global identity is
 insufficient; any supplied input or runtime identity drift fails validation.
 Each execution record's environment-contract object must equal the
 inventory-level runtime values and the fixed allowlist.
+
+Task 5 joins the typed public-pool and native-inventory source tuples only by
+`(document_format, source_id)` and additionally requires exact relative-path
+and SHA-256 equality. Missing, extra, or duplicate keys fail before source
+copying.
 
 ## Per-Format Manifest Assembly
 
