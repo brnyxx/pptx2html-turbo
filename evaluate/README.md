@@ -8,7 +8,7 @@ The evaluation strategy now has three tracks:
 2. **LibreOffice-backed regression detection** for fast, broad visual comparison during iteration.
 3. **Independent synthetic exactness** for deterministic parser and renderer contracts.
 
-The existing composite score remains useful for regression control, but it is no longer the only fidelity signal.
+The existing composite score remains useful for regression control, but it is no longer the only fidelity signal. These PPTX fidelity tracks are separate from the universal seven-format acceptance gate, whose default required profile is the signed macOS/Linux `libreoffice-poppler` path below.
 
 ## Seven-format acceptance gate
 
@@ -25,7 +25,18 @@ The machine-consumed contract is
 `evaluate/multiformat/contract.v1.json`. Every format must independently pass
 the conformance, blind, component, stratum, minimum-unit, security,
 determinism, review, and SHA-256 evidence-binding checks in the same wave.
-Missing native Microsoft Office evidence is `INCOMPLETE`, never `PASS`.
+The default required reference profile is `libreoffice-poppler`, using locked
+LibreOffice and Poppler on supported macOS/Linux hosts over seven frozen format
+corpora (Poppler is used directly for PDF). A schema-2 portable lock, signed
+receipt, and every bound artifact must validate; missing, stale, substituted, or
+tampered evidence remains `INCOMPLETE` or `FAIL`.
+
+The signed `microsoft-office` profile remains supported for optional
+Windows/Office oracle evidence. It is not a prerequisite for the default
+portable profile. Selecting it does not weaken fail-closed behavior: its
+schema-1 lock, signed receipt, provenance, and artifact hashes must all pass,
+and missing Office evidence cannot be substituted into a passing Office-profile
+wave.
 
 Scaffold one new fail-closed evidence wave:
 
@@ -76,7 +87,7 @@ uv run python -m evaluate.validate_multiformat_public_pool \
 ```
 
 Materialize the validated sources into the exact manifest layout consumed by
-the Windows Office capture script:
+the optional Office capture script:
 
 ```bash
 uv run python -m evaluate.build_multiformat_public_pool_input \
@@ -90,9 +101,9 @@ The collector fetches each repository tree at an exact commit, excludes known
 crash, fuzz, encryption, and malformed-fixture paths, validates the downloaded
 OOXML, CFBF, or PDF structure, removes duplicate bytes, and publishes an exact
 `COLLECTED` file set with source URI, repository path, commit, license, and
-SHA-256 provenance. `COLLECTED` is not `READY`: trusted Windows Office capture
-must still freeze each source's native page or slide count before the files can
-enter a corpus manifest.
+SHA-256 provenance. `COLLECTED` is not `READY`: the selected reference profile
+must still freeze each source's native page, sheet-page, or slide-page count
+before the files can enter a corpus manifest.
 
 Build the exact 700-case conformance identity plan from the same contract:
 
@@ -350,16 +361,18 @@ aggregation, capture, test, and gate source file. A
 manually edited aggregate report, stale dependency, missing unit, pooled blind
 score, changed raw artifact, incomplete reviewer, or unequal clean run fails.
 
-On a network-disabled Windows Office host, populate the positive native oracle
-batch with `evaluate/capture_multiformat_office_oracles.ps1`. The capture
-script opens the actual modern or binary source file read-only, disables
-macros and link updates, exports native Office PDFs, exports PowerPoint slides
-directly at 960x540, rasterizes page formats at 144 DPI, records Poppler
-bounding-box layout plus Office semantic inventories, and SHA-256-binds every
-artifact. `evaluate.finalize_multiformat_office_oracles` converts that schema-2
-batch into the product gate's per-format capture manifest. It creates
-page/slide inventories, materializes the exact verifier runtime, and requires
-an Ed25519 receipt from a key distinct from the candidate sandbox signer.
+For the optional `microsoft-office` profile, a network-disabled Windows
+Office host can populate the positive native oracle batch with
+`evaluate/capture_multiformat_office_oracles.ps1`. The capture script opens the
+actual modern or binary source file read-only, disables macros and link updates,
+exports native Office PDFs, exports PowerPoint slides directly at 960x540,
+rasterizes page formats at 144 DPI, records Poppler bounding-box layout plus
+Office semantic inventories, and SHA-256-binds every artifact.
+`evaluate.finalize_multiformat_office_oracles` converts that schema-2 batch into
+the product gate's per-format capture manifest. It creates page/slide
+inventories, materializes the exact verifier runtime, and requires an Ed25519
+receipt from a key distinct from the candidate sandbox signer. This optional
+workflow is not needed when the default `libreoffice-poppler` profile is used.
 
 The manual GitHub Actions entry point is
 `.github/workflows/capture-office-oracles.yml`. It only targets a runner labeled
@@ -382,8 +395,10 @@ The downloaded `multiformat-office-input` artifact must contain
 runs `evaluate/run_multiformat_office_oracle_pipeline.ps1`, which captures once
 and finalizes every contract-required format. A missing dedicated runner,
 wrapper, signed receipt, exact Office/Poppler version, corpus source, page, or
-artifact remains `INCOMPLETE`; the workflow never substitutes LibreOffice or a
-GitHub-hosted image.
+artifact leaves this optional profile `INCOMPLETE`; the workflow never
+substitutes LibreOffice or a GitHub-hosted image. The default acceptance path
+does not depend on this workflow and uses the separately locked portable
+profile.
 
 Build that frozen artifact directory only after all seven corpus manifests are
 READY:
@@ -412,6 +427,11 @@ See `docs/UNIVERSAL_DOCUMENTS.md` and
 runtime architecture and full evidence rationale.
 
 ## Strict PowerPoint Pixel Gate
+
+This is a separate PPTX `exact`-promotion gate, not the default seven-format
+acceptance profile. Its Windows/PowerPoint evidence requirement remains
+intentional for that stricter claim; it does not make Office evidence a
+prerequisite for the portable general acceptance path.
 
 The strict gate is intentionally binary. It validates the PowerPoint-native
 batch provenance, compares every browser candidate against its corresponding

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This contract makes completeness finite and observable. It does not promise universal PowerPoint-to-browser 1:1 rendering. Every inventoried feature must have direct output with an honest tier or a deterministic fallback diagnostic; content must not silently disappear.
+This contract makes completeness finite and observable. It does not promise universal PowerPoint-to-browser 1:1 rendering. Every inventoried feature must have direct output with an honest tier or a deterministic fallback diagnostic; content must not silently disappear. Its PowerPoint-native requirement applies only to the separate PPTX `exact`-promotion tier, not to the default seven-format `libreoffice-poppler` acceptance profile. Signed Windows Office evidence remains optional for that general profile.
 
 `evaluate/completeness_manifest.json` is schema version `2.0`. Its root `contract_scope` must exactly equal `current and target dispositions; no exact claim without feature evidence`. The checker reports `INVALID_CONTRACT_SCOPE` for drift.
 

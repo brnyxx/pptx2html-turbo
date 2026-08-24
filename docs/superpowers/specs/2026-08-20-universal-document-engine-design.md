@@ -440,9 +440,13 @@ code enforces input, cumulative output, log, and time bounds on every platform.
 
 ## 96% acceptance contract
 
-The 96% gate is an acceptance gate, not an `exact` promotion. Existing PPTX
-exactness still requires the stricter PowerPoint-native zero-RGBA-difference
-contract.
+The gate is an acceptance gate, not an `exact` promotion. Its default required
+reference profile is `libreoffice-poppler`: supported macOS/Linux hosts use
+locked LibreOffice and Poppler over the seven frozen format corpora, with PDF
+entering Poppler directly. Existing PPTX exactness remains a separate,
+stricter PowerPoint-native zero-RGBA-difference contract. A signed
+`microsoft-office`/Windows profile is supported as optional evidence and is not
+a prerequisite for the default acceptance path.
 
 ### Corpus
 
@@ -486,39 +490,43 @@ Each blind file score is the arithmetic mean of all its unit scores. The blind
 format score is the arithmetic mean of exactly 75 file scores, so a long file
 cannot dominate the result.
 
-### Native oracles
+### Reference profiles and evidence identity
 
-- DOCX and DOC: pinned Microsoft Word PDF export on Windows.
-- XLSX and XLS: pinned Microsoft Excel PDF export on Windows.
-- PPTX and PPT: pinned Microsoft PowerPoint slide export on Windows.
-- PDF: source PDF rendered by pinned MuPDF, with a second renderer for complex
-  transparency and color-space cases.
+The default required profile is `libreoffice-poppler`:
 
-LibreOffice is a local regression oracle only. Missing Windows Office evidence
-is `INCOMPLETE`, never `PASS`.
+- DOCX, DOC, XLSX, XLS, PPTX, and PPT use locked LibreOffice PDF export plus
+  locked Poppler metadata, rendering, and text extraction on supported macOS or
+  Linux hosts.
+- PDF uses the same locked Poppler stages directly, without LibreOffice.
 
-Exact producer builds and rendering settings live in a versioned
-`evaluate/multiformat/oracle-lock.json`. The gate rejects a missing lock, an
-unrecorded producer, or any version mismatch. The initial lock records:
+Its schema-2 portable lock records the platform, routing-table and
+canonicalizer identities, tool/font/browser/runtime hashes, frozen corpus and
+evaluator scope, signed executor, network-isolated runtime attestation, and
+project revision. Every selected reference and candidate artifact is
+SHA-256-bound, and missing, stale, substituted, or tampered evidence remains
+`INCOMPLETE` or `FAIL`.
 
-- Windows 11 23H2,
-- the exact installed Microsoft 365 Word, Excel, and PowerPoint versions and
-  builds,
-- Office locale, timezone, default printer, disabled macro/link-update policy,
-  font-bundle digest, and PDF export settings,
-- exact MuPDF and secondary PDF renderer versions,
-- Chromium revision, viewport/device scale, locale, timezone, font-bundle
-  digest, animation policy, and color profile,
-- 144 DPI for paged documents and exactly 960 by 540 RGBA for presentations.
+The optional `microsoft-office` profile remains supported for signed Windows
+Word, Excel, and PowerPoint oracle evidence. Its schema-1 lock, distinct
+verifier, Office provenance, and artifact bindings remain fail-closed when that
+profile is selected, but its absence does not block the default portable
+profile. Profiles are selected as a complete evidence wave and are not mixed.
 
-The lock is populated only from the real evaluator hosts. Until those concrete
-values and hashes exist, every affected format is `INCOMPLETE`; placeholder or
-invented versions are forbidden.
+A selected Office profile may use:
 
-PowerPoint references are exported through the documented
-`Slide.Export(path, "PNG", 960, 540)` operation. The gate verifies every PNG
-IHDR is exactly 960 by 540. Decoding RGB PNG data into an RGBA pixel buffer is
-allowed; geometric resize, crop, padding, or alignment is not.
+- DOCX and DOC: pinned Microsoft Word PDF export on Windows;
+- XLSX and XLS: pinned Microsoft Excel PDF export on Windows;
+- PPTX and PPT: pinned Microsoft PowerPoint slide export on Windows;
+- PDF: source PDF rendered by pinned PDF renderers.
+
+The lock is populated only from real evaluator hosts. Until the concrete
+values and hashes for a selected profile exist, that profile is `INCOMPLETE`;
+placeholder or invented versions are forbidden.
+
+PowerPoint references in the optional Office profile are exported through the
+documented `Slide.Export(path, "PNG", 960, 540)` operation. The gate verifies
+every PNG IHDR is exactly 960 by 540. Decoding RGB PNG data into an RGBA pixel
+buffer is allowed; geometric resize, crop, padding, or alignment is not.
 
 ### Metrics
 
@@ -570,14 +578,17 @@ The machine implementation is fixed as follows:
 - Conformance score is the arithmetic mean of exactly 100 unit scores. Blind
   aggregation follows the file-then-format rule above.
 
-Oracle semantic inventories come from pinned Word, Excel, and PowerPoint COM
-exporters and from MuPDF's page text/image/link/annotation extraction. Candidate
-inventories come from a pinned Chromium script that walks visible DOM text
-nodes, images, links, form controls, SVG graphics, and page containers and
-records bounding boxes and text baselines. Spreadsheet oracle tuples retain
-their cell coordinates; candidate nodes are assigned to tuples by displayed
-value, page, and minimum-cost box matching. Duplicate values use global
-minimum-cost assignment, never first-match order.
+Reference semantic inventories come from the selected profile's locked
+reference outputs and extraction contract. The optional Office profile may use
+pinned Word, Excel, and PowerPoint COM exporters together with the pinned PDF
+renderers; the default portable profile uses its bound LibreOffice/Poppler
+artifacts and documented extraction. Candidate inventories come from a pinned
+Chromium script that walks visible DOM text nodes, images, links, form
+controls, SVG graphics, and page containers and records bounding boxes and text
+baselines. Spreadsheet reference tuples retain their cell coordinates;
+candidate nodes are assigned to tuples by displayed value, page, and
+minimum-cost box matching. Duplicate values use global minimum-cost
+assignment, never first-match order.
 
 Object identity is `(unit, type, semantic-value-or-content-hash, occurrence)`.
 Reading order is the oracle order from COM/MuPDF and candidate DOM order after
@@ -686,9 +697,10 @@ The dependency-tree gate fails if `document2html-native` appears under
 Manual QA covers each CLI format with a valid input, invalid input, and
 `--help`. Native QA records the actual LibreOffice and Poppler versions.
 
-The final 96% product claim additionally requires the transferred,
-same-revision Windows Office evidence and all seven machine-readable format
-reports.
+The final acceptance result requires one selected, complete reference profile
+and all seven machine-readable format reports at the same project revision.
+The optional Office profile is not required when the default portable profile
+is complete.
 
 ## Authoritative references
 

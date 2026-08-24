@@ -16,8 +16,11 @@ each required format:
 Each manifest must bind exactly 100 conformance units, 75 blind files, and 10
 security cases from the already frozen source snapshots. Blind `unit_count`
 values must come from two clean LibreOffice/Poppler native inventory runs over
-the exact source bytes. The final external snapshot must be assembled
-deterministically, validated before publication, and remain outside Git.
+the exact source bytes. This inventory is the native observation stage for the
+default macOS/Linux `libreoffice-poppler` acceptance profile; signed Windows
+Office oracle evidence is a separate optional profile. The final external
+snapshot must be assembled deterministically, validated before publication, and
+remain outside Git.
 
 This work establishes source-corpus readiness only. It does not perform the
 later signed aggregate admission, prove runtime security outcomes, capture

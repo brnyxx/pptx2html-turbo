@@ -1,6 +1,6 @@
 # Capability Matrix
 
-`evaluate/completeness_manifest.json` is the sole machine-readable source of truth for feature status. This document is a family-level explanatory summary; generated per-feature blocks and digests in the contract docs are refreshed from the manifest.
+`evaluate/completeness_manifest.json` is the sole machine-readable source of truth for feature status. This document is a family-level explanatory summary; generated per-feature blocks and digests in the contract docs are refreshed from the manifest. The `exact` tier below is a separate PPTX promotion contract; it must not be conflated with the default seven-format `libreoffice-poppler` acceptance profile, for which signed Windows Office evidence is optional.
 
 ## Support Tiers
 

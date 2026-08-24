@@ -1,7 +1,11 @@
 # Visual Acceptance Contract
 
-The visual-fidelity goal is complete only when every requirement below passes
-in the same evaluation wave.
+This document defines the separate PPTX `exact`-promotion visual contract. It
+is not the default seven-format acceptance profile: a complete signed
+macOS/Linux `libreoffice-poppler` wave may satisfy the general acceptance
+contract without Windows/Office pixel evidence. The visual-fidelity goal below
+is complete only when every requirement passes in the same exact-promotion
+wave.
 
 ## Corpus
 

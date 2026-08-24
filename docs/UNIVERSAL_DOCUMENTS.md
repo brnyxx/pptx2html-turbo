@@ -42,6 +42,23 @@ the release security gate.
 LibreOffice command-line behavior is documented at:
 https://help.libreoffice.org/latest/en-US/text/shared/guide/start_parameters.html
 
+## Reference profiles
+
+The default required profile is `libreoffice-poppler`. On supported macOS and
+Linux hosts, the six Office formats use locked LibreOffice PDF export followed
+by locked Poppler rendering/text extraction; PDF uses locked Poppler directly.
+The profile runs over the seven frozen format corpora and requires a schema-2
+portable lock, signed receipt, and SHA-256 binding for every admitted source,
+tool, runtime, and output. Missing, stale, substituted, or tampered evidence
+remains `INCOMPLETE` or `FAIL`.
+
+Signed Microsoft Office/Windows oracle evidence remains supported as the
+optional `microsoft-office` profile. It is not a prerequisite for the default
+portable acceptance path. If selected, that profile still requires its signed
+schema-1 lock, verifier-bound capture, provenance, and artifact hashes; an
+incomplete Office profile cannot pass and cannot be substituted for portable
+evidence.
+
 ## CLI
 
 Build or run the universal binary:
@@ -128,10 +145,12 @@ Thresholds include:
 - no blind file below 90.00,
 - zero critical defects.
 
-Word, Excel, and PowerPoint references require pinned Windows Microsoft Office
-exports. PDF references use pinned PDF renderers. LibreOffice output is local
-regression evidence and never substitutes for Microsoft Office-native
-evidence.
+The default `libreoffice-poppler` profile uses the locked macOS/Linux
+LibreOffice + Poppler route for the six Office formats and locked Poppler
+directly for PDF. Signed Microsoft Office/Windows exports remain supported
+only as the optional `microsoft-office` profile; they are not required for the
+default path. Each selected profile must satisfy the same signed, hash-bound,
+fail-closed evidence contract.
 
 Run the gate:
 
@@ -207,10 +226,10 @@ uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
   --output evaluate/multiformat/wave/reports/docx.json
 ```
 
-On a network-disabled Windows host with desktop Microsoft Office and Poppler,
-capture the positive native references. Schema 2 also records `pdftotext
--bbox-layout` output so the finalizer can build page-bound text geometry and
-worksheet/cell inventories:
+For the optional `microsoft-office` profile, a network-disabled Windows host
+with desktop Microsoft Office and Poppler can capture the positive native
+references. Schema 2 also records `pdftotext -bbox-layout` output so the
+finalizer can build page-bound text geometry and worksheet/cell inventories:
 
 ```powershell
 pwsh -File evaluate/capture_multiformat_office_oracles.ps1 `
@@ -239,17 +258,18 @@ uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
   --run-nonce <64-lowercase-hex>
 ```
 
-For remote execution, dispatch `.github/workflows/capture-office-oracles.yml`.
-It deliberately requires a dedicated self-hosted runner labeled
-`office-oracle`; the host-owned `OFFICE_ORACLE_CAPTURE_WRAPPER` must enforce
-network isolation around both raw capture and finalization. The lock uses a
-separate `office_oracle_verifier` key, and pins the Office channel, Word,
-Excel, PowerPoint, `pdfinfo`, `pdftoppm`, and `pdftotext` identities. See
-GitHub's official
+For the optional `microsoft-office` profile, remote execution can dispatch
+`.github/workflows/capture-office-oracles.yml`. It deliberately requires a
+dedicated self-hosted runner labeled `office-oracle`; the host-owned
+`OFFICE_ORACLE_CAPTURE_WRAPPER` must enforce network isolation around both raw
+capture and finalization. The lock uses a separate `office_oracle_verifier`
+key, and pins the Office channel, Word, Excel, PowerPoint, `pdfinfo`,
+`pdftoppm`, and `pdftotext` identities. See GitHub's official
 [self-hosted runner workflow documentation](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)
 for label routing. No self-hosted Office runner is currently registered in this
-repository, so actual native batches remain external prerequisites rather than
-claimed evidence.
+repository, so optional Office batches remain external prerequisites rather
+than claimed evidence. The default portable profile does not depend on this
+runner.
 
 Ready reports bind relative evaluator, corpus-manifest, and metrics-evidence
 paths to their real SHA-256 digests. The gate resolves every path under the

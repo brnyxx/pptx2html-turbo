@@ -43,7 +43,13 @@ cargo run -p pptx2html-cli --bin document2html -- document.pdf --info
 The original `pptx2html` binary and all existing Rust, Python, and npm/WASM
 PPTX APIs remain unchanged.
 
-The seven-format 96% acceptance gate is intentionally fail-closed:
+The seven-format acceptance gate is intentionally fail-closed. Its default
+required reference profile is `libreoffice-poppler`: on supported macOS or
+Linux hosts, LibreOffice and Poppler produce the bound reference evidence for
+the six Office formats, while PDF uses Poppler directly. The profile runs over
+seven frozen format corpora and requires a signed, hash-bound portable lock,
+reports, and receipts; a missing, stale, substituted, or tampered input stays
+`INCOMPLETE` or `FAIL`.
 
 ```bash
 uv run python -m evaluate.multiformat_gate \
@@ -68,18 +74,17 @@ Network-isolated two-run Chromium candidates are produced with
 `python -m evaluate.capture_multiformat_candidates`; see
 `evaluate/README.md` for the locked runtime and sandbox contract.
 
-The repository does not currently contain the required Windows Microsoft
-Office oracle lock or all seven native evidence batches, so the product-level
-gate reports `INCOMPLETE`; it must not be described as a verified 96% release
-until those external artifacts are captured and all reports pass together.
-The signed closure path consists of the schema-2
+Signed Microsoft Office/Windows oracle evidence remains supported through the
+optional `microsoft-office` profile and its schema-1 lock, receipt, and
+verifier-bound capture workflow. It is not a prerequisite for the default
+portable acceptance path. If that optional profile is selected, its signed
+artifacts are still validated fail-closed; missing or invalid Office evidence
+cannot be relabeled as portable evidence or produce a passing Office-profile
+wave. The optional closure path consists of the schema-2
 `capture_multiformat_office_oracles.ps1` batch,
 `finalize_multiformat_office_oracles.py` gate-ready captures, and the manual
-`.github/workflows/capture-office-oracles.yml` workflow. That workflow only
-routes to a dedicated self-hosted Windows runner labeled `office-oracle`;
-candidate and Office evidence use distinct Ed25519 verifier keys. No such
-runner is currently registered, so the automation does not change the real
-gate from `INCOMPLETE`.
+`.github/workflows/capture-office-oracles.yml` workflow on a dedicated
+self-hosted Windows runner labeled `office-oracle`.
 See [Universal document conversion](docs/UNIVERSAL_DOCUMENTS.md).
 
 ## Features
@@ -461,7 +466,11 @@ Results are logged to `autoresearch/results.tsv`. See `autoresearch/program.md` 
 
 ## Evaluation
 
-The project now treats PowerPoint-native references as the primary fidelity oracle and LibreOffice references as a secondary regression signal.
+Universal seven-format acceptance uses the default signed macOS/Linux
+`libreoffice-poppler` profile described above. The following legacy PPTX
+fidelity loop is a separate regression and `exact`-promotion track: it treats
+PowerPoint-native references as the primary oracle for that stricter tier and
+LibreOffice references as a secondary regression signal.
 
 ```bash
 cd evaluate
