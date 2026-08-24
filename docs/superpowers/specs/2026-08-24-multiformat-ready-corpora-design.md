@@ -214,6 +214,12 @@ Their exact nested field sets are:
 - `evidence`: `reference_pdf` and `pdfinfo`; and
 - each evidence binding: `path` and `sha256`.
 
+`processes` is a JSON array in the listed order. `arguments` and
+`environment.keys` are JSON arrays of strings. `schema_version`, `run`,
+`unit_count`, `timeout_seconds`, and `exit_code` are JSON integers. Isolation
+fields are JSON booleans rather than numeric substitutes. All other scalar
+schema values are JSON strings.
+
 `schema_version` is `1`. `run` is `1` or `2`; `workspace_nonce` is a
 64-lowercase-hex value supplied by the capture orchestrator; `unit_count` is
 positive. Every SHA-256 is 64 lowercase hexadecimal characters. Tool names and
@@ -237,6 +243,10 @@ Version arguments are exactly `["--version"]` and `["-v"]`. The
 `libreoffice` and `poppler_metadata` process arguments are the exact
 unrendered argument templates from the locked routing table. No rendered
 workspace path is persisted.
+
+Version-command `timeout_seconds` is the literal integer `120`. Routed process
+timeouts equal the positive integer `timeout_seconds` from the validated
+routing table. Every accepted `exit_code` is the integer `0`.
 
 The runtime selects only `libreoffice` plus `poppler_metadata` from an Office
 route, and only `poppler_metadata` from a PDF route. It never invokes or
@@ -263,6 +273,10 @@ exactly `{observation-root}/reference.pdf` and
 PDF observations neither resolve nor record LibreOffice or font identities.
 The batch-level inventory still binds them because the same inventory contains
 the six Office formats.
+
+For every observation, `source`, `run`, `workspace_nonce`, `unit_count`, and
+both evidence bindings in `execution.json` must exactly equal the corresponding
+parent inventory source/observation fields. No repeated field may disagree.
 
 Converter/version stdout and stderr are bounded temporary capture mechanics.
 They are discarded and are not persisted as hashes or independent evidence.
@@ -350,6 +364,23 @@ bundle at observation time.
 `runtime.os` is exactly `macos` or `linux`. `runtime.architecture` is normalized
 to `arm64` or `x86_64`; every other architecture fails typed before capture.
 
+The shared failure enum contains
+`NativeUnitFailure.UNSUPPORTED_PLATFORM = "unsupported-platform"`.
+`NativeUnitError` has exact fields `failure`, `document_format`, `source_id`,
+and `detail`; the middle two are optional only for non-source-scoped failures.
+Capture preflight and independent validation raise
+`NativeUnitError(UNSUPPORTED_PLATFORM, None, None, detail)` before resolving,
+hashing, versioning, or invoking a tool on an unsupported OS or architecture.
+
+The acceptance contract does not separately pin semantic version numbers.
+Each supplied tool's trusted identity is the pair of its exact executable
+SHA-256 and normalized first non-empty version-output line. Normalization
+strips surrounding ASCII whitespace and rejects embedded CR, LF, NUL, or an
+empty result. Capture and validation invoke exactly LibreOffice `--version`
+and `pdfinfo -v` and require both the hash and normalized line to match the
+inventory. Font-snapshot identity is independent and need not come from the
+same installation root as the LibreOffice executable.
+
 The validator returns a separate aggregate value:
 
 ```python
@@ -364,8 +395,10 @@ class NativeUnitInventorySummary:
 
 `files` is exactly `3,151`, `sources` is `525`, and `observations` is `1,050`.
 `total_units` is the sum of the accepted positive source `unit_count` values.
-The existing `NativeUnitSummary` remains the per-source runtime value and is
-not overloaded for aggregate inventory validation.
+There is no public `NativeUnitSummary`. Task 3 returns one
+`NativeObservation` per call. Task 4 compares exactly two observations and
+constructs `NativeUnitCount`; aggregate validation returns
+`NativeUnitInventorySummary`.
 
 The manifest digest is SHA-256 over the exact canonical
 `native-unit-inventory.json` bytes including the trailing LF. Task 4 exposes:
@@ -421,6 +454,11 @@ The loader performs the complete existing validation, enforces unique
 in that key order. The existing `validate_public_pool` delegates to the loader
 and discards the tuple.
 
+Every public-pool, native-inventory, and Task 5 join record uses
+`evaluate.multiformat_corpus_types.DocumentFormat`. The separate routing enum
+is converted by `.value` only at the routing boundary. Sorting and joins use
+`(document_format.value, source_id)`.
+
 Locale is `en-US`, timezone is `UTC`, and the subprocess environment is
 allowlisted. Native conversion uses bounded output, a per-command timeout, and
 unique profiles. Bounded parallel workers may be used because workspaces and
@@ -441,8 +479,10 @@ The capture fails without publication when:
   binding path is duplicated; or
 - the destination already exists.
 
-The error identifies the failed format and source ID. There are no retries,
-skips, inferred fallback counts, or partial success states.
+Every source-scoped error identifies the failed format and source ID.
+Unsupported-platform preflight is the sole non-source-scoped failure and
+carries `None` for both fields. There are no retries, skips, inferred fallback
+counts, or partial success states.
 
 Independent inventory validation receives these trusted inputs explicitly:
 

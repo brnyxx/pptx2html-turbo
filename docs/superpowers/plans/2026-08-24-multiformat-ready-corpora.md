@@ -6,7 +6,7 @@
 
 **Architecture:** A provenance-bound LibreOffice/Poppler inventory stage runs twice per blind source and publishes retained observation evidence. A separate pure assembler consumes that inventory plus the frozen conformance, legacy, blind, and security snapshots, validates every input, builds seven source-level READY manifests, and publishes a root `VALIDATED` snapshot without an aggregate READY marker.
 
-**Tech Stack:** Python 3.11 standard library, existing strict JSON/JCS, corpus validators, bounded subprocess runtime, LibreOffice 26.2.2.2, Poppler 26.03.0, Ruff, basedpyright/LSP, unittest, Cargo workspace gates.
+**Tech Stack:** Python 3.11 standard library, existing strict JSON/JCS, corpus validators, bounded subprocess runtime, SHA-256 plus normalized-version identity-locked LibreOffice and Poppler, Ruff, basedpyright/LSP, unittest, Cargo workspace gates.
 
 **Design:** `docs/superpowers/specs/2026-08-24-multiformat-ready-corpora-design.md`
 
@@ -30,13 +30,20 @@
 
 ### Native unit inventory
 
-- Create `evaluate/multiformat_native_unit_types.py`: immutable runtime, source, observation, summary, error, and runner types.
+- Modify `evaluate/multiformat_candidate_process.py`: expose typed bounded-process failure reasons.
+- Create `evaluate/multiformat_native_unit_types.py`: immutable runtime, source, observation, error, and runner types.
 - Create `evaluate/multiformat_native_unit_runtime.py`: tool locking, isolated conversion, retained PDF, bounded `pdfinfo`, and execution records.
+- Create `evaluate/multiformat_native_unit_observation.py`: one-observation conversion and retained-evidence orchestration.
+- Create `evaluate/multiformat_native_unit_files.py`: stable descriptor/file operations.
+- Create `evaluate/multiformat_native_unit_process.py`: typed bounded-process construction and parsing.
 - Create `evaluate/multiformat_native_unit_capture.py`: exact 525-source orchestration and atomic publication.
 - Create `evaluate/multiformat_native_unit_validation.py`: independent trusted-input and exact-tree validation.
 - Create `evaluate/capture_multiformat_native_units.py`: `capture` and `validate` CLI subcommands.
 - Create `evaluate/tests/multiformat_native_unit_fixture.py`: production-schema pool/font/tool and injected-runner fixture.
 - Create `evaluate/tests/test_multiformat_native_unit_runtime.py`: process request and evidence tests.
+- Create `evaluate/tests/test_multiformat_native_unit_schema.py`: exact Office/PDF execution schema tests.
+- Modify `evaluate/tests/test_multiformat_snapshot_publish.py`: preserve publisher regressions across the typed process seam.
+- Modify `evaluate/tests/test_multiformat_subprocess.py`: preserve clean-environment regressions.
 - Create `evaluate/tests/test_multiformat_native_unit_capture.py`: exact-set, determinism, disagreement, and atomicity tests.
 - Create `evaluate/tests/test_multiformat_native_unit_validation.py`: tamper and trusted-input tests.
 - Create `evaluate/tests/test_capture_multiformat_native_units.py`: CLI tests.
@@ -330,10 +337,17 @@ git commit -m "feat: materialize deterministic font bundles" \
 ### Task 3: Implement bounded native observation runtime
 
 **Files:**
+- Modify: `evaluate/multiformat_candidate_process.py`
 - Create: `evaluate/multiformat_native_unit_types.py`
 - Create: `evaluate/multiformat_native_unit_runtime.py`
+- Create: `evaluate/multiformat_native_unit_observation.py`
+- Create: `evaluate/multiformat_native_unit_files.py`
+- Create: `evaluate/multiformat_native_unit_process.py`
 - Create: `evaluate/tests/multiformat_native_unit_fixture.py`
 - Create: `evaluate/tests/test_multiformat_native_unit_runtime.py`
+- Create: `evaluate/tests/test_multiformat_native_unit_schema.py`
+- Modify: `evaluate/tests/test_multiformat_snapshot_publish.py`
+- Modify: `evaluate/tests/test_multiformat_subprocess.py`
 
 - [ ] **Step 1: Write runtime RED tests**
 
@@ -348,7 +362,10 @@ Define an injected low-level `NativeProcessRunner` protocol. Tests must prove:
 - version commands are exactly LibreOffice `--version` and `pdfinfo -v`;
 - zero/missing/multiple page fields, nonzero exit, timeout, missing PDF, and
   outputs over 1 MiB raise typed errors;
-- execution records contain no absolute workspace path.
+- execution records contain no absolute workspace path;
+- array, integer, and boolean fields have the exact JSON types frozen in the
+  design; and
+- every repeated execution field equals its parent observation binding.
 
 - [ ] **Step 2: Verify RED**
 
@@ -371,7 +388,9 @@ class NativeUnitFailure(StrEnum): ...
 @dataclass(frozen=True, slots=True)
 class NativeUnitError(Exception):
     failure: NativeUnitFailure
+    document_format: DocumentFormat | None
     source_id: str | None
+    detail: str
 
 @dataclass(frozen=True, slots=True)
 class NativeUnitRequest: ...
@@ -392,12 +411,25 @@ def capture_native_observation(
 `workspace_nonce`. The runtime records that value and never generates its own
 random nonce.
 
+All public source/runtime types use
+`evaluate.multiformat_corpus_types.DocumentFormat`. Routing converts from its
+separate enum by `.value` only at selection time.
+
+Define `NativeUnitFailure.UNSUPPORTED_PLATFORM = "unsupported-platform"`.
+Unsupported OS/architecture capture preflight and validation raise
+`NativeUnitError(UNSUPPORTED_PLATFORM, None, None, detail)` before any tool is
+resolved or invoked. Source-scoped failures retain format and source ID.
+
 The capture layer owns the observation directory and supplies its staged
 destination to `NativeUnitRequest`. The runtime owns isolated workspaces,
 process requests, retained `reference.pdf`/`pdfinfo.txt`, temporary log
-hashing, and the typed observation result. The low-level runner only executes
+cleanup, and the typed observation result. The low-level runner only executes
 one bounded process request. Do not pass raw JSON dictionaries across either
 boundary.
+
+Task 3 exposes no `NativeUnitSummary`. Each call returns one
+`NativeObservation`; Task 4 compares two observations and constructs
+`NativeUnitCount`.
 
 - [ ] **Step 4: Implement real bounded process execution**
 
@@ -421,8 +453,14 @@ route's `libreoffice` and `poppler_metadata` commands. For PDF, invoke only
 The exact root/nested execution field sets, process-role order, tool variants,
 path bases, and Office/PDF environment variants are normative in the approved
 design's **Closed execution schema** section. Add tests proving timeout kills
-the full process group, there are no retries/skips/fallback counts, and every
-failure carries format and source ID.
+the full process group and there are no retries/skips/fallback counts. Every
+source-scoped failure carries format and source ID; unsupported-platform
+preflight carries neither.
+
+Tool identity is exactly executable SHA-256 plus the normalized first non-empty
+line from LibreOffice `--version` or `pdfinfo -v`. Do not separately compare a
+semantic-version constant. Font-manifest identity remains independent from the
+LibreOffice executable installation root.
 
 This source-level inventory records execution but does not claim the signed
 network-isolation proof owned by the later portable-reference receipt.
@@ -436,9 +474,16 @@ below 250 pure LOC.
 
 ```bash
 git add evaluate/multiformat_native_unit_types.py \
+  evaluate/multiformat_candidate_process.py \
   evaluate/multiformat_native_unit_runtime.py \
+  evaluate/multiformat_native_unit_observation.py \
+  evaluate/multiformat_native_unit_files.py \
+  evaluate/multiformat_native_unit_process.py \
   evaluate/tests/multiformat_native_unit_fixture.py \
-  evaluate/tests/test_multiformat_native_unit_runtime.py
+  evaluate/tests/test_multiformat_native_unit_runtime.py \
+  evaluate/tests/test_multiformat_native_unit_schema.py \
+  evaluate/tests/test_multiformat_snapshot_publish.py \
+  evaluate/tests/test_multiformat_subprocess.py
 git commit -m "feat: capture bounded native unit observations" \
   -m "Ultraworked with [omo](https://github.com/code-yeongyu/oh-my-openagent)" \
   -m "Co-authored-by: sisyphus-dev-ai <sisyphus-dev-ai@users.noreply.github.com>"
@@ -551,14 +596,18 @@ exact 3,151-file tree:
 - 525 x 2 x (`execution.json`, `reference.pdf`, `pdfinfo.txt`).
 
 `NativeUnitInventorySummary` has exactly `files`, `sources`, `observations`,
-`total_units`, and `manifest_sha256`. It is distinct from the existing
-per-source `NativeUnitSummary`. `manifest_sha256` hashes the exact manifest
-bytes including the trailing LF.
+`total_units`, and `manifest_sha256`. There is no per-source
+`NativeUnitSummary`; `manifest_sha256` hashes the exact manifest bytes
+including the trailing LF.
 
 `NativeUnitInventory` contains that summary plus a sorted tuple of
 `NativeUnitCount` records carrying exact format, source ID, relative path,
 source SHA-256, and accepted unit count. The validator delegates to this typed
 loader and returns its summary.
+
+Every public-pool, native-inventory, and Task 5 join type uses
+`evaluate.multiformat_corpus_types.DocumentFormat`; routing converts by
+`.value` only at route selection.
 
 Use the retained file bindings and rerun `pdfinfo` for count confirmation.
 
