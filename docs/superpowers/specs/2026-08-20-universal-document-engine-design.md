@@ -24,10 +24,12 @@ therefore interpreted as `.docx` and `.doc`.
 - The existing pure-Rust PPTX implementation remains the preferred PPTX
   backend.
 - `evaluate/evaluate_fidelity.py` remains human-owned and unchanged.
-- The selected LibreOffice/Poppler or optional Office/PDF reference workflow
-  supplies general conversion-evaluation evidence; Microsoft Office pixel
-  output is not a requirement for the general claim. Native PowerPoint pixel
-  evidence remains reserved for the separate `exact` capability claim.
+- The locked LibreOffice/Poppler portable profile supplies the reference
+  evidence required by the general conversion-evaluation contract. Optional
+  Office/PDF native workflows may provide enrichment or promotion evidence;
+  Microsoft Office pixel output is not a requirement for the general claim.
+  Native PowerPoint pixel evidence remains reserved for the separate `exact`
+  capability claim.
 - Browser WASM cannot launch native processes. Unsupported runtime/format
   combinations must be reported explicitly rather than silently degraded.
 - New format support must preserve unsupported content through typed
@@ -586,22 +588,27 @@ The machine implementation is fixed as follows:
 - Conformance score is the arithmetic mean of exactly 100 unit scores. Blind
   aggregation follows the file-then-format rule above.
 
-Reference semantic inventories come from the selected profile's locked
-reference outputs and extraction contract. The optional Office profile may use
-pinned Word, Excel, and PowerPoint COM exporters together with the pinned PDF
-renderers; the default portable profile uses its bound LibreOffice/Poppler
-artifacts and documented extraction. Candidate inventories come from a pinned
-Chromium script that walks visible DOM text nodes, images, links, form
-controls, SVG graphics, and page containers and records bounding boxes and text
-baselines. Spreadsheet reference tuples retain their cell coordinates;
-candidate nodes are assigned to tuples by displayed value, page, and
-minimum-cost box matching. Duplicate values use global minimum-cost
-assignment, never first-match order.
+Reference semantic inventories for the default required profile come only
+from its locked LibreOffice/Poppler reference outputs and documented extraction
+contract. Optional Office/native enrichment may add pinned Word, Excel, and
+PowerPoint COM/Microsoft Office reading-order captures, MuPDF extraction, or
+other locked PDF-renderer evidence for a separately selected profile or exact
+promotion; none is a prerequisite for the default general gate. Candidate
+inventories come from a pinned Chromium script that walks visible DOM text
+nodes, images, links, form controls, SVG graphics, and page containers and
+records bounding boxes and text baselines. Spreadsheet reference tuples retain
+their cell coordinates; candidate nodes are assigned to tuples by displayed
+value, page, and minimum-cost box matching. Duplicate values use global
+minimum-cost assignment, never first-match order.
 
 Object identity is `(unit, type, semantic-value-or-content-hash, occurrence)`.
-Reading order is the oracle order from COM/MuPDF and candidate DOM order after
-page-container grouping. Baselines use the oracle PDF text baseline and
-Chromium `Range.getClientRects()` plus computed font metrics.
+Reading order is the selected profile's locked extraction order and candidate
+DOM order after page-container grouping. The default profile uses Poppler
+extraction; optional Office/native enrichment may use COM/Microsoft Office or
+MuPDF reading-order evidence. Baselines use the selected profile's bound PDF
+text geometry and Chromium `Range.getClientRects()` plus computed font metrics.
+These optional native readings never become prerequisites for the default
+`96% under the documented general conversion evaluation contract` claim.
 
 If a metric family is declared not applicable by the frozen stratum manifest,
 both inventories must be empty and that component scores 100. If either side
@@ -654,9 +661,11 @@ Two reviewers independently inspect every full-resolution pair using the
 frozen checklist for missing content, clipping, overlap, wrong order, wrong
 color, and unsafe behavior. Both must return `PASS`. A disagreement or a
 reference defect fails the wave. For PDF transparency/color-space strata,
-MuPDF and the secondary locked renderer must agree within the reference
-threshold stored before candidate execution; disagreement invalidates the
-reference and cannot be waived.
+MuPDF agreement with a secondary locked renderer is optional native/reference
+or exact-promotion evidence. If that enrichment or promotion profile selects
+it, the agreement threshold is stored before candidate execution and
+invalidation remains fail-closed; its absence never blocks the default
+LibreOffice/Poppler general gate.
 
 ### Anti-gaming rules
 
@@ -716,10 +725,11 @@ The dependency-tree gate fails if `document2html-native` appears under
 Manual QA covers each CLI format with a valid input, invalid input, and
 `--help`. Native QA records the actual LibreOffice and Poppler versions.
 
-The final acceptance result requires one selected, complete reference profile
-and all seven machine-readable format reports at the same project revision.
-The optional Office profile is not required when the default portable profile
-is complete.
+The default general acceptance result requires the complete portable
+`libreoffice-poppler` profile and all seven machine-readable format reports at
+the same project revision. Optional Office/native evidence may enrich a
+separate selected profile or support exact promotion, but it cannot replace the
+portable profile or become a prerequisite for the general claim.
 
 ## Authoritative references
 

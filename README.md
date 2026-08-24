@@ -53,7 +53,7 @@ reports, and receipts; a missing, stale, substituted, or tampered input stays
 
 The approved general claim wording is
 `96% under the documented general conversion evaluation contract`. Use it only
-after one complete signed profile wave passes all seven formats. It is not a
+after one complete signed portable profile wave passes all seven formats. It is not a
 Microsoft Office pixel-accuracy, PowerPoint pixel-match, byte-identical-output,
 or exact-tier claim; the separate PPTX `exact` promotion contract remains
 stricter.

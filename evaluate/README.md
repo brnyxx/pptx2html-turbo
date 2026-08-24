@@ -33,7 +33,7 @@ tampered evidence remains `INCOMPLETE` or `FAIL`.
 
 The approved general claim wording is
 `96% under the documented general conversion evaluation contract`. It is
-permitted only after one complete signed profile wave passes all seven formats.
+permitted only after one complete signed portable profile wave passes all seven formats.
 This wording describes the machine contract, not Microsoft Office pixel
 accuracy, PowerPoint pixel matching, byte-identical output, or the separate
 PPTX `exact`-promotion tier.
