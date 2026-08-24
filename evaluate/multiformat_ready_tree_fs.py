@@ -5,33 +5,14 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-from collections.abc import Generator
-from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 
-
-class TreeIdentityError(ValueError):
-    reason: str
-
-    def __init__(self, reason: str) -> None:
-        super().__init__(reason)
-        self.reason = reason
-
-
-@dataclass(frozen=True, slots=True)
-class TreeFileRecord:
-    path: str
-    sha256: str
-    size: int
-
-
-@dataclass(frozen=True, slots=True)
-class _DirectoryContext:
-    fd: int
-    relative_parts: tuple[str, ...]
-    expected: os.stat_result
-    parent_fd: int | None
+from evaluate.multiformat_ready_tree_io import fd_scope
+from evaluate.multiformat_ready_tree_types import (
+    DirectoryContext,
+    TreeFileRecord,
+    TreeIdentityError,
+)
 
 
 def scan_tree(root: Path) -> tuple[TreeFileRecord, ...]:
@@ -51,7 +32,7 @@ def scan_tree(root: Path) -> tuple[TreeFileRecord, ...]:
         raise TreeIdentityError(reason=f"cannot inspect tree root: {root}") from error
     if not stat.S_ISDIR(root_stat.st_mode):
         raise TreeIdentityError(reason=f"tree root is not a directory: {root}")
-    with _fd_scope(root, directory_flags, None) as root_fd:
+    with fd_scope(root, directory_flags, None) as root_fd:
         try:
             opened_root = os.fstat(root_fd)
         except OSError as error:
@@ -59,7 +40,7 @@ def scan_tree(root: Path) -> tuple[TreeFileRecord, ...]:
         if not _same_file_identity(root_stat, opened_root):
             raise TreeIdentityError(reason="tree root changed before traversal")
         records, _ = _walk_directory(
-            _DirectoryContext(root_fd, (), root_stat, None),
+            DirectoryContext(root_fd, (), root_stat, None),
             file_flags,
             directory_flags,
         )
@@ -73,7 +54,7 @@ def scan_tree(root: Path) -> tuple[TreeFileRecord, ...]:
 
 
 def _walk_directory(
-    context: _DirectoryContext,
+    context: DirectoryContext,
     file_flags: int,
     directory_flags: int,
 ) -> tuple[list[TreeFileRecord], set[tuple[int, int]]]:
@@ -108,7 +89,7 @@ def _walk_directory(
         if stat.S_ISLNK(mode):
             raise TreeIdentityError(reason=f"symlink is not allowed: {relative_path}")
         if stat.S_ISDIR(mode):
-            with _fd_scope(name, directory_flags, context.fd) as child_fd:
+            with fd_scope(name, directory_flags, context.fd) as child_fd:
                 try:
                     opened_child = os.fstat(child_fd)
                 except OSError as error:
@@ -122,7 +103,7 @@ def _walk_directory(
                         reason=f"directory changed before traversal: {relative_path}"
                     )
                 child_records, child_inodes = _walk_directory(
-                    _DirectoryContext(
+                    DirectoryContext(
                         child_fd,
                         relative_parts,
                         entry_stat,
@@ -152,7 +133,7 @@ def _walk_directory(
         inodes.add(inode)
         if relative_path == "assembly-manifest.json":
             continue
-        with _fd_scope(name, file_flags, context.fd) as file_fd:
+        with fd_scope(name, file_flags, context.fd) as file_fd:
             try:
                 opened_file = os.fstat(file_fd)
             except OSError as error:
@@ -201,30 +182,6 @@ def _walk_directory(
     return records, inodes
 
 
-@contextmanager
-def _fd_scope(
-    path: str | Path,
-    flags: int,
-    parent_fd: int | None,
-) -> Generator[int, None, None]:
-    try:
-        if parent_fd is None:
-            descriptor = os.open(path, flags)
-        else:
-            descriptor = os.open(path, flags, dir_fd=parent_fd)
-    except OSError as error:
-        raise TreeIdentityError(reason=f"cannot open tree entry: {path}") from error
-    try:
-        yield descriptor
-    finally:
-        try:
-            os.close(descriptor)
-        except OSError as error:
-            raise TreeIdentityError(
-                reason=f"cannot close tree entry: {path}"
-            ) from error
-
-
 def _hash_file(
     descriptor: int,
     expected: os.stat_result,
@@ -238,7 +195,13 @@ def _hash_file(
             reason=f"cannot rewind tree entry: {relative_path}"
         ) from error
     second = _read_descriptor_hash(descriptor, relative_path)
-    snapshots = (expected, *first[1:], *second[1:])
+    try:
+        final = os.fstat(descriptor)
+    except OSError as error:
+        raise TreeIdentityError(
+            reason=f"cannot inspect tree entry after hashing: {relative_path}"
+        ) from error
+    snapshots = (expected, *first[1:], *second[1:], final)
     if first[0] != second[0] or any(
         not _same_file_identity(expected, snapshot) for snapshot in snapshots
     ):
