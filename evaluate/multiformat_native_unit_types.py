@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from evaluate.multiformat_corpus_types import DocumentFormat
-from evaluate.multiformat_reference_routing import RoutingIdentity
+from evaluate.multiformat_reference_routing import RoutedCommand, RoutingIdentity
 from evaluate.multiformat_schema import JsonValue, sha256_file
 
 
@@ -75,6 +75,7 @@ class NativeUnitRequest:
     runtime: NativeUnitRuntime
     observation_dir: Path
     run: int
+    nonce: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,11 +104,34 @@ class NativeRoutePaths:
     pdf: Path
 
 
+class NativeRouteKind(StrEnum):
+    OFFICE = "office"
+    PDF = "pdf"
+
+
+@dataclass(frozen=True, slots=True)
+class NativeRouteSelection:
+    kind: NativeRouteKind
+    office: RoutedCommand | None
+    metadata: RoutedCommand
+    commands: tuple[RoutedCommand, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class NativeStableFile:
+    device: int
+    inode: int
+    size: int
+    modified_ns: int
+    sha256: str
+
+
 @dataclass(frozen=True, slots=True)
 class NativeProcessLog:
     role: str
     stdout: Path
     stderr: Path
+    exit_code: int
     stdout_sha256: str
     stderr_sha256: str
 
@@ -115,15 +139,18 @@ class NativeProcessLog:
 @dataclass(frozen=True, slots=True)
 class NativeExecutionData:
     request: NativeUnitRequest
+    route_kind: NativeRouteKind
     source_sha256: str
     routes: tuple[tuple[str, tuple[str, ...]], ...]
-    soffice_sha256: str
+    soffice_sha256: str | None
     soffice_version: str | None
     pdfinfo_sha256: str
     pdfinfo_version: str
-    font_config_name: str
-    font_environment_sha256: str
+    font_config_name: str | None
+    font_environment_sha256: str | None
     environment_keys: tuple[str, ...]
+    environment_locale: str
+    environment_timezone: str
     logs: tuple[NativeProcessLog, ...]
     workspace_nonce: str
     unit_count: int
@@ -133,7 +160,22 @@ class NativeExecutionData:
 
 def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
     request = data.request
-    return {
+    tools: dict[str, JsonValue] = {
+        "pdfinfo": {
+            "name": request.runtime.pdfinfo.name,
+            "sha256": data.pdfinfo_sha256,
+            "version": data.pdfinfo_version,
+        }
+    }
+    environment: dict[str, JsonValue] = {
+        "keys": list(data.environment_keys),
+        "locale": data.environment_locale,
+        "timezone": data.environment_timezone,
+        "home_isolated": True,
+        "temporary_root_isolated": True,
+        "profile_isolated": True,
+    }
+    record: dict[str, JsonValue] = {
         "schema_version": 1,
         "source_id": request.source.source_id,
         "format": request.source.document_format.value,
@@ -145,33 +187,12 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
             {"tool_role": role, "arguments": list(arguments)}
             for role, arguments in data.routes
         ],
-        "tools": {
-            "soffice": {
-                "name": request.runtime.soffice.name,
-                "sha256": data.soffice_sha256,
-                "version": data.soffice_version,
-            },
-            "pdfinfo": {
-                "name": request.runtime.pdfinfo.name,
-                "sha256": data.pdfinfo_sha256,
-                "version": data.pdfinfo_version,
-            },
-        },
-        "font": {
-            "config": data.font_config_name,
-            "environment_sha256": data.font_environment_sha256,
-        },
-        "environment": {
-            "keys": list(data.environment_keys),
-            "locale": request.runtime.routing.locale,
-            "timezone": request.runtime.routing.timezone,
-            "home_isolated": True,
-            "temporary_root_isolated": True,
-            "profile_isolated": True,
-        },
+        "tools": tools,
+        "environment": environment,
         "logs": [
             {
                 "role": log.role,
+                "exit_code": log.exit_code,
                 "stdout_sha256": log.stdout_sha256,
                 "stderr_sha256": log.stderr_sha256,
             }
@@ -189,6 +210,18 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
         },
         "unit_count": data.unit_count,
     }
+    if data.route_kind is NativeRouteKind.OFFICE:
+        environment["font_environment_sha256"] = data.font_environment_sha256
+        tools["soffice"] = {
+            "name": request.runtime.soffice.name,
+            "sha256": data.soffice_sha256,
+            "version": data.soffice_version,
+        }
+        record["font"] = {
+            "config": data.font_config_name,
+            "environment_sha256": data.font_environment_sha256,
+        }
+    return record
 
 
 @dataclass(frozen=True, slots=True)

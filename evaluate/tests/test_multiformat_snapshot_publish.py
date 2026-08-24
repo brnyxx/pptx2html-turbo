@@ -29,7 +29,7 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
 
             def write_tree(staging: Path) -> None:
                 (staging / "nested").mkdir()
-                (staging / "nested" / "manifest.json").write_bytes(b"complete")
+                _ = (staging / "nested" / "manifest.json").write_bytes(b"complete")
 
             publish_snapshot(destination, write_tree)
 
@@ -46,13 +46,13 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
             root = Path(temp_dir)
             destination = root / "corpus"
             destination.mkdir()
-            (destination / "sentinel").write_bytes(b"destination")
+            _ = (destination / "sentinel").write_bytes(b"destination")
             writer_called = False
 
             def write_tree(staging: Path) -> None:
                 nonlocal writer_called
                 writer_called = True
-                (staging / "unexpected").write_bytes(b"unexpected")
+                _ = (staging / "unexpected").write_bytes(b"unexpected")
 
             with self.assertRaises(SnapshotPublishError) as raised:
                 publish_snapshot(destination, write_tree)
@@ -71,10 +71,10 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
             root = Path(temp_dir)
             destination = root / "corpus"
             lock = root / ".corpus.snapshot.lock"
-            lock.write_bytes(b"other")
+            _ = lock.write_bytes(b"other")
             writer_called = False
 
-            def write_locked_tree(staging: Path) -> None:
+            def write_locked_tree(_staging: Path) -> None:
                 nonlocal writer_called
                 writer_called = True
 
@@ -86,6 +86,26 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
             self.assertEqual(lock.read_bytes(), b"other")
             self.assertFalse(destination.exists())
 
+    def test_destination_appearing_after_writer_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            destination = root / "corpus"
+
+            def race(staging: Path) -> None:
+                _ = (staging / "manifest.json").write_bytes(b"complete")
+                _ = destination.mkdir()
+                _ = (destination / "sentinel").write_bytes(b"owner")
+
+            with self.assertRaises(SnapshotPublishError) as raised:
+                publish_snapshot(destination, race)
+
+            self.assertIs(
+                raised.exception.failure,
+                SnapshotPublishFailure.DESTINATION_EXISTS,
+            )
+            self.assertEqual((destination / "sentinel").read_bytes(), b"owner")
+            self.assertEqual(tuple(root.glob(".corpus.stage-*")), ())
+
     def test_substituted_staging_inode_is_never_published_or_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -94,9 +114,9 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
 
             def substitute_staging(staging: Path) -> None:
                 nonlocal replacement
-                shutil.rmtree(staging)
-                staging.mkdir()
-                (staging / "sentinel").write_bytes(b"other")
+                _ = shutil.rmtree(staging)
+                _ = staging.mkdir()
+                _ = (staging / "sentinel").write_bytes(b"other")
                 replacement = staging
 
             with self.assertRaises(SnapshotPublishError) as raised:
@@ -107,9 +127,10 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
                 SnapshotPublishFailure.PUBLICATION_FAILED,
             )
             self.assertFalse(destination.exists())
-            self.assertIsNotNone(replacement)
-            assert replacement is not None
-            self.assertEqual((replacement / "sentinel").read_bytes(), b"other")
+            replacement_path = replacement
+            if replacement_path is None:
+                raise AssertionError("staging replacement was not recorded")
+            self.assertEqual((replacement_path / "sentinel").read_bytes(), b"other")
             self.assertFalse((root / ".corpus.snapshot.lock").exists())
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -166,9 +187,9 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
             )
 
     def _raise_primary(self, staging: Path) -> None:
-        (staging / "partial").write_bytes(b"partial")
+        _ = (staging / "partial").write_bytes(b"partial")
         raise PrimaryWriterError("primary")
 
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

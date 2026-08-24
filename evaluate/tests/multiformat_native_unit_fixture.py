@@ -5,6 +5,10 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluate.multiformat_candidate_process import (
+    CandidateProcessError,
+    CandidateProcessFailure,
+)
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_native_unit_types import (
     NativeProcessRequest,
@@ -51,6 +55,7 @@ class NativeUnitFixture:
             ),
             observation_dir=root / f"observation-{document_format.value}-{run}",
             run=run,
+            nonce=hashlib.sha256(f"{document_format.value}:{run}".encode()).hexdigest(),
         )
 
 
@@ -60,17 +65,17 @@ class RecordingNativeRunner:
     def __init__(self) -> None:
         self.requests: list[NativeProcessRequest] = []
         self.exit_code: int = 0
-        self.failure: str | None = None
+        self.failure: CandidateProcessFailure | None = None
         self.write_pdf: bool = True
         self.pdfinfo_output: bytes = b"Pages:           1\n"
         self.stdout_output: bytes = b""
         self.stderr_output: bytes = b""
+        self.pdf_output: bytes = b"%PDF-1.4\nfixture-native-reference\n"
+        self.mutate_pdf: bool = False
 
     def __call__(self, request: NativeProcessRequest) -> int:
         self.requests.append(request)
         if self.failure is not None:
-            from evaluate.multiformat_candidate_process import CandidateProcessError
-
             raise CandidateProcessError(self.failure)
         _ = request.stdout_path.write_bytes(self.stdout_output)
         _ = request.stderr_path.write_bytes(self.stderr_output)
@@ -84,11 +89,11 @@ class RecordingNativeRunner:
                 output_dir = Path(command[command.index("--outdir") + 1])
                 source = Path(command[-1])
                 _ = output_dir.mkdir(parents=True, exist_ok=True)
-                _ = (output_dir / f"{source.stem}.pdf").write_bytes(
-                    b"%PDF-1.4\nfixture-native-reference\n"
-                )
+                _ = (output_dir / f"{source.stem}.pdf").write_bytes(self.pdf_output)
         elif command[0].endswith("pdfinfo"):
             _ = request.stdout_path.write_bytes(self.pdfinfo_output)
+            if self.mutate_pdf:
+                _ = Path(command[-1]).write_bytes(b"%PDF-1.4\nmutated\n")
         return self.exit_code
 
 

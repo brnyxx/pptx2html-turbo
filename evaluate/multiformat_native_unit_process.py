@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+import re
+import stat
+from pathlib import Path
+
+from evaluate.multiformat_candidate_fonts import CandidateFontEnvironment
+from evaluate.multiformat_candidate_process import (
+    CandidateProcessError,
+    CandidateProcessFailure,
+    run_bounded_process,
+)
+from evaluate.multiformat_native_unit_files import MAX_LOG_BYTES, fail
+from evaluate.multiformat_native_unit_types import (
+    NativeProcessContext,
+    NativeProcessLog,
+    NativeProcessRequest,
+    NativeProcessSpec,
+    NativeRoutePaths,
+    NativeUnitFailure,
+    NativeUnitRequest,
+)
+from evaluate.multiformat_schema import sha256_file
+from evaluate.multiformat_subprocess import clean_subprocess_environment
+
+_PAGE_PATTERN = re.compile(r"^Pages:\s+([0-9]+)\s*$", re.MULTILINE)
+
+
+def run_native_process(request: NativeProcessRequest) -> int:
+    return run_bounded_process(
+        request.command,
+        request.cwd,
+        dict(request.environment),
+        request.stdout_path,
+        request.stderr_path,
+        timeout_seconds=request.timeout_seconds,
+        max_log_bytes=request.max_log_bytes,
+    )
+
+
+def process(context: NativeProcessContext) -> NativeProcessLog:
+    try:
+        exit_code = context.runner(context.process)
+    except CandidateProcessError as error:
+        failure = {
+            CandidateProcessFailure.TIMEOUT: NativeUnitFailure.TIMEOUT,
+            CandidateProcessFailure.LOG_OVERSIZE: NativeUnitFailure.LOG_OVERSIZE,
+        }.get(error.failure, NativeUnitFailure.PROCESS_FAILED)
+        raise fail(context.request, failure, f"{context.role}: {error}") from error
+    except OSError as error:
+        raise fail(
+            context.request,
+            NativeUnitFailure.PROCESS_FAILED,
+            f"{context.role}: process error",
+        ) from error
+    if exit_code != 0:
+        raise fail(
+            context.request,
+            NativeUnitFailure.PROCESS_FAILED,
+            f"{context.role}: exit {exit_code}",
+        )
+    return NativeProcessLog(
+        context.role,
+        context.process.stdout_path,
+        context.process.stderr_path,
+        exit_code,
+        bounded(context.process.stdout_path, context.request),
+        bounded(context.process.stderr_path, context.request),
+    )
+
+
+def bounded(path: Path, request: NativeUnitRequest) -> str:
+    try:
+        value = path.lstat()
+        if not stat.S_ISREG(value.st_mode):
+            raise fail(request, NativeUnitFailure.OUTPUT_INVALID, "log is not regular")
+        if value.st_size > MAX_LOG_BYTES:
+            raise fail(request, NativeUnitFailure.LOG_OVERSIZE, "log exceeds 1 MiB")
+        return sha256_file(path)
+    except FileNotFoundError:
+        return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    except OSError as error:
+        raise fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "log cannot be read"
+        ) from error
+
+
+def version(log: NativeProcessLog, request: NativeUnitRequest) -> str:
+    try:
+        output = (log.stdout.read_bytes() + log.stderr.read_bytes()).decode("utf-8")
+    except (OSError, UnicodeError) as error:
+        raise fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "version output is unreadable"
+        ) from error
+    lines = tuple(line.strip() for line in output.splitlines() if line.strip())
+    if not lines:
+        raise fail(request, NativeUnitFailure.OUTPUT_INVALID, "version output is empty")
+    return lines[0]
+
+
+def pages(path: Path, request: NativeUnitRequest) -> int:
+    try:
+        matches: list[str] = _PAGE_PATTERN.findall(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError) as error:
+        raise fail(
+            request, NativeUnitFailure.PAGES_MALFORMED, "pdfinfo output is unreadable"
+        ) from error
+    if len(matches) != 1 or int(matches[0]) <= 0:
+        raise fail(
+            request,
+            NativeUnitFailure.PAGES_MALFORMED,
+            "Pages field is not one positive value",
+        )
+    return int(matches[0])
+
+
+def make_request(spec: NativeProcessSpec) -> NativeProcessRequest:
+    return NativeProcessRequest(
+        (spec.executable.as_posix(), *spec.arguments),
+        spec.cwd,
+        spec.environment,
+        spec.prefix.with_suffix(".stdout"),
+        spec.prefix.with_suffix(".stderr"),
+        spec.timeout,
+        MAX_LOG_BYTES,
+    )
+
+
+def environment(
+    home: Path, temporary: Path, font: CandidateFontEnvironment | None
+) -> tuple[tuple[str, str], ...]:
+    values = clean_subprocess_environment()
+    values.update(
+        {
+            "HOME": home.as_posix(),
+            "LANG": "en-US",
+            "LC_ALL": "en-US",
+            "TMPDIR": temporary.as_posix(),
+            "TZ": "UTC",
+        }
+    )
+    if font:
+        values["FONTCONFIG_FILE"] = font.config_path.as_posix()
+    return tuple(sorted(values.items()))
+
+
+def render(arguments: tuple[str, ...], paths: NativeRoutePaths) -> tuple[str, ...]:
+    values = (
+        ("{source}", paths.source.as_posix()),
+        ("{reference_pdf}", paths.pdf.as_posix()),
+        ("{output_dir}", paths.output.as_posix()),
+        ("{profile_uri}", paths.profile.as_uri()),
+    )
+    return tuple(replace(argument, values) for argument in arguments)
+
+
+def replace(argument: str, values: tuple[tuple[str, str], ...]) -> str:
+    for placeholder, value in values:
+        argument = argument.replace(placeholder, value)
+    return argument

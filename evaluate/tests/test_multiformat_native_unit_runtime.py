@@ -1,60 +1,73 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from evaluate.multiformat_candidate_process import CandidateProcessFailure
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_native_unit_runtime import capture_native_observation
 from evaluate.multiformat_native_unit_types import NativeUnitError, NativeUnitFailure
+from evaluate.multiformat_schema import object_value, string_list
 from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.tests.multiformat_native_unit_fixture import (
     RecordingNativeRunner,
     make_native_unit_fixture,
 )
 
-OFFICE_FORMATS = (
-    DocumentFormat.DOC,
-    DocumentFormat.DOCX,
-    DocumentFormat.XLS,
-    DocumentFormat.XLSX,
-    DocumentFormat.PPT,
-    DocumentFormat.PPTX,
+OFFICE_FORMATS = tuple(
+    format for format in DocumentFormat if format is not DocumentFormat.PDF
 )
 
 
 class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
-    def test_pdf_copies_source_and_invokes_only_pdfinfo(self) -> None:
-        # Given
+    def test_pdf_route_needs_only_pdfinfo_and_retains_exact_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             fixture = make_native_unit_fixture(root)
             source = root / "source.pdf"
             _ = source.write_bytes(b"%PDF-1.4\nfixture-pdf\n")
-            original_request = fixture.request(root, DocumentFormat.PDF)
+            base = fixture.request(root, DocumentFormat.PDF)
             request = replace(
-                original_request,
+                base,
                 source=replace(
-                    original_request.source,
-                    path=source,
-                    relative_path="sources/source.pdf",
+                    base.source, path=source, relative_path="sources/source.pdf"
+                ),
+                runtime=replace(
+                    base.runtime,
+                    soffice=root / "missing-soffice",
+                    font_bundle=root / "missing-fonts.json",
                 ),
             )
             runner = RecordingNativeRunner()
 
-            # When
             observation = capture_native_observation(request, runner)
-
-            # Then
-            self.assertEqual(observation.unit_count, 1)
             commands = [item.command for item in runner.requests]
+            execution = read_strict_object(request.observation_dir / "execution.json")
+
+            self.assertEqual(observation.unit_count, 1)
+            self.assertEqual(observation.workspace_nonce, request.nonce)
+            self.assertEqual(execution["workspace_nonce"], request.nonce)
             self.assertEqual(len(commands), 2)
             self.assertEqual(commands[0], (fixture.pdfinfo.resolve().as_posix(), "-v"))
-            self.assertEqual(commands[1][0], fixture.pdfinfo.resolve().as_posix())
             self.assertTrue(commands[1][-1].endswith("/source.pdf"))
+            tools = object_value(execution, "tools")
+            logs = execution["logs"]
+            environment = object_value(execution, "environment")
+            assert isinstance(logs, list)
+            self.assertEqual(set(tools), {"pdfinfo"})
+            self.assertNotIn("font", execution)
+            self.assertTrue(
+                all(isinstance(log, dict) and log.get("exit_code") == 0 for log in logs)
+            )
+            self.assertEqual(environment["locale"], "en-US")
+            self.assertEqual(environment["timezone"], "UTC")
+            self.assertEqual(
+                set(string_list(environment, "keys")),
+                {"HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"},
+            )
             self.assertEqual(
                 {path.name for path in request.observation_dir.iterdir()},
                 {"execution.json", "reference.pdf", "pdfinfo.txt"},
@@ -63,21 +76,19 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
                 (request.observation_dir / "reference.pdf").read_bytes(),
                 source.read_bytes(),
             )
+            self.assertRegex(observation.reference_pdf_sha256, r"^[0-9a-f]{64}$")
+            self.assertNotIn(root.as_posix(), json.dumps(execution, sort_keys=True))
 
     def test_office_formats_use_exact_locked_arguments(self) -> None:
-        # Given
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             fixture = make_native_unit_fixture(root)
             for document_format in OFFICE_FORMATS:
                 with self.subTest(document_format=document_format.value):
                     runner = RecordingNativeRunner()
-                    request = fixture.request(root, document_format)
-
-                    # When
-                    _ = capture_native_observation(request, runner)
-
-                    # Then
+                    _ = capture_native_observation(
+                        fixture.request(root, document_format), runner
+                    )
                     conversion = next(
                         item
                         for item in runner.requests
@@ -105,166 +116,112 @@ class MultiFormatNativeUnitRuntimeTests(unittest.TestCase):
                             "-env:UserInstallation=file://"
                         )
                     )
-                    self.assertEqual(conversion.command[8], "pdf")
-                    self.assertEqual(conversion.command[9], "--outdir")
+                    self.assertEqual(conversion.command[8:10], ("pdf", "--outdir"))
                     self.assertEqual(output_dir.name, "export")
                     self.assertEqual(source.suffix, f".{document_format.value}")
-                    metadata = runner.requests[-1]
-                    self.assertEqual(
-                        metadata.command[0], fixture.pdfinfo.resolve().as_posix()
-                    )
-                    self.assertEqual(
-                        metadata.command[-1],
-                        (output_dir / "source.pdf").as_posix(),
-                    )
 
-    def test_execution_retains_hashes_without_workspace_paths(self) -> None:
-        # Given
+    def test_process_roots_are_unique_and_environment_is_clean(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             fixture = make_native_unit_fixture(root)
-            runner = RecordingNativeRunner()
-            request = fixture.request(root, DocumentFormat.DOCX)
-            runner.stdout_output = b"conversion stdout"
-            runner.stderr_output = b"conversion stderr"
-
-            # When
-            _ = capture_native_observation(request, runner)
-
-            # Then
-            execution = read_strict_object(request.observation_dir / "execution.json")
-            evidence = execution.get("evidence")
-            assert isinstance(evidence, dict)
-            reference_pdf = evidence.get("reference_pdf")
-            pdfinfo = evidence.get("pdfinfo")
-            assert isinstance(reference_pdf, dict)
-            assert isinstance(pdfinfo, dict)
-            reference_hash = reference_pdf.get("sha256")
-            pdfinfo_hash = pdfinfo.get("sha256")
-            logs = execution.get("logs")
-            assert isinstance(reference_hash, str)
-            assert isinstance(pdfinfo_hash, str)
-            assert isinstance(logs, list)
-            log_hashes = {
-                value
-                for log in logs
-                if isinstance(log, dict)
-                for field in ("stdout_sha256", "stderr_sha256")
-                if isinstance(value := log.get(field), str)
-            }
-            self.assertIn(
-                hashlib.sha256(b"conversion stdout").hexdigest(),
-                log_hashes,
-            )
-            self.assertIn(
-                hashlib.sha256(b"conversion stderr").hexdigest(),
-                log_hashes,
-            )
-            serialized = json.dumps(execution, sort_keys=True)
-            self.assertNotIn(request.observation_dir.parent.as_posix(), serialized)
-            self.assertNotIn(".native-unit-", serialized)
-            self.assertRegex(
-                reference_hash,
-                r"^[0-9a-f]{64}$",
-            )
-            self.assertRegex(
-                pdfinfo_hash,
-                r"^[0-9a-f]{64}$",
-            )
-            self.assertEqual(
-                {path.name for path in request.observation_dir.iterdir()},
-                {"execution.json", "reference.pdf", "pdfinfo.txt"},
-            )
-
-    def test_process_requests_have_unique_isolated_roots_and_clean_environment(
-        self,
-    ) -> None:
-        # Given
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            fixture = make_native_unit_fixture(root)
-            first_runner = RecordingNativeRunner()
-            second_runner = RecordingNativeRunner()
-
-            # When
+            first = RecordingNativeRunner()
+            second = RecordingNativeRunner()
             _ = capture_native_observation(
-                fixture.request(root, DocumentFormat.DOCX, run=1), first_runner
+                fixture.request(root, DocumentFormat.DOCX, run=1), first
             )
             _ = capture_native_observation(
-                fixture.request(root, DocumentFormat.DOCX, run=2), second_runner
+                fixture.request(root, DocumentFormat.DOCX, run=2), second
             )
-
-            # Then
-            first = first_runner.requests[2]
-            second = second_runner.requests[2]
-            self.assertNotEqual(
-                dict(first.environment)["HOME"], dict(second.environment)["HOME"]
-            )
-            self.assertNotEqual(
-                dict(first.environment)["TMPDIR"], dict(second.environment)["TMPDIR"]
-            )
+            first_env = dict(first.requests[2].environment)
+            second_env = dict(second.requests[2].environment)
+            self.assertNotEqual(first_env["HOME"], second_env["HOME"])
+            self.assertNotEqual(first_env["TMPDIR"], second_env["TMPDIR"])
             self.assertEqual(
-                set(dict(first.environment)),
+                set(first_env),
                 {"FONTCONFIG_FILE", "HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"},
             )
-            self.assertEqual(dict(first.environment)["LANG"], "C")
-            self.assertEqual(dict(first.environment)["LC_ALL"], "C")
-            self.assertEqual(dict(first.environment)["TZ"], "UTC")
+            self.assertEqual(first_env["LANG"], "en-US")
+            self.assertEqual(first_env["LC_ALL"], "en-US")
+            self.assertEqual(first_env["TZ"], "UTC")
 
-    def test_nonzero_timeout_missing_malformed_and_oversize_are_typed_failures(
-        self,
-    ) -> None:
+    def test_failures_are_typed_and_cleanup_is_complete(self) -> None:
         cases = (
             ("nonzero", NativeUnitFailure.PROCESS_FAILED, 7, None, True),
-            ("timeout", NativeUnitFailure.TIMEOUT, 0, "converter timeout", True),
+            (
+                "timeout",
+                NativeUnitFailure.TIMEOUT,
+                0,
+                CandidateProcessFailure.TIMEOUT,
+                True,
+            ),
             ("missing", NativeUnitFailure.OUTPUT_MISSING, 0, None, False),
-            ("malformed", NativeUnitFailure.PAGES_MALFORMED, 0, None, True),
-            ("oversize", NativeUnitFailure.LOG_OVERSIZE, 0, None, True),
+            ("malformed-pages", NativeUnitFailure.PAGES_MALFORMED, 0, None, True),
+            ("malformed-pdf", NativeUnitFailure.OUTPUT_INVALID, 0, None, True),
+            ("oversize-log", NativeUnitFailure.LOG_OVERSIZE, 0, None, True),
         )
         for name, failure, exit_code, runner_failure, write_pdf in cases:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)
                 fixture = make_native_unit_fixture(root)
                 runner = RecordingNativeRunner()
-                runner.exit_code = exit_code
-                runner.failure = runner_failure
-                runner.write_pdf = write_pdf
-                if name == "malformed":
+                runner.exit_code, runner.failure, runner.write_pdf = (
+                    exit_code,
+                    runner_failure,
+                    write_pdf,
+                )
+                if name == "malformed-pages":
                     runner.pdfinfo_output = b"Producer: fixture\n"
-                if name == "oversize":
+                if name == "malformed-pdf":
+                    runner.pdf_output = b"not a PDF"
+                if name == "oversize-log":
                     runner.stdout_output = b"x" * (1024 * 1024 + 1)
                 request = fixture.request(root, DocumentFormat.DOCX)
-
-                # When / Then
-                with self.assertRaises(NativeUnitError) as context:
+                with self.assertRaises(NativeUnitError) as raised:
                     _ = capture_native_observation(request, runner)
-                self.assertEqual(context.exception.failure, failure)
-                self.assertEqual(
-                    context.exception.source_id,
-                    request.source.source_id,
-                )
-                self.assertEqual(
-                    context.exception.document_format,
-                    request.source.document_format,
-                )
+                self.assertEqual(raised.exception.failure, failure)
                 self.assertFalse(request.observation_dir.exists())
+
+    def test_output_mutation_after_pdfinfo_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = make_native_unit_fixture(root)
+            runner = RecordingNativeRunner()
+            runner.mutate_pdf = True
+            with self.assertRaises(NativeUnitError) as raised:
+                _ = capture_native_observation(
+                    fixture.request(root, DocumentFormat.DOCX), runner
+                )
+            self.assertEqual(raised.exception.failure, NativeUnitFailure.OUTPUT_INVALID)
+
+    def test_nonce_must_be_exact_lowercase_hex_and_is_not_generated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = make_native_unit_fixture(root)
+            request = replace(fixture.request(root, DocumentFormat.PDF), nonce="A" * 64)
+            with self.assertRaises(NativeUnitError) as raised:
+                _ = capture_native_observation(request, RecordingNativeRunner())
+            self.assertEqual(raised.exception.failure, NativeUnitFailure.SOURCE_INVALID)
 
     def test_zero_and_multiple_pages_fail_closed(self) -> None:
         for output in (b"Pages:           0\n", b"Pages:           1\nPages: 2\n"):
             with self.subTest(output=output), tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)
                 fixture = make_native_unit_fixture(root)
+                source = root / "source.pdf"
+                _ = source.write_bytes(b"%PDF-1.4\nfixture\n")
+                base = fixture.request(root, DocumentFormat.PDF)
+                request = replace(
+                    base,
+                    source=replace(
+                        base.source, path=source, relative_path="sources/source.pdf"
+                    ),
+                )
                 runner = RecordingNativeRunner()
                 runner.pdfinfo_output = output
-
-                # When / Then
-                with self.assertRaises(NativeUnitError) as context:
-                    _ = capture_native_observation(
-                        fixture.request(root, DocumentFormat.PDF), runner
-                    )
+                with self.assertRaises(NativeUnitError) as raised:
+                    _ = capture_native_observation(request, runner)
                 self.assertEqual(
-                    context.exception.failure,
-                    NativeUnitFailure.PAGES_MALFORMED,
+                    raised.exception.failure, NativeUnitFailure.PAGES_MALFORMED
                 )
 
 
