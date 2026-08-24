@@ -12,7 +12,9 @@ from pathlib import Path
 
 from evaluate.multiformat_snapshot_filesystem import (
     _clean_directory_fd,
+    _remove_owned_entry,
     atomic_rename_noreplace,
+    unlink_owned_file,
 )
 
 _DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
@@ -257,7 +259,13 @@ def _remove_owned_directory(
     if not _matches(path, identity, stat.S_ISDIR):
         raise OSError(errno.ESTALE, "staging path ownership changed")
     assert path is not None
-    os.rmdir(path.name, dir_fd=parent_descriptor)
+    assert identity is not None
+    _remove_owned_entry(
+        parent_descriptor,
+        path.name,
+        (identity.device, identity.inode),
+        directory=True,
+    )
 
 
 def _unlink_owned_file(
@@ -267,14 +275,8 @@ def _unlink_owned_file(
 ) -> None:
     if not _matches(path, identity, stat.S_ISREG):
         raise OSError(errno.ESTALE, "lock path ownership changed")
-    descriptor = os.open(
-        path.name,
-        os.O_WRONLY | _NOFOLLOW_FLAGS,
-        dir_fd=parent_descriptor,
+    unlink_owned_file(
+        path,
+        (identity.device, identity.inode),
+        parent_descriptor,
     )
-    try:
-        if _identity(os.fstat(descriptor)) != identity:
-            raise OSError(errno.ESTALE, "lock inode changed")
-        os.unlink(path.name, dir_fd=parent_descriptor)
-    finally:
-        os.close(descriptor)
