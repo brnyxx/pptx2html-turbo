@@ -15,6 +15,18 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
     def test_manifest_boundary_includes_portable_lock_validation(self) -> None:
         self.assertIn("evaluate/multiformat_reference_profile.py", EVALUATOR_FILES)
         self.assertIn("evaluate/multiformat_portable_lock.py", EVALUATOR_FILES)
+        for path in (
+            "evaluate/generate_multiformat_legacy_conformance.py",
+            "evaluate/multiformat_legacy_conformance.py",
+            "evaluate/multiformat_legacy_process.py",
+            "evaluate/multiformat_legacy_runtime.py",
+            "evaluate/multiformat_legacy_sources.py",
+            "evaluate/multiformat_legacy_types.py",
+            "evaluate/tests/test_generate_multiformat_legacy_conformance.py",
+            "evaluate/tests/test_generate_multiformat_legacy_conformance_cli.py",
+            "evaluate/tests/test_multiformat_legacy_runtime.py",
+        ):
+            self.assertIn(path, EVALUATOR_FILES)
         self.assertIn(
             "evaluate/tests/test_multiformat_reference_profile.py",
             EVALUATOR_FILES,
