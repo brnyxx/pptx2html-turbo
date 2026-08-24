@@ -70,14 +70,16 @@ def run_bounded_process(
                 CandidateProcessFailure.PIPES_UNAVAILABLE
             ) from error
         if process.stdout is None or process.stderr is None:
+            pipe_termination_failures: list[Exception] = []
             if not _kill_process_group(process):
-                raise CandidateProcessError(CandidateProcessFailure.TERMINATION_FAILED)
-            try:
-                _ = process.wait(timeout=_termination_timeout(timeout_seconds))
-            except (OSError, subprocess.TimeoutExpired) as error:
+                pipe_termination_failures.append(
+                    RuntimeError("process group survived pipe failure")
+                )
+            _reap_parent(process, timeout_seconds, pipe_termination_failures)
+            if pipe_termination_failures:
                 raise CandidateProcessError(
                     CandidateProcessFailure.TERMINATION_FAILED
-                ) from error
+                ) from pipe_termination_failures[0]
             raise CandidateProcessError(CandidateProcessFailure.PIPES_UNAVAILABLE)
         overflow = threading.Event()
         reader_failures: list[Exception] = []
@@ -122,22 +124,14 @@ def run_bounded_process(
             timeout_error = error
             if not _kill_process_group(process):
                 termination_failures.append(RuntimeError("process group survived kill"))
-            else:
-                try:
-                    _ = process.wait(timeout=_termination_timeout(timeout_seconds))
-                except (OSError, subprocess.TimeoutExpired) as wait_error:
-                    termination_failures.append(wait_error)
+            _reap_parent(process, timeout_seconds, termination_failures)
         except (OSError, ValueError) as error:
             termination_failures.append(error)
             if not _kill_process_group(process):
                 termination_failures.append(
                     RuntimeError("process group survived wait failure")
                 )
-            else:
-                try:
-                    _ = process.wait(timeout=_termination_timeout(timeout_seconds))
-                except (OSError, subprocess.TimeoutExpired) as wait_error:
-                    termination_failures.append(wait_error)
+            _reap_parent(process, timeout_seconds, termination_failures)
         finally:
             deadline = time.monotonic() + _termination_timeout(timeout_seconds)
             for reader in readers:
@@ -201,6 +195,17 @@ def _drain_bounded(
             )
 
 
+def _reap_parent(
+    process: subprocess.Popen[bytes],
+    timeout_seconds: float,
+    failures: list[Exception],
+) -> None:
+    try:
+        _ = process.wait(timeout=_termination_timeout(timeout_seconds))
+    except (OSError, subprocess.TimeoutExpired) as error:
+        failures.append(error)
+
+
 def _termination_timeout(timeout_seconds: float) -> float:
     return min(1.0, max(0.01, timeout_seconds))
 
@@ -236,8 +241,21 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> bool:
         os.killpg(process.pid, signal.SIGKILL)
         return True
     except OSError:
+        group_absent = _group_absent_before_fallback(process)
         try:
             _ = process.kill()
         except (OSError, ValueError):
-            return process.poll() is not None
-        return process.poll() is not None
+            return group_absent
+        return group_absent
+
+
+def _group_absent_before_fallback(process: subprocess.Popen[bytes]) -> bool:
+    if process.poll() is None:
+        return False
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    return False

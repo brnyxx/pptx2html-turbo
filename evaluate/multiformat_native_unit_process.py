@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 import stat
 from pathlib import Path
@@ -12,8 +11,12 @@ from evaluate.multiformat_candidate_process import (
     run_bounded_process,
 )
 from evaluate.multiformat_native_unit_files import MAX_LOG_BYTES, fail
-from evaluate.multiformat_native_unit_trusted import (
+from evaluate.multiformat_native_unit_snapshot import (
     materialize_binary,
+    release_binary,
+)
+from evaluate.multiformat_native_unit_trusted import (
+    close_trusted_executable,
     open_trusted_executable,
 )
 from evaluate.multiformat_native_unit_types import (
@@ -45,16 +48,16 @@ def run_native_process(request: NativeProcessRequest) -> int:
     trusted = open_trusted_executable(
         Path(request.command[0]), request.executable_identity
     )
-    snapshot: Path | None = None
+    snapshot = None
     try:
         if trusted.shell_script:
             command = ("/bin/sh", "-c", ". /dev/stdin", *request.command)
             executable = None
             stdin_fd = trusted.descriptor
         else:
-            snapshot = materialize_binary(trusted.content, trusted.path.parent)
+            snapshot = materialize_binary(trusted, request.cwd)
             command = request.command
-            executable = snapshot
+            executable = snapshot.path
             stdin_fd = None
         return run_bounded_process(
             command,
@@ -68,9 +71,10 @@ def run_native_process(request: NativeProcessRequest) -> int:
             stdin_fd=stdin_fd,
         )
     finally:
-        os.close(trusted.descriptor)
         if snapshot is not None:
-            snapshot.unlink(missing_ok=True)
+            release_binary(snapshot)
+        else:
+            close_trusted_executable(trusted.descriptor)
 
 
 def process(context: NativeProcessContext) -> NativeProcessLog:

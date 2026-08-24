@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-import stat
-import tempfile
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +20,7 @@ class NativeTrustedExecutable:
     descriptor: int
     content: bytes
     shell_script: bool
+    identity: tuple[int, int]
 
 
 def open_trusted_executable(
@@ -40,39 +40,42 @@ def open_trusted_executable(
             raise OSError("executable changed during trust binding")
         _ = os.lseek(descriptor, 0, os.SEEK_SET)
         return NativeTrustedExecutable(
-            path, descriptor, content, _is_shell_script(content)
+            path,
+            descriptor,
+            content,
+            _is_shell_script(content),
+            _identity(after),
         )
     except OSError as error:
-        if descriptor >= 0:
-            os.close(descriptor)
+        _close_descriptor(descriptor)
         raise CandidateProcessError(
             CandidateProcessFailure.EXECUTABLE_UNTRUSTED
         ) from error
 
 
-def materialize_binary(content: bytes, directory: Path) -> Path:
-    descriptor, raw_path = tempfile.mkstemp(
-        prefix=".trusted-executable-", dir=directory
-    )
-    path = Path(raw_path)
+def close_trusted_executable(descriptor: int) -> None:
+    active = sys.exception()
     try:
-        _write_all(descriptor, content)
-        os.fchmod(descriptor, stat.S_IRWXU)
-    except OSError:
         os.close(descriptor)
-        path.unlink(missing_ok=True)
-        raise
-    os.close(descriptor)
-    return path
+    except OSError as error:
+        failure = CandidateProcessError(CandidateProcessFailure.EXECUTABLE_UNTRUSTED)
+        if active is not None:
+            active.add_note(str(failure))
+            active.add_note(str(error))
+        else:
+            raise failure from error
 
 
-def _write_all(descriptor: int, content: bytes) -> None:
-    offset = 0
-    while offset < len(content):
-        written = os.write(descriptor, content[offset:])
-        if written <= 0:
-            raise OSError("trusted executable write made no progress")
-        offset += written
+def _close_descriptor(descriptor: int) -> None:
+    if descriptor >= 0:
+        try:
+            os.close(descriptor)
+        except OSError:
+            return
+
+
+def _identity(value: os.stat_result) -> tuple[int, int]:
+    return value.st_dev, value.st_ino
 
 
 def _matches_expected(value: os.stat_result, expected: NativeStableFile) -> bool:

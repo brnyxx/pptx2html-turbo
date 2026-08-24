@@ -98,8 +98,7 @@ class MultiFormatNativeUnitFinalRaceTests(unittest.TestCase):
             self.assertTrue(swapped)
             self.assertTrue(attacker_file.is_file())
             self.assertEqual(attacker_file.read_bytes(), b"attacker")
-            self.assertTrue(backup.is_dir())
-            self.assertEqual(tuple(backup.iterdir()), ())
+            self.assertEqual((backup / "owned").read_bytes(), b"owned")
 
     def test_cleanup_failure_does_not_publish_observation(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

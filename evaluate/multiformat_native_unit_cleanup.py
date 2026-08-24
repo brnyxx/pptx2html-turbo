@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import ctypes
+import errno
 import os
+import secrets
 import stat
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 from evaluate.multiformat_native_unit_io import no_follow
 from evaluate.multiformat_native_unit_types import (
@@ -11,6 +16,13 @@ from evaluate.multiformat_native_unit_types import (
     NativeUnitFailure,
     NativeUnitRequest,
 )
+
+_ENTRY_NAME = ".captured-entry"
+_TOMBSTONE_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+
+
+class _NativeCallable(Protocol):
+    def __call__(self, *arguments: int | bytes) -> int: ...
 
 
 def identity(value: os.stat_result) -> tuple[int, int]:
@@ -46,23 +58,15 @@ def _remove_owned_workspace(path: Path, expected: tuple[int, int]) -> None:
         path.parent,
         os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
     )
-    workspace_descriptor = -1
     try:
-        workspace_descriptor = os.open(
-            path.name,
-            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
-            dir_fd=parent_descriptor,
-        )
-        if identity(os.fstat(workspace_descriptor)) != expected:
-            raise OSError("workspace identity changed")
-        _clean_directory(workspace_descriptor)
         _before_final_rmdir(path)
-        if not _entry_matches(parent_descriptor, path.name, expected):
-            raise OSError("workspace replacement survived cleanup")
-        os.rmdir(path.name, dir_fd=parent_descriptor)
+        _remove_entry(
+            parent_descriptor,
+            path.name,
+            expected,
+            expect_directory=True,
+        )
     finally:
-        if workspace_descriptor >= 0:
-            os.close(workspace_descriptor)
         os.close(parent_descriptor)
 
 
@@ -70,31 +74,161 @@ def _clean_directory(directory_descriptor: int) -> None:
     with os.scandir(directory_descriptor) as entries:
         children = tuple(entries)
     for entry in children:
-        child_stat = entry.stat(follow_symlinks=False)
+        value = entry.stat(follow_symlinks=False)
+        expected = identity(value)
         _before_inner_delete(directory_descriptor, entry.name)
-        if stat.S_ISDIR(child_stat.st_mode):
-            child_descriptor = os.open(
-                entry.name,
-                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
-                dir_fd=directory_descriptor,
-            )
+        _remove_entry(
+            directory_descriptor,
+            entry.name,
+            expected,
+            expect_directory=stat.S_ISDIR(value.st_mode),
+        )
+
+
+def _remove_entry(
+    directory_descriptor: int,
+    name: str,
+    expected: tuple[int, int],
+    *,
+    expect_directory: bool,
+) -> None:
+    tombstone_name = f".native-tombstone-{secrets.token_hex(16)}"
+    os.mkdir(tombstone_name, _TOMBSTONE_MODE, dir_fd=directory_descriptor)
+    tombstone_descriptor = -1
+    captured_descriptor = -1
+    tombstone_identity: tuple[int, int] | None = None
+    try:
+        tombstone_descriptor = os.open(
+            tombstone_name,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
+            dir_fd=directory_descriptor,
+        )
+        tombstone_identity = identity(os.fstat(tombstone_descriptor))
+        _rename_noreplace(
+            directory_descriptor,
+            name,
+            tombstone_descriptor,
+            _ENTRY_NAME,
+        )
+        captured_descriptor = os.open(
+            _ENTRY_NAME,
+            os.O_RDONLY | no_follow(),
+            dir_fd=tombstone_descriptor,
+        )
+        captured = os.fstat(captured_descriptor)
+        if (
+            identity(captured) != expected
+            or stat.S_ISDIR(captured.st_mode) is not expect_directory
+        ):
+            _restore_captured(tombstone_descriptor, directory_descriptor, name)
+            raise OSError("captured entry identity changed")
+        if expect_directory:
+            _clean_directory(captured_descriptor)
+        _before_tombstone_remove(tombstone_descriptor, _ENTRY_NAME)
+        os.fchmod(tombstone_descriptor, stat.S_IRUSR | stat.S_IXUSR)
+        if not _entry_matches(tombstone_descriptor, _ENTRY_NAME, expected):
+            raise OSError("captured entry changed before removal")
+        _remove_captured(tombstone_descriptor, _ENTRY_NAME, expect_directory)
+    except OSError as error:
+        if captured_descriptor < 0 and tombstone_descriptor >= 0:
+            _restore_if_present(tombstone_descriptor, directory_descriptor, name)
+        elif captured_descriptor >= 0 and _entry_matches(
+            tombstone_descriptor, _ENTRY_NAME, expected
+        ):
             try:
-                if not _same_stat(child_stat, os.fstat(child_descriptor)):
-                    raise OSError("workspace child changed")
-                _clean_directory(child_descriptor)
-            finally:
-                os.close(child_descriptor)
-            if not _entry_matches(
-                directory_descriptor, entry.name, identity(child_stat)
-            ):
-                raise OSError("workspace child changed")
-            os.rmdir(entry.name, dir_fd=directory_descriptor)
-        else:
-            if not _entry_matches(
-                directory_descriptor, entry.name, identity(child_stat)
-            ):
-                raise OSError("workspace child changed")
-            os.unlink(entry.name, dir_fd=directory_descriptor)
+                _restore_captured(tombstone_descriptor, directory_descriptor, name)
+            except OSError as restore_error:
+                error.add_note(f"owned entry restore failed: {restore_error}")
+        raise
+    finally:
+        if captured_descriptor >= 0:
+            os.close(captured_descriptor)
+        if tombstone_descriptor >= 0:
+            os.close(tombstone_descriptor)
+        if tombstone_identity is not None and _entry_matches(
+            directory_descriptor, tombstone_name, tombstone_identity
+        ):
+            os.rmdir(tombstone_name, dir_fd=directory_descriptor)
+
+
+def _restore_if_present(
+    tombstone_descriptor: int, directory_descriptor: int, name: str
+) -> None:
+    try:
+        _ = os.lstat(_ENTRY_NAME, dir_fd=tombstone_descriptor)
+    except FileNotFoundError:
+        return
+    _restore_captured(tombstone_descriptor, directory_descriptor, name)
+
+
+def _restore_captured(
+    tombstone_descriptor: int, directory_descriptor: int, name: str
+) -> None:
+    _rename_noreplace(tombstone_descriptor, _ENTRY_NAME, directory_descriptor, name)
+
+
+def _rename_noreplace(
+    source_descriptor: int,
+    source_name: str,
+    destination_descriptor: int,
+    destination_name: str,
+) -> None:
+    function_type = ctypes.CFUNCTYPE(
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+        use_errno=True,
+    )
+    library = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        function = _load_native_function(function_type, library, "renameatx_np")
+        flags = 0x00000004
+    elif sys.platform.startswith("linux"):
+        function = _load_native_function(function_type, library, "renameat2")
+        flags = 0x00000001
+    else:
+        raise OSError(errno.ENOTSUP, "no atomic no-replace rename")
+    result = function(
+        source_descriptor,
+        os.fsencode(source_name),
+        destination_descriptor,
+        os.fsencode(destination_name),
+        flags,
+    )
+    if result != 0:
+        error_number = ctypes.get_errno()
+        raise OSError(error_number, os.strerror(error_number))
+
+
+def _load_native_function(
+    function_type: Callable[..., _NativeCallable], library: ctypes.CDLL, name: str
+) -> _NativeCallable:
+    return function_type((name, library))
+
+
+def _remove_captured(directory_descriptor: int, name: str, directory: bool) -> None:
+    os.fchmod(directory_descriptor, _TOMBSTONE_MODE)
+    function_type = ctypes.CFUNCTYPE(
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        use_errno=True,
+    )
+    function = _load_native_function(
+        function_type, ctypes.CDLL(None, use_errno=True), "unlinkat"
+    )
+    if directory:
+        flags = 0x00000080 if sys.platform == "darwin" else 0x00000200
+    else:
+        flags = 0
+    result = function(directory_descriptor, os.fsencode(name), flags)
+    if result != 0:
+        error_number = ctypes.get_errno()
+        raise OSError(error_number, os.strerror(error_number))
 
 
 def _entry_matches(
@@ -107,20 +241,15 @@ def _entry_matches(
     return identity(value) == expected
 
 
-def _same_stat(left: os.stat_result, right: os.stat_result) -> bool:
-    return (
-        identity(left) == identity(right)
-        and left.st_size == right.st_size
-        and left.st_mtime_ns == right.st_mtime_ns
-        and left.st_ctime_ns == right.st_ctime_ns
-    )
-
-
 def _before_inner_delete(_directory_descriptor: int, _name: str) -> None:
     return
 
 
 def _before_final_rmdir(_path: Path) -> None:
+    return
+
+
+def _before_tombstone_remove(_directory_descriptor: int, _name: str) -> None:
     return
 
 
