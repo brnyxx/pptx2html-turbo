@@ -170,7 +170,7 @@ class MultiFormatSubprocessTests(unittest.TestCase):
             stdout, stderr = root / "stdout", root / "stderr"
             with self.assertRaises(CandidateProcessError) as raised:
                 _ = run_bounded_process(
-                    (sys.executable, "-c", "import time; time.sleep(2)"),
+                    (sys.executable, "-c", "import signal; signal.pause()"),
                     root,
                     {},
                     stdout,
