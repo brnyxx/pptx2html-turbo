@@ -12,6 +12,12 @@ from evaluate.multiformat_candidate_fonts import (
     CandidateFontError,
     prepare_font_environment,
 )
+from evaluate.multiformat_native_unit_io import (
+    no_follow,
+    read_descriptor,
+    same_file,
+    write_new,
+)
 from evaluate.multiformat_native_unit_types import (
     NativeStableFile,
     NativeUnitError,
@@ -52,33 +58,75 @@ def tool_path(path: Path, request: NativeUnitRequest) -> Path:
     return resolved
 
 
+def tool_identity(path: Path, request: NativeUnitRequest) -> NativeStableFile:
+    return stable_file(path, request, NativeUnitFailure.TOOL_MISSING)
+
+
+def verify_tool(
+    path: Path, expected: NativeStableFile, request: NativeUnitRequest
+) -> None:
+    actual = tool_identity(path, request)
+    if actual != expected:
+        raise fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "tool changed during capture"
+        )
+
+
 def stable_file(
     path: Path,
     request: NativeUnitRequest,
     failure: NativeUnitFailure,
     maximum: int | None = None,
 ) -> NativeStableFile:
+    return stable_bytes(path, request, failure, maximum)[0]
+
+
+def stable_bytes(
+    path: Path,
+    request: NativeUnitRequest,
+    failure: NativeUnitFailure,
+    maximum: int | None = None,
+) -> tuple[NativeStableFile, bytes]:
     try:
         before = path.lstat()
         if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
             raise fail(request, failure, "file is not regular")
         if maximum is not None and before.st_size > maximum:
             raise fail(request, NativeUnitFailure.OUTPUT_OVERSIZE, "file exceeds bound")
-        digest = _sha256(path)
-        after = path.lstat()
-        if (
-            identity(before) != identity(after)
-            or before.st_size != after.st_size
-            or before.st_mtime_ns != after.st_mtime_ns
-        ):
+        descriptor = os.open(path, os.O_RDONLY | no_follow())
+        try:
+            opened = os.fstat(descriptor)
+            if not same_file(before, opened):
+                raise fail(
+                    request,
+                    NativeUnitFailure.OUTPUT_INVALID,
+                    "file changed during read",
+                )
+            content = read_descriptor(descriptor)
+            after = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        if maximum is not None and len(content) > maximum:
+            raise fail(request, NativeUnitFailure.OUTPUT_OVERSIZE, "file exceeds bound")
+        if not same_file(opened, after) or len(content) != before.st_size:
             raise fail(
                 request, NativeUnitFailure.OUTPUT_INVALID, "file changed during capture"
             )
-        return NativeStableFile(
-            before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, digest
+        digest = hashlib.sha256(content).hexdigest()
+        return (
+            NativeStableFile(
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+                digest,
+            ),
+            content,
         )
     except FileNotFoundError as error:
         raise fail(request, failure, "file is missing") from error
+    except NativeUnitError:
+        raise
     except OSError as error:
         raise fail(
             request, NativeUnitFailure.OUTPUT_INVALID, "file cannot be read"
@@ -118,32 +166,32 @@ def copy_stable(
     destination: Path,
     expected: NativeStableFile,
     request: NativeUnitRequest,
-) -> None:
+) -> NativeStableFile:
+    if os.path.lexists(destination):
+        raise fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "destination already exists"
+        )
     try:
-        if os.path.lexists(destination):
-            raise fail(
-                request, NativeUnitFailure.OUTPUT_INVALID, "destination already exists"
-            )
-        with source.open("rb") as handle:
-            before = os.fstat(handle.fileno())
-            content = handle.read()
-            after = os.fstat(handle.fileno())
-        if (
-            identity(before) != identity(after)
-            or len(content) != expected.size
-            or hashlib.sha256(content).hexdigest() != expected.sha256
-        ):
+        source_file, content = stable_bytes(
+            source, request, NativeUnitFailure.OUTPUT_INVALID
+        )
+        if source_file != expected:
             raise fail(
                 request, NativeUnitFailure.OUTPUT_INVALID, "file changed during copy"
             )
-        _ = destination.write_bytes(content)
-        verify_file(expected, source, request)
+        return write_new(destination, content, request)
     except NativeUnitError:
         raise
     except (FileNotFoundError, OSError) as error:
         raise fail(
             request, NativeUnitFailure.OUTPUT_INVALID, "file copy failed"
         ) from error
+
+
+def write_snapshot(
+    destination: Path, content: bytes, request: NativeUnitRequest
+) -> NativeStableFile:
+    return write_new(destination, content, request)
 
 
 def font_environment(
@@ -163,24 +211,38 @@ def identity(value: os.stat_result) -> tuple[int, int]:
     return value.st_dev, value.st_ino
 
 
-def cleanup_workspace(path: Path, expected: tuple[int, int]) -> None:
+def cleanup_workspace(
+    path: Path, expected: tuple[int, int], request: NativeUnitRequest
+) -> None:
     active = sys.exception()
+    cleanup_error: NativeUnitError | None = None
+    cleanup_cause: OSError | None = None
     try:
         value = path.lstat()
-        if identity(value) == expected and stat.S_ISDIR(value.st_mode):
-            _ = shutil.rmtree(path)
-    except FileNotFoundError:
-        return
-    except OSError as error:
-        if active is not None:
-            active.add_note(f"workspace cleanup failed: {error}")
+        if identity(value) != expected or not stat.S_ISDIR(value.st_mode):
+            cleanup_error = fail(
+                request, NativeUnitFailure.OUTPUT_INVALID, "workspace identity changed"
+            )
         else:
-            raise
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        while chunk := source.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
+            _ = shutil.rmtree(path)
+            if os.path.lexists(path):
+                cleanup_error = fail(
+                    request, NativeUnitFailure.OUTPUT_INVALID, "workspace remains"
+                )
+    except FileNotFoundError as error:
+        cleanup_error = fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "workspace disappeared"
+        )
+        cleanup_cause = error
+    except OSError as error:
+        cleanup_error = fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "workspace cleanup failed"
+        )
+        cleanup_cause = error
+    if cleanup_error is not None:
+        if active is not None:
+            active.add_note(f"{cleanup_error}: {cleanup_cause}")
+        else:
+            if cleanup_cause is not None:
+                raise cleanup_error from cleanup_cause
+            raise cleanup_error

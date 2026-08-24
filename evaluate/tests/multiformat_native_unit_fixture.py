@@ -74,18 +74,25 @@ class RecordingNativeRunner:
         self.pdfinfo_version_output: bytes = b"pdfinfo version 26.03.0\n"
         self.pdf_output: bytes = b"%PDF-1.4\nfixture-native-reference\n"
         self.mutate_pdf: bool = False
+        self.missing_stdout: bool = False
+        self.missing_stderr: bool = False
+        self.mutate_tool: Path | None = None
 
     def __call__(self, request: NativeProcessRequest) -> int:
         self.requests.append(request)
         if self.failure is not None:
             raise CandidateProcessError(self.failure)
-        _ = request.stdout_path.write_bytes(self.stdout_output)
-        _ = request.stderr_path.write_bytes(self.stderr_output)
+        if not self.missing_stdout:
+            _ = request.stdout_path.write_bytes(self.stdout_output)
+        if not self.missing_stderr:
+            _ = request.stderr_path.write_bytes(self.stderr_output)
         command = request.command
         if command[-1:] == ("--version",):
-            _ = request.stdout_path.write_bytes(self.office_version_output)
+            if not self.missing_stdout:
+                _ = request.stdout_path.write_bytes(self.office_version_output)
         elif command[-1:] == ("-v",):
-            _ = request.stdout_path.write_bytes(self.pdfinfo_version_output)
+            if not self.missing_stdout:
+                _ = request.stdout_path.write_bytes(self.pdfinfo_version_output)
         elif "--convert-to" in command:
             if self.write_pdf:
                 output_dir = Path(command[command.index("--outdir") + 1])
@@ -93,9 +100,12 @@ class RecordingNativeRunner:
                 _ = output_dir.mkdir(parents=True, exist_ok=True)
                 _ = (output_dir / f"{source.stem}.pdf").write_bytes(self.pdf_output)
         elif command[0].endswith("pdfinfo"):
-            _ = request.stdout_path.write_bytes(self.pdfinfo_output)
+            if not self.missing_stdout:
+                _ = request.stdout_path.write_bytes(self.pdfinfo_output)
             if self.mutate_pdf:
                 _ = Path(command[-1]).write_bytes(b"%PDF-1.4\nmutated\n")
+        if self.mutate_tool is not None and Path(command[0]) == self.mutate_tool:
+            _ = self.mutate_tool.write_bytes(b"replacement-tool")
         return self.exit_code
 
 

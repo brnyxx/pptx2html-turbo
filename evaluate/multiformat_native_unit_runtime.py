@@ -19,7 +19,6 @@ from evaluate.multiformat_native_unit_types import (
     NativeUnitRequest,
 )
 from evaluate.multiformat_reference_routing import ToolRole
-from evaluate.multiformat_schema import sha256_file
 from evaluate.multiformat_snapshot_publish import SnapshotPublishError, publish_snapshot
 
 
@@ -69,9 +68,9 @@ def _observation(request: NativeUnitRequest, captured: Captured) -> NativeObserv
         execution,
         reference,
         info,
-        sha256_file(execution),
-        sha256_file(reference),
-        sha256_file(info),
+        captured.execution_sha256,
+        captured.reference_pdf_sha256,
+        captured.pdfinfo_sha256,
     )
 
 
@@ -89,6 +88,13 @@ def _route(request: NativeUnitRequest) -> NativeRouteSelection:
             request, NativeUnitFailure.SOURCE_INVALID, "routing route is missing"
         )
     commands = route.commands
+    if any(
+        type(command.timeout_seconds) is not int or command.timeout_seconds <= 0
+        for command in commands
+    ):
+        raise _fail(
+            request, NativeUnitFailure.SOURCE_INVALID, "route timeout is invalid"
+        )
     document_format = request.source.document_format
     if document_format is DocumentFormat.PDF:
         roles = tuple(command.tool_role for command in commands)
@@ -147,7 +153,8 @@ def _validate(request: NativeUnitRequest) -> None:
         character not in "0123456789abcdef" for character in request.nonce
     )
     invalid_source = (
-        request.run not in (1, 2)
+        type(request.run) is not int
+        or request.run not in (1, 2)
         or invalid_nonce
         or not request.source.source_id
         or not request.source.relative_path

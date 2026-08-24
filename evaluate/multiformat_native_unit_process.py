@@ -14,6 +14,7 @@ from evaluate.multiformat_native_unit_files import MAX_LOG_BYTES, fail
 from evaluate.multiformat_native_unit_types import (
     NativeProcessContext,
     NativeProcessLog,
+    NativeProcessRecord,
     NativeProcessRequest,
     NativeProcessSpec,
     NativeRoutePaths,
@@ -52,11 +53,11 @@ def process(context: NativeProcessContext) -> NativeProcessLog:
             NativeUnitFailure.PROCESS_FAILED,
             f"{context.role}: process error",
         ) from error
-    if exit_code != 0:
+    if type(exit_code) is not int or exit_code != 0:
         raise fail(
             context.request,
             NativeUnitFailure.PROCESS_FAILED,
-            f"{context.role}: exit {exit_code}",
+            f"{context.role}: invalid or nonzero exit {exit_code}",
         )
     bounded(context.process.stdout_path, context.request)
     bounded(context.process.stderr_path, context.request)
@@ -68,6 +69,21 @@ def process(context: NativeProcessContext) -> NativeProcessLog:
     )
 
 
+def invoke(
+    context: NativeProcessContext,
+    role: str,
+    arguments: tuple[str, ...],
+    processes: list[NativeProcessRecord],
+) -> NativeProcessLog:
+    log = process(context)
+    processes.append(
+        NativeProcessRecord(
+            role, arguments, context.process.timeout_seconds, log.exit_code
+        )
+    )
+    return log
+
+
 def bounded(path: Path, request: NativeUnitRequest) -> None:
     try:
         value = path.lstat()
@@ -76,8 +92,10 @@ def bounded(path: Path, request: NativeUnitRequest) -> None:
         if value.st_size > MAX_LOG_BYTES:
             raise fail(request, NativeUnitFailure.LOG_OVERSIZE, "log exceeds 1 MiB")
         return
-    except FileNotFoundError:
-        return
+    except FileNotFoundError as error:
+        raise fail(
+            request, NativeUnitFailure.OUTPUT_INVALID, "log is missing"
+        ) from error
     except OSError as error:
         raise fail(
             request, NativeUnitFailure.OUTPUT_INVALID, "log cannot be read"
@@ -109,9 +127,11 @@ def version(log: NativeProcessLog, request: NativeUnitRequest) -> str:
     raise fail(request, NativeUnitFailure.OUTPUT_INVALID, "version output is empty")
 
 
-def pages(path: Path, request: NativeUnitRequest) -> int:
+def pages(content: bytes | Path, request: NativeUnitRequest) -> int:
     try:
-        matches: list[str] = _PAGE_PATTERN.findall(path.read_text(encoding="utf-8"))
+        raw = content if isinstance(content, bytes) else content.read_bytes()
+        text = raw.decode("utf-8")
+        matches: list[str] = _PAGE_PATTERN.findall(text)
     except (OSError, UnicodeError) as error:
         raise fail(
             request, NativeUnitFailure.PAGES_MALFORMED, "pdfinfo output is unreadable"

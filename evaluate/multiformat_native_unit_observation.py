@@ -6,28 +6,32 @@ from pathlib import Path
 
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_native_unit_files import (
+    MAX_LOG_BYTES,
     cleanup_workspace,
     copy_stable,
     fail,
     font_environment,
     identity,
     output_file,
+    stable_bytes,
     stable_file,
+    tool_identity,
     tool_path,
     verify_file,
+    verify_tool,
+    write_snapshot,
 )
 from evaluate.multiformat_native_unit_process import (
     environment,
+    invoke,
     make_request,
     pages,
-    process,
     render,
     version,
 )
 from evaluate.multiformat_native_unit_types import (
     NativeExecutionData,
     NativeProcessContext,
-    NativeProcessLog,
     NativeProcessRecord,
     NativeProcessRunner,
     NativeProcessSpec,
@@ -39,7 +43,6 @@ from evaluate.multiformat_native_unit_types import (
     NativeUnitRequest,
     execution_record,
 )
-from evaluate.multiformat_schema import sha256_file
 
 VERSION_TIMEOUT_SECONDS = 120
 
@@ -47,6 +50,9 @@ VERSION_TIMEOUT_SECONDS = 120
 @dataclass(frozen=True, slots=True)
 class Captured:
     unit_count: int
+    execution_sha256: str
+    reference_pdf_sha256: str
+    pdfinfo_sha256: str
 
 
 def capture(
@@ -64,7 +70,7 @@ def capture(
             staging, workspace, source, source_file, route, request, runner
         )
     finally:
-        cleanup_workspace(workspace, workspace_identity)
+        cleanup_workspace(workspace, workspace_identity, request)
 
 
 def _workspace(
@@ -83,9 +89,11 @@ def _workspace(
     for folder in folders:
         folder.mkdir()
     staged = folders[0] / f"source.{request.source.document_format.value}"
-    copy_stable(source, staged, source_file, request)
+    _ = copy_stable(source, staged, source_file, request)
     pdfinfo = tool_path(request.runtime.pdfinfo, request)
+    pdfinfo_file = tool_identity(pdfinfo, request)
     office = tool_path(request.runtime.soffice, request) if route.office else None
+    office_file = tool_identity(office, request) if office else None
     font = (
         font_environment(request, workspace)
         if route.kind is NativeRouteKind.OFFICE
@@ -140,7 +148,7 @@ def _workspace(
     pdfinfo_version = version(version_log, request)
     if route.office is None:
         pdf = folders[1] / "source.pdf"
-        copy_stable(source, pdf, source_file, request)
+        _ = copy_stable(source, pdf, source_file, request)
     else:
         if office is None:
             raise fail(
@@ -198,21 +206,24 @@ def _workspace(
     )
     verify_file(output, pdf, request)
     verify_file(source_file, source, request)
-    count = pages(metadata_log.stdout, request)
+    _metadata_file, metadata_content = stable_bytes(
+        metadata_log.stdout, request, NativeUnitFailure.OUTPUT_INVALID, MAX_LOG_BYTES
+    )
+    count = pages(metadata_content, request)
     reference = staging / "reference.pdf"
     retained_info = staging / "pdfinfo.txt"
-    copy_stable(pdf, reference, output, request)
-    info_file = stable_file(
-        metadata_log.stdout, request, NativeUnitFailure.OUTPUT_INVALID
-    )
-    copy_stable(metadata_log.stdout, retained_info, info_file, request)
+    reference_file = copy_stable(pdf, reference, output, request)
+    info_file = write_snapshot(retained_info, metadata_content, request)
+    verify_tool(pdfinfo, pdfinfo_file, request)
+    if office is not None and office_file is not None:
+        verify_tool(office, office_file, request)
     data = NativeExecutionData(
         request,
         route.kind,
         source_file.sha256,
-        sha256_file(office) if office is not None else None,
+        office_file.sha256 if office_file is not None else None,
         office_version,
-        sha256_file(pdfinfo),
+        pdfinfo_file.sha256,
         pdfinfo_version,
         font.environment_sha256 if font else None,
         tuple(sorted(env_values)),
@@ -226,22 +237,14 @@ def _workspace(
         reference,
         retained_info,
     )
-    _ = (staging / "execution.json").write_bytes(
-        canonicalize(execution_record(data)) + b"\n"
+    execution_path = staging / "execution.json"
+    _ = execution_path.write_bytes(canonicalize(execution_record(data)) + b"\n")
+    execution_file = stable_file(
+        execution_path, request, NativeUnitFailure.OUTPUT_INVALID
     )
-    return Captured(count)
-
-
-def invoke(
-    context: NativeProcessContext,
-    role: str,
-    arguments: tuple[str, ...],
-    processes: list[NativeProcessRecord],
-) -> NativeProcessLog:
-    log = process(context)
-    processes.append(
-        NativeProcessRecord(
-            role, arguments, context.process.timeout_seconds, log.exit_code
-        )
+    return Captured(
+        count,
+        execution_file.sha256,
+        reference_file.sha256,
+        info_file.sha256,
     )
-    return log
