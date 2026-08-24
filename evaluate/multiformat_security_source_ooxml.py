@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import assert_never
 
 from evaluate.multiformat_package_validation import MAX_XML_BYTES
-from evaluate.tests.multiformat_security_cfb_fixture import (
+from evaluate.multiformat_security_source_cfb import (
     write_cfb_security_fixture,
 )
-from evaluate.tests.multiformat_source_fixture import (
+from evaluate.multiformat_source_fixture import (
     OOXML_PARTS,
     SourceFixtureError,
     write_positive_source,

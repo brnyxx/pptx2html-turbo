@@ -8,16 +8,16 @@ from pathlib import Path
 
 from evaluate.multiformat_corpus_types import CorpusError, DocumentFormat
 from evaluate.multiformat_security_fixture import validate_security_fixture
-from evaluate.tests.multiformat_security_cfb_fixture import (
+from evaluate.multiformat_security_source import write_security_source
+from evaluate.multiformat_security_source_cfb import (
+    CHILD_ENTRY_OFFSET,
     LINK_STREAM_OFFSET,
     PRIMARY_ENTRY_OFFSET,
     ROOT_ENTRY_OFFSET,
     SEMANTIC_ENTRY_OFFSET,
-    CHILD_ENTRY_OFFSET,
     _directory_entry,
 )
-from evaluate.tests.multiformat_security_source_fixture import write_security_source
-from evaluate.tests.multiformat_source_fixture import (
+from evaluate.multiformat_source_fixture import (
     END_OF_CHAIN,
     FREE_SECTOR,
     OLE_SIGNATURE,
@@ -107,7 +107,7 @@ class MultiFormatSecurityAdversarialTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     source = Path(temp_dir) / f"source.{source_format}"
                     renamed = Path(temp_dir) / f"renamed.{declared_format.value}"
-                    write_security_source(source, source_format, family)
+                    write_security_source(source, DocumentFormat(source_format), family)
                     renamed.write_bytes(source.read_bytes())
 
                     with self.assertRaisesRegex(CorpusError, "security.fixture"):
@@ -121,7 +121,7 @@ class MultiFormatSecurityAdversarialTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "source.xlsx"
             renamed = Path(temp_dir) / "renamed.docx"
-            write_security_source(source, "xlsx", "malformed-zip")
+            write_security_source(source, DocumentFormat("xlsx"), "malformed-zip")
             renamed.write_bytes(source.read_bytes() + b"word/document.xml")
 
             with self.assertRaisesRegex(CorpusError, "security.fixture"):
@@ -134,7 +134,7 @@ class MultiFormatSecurityAdversarialTests(unittest.TestCase):
     def test_cfb_external_target_must_belong_to_link_stream(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "disconnected.doc"
-            write_security_source(source, "doc", "external-link")
+            write_security_source(source, DocumentFormat("doc"), "external-link")
             value = bytearray(source.read_bytes())
             target = b"https://example.invalid/security-link"
             value[LINK_STREAM_OFFSET : LINK_STREAM_OFFSET + len(target)] = (
@@ -153,7 +153,7 @@ class MultiFormatSecurityAdversarialTests(unittest.TestCase):
     def test_cfb_security_stream_must_be_root_reachable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "detached.doc"
-            write_security_source(source, "doc", "external-link")
+            write_security_source(source, DocumentFormat("doc"), "external-link")
             value = bytearray(source.read_bytes())
             struct.pack_into(
                 "<I",
@@ -175,7 +175,7 @@ class MultiFormatSecurityAdversarialTests(unittest.TestCase):
             with self.subTest(family=family):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     source = Path(temp_dir) / "sibling.doc"
-                    write_security_source(source, "doc", family)
+                    write_security_source(source, DocumentFormat("doc"), family)
                     value = bytearray(source.read_bytes())
                     struct.pack_into(
                         "<I",
@@ -201,7 +201,7 @@ class MultiFormatSecurityAdversarialTests(unittest.TestCase):
     def test_cfb_mini_stream_corruption_checks_declared_chain(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "mini.doc"
-            write_security_source(source, "doc", "external-link")
+            write_security_source(source, DocumentFormat("doc"), "external-link")
             value = bytearray(source.read_bytes())
             struct.pack_into("<II", value, 60, 9, 1)
             struct.pack_into("<I", value, ROOT_ENTRY_OFFSET + 116, 1)

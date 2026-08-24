@@ -6,7 +6,7 @@ from pathlib import Path
 
 from evaluate.multiformat_corpus_types import CorpusError, DocumentFormat
 from evaluate.multiformat_security_fixture import validate_security_fixture
-from evaluate.tests.multiformat_security_pdf_fixture import _pdf_bytes
+from evaluate.multiformat_security_source_pdf import _pdf_bytes
 
 
 class MultiFormatSecurityPdfContainerAdversarialTests(unittest.TestCase):

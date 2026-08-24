@@ -12,7 +12,7 @@ from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_pdf_link_annotation import add_link_annotation
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import sha256_file
-from evaluate.tests.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_source_fixture import write_positive_source
 
 ROOT = Path(__file__).resolve().parents[2]
 ROUTING_TABLE = ROOT / "evaluate/multiformat/reference-routing.v1.json"

@@ -4,13 +4,14 @@ import hashlib
 import json
 from pathlib import Path
 
+from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
     string_value,
 )
-from evaluate.tests.multiformat_security_source_fixture import write_security_source
-from evaluate.tests.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_security_source import write_security_source
+from evaluate.multiformat_source_fixture import write_positive_source
 
 PAIRED_FORMATS = {"doc": "docx", "xls": "xlsx", "ppt": "pptx"}
 
@@ -199,7 +200,7 @@ def _security_sources(
     for index, family in enumerate(security_values):
         path = sources / f"security-{index}.{document_format}"
         outcome = string_value(security_values, family)
-        write_security_source(path, document_format, family)
+        write_security_source(path, DocumentFormat(document_format), family)
         security.append(
             {
                 "id": f"{document_format}-security-{index}",

@@ -13,7 +13,7 @@ from evaluate.multiformat_legacy_binary_pool import (
 )
 from evaluate.multiformat_public_pool import collect_public_pool
 from evaluate.multiformat_schema import JsonValue, sha256_file
-from evaluate.tests.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_source_fixture import write_positive_source
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_CONFIG = (

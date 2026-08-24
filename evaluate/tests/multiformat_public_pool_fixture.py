@@ -6,7 +6,7 @@ from pathlib import Path
 
 from evaluate.multiformat_public_pool import collect_public_pool
 from evaluate.multiformat_schema import JsonValue
-from evaluate.tests.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_source_fixture import write_positive_source
 
 
 @dataclass(frozen=True, slots=True)

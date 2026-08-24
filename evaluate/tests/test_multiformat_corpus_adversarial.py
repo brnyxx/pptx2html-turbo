@@ -8,12 +8,12 @@ from evaluate.multiformat_corpus import CorpusError, validate_corpus_manifest
 from evaluate.multiformat_corpus_sources import validate_source
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_package_validation import MAX_SOURCE_BYTES
-from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
-from evaluate.tests.multiformat_source_fixture import (
+from evaluate.multiformat_source_fixture import (
     write_ambiguous_legacy_source,
     write_ambiguous_ooxml_source,
     write_positive_source,
 )
+from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 
 class MultiFormatCorpusAdversarialTests(unittest.TestCase):

@@ -16,7 +16,7 @@ from evaluate.multiformat_legacy_types import (
     LegacyPairJob,
 )
 from evaluate.multiformat_schema import sha256_file
-from evaluate.tests.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_source_fixture import write_positive_source
 
 
 class MultiFormatLegacyRuntimeTests(unittest.TestCase):

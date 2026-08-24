@@ -4,9 +4,10 @@ import hashlib
 import json
 from pathlib import Path
 
+from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_schema import JsonValue
-from evaluate.tests.multiformat_security_source_fixture import write_security_source
-from evaluate.tests.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_security_source import write_security_source
+from evaluate.multiformat_source_fixture import write_positive_source
 
 
 def ready_fixture(
@@ -126,7 +127,7 @@ def ready_fixture(
     security_families = ("malformed-zip", "path-traversal")
     for index, family in enumerate(security_families):
         path = sources / f"security-{index}.docx"
-        write_security_source(path, "docx", family)
+        write_security_source(path, DocumentFormat("docx"), family)
         security.append(
             {
                 "id": f"security-{index}",

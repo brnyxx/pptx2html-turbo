@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import assert_never
 
 from evaluate.multiformat_package_validation import MAX_SOURCE_BYTES
-from evaluate.tests.multiformat_source_fixture import (
+from evaluate.multiformat_source_fixture import (
     END_OF_CHAIN,
     FAT_SECTOR,
     FREE_SECTOR,

@@ -4,7 +4,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import assert_never
 
-from evaluate.tests.multiformat_source_fixture import SourceFixtureError
+from evaluate.multiformat_source_fixture import SourceFixtureError
 
 
 class PdfSecurityFamily(StrEnum):
@@ -84,8 +84,10 @@ def _objects_for(family: PdfSecurityFamily) -> tuple[list[tuple[int, bytes]], st
             extras = [
                 (
                     4,
-                    b"<< /Type /ObjStm /N 100001 /First 0 /Length 1 >>"
-                    b"\nstream\nx\nendstream",
+                    (
+                        b"<< /Type /ObjStm /N 100001 /First 0 /Length 1 >>"
+                        b"\nstream\nx\nendstream"
+                    ),
                 )
             ]
         case PdfSecurityFamily.OVERSIZED_IMAGE:
@@ -93,9 +95,11 @@ def _objects_for(family: PdfSecurityFamily) -> tuple[list[tuple[int, bytes]], st
             extras = [
                 (
                     4,
-                    b"<< /Type /XObject /Subtype /Image /Width 200000 "
-                    b"/Height 200000 /ColorSpace /DeviceRGB "
-                    b"/BitsPerComponent 8 /Length 1 >>\nstream\nx\nendstream",
+                    (
+                        b"<< /Type /XObject /Subtype /Image /Width 200000 "
+                        b"/Height 200000 /ColorSpace /DeviceRGB "
+                        b"/BitsPerComponent 8 /Length 1 >>\nstream\nx\nendstream"
+                    ),
                 )
             ]
         case PdfSecurityFamily.ENCRYPTED_DOCUMENT:

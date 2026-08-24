@@ -18,7 +18,7 @@ from evaluate.multiformat_legacy_conformance import (
     generate_legacy_pairs,
 )
 from evaluate.multiformat_schema import sha256_file
-from evaluate.tests.multiformat_source_fixture import write_positive_source
+from evaluate.multiformat_source_fixture import write_positive_source
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"

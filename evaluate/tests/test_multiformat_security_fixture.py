@@ -10,9 +10,9 @@ from evaluate.multiformat_corpus import CorpusError, validate_corpus_manifest
 from evaluate.multiformat_corpus_sources import validate_source
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_security_fixture import validate_security_fixture
-from evaluate.tests.multiformat_security_source_fixture import write_security_source
+from evaluate.multiformat_security_source import write_security_source
+from evaluate.multiformat_source_fixture import write_positive_source
 from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
-from evaluate.tests.multiformat_source_fixture import write_positive_source
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
@@ -27,7 +27,9 @@ class MultiFormatSecurityFixtureTests(unittest.TestCase):
                 with self.subTest(document_format=format_name, family=family):
                     with tempfile.TemporaryDirectory() as temp_dir:
                         source = Path(temp_dir) / f"fixture.{format_name}"
-                        write_security_source(source, format_name, family)
+                        write_security_source(
+                            source, DocumentFormat(format_name), family
+                        )
 
                         validate_security_fixture(
                             source,
@@ -45,7 +47,9 @@ class MultiFormatSecurityFixtureTests(unittest.TestCase):
                     with tempfile.TemporaryDirectory() as temp_dir:
                         root = Path(temp_dir)
                         source = root / f"fixture.{format_name}"
-                        write_security_source(source, format_name, family)
+                        write_security_source(
+                            source, DocumentFormat(format_name), family
+                        )
 
                         validate_source(
                             {
@@ -68,7 +72,9 @@ class MultiFormatSecurityFixtureTests(unittest.TestCase):
                 with self.subTest(document_format=format_name, family=family):
                     with tempfile.TemporaryDirectory() as temp_dir:
                         source = Path(temp_dir) / f"fixture.{format_name}"
-                        write_security_source(source, format_name, family)
+                        write_security_source(
+                            source, DocumentFormat(format_name), family
+                        )
 
                         with self.assertRaisesRegex(
                             CorpusError,

@@ -1,3 +1,5 @@
+"""Deterministic positive document source writers."""
+
 from __future__ import annotations
 
 import hashlib
