@@ -530,6 +530,40 @@ Expected: missing capture module.
 
 - [ ] **Step 3: Implement capture orchestration**
 
+Freeze the public typed capture boundary exactly as:
+
+```python
+@dataclass(frozen=True, slots=True)
+class NativeUnitCaptureInputs:
+    contract: Path
+    public_config: Path
+    public_pool_manifest: Path
+    routing: Path
+    font_manifest: Path
+    libreoffice: Path
+    pdfinfo: Path
+    output_dir: Path
+    workers: int
+
+NonceFactory = Callable[[], str]
+
+def capture_native_unit_inventory(
+    inputs: NativeUnitCaptureInputs,
+    *,
+    runner: NativeProcessRunner = run_native_process,
+    nonce_factory: NonceFactory = generate_native_nonce,
+) -> NativeUnitInventorySummary: ...
+```
+
+`font_manifest` maps from CLI `--font-bundle`; the runtime derives the bundle
+root from its parent. `output_dir` is the no-replace publication destination.
+The nonce factory is a keyword-only public test seam and is called exactly
+1,050 times in sorted `(format.value, source_id, run)` order before workers are
+submitted. Unsupported platform or architecture raises the frozen unscoped
+`NativeUnitError` before any tool is resolved or invoked. The function
+independently validates the complete staged tree and returns that validator's
+`NativeUnitInventorySummary`.
+
 Validate and enumerate the public pool with:
 
 ```python

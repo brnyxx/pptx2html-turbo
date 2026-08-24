@@ -381,6 +381,45 @@ and `pdfinfo -v` and require both the hash and normalized line to match the
 inventory. Font-snapshot identity is independent and need not come from the
 same installation root as the LibreOffice executable.
 
+Task 4 exposes one typed capture boundary:
+
+```python
+@dataclass(frozen=True, slots=True)
+class NativeUnitCaptureInputs:
+    contract: Path
+    public_config: Path
+    public_pool_manifest: Path
+    routing: Path
+    font_manifest: Path
+    libreoffice: Path
+    pdfinfo: Path
+    output_dir: Path
+    workers: int
+
+NonceFactory = Callable[[], str]
+
+def capture_native_unit_inventory(
+    inputs: NativeUnitCaptureInputs,
+    *,
+    runner: NativeProcessRunner = run_native_process,
+    nonce_factory: NonceFactory = generate_native_nonce,
+) -> NativeUnitInventorySummary: ...
+```
+
+`font_manifest` is the canonical font-bundle manifest path. The runtime derives
+the bundle root from its parent; capture has no separate font-root field.
+`output_dir` is the no-replace publication destination and is part of the
+capture inputs. The orchestrator calls `nonce_factory` exactly 1,050 times in
+sorted `(format.value, source_id, run)` order before submitting any worker.
+The keyword-only factory and runner are the only public capture test seams.
+
+Unsupported platform or architecture raises
+`NativeUnitError(UNSUPPORTED_PLATFORM, None, None, detail)` before any input
+tool is resolved, hashed, versioned, or invoked. Capture validates the complete
+staged inventory through `validate_native_unit_inventory` before publication
+and returns that independent validator's `NativeUnitInventorySummary`. There
+is no alternate overload and no public per-source summary.
+
 The validator returns a separate aggregate value:
 
 ```python
