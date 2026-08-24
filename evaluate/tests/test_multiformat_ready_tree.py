@@ -4,11 +4,44 @@ import hashlib
 import os
 import tempfile
 import unittest
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Protocol
+from unittest.mock import patch
 
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_ready_tree import TreeIdentityError, tree_identity
 from evaluate.multiformat_schema import JsonValue
+
+
+class _HashProtocol(Protocol):
+    def update(self, data: bytes | bytearray | memoryview[int], /) -> None: ...
+
+    def hexdigest(self) -> str: ...
+
+
+class _MutatingHash:
+    _inner: _HashProtocol
+    _target: Path
+    _replacement: bytes
+    mutated: bool
+
+    def __init__(self, inner: _HashProtocol, target: Path, replacement: bytes) -> None:
+        self._inner = inner
+        self._target = target
+        self._replacement = replacement
+        self.mutated = False
+
+    def update(self, data: bytes | bytearray | memoryview[int], /) -> None:
+        self._inner.update(data)
+        if not self.mutated:
+            self.mutated = True
+            with self._target.open("r+b") as source:
+                _ = source.seek(1024 * 1024)
+                _ = source.write(self._replacement)
+
+    def hexdigest(self) -> str:
+        return self._inner.hexdigest()
 
 
 class MultiFormatReadyTreeIdentityTests(unittest.TestCase):
@@ -130,6 +163,99 @@ class MultiFormatReadyTreeIdentityTests(unittest.TestCase):
                 )
                 self.assertIn("invalid", str(first_error.exception))
 
+    def test_root_replacement_before_traversal_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            root = workspace / "root"
+            external = workspace / "external"
+            root.mkdir()
+            external.mkdir()
+            _ = (root / "inside.txt").write_bytes(b"inside")
+            _ = (external / "secret.txt").write_bytes(b"external")
+            checked_root = workspace / "checked-root"
+            replaced = False
+            real_scandir = os.scandir
+
+            def replace_root_before_scan(
+                candidate: str | bytes | os.PathLike[str] | int,
+            ) -> Iterator[os.DirEntry[str] | os.DirEntry[bytes]]:
+                nonlocal replaced
+                if not replaced:
+                    replaced = True
+                    _ = root.rename(checked_root)
+                    _ = external.rename(root)
+                return real_scandir(candidate)
+
+            with (
+                patch.object(os, "scandir", side_effect=replace_root_before_scan),
+                self.assertRaises(TreeIdentityError),
+            ):
+                _ = tree_identity(root)
+
+            self.assertTrue(replaced)
+            self.assertTrue((root / "secret.txt").exists())
+
+    def test_checked_directory_replacement_before_traversal_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            root = workspace / "root"
+            checked = root / "checked"
+            external = workspace / "external"
+            root.mkdir()
+            checked.mkdir()
+            external.mkdir()
+            _ = (checked / "inside.txt").write_bytes(b"inside")
+            _ = (external / "secret.txt").write_bytes(b"external")
+            checked_backup = workspace / "checked-backup"
+            scan_count = 0
+            real_scandir = os.scandir
+
+            def replace_checked_before_scan(
+                candidate: str | bytes | os.PathLike[str] | int,
+            ) -> Iterator[os.DirEntry[str] | os.DirEntry[bytes]]:
+                nonlocal scan_count
+                scan_count += 1
+                if scan_count == 2:
+                    _ = checked.rename(checked_backup)
+                    _ = external.rename(checked)
+                return real_scandir(candidate)
+
+            with (
+                patch.object(os, "scandir", side_effect=replace_checked_before_scan),
+                self.assertRaises(TreeIdentityError),
+            ):
+                _ = tree_identity(root)
+
+            self.assertEqual(scan_count, 2)
+            self.assertTrue((checked / "secret.txt").exists())
+
+    def test_equal_size_in_place_mutation_during_hashing_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.bin"
+            original = b"a" * (2 * 1024 * 1024)
+            replacement = b"b" * (1024 * 1024)
+            _ = source.write_bytes(original)
+            mutating_hashes: list[_MutatingHash] = []
+            real_sha256 = hashlib.sha256
+
+            def sha256_factory(data: bytes = b"") -> _HashProtocol:
+                if not mutating_hashes:
+                    mutating_hashes.append(
+                        _MutatingHash(real_sha256(data), source, replacement)
+                    )
+                    return mutating_hashes[0]
+                return real_sha256(data)
+
+            with (
+                patch.object(hashlib, "sha256", side_effect=sha256_factory),
+                self.assertRaises(TreeIdentityError),
+            ):
+                _ = tree_identity(root)
+
+            self.assertEqual(len(mutating_hashes), 1)
+            self.assertTrue(mutating_hashes[0].mutated)
+
     def test_symlinked_directory_is_rejected_without_following_it(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -141,7 +267,7 @@ class MultiFormatReadyTreeIdentityTests(unittest.TestCase):
             with self.assertRaises(TreeIdentityError):
                 _ = tree_identity(root)
 
-            self.assertFalse((root / "secret.txt").exists())
+            self.assertTrue((outside / "secret.txt").exists())
 
     def test_non_directory_root_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
