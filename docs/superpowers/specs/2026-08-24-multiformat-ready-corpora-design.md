@@ -309,10 +309,12 @@ top-level track and contributes no additional conformance unit.
 `paired_format` for the owning legacy format; no `format`, provenance, or
 relationship field is added. During input validation, the upstream support ID
 and digest must match the plan-selected modern conformance case. During
-assembly, the final support ID and basename are derived as
-`{owner_format}-support-{modern_case_id}` so later aggregate admission cannot
-collide with the modern format's primary `(format, id)` identity. The root
-assembly's support relation record has exactly `owner_format`,
+assembly, the final support ID is derived as
+`{owner_format}-support-{modern_case_id}` and its exact filename is
+`{support_id}.{support_format}`. This prevents later aggregate admission from
+colliding with the modern format's primary `(format, id)` identity while
+satisfying format-extension validation. The root assembly's support relation
+record has exactly `owner_format`,
 `owner_source_id`, `support_format`, `modern_case_id`, `support_id`, `path`,
 and `sha256`.
 
@@ -411,9 +413,13 @@ The assembly validator:
 6. Validates the copied native inventory with explicit contract, catalog,
    pool, routing, font, and executable inputs.
 7. Runs `validate_corpus_manifest` for all seven formats.
-8. Recomputes track counts, source counts, support counts, and tree digest.
-9. Requires root status `VALIDATED`.
-10. Rejects a root `READY` marker to preserve the aggregate-admission boundary.
+8. For every support relation, resolves the owning legacy source and selected
+   modern plan case, then requires exact `modern_case_id`, derived
+   `support_id`, `support_format`, extension-bearing path, digest, and matching
+   closed-schema `paired_source` values.
+9. Recomputes track counts, source counts, support counts, and tree digest.
+10. Requires root status `VALIDATED`.
+11. Rejects a root `READY` marker to preserve the aggregate-admission boundary.
 
 Validation does not regenerate source documents or rerun LibreOffice.
 

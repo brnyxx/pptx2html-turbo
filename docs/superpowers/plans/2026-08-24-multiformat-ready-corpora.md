@@ -607,8 +607,9 @@ support relationships. Mutate:
 For each legacy support, validate the upstream ID and digest against the
 selected modern plan case, then return a typed relation containing both
 `modern_case_id` and the final collision-free support ID
-`{owner_format}-support-{modern_case_id}`. Add a regression proving that
-reusing the modern case ID as the final support ID would collide in
+`{owner_format}-support-{modern_case_id}`. Its exact final filename is
+`{support_id}.{support_format}`. Add a regression proving that reusing the
+modern case ID as the final support ID would collide in
 `load_admission_sources`.
 
 Each mutation must fail before copying bytes.
@@ -689,6 +690,9 @@ For all seven formats assert:
 - support names owned by the legacy format.
 
 Pass each generated manifest to the existing `validate_corpus_manifest`.
+Also pass all seven valid manifests to `load_admission_sources` and require
+exactly 180 support records with the owner-prefixed IDs and extension-bearing
+paths, in addition to all 1,295 primary track records.
 
 - [ ] **Step 2: Verify RED**
 
@@ -819,6 +823,12 @@ Mutate one concern per test:
 - support relationship mismatch;
 - final support ID reuse of a modern primary `(format, id)` identity;
 - per-format manifest or unit-count tampering.
+
+For every support relation, require the validator to resolve the owning legacy
+source and selected modern plan case, then compare exact `modern_case_id`,
+derived `support_id`, `support_format`, extension-bearing path, SHA-256, and
+the owning manifest's closed-schema `paired_source`. Mutate each field
+independently.
 
 Also inject lock contention, staging inode substitution, lock substitution,
 destination appearance before rename, cleanup failure with a primary error,
