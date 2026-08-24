@@ -10,15 +10,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from evaluate.multiformat_snapshot_cleanup import remove_owned_staging
 from evaluate.multiformat_snapshot_filesystem import (
-    acquire_lock,
     atomic_rename_noreplace,
+    directory_identity,
     open_owned_directory,
-    remove_owned_staging,
     unlink_owned_file,
     valid_lock_namespace,
     verify_directory_identity,
 )
+from evaluate.multiformat_snapshot_lock import acquire_lock
 
 _DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
 _NOFOLLOW_FLAGS = getattr(os, "O_NOFOLLOW", 0)
@@ -112,13 +113,18 @@ def publish_snapshot(
         staging = Path(
             tempfile.mkdtemp(prefix=f".{target.name}.stage-", dir=resolved_parent)
         )
-        staging_identity = _identity(staging.lstat())
         try:
-            staging_descriptor = open_owned_directory(
-                staging,
-                (staging_identity.device, staging_identity.inode),
-            )
+            created_identity = directory_identity(parent_descriptor, staging.name)
+            staging_identity = _Identity(*created_identity)
+            staging_descriptor = open_owned_directory(staging, created_identity)
         except OSError as error:
+            if staging_identity is None:
+                try:
+                    staging_identity = _Identity(
+                        *directory_identity(parent_descriptor, staging.name)
+                    )
+                except OSError as cleanup_error:
+                    error.add_note(f"snapshot cleanup failed: {cleanup_error}")
             raise SnapshotPublishError(
                 staging,
                 SnapshotPublishFailure.PUBLICATION_FAILED,

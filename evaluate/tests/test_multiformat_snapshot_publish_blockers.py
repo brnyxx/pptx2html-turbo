@@ -8,7 +8,6 @@ from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
 
-from evaluate import multiformat_snapshot_filesystem as snapshot_filesystem
 from evaluate import multiformat_snapshot_publish as snapshot_publish
 from evaluate.multiformat_snapshot_publish import (
     SnapshotPublishError,
@@ -16,81 +15,15 @@ from evaluate.multiformat_snapshot_publish import (
 )
 
 
-class PrimaryWriterError(Exception):
-    pass
-
-
 def _write_complete(staging: Path) -> None:
     (staging / "manifest.json").write_bytes(b"complete")
 
 
+def _fd_count() -> int:
+    return len(os.listdir("/dev/fd"))
+
+
 class MultiFormatSnapshotPublishBlockerTests(unittest.TestCase):
-    def test_restore_race_preserves_attacker_and_owned_tombstone(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            destination = root / "corpus"
-            original_atomic = snapshot_filesystem.atomic_rename_noreplace
-            original_unlink = snapshot_filesystem.os.unlink
-            attacker_inserted = False
-            forced_failure = False
-
-            def insert_attacker(
-                staging: Path,
-                target: Path,
-                parent_descriptor: int,
-            ) -> None:
-                nonlocal attacker_inserted
-                if target.name == "child" and not attacker_inserted:
-                    attacker_inserted = True
-                    descriptor = os.open(
-                        target.name,
-                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                        0o600,
-                        dir_fd=parent_descriptor,
-                    )
-                    try:
-                        os.write(descriptor, b"attacker")
-                    finally:
-                        os.close(descriptor)
-                original_atomic(staging, target, parent_descriptor)
-
-            def fail_first_unlink(
-                path: str | os.PathLike[str],
-                *,
-                dir_fd: int | None = None,
-            ) -> None:
-                nonlocal forced_failure
-                if not forced_failure and Path(path).name.startswith(".cleanup-"):
-                    forced_failure = True
-                    raise OSError("forced cleanup failure")
-                original_unlink(path, dir_fd=dir_fd)
-
-            def fail_writer(staging: Path) -> None:
-                (staging / "child").write_bytes(b"owned")
-                raise PrimaryWriterError("primary")
-
-            with (
-                mock.patch.object(
-                    snapshot_filesystem,
-                    "atomic_rename_noreplace",
-                    side_effect=insert_attacker,
-                ),
-                mock.patch.object(
-                    snapshot_filesystem.os,
-                    "unlink",
-                    side_effect=fail_first_unlink,
-                ),
-                self.assertRaisesRegex(PrimaryWriterError, "primary"),
-            ):
-                publish_snapshot(destination, fail_writer)
-
-            stage = next(root.glob(".corpus.stage-*"))
-            self.assertEqual((stage / "child").read_bytes(), b"attacker")
-            self.assertEqual(
-                next(stage.glob(".cleanup-*")).read_bytes(),
-                b"owned",
-            )
-
     def test_lock_file_contention_closes_parent_once(self) -> None:
         self._assert_lock_failure(lock_kind="file")
 
@@ -99,6 +32,7 @@ class MultiFormatSnapshotPublishBlockerTests(unittest.TestCase):
 
     def test_lock_acquire_oserror_closes_parent_once(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
+            before = _fd_count()
             root = Path(temp_dir)
             destination = root / "corpus"
             original_open = snapshot_publish.os.open
@@ -137,15 +71,18 @@ class MultiFormatSnapshotPublishBlockerTests(unittest.TestCase):
                     publish_snapshot(destination, _write_complete)
                 self.assertCountEqual(closed, opened)
                 self._assert_descriptors_closed(opened, original_fstat, original_close)
+                self.assertEqual(_fd_count(), before)
             finally:
                 self._close_valid_descriptors(opened, original_fstat, original_close)
 
     def test_lock_post_open_fstat_failure_closes_both_descriptors(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
+            before = _fd_count()
             root = Path(temp_dir)
             destination = root / "corpus"
             original_open = snapshot_publish.os.open
             original_close = snapshot_publish.os.close
+            original_dup = snapshot_publish.os.dup
             original_fstat = snapshot_publish.os.fstat
             opened: list[int] = []
             closed: list[int] = []
@@ -165,6 +102,11 @@ class MultiFormatSnapshotPublishBlockerTests(unittest.TestCase):
                 if Path(path).name == ".corpus.snapshot.lock":
                     lock_descriptor = descriptor
                 return descriptor
+
+            def track_dup(descriptor: int) -> int:
+                duplicated = original_dup(descriptor)
+                opened.append(duplicated)
+                return duplicated
 
             def fail_lock_fstat(descriptor: int) -> os.stat_result:
                 nonlocal failed
@@ -186,6 +128,9 @@ class MultiFormatSnapshotPublishBlockerTests(unittest.TestCase):
                         snapshot_publish.os, "fstat", side_effect=fail_lock_fstat
                     ),
                     mock.patch.object(
+                        snapshot_publish.os, "dup", side_effect=track_dup
+                    ),
+                    mock.patch.object(
                         snapshot_publish.os, "close", side_effect=track_close
                     ),
                     self.assertRaises(SnapshotPublishError),
@@ -195,9 +140,62 @@ class MultiFormatSnapshotPublishBlockerTests(unittest.TestCase):
                 self._assert_descriptors_closed(opened, original_fstat, original_close)
             finally:
                 self._close_valid_descriptors(opened, original_fstat, original_close)
+            publish_snapshot(destination, _write_complete)
+            self.assertEqual(_fd_count(), before)
+
+    def test_lock_recovery_preserves_attacker_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            before = _fd_count()
+            root = Path(temp_dir)
+            destination = root / "corpus"
+            lock = root / ".corpus.snapshot.lock"
+            original_open = snapshot_publish.os.open
+            original_fstat = snapshot_publish.os.fstat
+            lock_descriptor: int | None = None
+            replaced = False
+
+            def track_open(
+                path: str | os.PathLike[str],
+                flags: int,
+                mode: int = 0o777,
+                *,
+                dir_fd: int | None = None,
+            ) -> int:
+                nonlocal lock_descriptor
+                descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+                if Path(path).name == lock.name:
+                    lock_descriptor = descriptor
+                return descriptor
+
+            def replace_then_fail(descriptor: int) -> os.stat_result:
+                nonlocal replaced
+                information = original_fstat(descriptor)
+                if descriptor == lock_descriptor and not replaced:
+                    replaced = True
+                    lock.rename(root / "owned-lock")
+                    lock.write_bytes(b"attacker")
+                    raise OSError("lock identity failure")
+                return information
+
+            with (
+                mock.patch.object(snapshot_publish.os, "open", side_effect=track_open),
+                mock.patch.object(
+                    snapshot_publish.os, "fstat", side_effect=replace_then_fail
+                ),
+                self.assertRaises(SnapshotPublishError) as raised,
+            ):
+                publish_snapshot(destination, _write_complete)
+
+            cause = raised.exception.__cause__
+            self.assertIsNotNone(cause)
+            assert cause is not None
+            self.assertTrue(any("cleanup failed" in note for note in cause.__notes__))
+            self.assertEqual(lock.read_bytes(), b"attacker")
+            self.assertEqual(_fd_count(), before)
 
     def _assert_lock_failure(self, *, lock_kind: str) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
+            before = _fd_count()
             root = Path(temp_dir)
             destination = root / "corpus"
             lock = root / ".corpus.snapshot.lock"
@@ -239,6 +237,7 @@ class MultiFormatSnapshotPublishBlockerTests(unittest.TestCase):
                     publish_snapshot(destination, _write_complete)
                 self.assertCountEqual(closed, opened)
                 self._assert_descriptors_closed(opened, original_fstat, original_close)
+                self.assertEqual(_fd_count(), before)
             finally:
                 self._close_valid_descriptors(opened, original_fstat, original_close)
 
