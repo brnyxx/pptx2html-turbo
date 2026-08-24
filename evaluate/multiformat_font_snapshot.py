@@ -42,6 +42,7 @@ class FontSource:
     source: Path
     digest: str
     suffix: str
+    identity: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,12 +70,7 @@ def generate_font_snapshot(
         if summary is None:
             raise FontSnapshotError("font snapshot summary is missing")
         return summary
-    except (
-        OSError,
-        SnapshotPublishError,
-        TypeError,
-        ValueError,
-    ) as error:
+    except (OSError, SnapshotPublishError, TypeError, ValueError) as error:
         raise FontSnapshotError("font snapshot generation failed") from error
 
 
@@ -95,7 +91,10 @@ def validate_font_snapshot(
             raise FontSnapshotError(
                 "font snapshot fonts entry is not a directory", root / "fonts"
             )
+        manifest_identity = (manifest.lstat().st_dev, manifest.lstat().st_ino)
         values = read_strict_object(manifest)
+        if (manifest.lstat().st_dev, manifest.lstat().st_ino) != manifest_identity:
+            raise FontSnapshotError("font bundle manifest changed", manifest)
         require_keys(values, {"schema_version", "fonts"}, "font_bundle")
         if manifest.read_bytes() != canonicalize(values) + b"\n":
             raise FontSnapshotError("font bundle is not canonical JCS", manifest)
@@ -112,13 +111,7 @@ def validate_font_snapshot(
             manifest_sha256=sha256_file(manifest),
             environment_sha256=environment_sha256,
         )
-    except (
-        CandidateFontError,
-        CorpusError,
-        OSError,
-        TypeError,
-        ValueError,
-    ) as error:
+    except (CandidateFontError, CorpusError, OSError, TypeError, ValueError) as error:
         raise FontSnapshotError(
             "font snapshot validation failed", manifest_path
         ) from error
@@ -130,8 +123,7 @@ def _discover_fonts(font_dirs: Sequence[Path]) -> tuple[FontSource, ...]:
     digests: set[str] = set()
     for font_dir in font_dirs:
         root = _strict_path(font_dir, directory=True)
-        state = (sources, identities, digests)
-        _walk_font_root(root, root, state)
+        _walk_font_root(root, root, (sources, identities, digests))
     if not sources:
         raise FontSnapshotError("font roots contain no fonts")
     return tuple(sorted(sources, key=lambda item: (item.digest, item.suffix)))
@@ -172,7 +164,7 @@ def _walk_font_root(
         if digest in digests:
             raise FontSnapshotError("font digest is repeated", path)
         digests.add(digest)
-        sources.append(FontSource(resolved, digest, suffix))
+        sources.append(FontSource(resolved, digest, suffix, identity))
 
 
 def _write_snapshot(staging: Path, sources: Sequence[FontSource]) -> None:
@@ -182,14 +174,22 @@ def _write_snapshot(staging: Path, sources: Sequence[FontSource]) -> None:
     for ordinal, source in enumerate(sources, start=1):
         destination = font_root / f"{ordinal:04d}-{source.digest}{source.suffix}"
         information = source.source.stat(follow_symlinks=False)
+        source_identity = (information.st_dev, information.st_ino)
         if (
             not stat.S_ISREG(information.st_mode)
             or information.st_nlink != 1
+            or source.identity != source_identity
             or sha256_file(source.source) != source.digest
         ):
             raise FontSnapshotError("font source changed", source.source)
-        shutil.copyfile(source.source, destination)
-        if sha256_file(destination) != source.digest:
+        shutil.copyfile(source.source, destination, follow_symlinks=False)
+        if (
+            not stat.S_ISREG((information := source.source.lstat()).st_mode)
+            or information.st_nlink != 1
+            or (information.st_dev, information.st_ino) != source_identity
+            or sha256_file(destination) != source.digest
+            or sha256_file(source.source) != source.digest
+        ):
             raise FontSnapshotError("copied font digest differs", destination)
         entries.append(
             {
@@ -204,12 +204,10 @@ def _write_snapshot(staging: Path, sources: Sequence[FontSource]) -> None:
 
 def _strict_path(path: Path, *, directory: bool) -> Path:
     information = path.lstat()
-    valid = (
-        stat.S_ISDIR(information.st_mode)
-        if directory
-        else (stat.S_ISREG(information.st_mode) and information.st_nlink == 1)
-    )
-    if not valid:
+    expected = stat.S_IFDIR if directory else stat.S_IFREG
+    if stat.S_IFMT(information.st_mode) != expected or (
+        not directory and information.st_nlink != 1
+    ):
         raise FontSnapshotError("expected a valid snapshot path", path)
     return path.resolve(strict=True)
 
@@ -266,7 +264,9 @@ def _validate_manifest_entries(
         if identity in identities:
             raise FontSnapshotError("font snapshot reuses a file inode", candidate)
         identities.add(identity)
-        if sha256_file(candidate) != digest:
+        if sha256_file(candidate) != digest or not os.path.samestat(
+            information, resolved.lstat()
+        ):
             raise FontSnapshotError("font bundle file hash mismatch", candidate)
     actual_names = {entry.name for entry in (root / "fonts").iterdir()}
     if actual_names != expected_names:
