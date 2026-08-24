@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
 
+from evaluate.jcs import canonicalize
 from evaluate.multiformat_font_snapshot import (
     FontSnapshotError,
     generate_font_snapshot,
@@ -128,6 +129,21 @@ class MultiFormatFontSnapshotTests(unittest.TestCase):
             manifest = output / "font-bundle.json"
             values = json.loads(manifest.read_text())
             manifest.write_text(json.dumps(values, indent=2) + "\n")
+
+            with self.assertRaises(FontSnapshotError):
+                validate_font_snapshot(manifest, output)
+
+    def test_direct_validation_translates_unexpected_manifest_field(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            self._font(source / "font.ttf", b"font")
+            output = root / "output"
+            generate_font_snapshot((source,), output)
+            manifest = output / "font-bundle.json"
+            values = json.loads(manifest.read_text())
+            values["unexpected"] = "field"
+            manifest.write_bytes(canonicalize(values) + b"\n")
 
             with self.assertRaises(FontSnapshotError):
                 validate_font_snapshot(manifest, output)

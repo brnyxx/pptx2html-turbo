@@ -14,6 +14,7 @@ from evaluate.multiformat_candidate_fonts import (
     validate_font_bundle,
 )
 from evaluate.multiformat_corpus_items import object_list, require_keys
+from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
@@ -22,7 +23,7 @@ from evaluate.multiformat_schema import (
     string_value,
 )
 from evaluate.multiformat_snapshot_publish import SnapshotPublishError, publish_snapshot
-from evaluate.multiformat_strict_json import StrictJsonError, read_strict_object
+from evaluate.multiformat_strict_json import read_strict_object
 
 _FONT_NAME = re.compile(r"^(\d{4})-([0-9a-f]{64})(\.otf|\.ttf)$")
 
@@ -69,10 +70,8 @@ def generate_font_snapshot(
             raise FontSnapshotError("font snapshot summary is missing")
         return summary
     except (
-        CandidateFontError,
         OSError,
         SnapshotPublishError,
-        StrictJsonError,
         TypeError,
         ValueError,
     ) as error:
@@ -115,8 +114,8 @@ def validate_font_snapshot(
         )
     except (
         CandidateFontError,
+        CorpusError,
         OSError,
-        StrictJsonError,
         TypeError,
         ValueError,
     ) as error:
