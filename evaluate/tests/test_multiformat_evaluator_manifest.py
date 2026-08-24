@@ -27,6 +27,16 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/tests/test_multiformat_legacy_runtime.py",
         ):
             self.assertIn(path, EVALUATOR_FILES)
+        for path in (
+            "evaluate/collect_multiformat_legacy_binary_pool.py",
+            "evaluate/multiformat/legacy-binary-sources.v1.json",
+            "evaluate/multiformat_legacy_binary_config.py",
+            "evaluate/multiformat_legacy_binary_pool.py",
+            "evaluate/multiformat_legacy_binary_validation.py",
+            "evaluate/tests/test_collect_multiformat_legacy_binary_pool.py",
+            "evaluate/tests/test_collect_multiformat_legacy_binary_pool_cli.py",
+        ):
+            self.assertIn(path, EVALUATOR_FILES)
         self.assertIn(
             "evaluate/tests/test_multiformat_reference_profile.py",
             EVALUATOR_FILES,

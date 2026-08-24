@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "source_catalog_sha256": "615f29c8983dfbe4ee30d2a8b80293906ca52e29c5d5f013111d77c4451447de",
+  "formats": {
+    "doc": {
+      "expected_count": 40,
+      "groups": [
+        {"producer": "apache-poi", "quota": 10},
+        {"producer": "apache-tika", "quota": 10},
+        {"producer": "aspose-words", "quota": 10},
+        {"producer": "npoi", "quota": 10}
+      ]
+    },
+    "xls": {
+      "expected_count": 40,
+      "groups": [
+        {"producer": "apache-poi", "quota": 8},
+        {"producer": "apache-tika", "quota": 8},
+        {"producer": "npoi", "quota": 8},
+        {"producer": "exceldatareader", "quota": 8},
+        {"producer": "phpspreadsheet", "quota": 8}
+      ]
+    },
+    "ppt": {
+      "expected_count": 40,
+      "groups": [
+        {"producer": "apache-poi", "quota": 26},
+        {"producer": "aspose-slides", "quota": 2},
+        {"producer": "npoi", "quota": 12}
+      ]
+    }
+  }
+}
