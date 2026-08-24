@@ -86,7 +86,8 @@ def validate_reference_lock(
             raise PortableLockError("portable routing table digest mismatch")
 
         canonicalizer = object_value(lock, "canonicalizer")
-        string_value(canonicalizer, "version")
+        if string_value(canonicalizer, "version") != routing.canonicalizer_version:
+            raise PortableLockError("portable canonicalizer version differs")
         _artifact_path(canonicalizer, evidence_root)
         _artifact_path(object_value(lock, "font_bundle"), evidence_root)
         _artifact_path(object_value(lock, "configuration"), evidence_root)

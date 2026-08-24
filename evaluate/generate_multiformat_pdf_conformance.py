@@ -15,8 +15,9 @@ from evaluate.multiformat_conformance_pdf import (
     PdfCanonicalizer,
     PdfConformanceError,
     PdfConverter,
-    pdf_case_html,
+    canonicalize_pdf_bytes,
 )
+from evaluate.multiformat_conformance_pdf_cases import pdf_case_html
 from evaluate.multiformat_conformance_pdf_runtime import (
     build_pdf_tool_lock,
     pdf_canonicalizer,
@@ -27,7 +28,6 @@ from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_corpus_sources import validate_source
 from evaluate.multiformat_corpus_types import CorpusError, DocumentFormat
 from evaluate.multiformat_pdf_link_annotation import add_link_annotation
-from evaluate.multiformat_pdf_writer import canonicalize_pdf_bytes
 from evaluate.multiformat_schema import (
     JsonValue,
     object_value,

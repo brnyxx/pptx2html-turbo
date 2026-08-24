@@ -2,24 +2,39 @@ from __future__ import annotations
 
 import re
 import zlib
-from dataclasses import dataclass
 
-from evaluate.multiformat_conformance_pdf import PdfConformanceError
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedPdfObjects:
-    prefix: bytes
-    objects: dict[int, bytes]
-    root_id: int
+from evaluate.multiformat_conformance_pdf import (
+    PDF_CATALOG_KEYS,
+    PDF_OBJECT_STREAM_KEYS,
+    PDF_XREF_STREAM_KEYS,
+    ParsedPdfObjects,
+    PdfConformanceError,
+    PdfUnsupportedConstructError,
+    pdf_reject_unsupported_fields,
+    pdf_require_name_value,
+    pdf_trailer_identity,
+    pdf_unique_name_values,
+)
 
 
 def parse_pdf_objects(value: bytes) -> ParsedPdfObjects:
+    if re.match(rb"%PDF-(?:1\.[4-7]|2\.0)(?:\r?\n)", value) is None:
+        raise PdfUnsupportedConstructError("PDF version is unsupported", "version")
     xref_offset = _startxref(value)
-    offsets, compressed, root_id = _xref_metadata(value, xref_offset)
+    offsets, compressed, dictionary = _xref_metadata(value, xref_offset)
+    root_id, info_id, document_id, checksum = pdf_trailer_identity(dictionary)
     objects = _objects(value, offsets, compressed, xref_offset)
+    if info_id is not None and info_id not in objects:
+        raise PdfConformanceError("PDF trailer Info reference is unresolved")
+    catalog = objects.get(root_id, b"")
+    catalog_fields = dict(
+        pdf_unique_name_values(catalog, PDF_CATALOG_KEYS, "catalog-structure")
+    )
+    pdf_require_name_value(
+        catalog_fields.get(b"Type", b""), b"Catalog", "catalog-structure"
+    )
     prefix = value[: min(offsets.values())]
-    return ParsedPdfObjects(prefix, objects, root_id)
+    return ParsedPdfObjects(prefix, objects, root_id, info_id, document_id, checksum)
 
 
 def _startxref(value: bytes) -> int:
@@ -27,7 +42,7 @@ def _startxref(value: bytes) -> int:
     if not matches:
         raise PdfConformanceError("PDF startxref is unavailable")
     offset = int(matches[-1].group(1))
-    if offset < 0 or offset >= len(value):
+    if offset >= len(value):
         raise PdfConformanceError("PDF startxref is outside the file")
     return offset
 
@@ -35,20 +50,18 @@ def _startxref(value: bytes) -> int:
 def _xref_metadata(
     value: bytes,
     xref_offset: int,
-) -> tuple[dict[int, int], dict[int, tuple[int, int]], int]:
+) -> tuple[dict[int, int], dict[int, tuple[int, int]], bytes]:
     if value[xref_offset : xref_offset + 4] == b"xref":
-        return (
-            _xref_table_offsets(value, xref_offset),
-            {},
-            _required_int(rb"/Root\s+([0-9]+)\s+0\s+R", value[xref_offset:]),
-        )
+        trailer = value.find(b"trailer", xref_offset)
+        startxref = value.find(b"startxref", trailer)
+        if trailer < 0 or startxref < 0:
+            raise PdfConformanceError("PDF trailer is unavailable")
+        return _xref_table_offsets(value, xref_offset), {}, value[trailer:startxref]
     return _xref_stream_offsets(value, xref_offset)
 
 
 def _xref_table_offsets(value: bytes, xref_offset: int) -> dict[int, int]:
     trailer_offset = value.find(b"trailer", xref_offset)
-    if trailer_offset < 0:
-        raise PdfConformanceError("PDF trailer is unavailable")
     lines = value[xref_offset:trailer_offset].splitlines()
     if not lines or lines[0].strip() != b"xref":
         raise PdfConformanceError("PDF xref header is invalid")
@@ -81,7 +94,7 @@ def _xref_table_offsets(value: bytes, xref_offset: int) -> dict[int, int]:
 def _xref_stream_offsets(
     value: bytes,
     xref_offset: int,
-) -> tuple[dict[int, int], dict[int, tuple[int, int]], int]:
+) -> tuple[dict[int, int], dict[int, tuple[int, int]], bytes]:
     object_match = re.match(
         rb"([0-9]+)\s+0\s+obj\s*(<<.*?>>)\s*stream\r?\n",
         value[xref_offset:],
@@ -90,17 +103,30 @@ def _xref_stream_offsets(
     if object_match is None:
         raise PdfConformanceError("PDF xref stream object is invalid")
     dictionary = object_match.group(2)
-    widths = _required_ints(rb"/W\s*\[\s*([0-9 ]+)\]", dictionary)
+    fields = dict(
+        pdf_unique_name_values(dictionary, PDF_XREF_STREAM_KEYS, "xref-structure")
+    )
+    pdf_reject_unsupported_fields(fields)
+    if b"DecodeParms" in fields:
+        raise PdfUnsupportedConstructError(
+            "unsupported decode parameters", "xref-filter"
+        )
+    pdf_require_name_value(fields.get(b"Type", b""), b"XRef", "xref-structure")
+    pdf_require_name_value(fields.get(b"Filter", b""), b"FlateDecode", "xref-filter")
+    widths_match = re.match(rb"\s*\[\s*([0-9 ]+)\]", fields.get(b"W", b""))
+    size_match = re.match(rb"\s*([0-9]+)", fields.get(b"Size", b""))
+    length_match = re.match(rb"\s*([0-9]+)", fields.get(b"Length", b""))
+    if widths_match is None or size_match is None or length_match is None:
+        raise PdfConformanceError("PDF xref stream fields are missing")
+    widths = _parse_ints(widths_match.group(1))
     if len(widths) != 3 or sum(widths) <= 0:
         raise PdfConformanceError("PDF xref stream widths are invalid")
-    size = _required_int(rb"/Size\s+([0-9]+)", dictionary)
-    indexes_match = re.search(rb"/Index\s*\[\s*([0-9 ]+)\]", dictionary)
-    indexes = (
-        _parse_ints(indexes_match.group(1)) if indexes_match is not None else [0, size]
-    )
+    size = int(size_match.group(1))
+    indexes_match = re.match(rb"\s*\[\s*([0-9 ]+)\]", fields.get(b"Index", b""))
+    indexes = _parse_ints(indexes_match.group(1)) if indexes_match else [0, size]
     if len(indexes) % 2 != 0:
         raise PdfConformanceError("PDF xref stream index is invalid")
-    length = _required_int(rb"/Length\s+([0-9]+)", dictionary)
+    length = int(length_match.group(1))
     stream_start = xref_offset + object_match.end()
     try:
         decoded = zlib.decompress(value[stream_start : stream_start + length])
@@ -136,11 +162,7 @@ def _xref_stream_offsets(
                 compressed[object_id] = (fields[1], fields[2])
     if not offsets:
         raise PdfConformanceError("PDF xref stream has no objects")
-    return (
-        offsets,
-        compressed,
-        _required_int(rb"/Root\s+([0-9]+)\s+0\s+R", dictionary),
-    )
+    return offsets, compressed, dictionary
 
 
 def _objects(
@@ -175,12 +197,9 @@ def _expand_object_streams(
     }
     if len(streams) != len(stream_ids):
         raise PdfConformanceError("PDF object stream is missing")
-    length_ids = {
-        _required_int(rb"/Length\s+([0-9]+)\s+0\s+R", objects[stream_id])
-        for stream_id in stream_ids
-    }
+    length_ids = {members[1] for members in streams.values()}
     for object_id, (stream_id, index) in compressed.items():
-        members = streams[stream_id]
+        members = streams[stream_id][0]
         if index >= len(members) or members[index][0] != object_id:
             raise PdfConformanceError("PDF object stream index differs")
         body = members[index][1]
@@ -195,7 +214,7 @@ def _expand_object_streams(
             objects.pop(length_id, None)
 
 
-def _object_stream_members(value: bytes) -> list[tuple[int, bytes]]:
+def _object_stream_members(value: bytes) -> tuple[list[tuple[int, bytes]], int]:
     match = re.match(
         rb"[0-9]+\s+0\s+obj\s*(<<.*?>>)\s*stream\r?\n",
         value,
@@ -204,8 +223,21 @@ def _object_stream_members(value: bytes) -> list[tuple[int, bytes]]:
     if match is None:
         raise PdfConformanceError("PDF object stream syntax is invalid")
     dictionary = match.group(1)
-    count = _required_int(rb"/N\s+([0-9]+)", dictionary)
-    first = _required_int(rb"/First\s+([0-9]+)", dictionary)
+    fields = dict(
+        pdf_unique_name_values(dictionary, PDF_OBJECT_STREAM_KEYS, "object-structure")
+    )
+    if b"DecodeParms" in fields:
+        raise PdfUnsupportedConstructError("object DecodeParms", "object-filter")
+    pdf_require_name_value(fields.get(b"Type", b""), b"ObjStm", "object-structure")
+    pdf_require_name_value(fields.get(b"Filter", b""), b"FlateDecode", "object-filter")
+    length_match = re.match(rb"\s*([0-9]+)\s+0\s+R", fields.get(b"Length", b""))
+    count_match = re.match(rb"\s*([0-9]+)", fields.get(b"N", b""))
+    first_match = re.match(rb"\s*([0-9]+)", fields.get(b"First", b""))
+    if length_match is None or count_match is None or first_match is None:
+        raise PdfUnsupportedConstructError("object stream fields", "object-structure")
+    length_id = int(length_match.group(1))
+    count = int(count_match.group(1))
+    first = int(first_match.group(1))
     stream_end = value.rfind(b"\nendstream")
     if stream_end < match.end():
         raise PdfConformanceError("PDF object stream data is missing")
@@ -224,21 +256,7 @@ def _object_stream_members(value: bytes) -> list[tuple[int, bytes]]:
         if not first <= start <= end <= len(decoded):
             raise PdfConformanceError("PDF object stream offset is invalid")
         result.append((object_id, decoded[start:end]))
-    return result
-
-
-def _required_int(pattern: bytes, value: bytes) -> int:
-    match = re.search(pattern, value)
-    if match is None:
-        raise PdfConformanceError("PDF trailer reference is missing")
-    return int(match.group(1))
-
-
-def _required_ints(pattern: bytes, value: bytes) -> list[int]:
-    match = re.search(pattern, value)
-    if match is None:
-        raise PdfConformanceError("PDF integer array is missing")
-    return _parse_ints(match.group(1))
+    return result, length_id
 
 
 def _parse_ints(value: bytes) -> list[int]:

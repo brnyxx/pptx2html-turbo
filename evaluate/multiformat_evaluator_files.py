@@ -28,6 +28,7 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_graphemes.py",
     "evaluate/multiformat_contract.py",
     "evaluate/multiformat_conformance_pdf.py",
+    "evaluate/multiformat_conformance_pdf_cases.py",
     "evaluate/multiformat_conformance_pptx.py",
     "evaluate/multiformat_xlsx_package_validation.py",
     "evaluate/multiformat_conformance_pdf_runtime.py",

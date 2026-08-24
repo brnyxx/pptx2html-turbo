@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Final, NewType, assert_never
 
 from evaluate.jcs import JcsError, canonicalize
+from evaluate.multiformat_conformance_pdf import pdf_canonicalizer_identity
 from evaluate.multiformat_schema import JsonValue
 from evaluate.multiformat_strict_json import StrictJsonError, read_strict_object
 
@@ -80,6 +81,7 @@ class RoutingIdentity:
     schema_version: int
     sha256: RoutingTableSha256
     canonicalizer_version: str
+    canonicalizer_implementation_sha256: str
     environment_whitelist: tuple[str, ...]
     locale: str
     timezone: str
@@ -97,6 +99,7 @@ def load_reference_routing(path: Path) -> RoutingIdentity:
                 "schema_version",
                 "reference_profile",
                 "canonicalizer_version",
+                "canonicalizer_implementation_sha256",
                 "runtime",
                 "routes",
             },
@@ -106,8 +109,14 @@ def load_reference_routing(path: Path) -> RoutingIdentity:
             raise RoutingError("routing schema version is unsupported")
         if _string(value, "reference_profile") != "libreoffice-poppler":
             raise RoutingError("routing reference profile is unsupported")
-        if _string(value, "canonicalizer_version") != _CANONICALIZER_VERSION:
+        canonicalizer = pdf_canonicalizer_identity()
+        if _string(value, "canonicalizer_version") != canonicalizer.version:
             raise RoutingError("routing canonicalizer version is unsupported")
+        if (
+            _string(value, "canonicalizer_implementation_sha256")
+            != canonicalizer.implementation_sha256
+        ):
+            raise RoutingError("routing canonicalizer implementation differs")
         runtime = _as_mapping(value.get("runtime"), "runtime")
         _validate_runtime(runtime)
         route_values = _array(value, "routes")
@@ -127,6 +136,7 @@ def load_reference_routing(path: Path) -> RoutingIdentity:
             schema_version=_SCHEMA_VERSION,
             sha256=digest,
             canonicalizer_version=_CANONICALIZER_VERSION,
+            canonicalizer_implementation_sha256=canonicalizer.implementation_sha256,
             environment_whitelist=_ENVIRONMENT_WHITELIST,
             locale=_LOCALE,
             timezone=_TIMEZONE,
