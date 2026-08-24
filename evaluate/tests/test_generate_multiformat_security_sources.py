@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from evaluate.multiformat_corpus_types import DocumentFormat
@@ -82,6 +83,26 @@ class GenerateMultiFormatSecuritySourcesTests(unittest.TestCase):
             generate_security_snapshot(CONTRACT, second, validator=self._accept)
 
             self.assertEqual(self._tree(first), self._tree(second))
+
+    def test_every_ooxml_zip_entry_has_fixed_timestamp(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "security"
+            generate_security_snapshot(CONTRACT, output, validator=self._accept)
+
+            for document_format in ("docx", "pptx", "xlsx"):
+                for source in sorted((output / "sources" / document_format).iterdir()):
+                    if source.stem == "malformed-zip":
+                        continue
+                    with (
+                        self.subTest(source=source),
+                        zipfile.ZipFile(source) as archive,
+                    ):
+                        self.assertTrue(
+                            all(
+                                item.date_time == (1980, 1, 1, 0, 0, 0)
+                                for item in archive.infolist()
+                            )
+                        )
 
     def test_existing_destination_and_lock_are_never_mutated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

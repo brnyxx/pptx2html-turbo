@@ -68,19 +68,30 @@ def _security_package(document_format: str, family: str) -> bytes:
     ) as archive:
         match parsed_family:
             case OoxmlSecurityFamily.ZIP_BOMB:
-                archive.writestr("security/bomb.bin", b"\x00" * (MAX_XML_BYTES + 1))
+                _write_entry(
+                    archive,
+                    "security/bomb.bin",
+                    b"\x00" * (MAX_XML_BYTES + 1),
+                )
             case OoxmlSecurityFamily.PATH_TRAVERSAL:
-                archive.writestr("../escape.bin", b"escape")
+                _write_entry(archive, "../escape.bin", b"escape")
             case OoxmlSecurityFamily.EXTERNAL_RELATIONSHIP:
-                archive.writestr(
+                _write_entry(
+                    archive,
                     relationship_part,
                     _relationships(
-                        f"{_relationship('external', 'hyperlink', 'https://example.invalid/', external=True)}"
+                        _relationship(
+                            "external",
+                            "hyperlink",
+                            "https://example.invalid/",
+                            external=True,
+                        )
                     ),
                 )
             case OoxmlSecurityFamily.MACRO_CONTENT:
-                archive.writestr("security/vbaProject.bin", _macro_payload())
-                archive.writestr(
+                _write_entry(archive, "security/vbaProject.bin", _macro_payload())
+                _write_entry(
+                    archive,
                     relationship_part,
                     _relationships(
                         _relationship(
@@ -91,11 +102,13 @@ def _security_package(document_format: str, family: str) -> bytes:
                     ),
                 )
             case OoxmlSecurityFamily.EMBEDDED_OBJECT:
-                archive.writestr(
+                _write_entry(
+                    archive,
                     "security/embeddings/object.bin",
                     _embedded_payload(),
                 )
-                archive.writestr(
+                _write_entry(
+                    archive,
                     relationship_part,
                     _relationships(
                         _relationship(
@@ -106,11 +119,13 @@ def _security_package(document_format: str, family: str) -> bytes:
                     ),
                 )
             case OoxmlSecurityFamily.OVERSIZED_XML:
-                archive.writestr(
+                _write_entry(
+                    archive,
                     "security/oversized.xml",
                     b"<root>" + b"x" * MAX_XML_BYTES + b"</root>",
                 )
-                archive.writestr(
+                _write_entry(
+                    archive,
                     relationship_part,
                     _relationships(
                         _relationship(
@@ -121,11 +136,13 @@ def _security_package(document_format: str, family: str) -> bytes:
                     ),
                 )
             case OoxmlSecurityFamily.ENTITY_EXPANSION:
-                archive.writestr(
+                _write_entry(
+                    archive,
                     "security/entity.xml",
                     b'<!DOCTYPE root [<!ENTITY x "expanded">]><root>&x;</root>',
                 )
-                archive.writestr(
+                _write_entry(
+                    archive,
                     relationship_part,
                     _relationships(
                         _relationship(
@@ -136,25 +153,33 @@ def _security_package(document_format: str, family: str) -> bytes:
                     ),
                 )
             case OoxmlSecurityFamily.RELATIONSHIP_CYCLE:
-                archive.writestr("security/a.xml", b"<a/>")
-                archive.writestr("security/b.xml", b"<b/>")
-                archive.writestr(
+                _write_entry(archive, "security/a.xml", b"<a/>")
+                _write_entry(archive, "security/b.xml", b"<b/>")
+                _write_entry(
+                    archive,
                     relationship_part,
                     _relationships(
-                        _relationship("cycle-root", "customXml", "../security/a.xml")
+                        _relationship(
+                            "cycle-root",
+                            "customXml",
+                            "../security/a.xml",
+                        )
                     ),
                 )
-                archive.writestr(
+                _write_entry(
+                    archive,
                     "security/_rels/a.xml.rels",
                     _relationships(_relationship("cycle-a", "customXml", "b.xml")),
                 )
-                archive.writestr(
+                _write_entry(
+                    archive,
                     "security/_rels/b.xml.rels",
                     _relationships(_relationship("cycle-b", "customXml", "a.xml")),
                 )
             case OoxmlSecurityFamily.CORRUPT_MEDIA:
-                archive.writestr("security/media/image.png", b"not-a-png")
-                archive.writestr(
+                _write_entry(archive, "security/media/image.png", b"not-a-png")
+                _write_entry(
+                    archive,
                     relationship_part,
                     _relationships(
                         _relationship(
@@ -169,6 +194,18 @@ def _security_package(document_format: str, family: str) -> bytes:
             case unreachable:
                 assert_never(unreachable)
     return output.getvalue()
+
+
+def _write_entry(
+    archive: zipfile.ZipFile,
+    name: str,
+    value: str | bytes,
+) -> None:
+    entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    entry.compress_type = zipfile.ZIP_DEFLATED
+    entry.create_system = 3
+    entry.external_attr = 0o600 << 16
+    archive.writestr(entry, value)
 
 
 def _relationship_part(main_part: str) -> str:
