@@ -115,6 +115,7 @@ def _workspace(
                         env,
                         folders[2] / "soffice-version",
                         timeout=VERSION_TIMEOUT_SECONDS,
+                        executable_identity=office_file,
                     )
                 ),
                 "soffice-version",
@@ -136,6 +137,7 @@ def _workspace(
                     env,
                     folders[2] / "pdfinfo-version",
                     timeout=VERSION_TIMEOUT_SECONDS,
+                    executable_identity=pdfinfo_file,
                 )
             ),
             "pdfinfo-version",
@@ -169,6 +171,7 @@ def _workspace(
                         env,
                         folders[2] / "libreoffice",
                         timeout=route.office.timeout_seconds,
+                        executable_identity=office_file,
                     )
                 ),
                 "libreoffice",
@@ -195,6 +198,7 @@ def _workspace(
                     env,
                     folders[2] / "pdfinfo",
                     timeout=route.metadata.timeout_seconds,
+                    executable_identity=pdfinfo_file,
                 )
             ),
             "pdfinfo",

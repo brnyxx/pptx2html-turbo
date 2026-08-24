@@ -76,7 +76,7 @@ class MultiFormatNativeUnitBlockerTests(unittest.TestCase):
             expected = identity(workspace.lstat())
             with (
                 patch(
-                    "evaluate.multiformat_native_unit_files.shutil.rmtree",
+                    "evaluate.multiformat_native_unit_cleanup._before_final_rmdir",
                     side_effect=OSError("cleanup failed"),
                 ),
                 self.assertRaises(NativeUnitError),
@@ -88,7 +88,7 @@ class MultiFormatNativeUnitBlockerTests(unittest.TestCase):
             expected = identity(workspace.lstat())
             with (
                 patch(
-                    "evaluate.multiformat_native_unit_files.shutil.rmtree",
+                    "evaluate.multiformat_native_unit_cleanup._before_final_rmdir",
                     side_effect=OSError("cleanup failed"),
                 ),
                 self.assertRaises(PrimaryFailure) as raised,

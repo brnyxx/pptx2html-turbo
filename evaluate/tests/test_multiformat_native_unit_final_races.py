@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
 import unittest
 from dataclasses import replace
@@ -74,7 +73,6 @@ class MultiFormatNativeUnitFinalRaceTests(unittest.TestCase):
             expected = identity(workspace.lstat())
             backup = root / "owned-backup"
             attacker_file = workspace / "attacker"
-            original_rmtree = shutil.rmtree
             swapped = False
 
             def race(path: Path) -> None:
@@ -85,11 +83,11 @@ class MultiFormatNativeUnitFinalRaceTests(unittest.TestCase):
                         _ = workspace.rename(backup)
                     workspace.mkdir()
                     _ = attacker_file.write_bytes(b"attacker")
-                original_rmtree(path)
+                self.assertEqual(path, workspace)
 
             with (
                 patch(
-                    "evaluate.multiformat_native_unit_files.shutil.rmtree",
+                    "evaluate.multiformat_native_unit_cleanup._before_final_rmdir",
                     side_effect=race,
                 ),
                 self.assertRaises(NativeUnitError) as raised,
@@ -100,7 +98,8 @@ class MultiFormatNativeUnitFinalRaceTests(unittest.TestCase):
             self.assertTrue(swapped)
             self.assertTrue(attacker_file.is_file())
             self.assertEqual(attacker_file.read_bytes(), b"attacker")
-            self.assertFalse(backup.exists())
+            self.assertTrue(backup.is_dir())
+            self.assertEqual(tuple(backup.iterdir()), ())
 
     def test_cleanup_failure_does_not_publish_observation(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -110,7 +109,7 @@ class MultiFormatNativeUnitFinalRaceTests(unittest.TestCase):
 
             with (
                 patch(
-                    "evaluate.multiformat_native_unit_files.shutil.rmtree",
+                    "evaluate.multiformat_native_unit_cleanup._before_final_rmdir",
                     side_effect=OSError("cleanup failed"),
                 ),
                 self.assertRaises(NativeUnitError) as raised,
@@ -118,12 +117,7 @@ class MultiFormatNativeUnitFinalRaceTests(unittest.TestCase):
                 _ = capture_native_observation(request, RecordingNativeRunner())
 
             self.assertEqual(raised.exception.failure, NativeUnitFailure.OUTPUT_INVALID)
-            self.assertTrue(
-                any(
-                    "snapshot cleanup failed" in note
-                    for note in raised.exception.__notes__
-                )
-            )
+            self.assertIsInstance(raised.exception.__cause__, OSError)
             self.assertFalse(request.observation_dir.exists())
 
     def test_destination_race_is_at_exclusive_open_boundary(self) -> None:

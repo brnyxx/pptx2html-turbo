@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import stat
 from pathlib import Path
@@ -11,6 +12,10 @@ from evaluate.multiformat_candidate_process import (
     run_bounded_process,
 )
 from evaluate.multiformat_native_unit_files import MAX_LOG_BYTES, fail
+from evaluate.multiformat_native_unit_trusted import (
+    materialize_binary,
+    open_trusted_executable,
+)
 from evaluate.multiformat_native_unit_types import (
     NativeProcessContext,
     NativeProcessLog,
@@ -27,15 +32,45 @@ _PAGE_PATTERN = re.compile(r"^Pages:\s+([0-9]+)\s*$", re.MULTILINE)
 
 
 def run_native_process(request: NativeProcessRequest) -> int:
-    return run_bounded_process(
-        request.command,
-        request.cwd,
-        dict(request.environment),
-        request.stdout_path,
-        request.stderr_path,
-        timeout_seconds=request.timeout_seconds,
-        max_log_bytes=request.max_log_bytes,
+    if request.executable_identity is None:
+        return run_bounded_process(
+            request.command,
+            request.cwd,
+            dict(request.environment),
+            request.stdout_path,
+            request.stderr_path,
+            timeout_seconds=request.timeout_seconds,
+            max_log_bytes=request.max_log_bytes,
+        )
+    trusted = open_trusted_executable(
+        Path(request.command[0]), request.executable_identity
     )
+    snapshot: Path | None = None
+    try:
+        if trusted.shell_script:
+            command = ("/bin/sh", "-c", ". /dev/stdin", *request.command)
+            executable = None
+            stdin_fd = trusted.descriptor
+        else:
+            snapshot = materialize_binary(trusted.content, trusted.path.parent)
+            command = request.command
+            executable = snapshot
+            stdin_fd = None
+        return run_bounded_process(
+            command,
+            request.cwd,
+            dict(request.environment),
+            request.stdout_path,
+            request.stderr_path,
+            timeout_seconds=request.timeout_seconds,
+            max_log_bytes=request.max_log_bytes,
+            executable=executable,
+            stdin_fd=stdin_fd,
+        )
+    finally:
+        os.close(trusted.descriptor)
+        if snapshot is not None:
+            snapshot.unlink(missing_ok=True)
 
 
 def process(context: NativeProcessContext) -> NativeProcessLog:
@@ -45,6 +80,7 @@ def process(context: NativeProcessContext) -> NativeProcessLog:
         failure = {
             CandidateProcessFailure.TIMEOUT: NativeUnitFailure.TIMEOUT,
             CandidateProcessFailure.LOG_OVERSIZE: NativeUnitFailure.LOG_OVERSIZE,
+            CandidateProcessFailure.EXECUTABLE_UNTRUSTED: NativeUnitFailure.TOOL_MISSING,
         }.get(error.failure, NativeUnitFailure.PROCESS_FAILED)
         raise fail(context.request, failure, f"{context.role}: {error}") from error
     except OSError as error:
@@ -154,6 +190,7 @@ def make_request(spec: NativeProcessSpec) -> NativeProcessRequest:
         spec.prefix.with_suffix(".stderr"),
         spec.timeout,
         MAX_LOG_BYTES,
+        spec.executable_identity,
     )
 
 

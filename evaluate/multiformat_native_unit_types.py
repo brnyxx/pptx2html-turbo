@@ -72,6 +72,7 @@ class NativeProcessRequest:
     stderr_path: Path
     timeout_seconds: int
     max_log_bytes: int
+    executable_identity: NativeStableFile | None = None
 
 
 class NativeProcessRunner(Protocol):
@@ -95,6 +96,7 @@ class NativeProcessSpec:
     environment: tuple[tuple[str, str], ...]
     prefix: Path
     timeout: int = 120
+    executable_identity: NativeStableFile | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -37,12 +37,19 @@ class MultiFormatNativeUnitStabilityTests(unittest.TestCase):
 
             def mutate(descriptor: int) -> bytes:
                 content = read_descriptor(descriptor)
-                _ = os.lseek(descriptor, 0, os.SEEK_SET)
-                _ = os.write(descriptor, b"X" + content[1:])
+                writable = os.open(source, os.O_WRONLY)
+                try:
+                    _ = os.lseek(writable, 0, os.SEEK_SET)
+                    _ = os.write(writable, b"X" + content[1:])
+                finally:
+                    os.close(writable)
                 _ = os.utime(
                     source,
                     ns=(before.st_atime_ns, before.st_mtime_ns),
                 )
+                after = source.stat()
+                self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
+                self.assertNotEqual(after.st_ctime_ns, before.st_ctime_ns)
                 return content
 
             with (

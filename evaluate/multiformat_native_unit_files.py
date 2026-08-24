@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil as _shutil
 import stat
 from pathlib import Path
 
@@ -28,7 +27,6 @@ from evaluate.multiformat_native_unit_types import (
 )
 
 cleanup_workspace = _cleanup_workspace
-shutil = _shutil
 
 MAX_LOG_BYTES = 1024 * 1024
 MAX_PDF_BYTES = 64 * 1024 * 1024

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import os
-import shutil
+import stat
 import sys
-import tempfile
 from pathlib import Path
 
 from evaluate.multiformat_native_unit_io import no_follow
@@ -48,8 +47,6 @@ def _remove_owned_workspace(path: Path, expected: tuple[int, int]) -> None:
         os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
     )
     workspace_descriptor = -1
-    cleanup_root: Path | None = None
-    cleanup_descriptor = -1
     try:
         workspace_descriptor = os.open(
             path.name,
@@ -58,33 +55,73 @@ def _remove_owned_workspace(path: Path, expected: tuple[int, int]) -> None:
         )
         if identity(os.fstat(workspace_descriptor)) != expected:
             raise OSError("workspace identity changed")
-        cleanup_root = Path(
-            tempfile.mkdtemp(prefix=f".{path.name}.cleanup-", dir=path.parent)
-        )
-        cleanup_descriptor = os.open(
-            cleanup_root,
-            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
-        )
-        os.rename(
-            path.name,
-            path.name,
-            src_dir_fd=parent_descriptor,
-            dst_dir_fd=cleanup_descriptor,
-        )
-        moved = cleanup_root / path.name
-        if identity(moved.lstat()) != expected:
-            raise OSError("workspace identity changed")
-        shutil.rmtree(moved)
-        if os.path.lexists(path):
+        _clean_directory(workspace_descriptor)
+        _before_final_rmdir(path)
+        if not _entry_matches(parent_descriptor, path.name, expected):
             raise OSError("workspace replacement survived cleanup")
-        cleanup_root.rmdir()
-        cleanup_root = None
+        os.rmdir(path.name, dir_fd=parent_descriptor)
     finally:
-        if cleanup_descriptor >= 0:
-            os.close(cleanup_descriptor)
         if workspace_descriptor >= 0:
             os.close(workspace_descriptor)
         os.close(parent_descriptor)
+
+
+def _clean_directory(directory_descriptor: int) -> None:
+    with os.scandir(directory_descriptor) as entries:
+        children = tuple(entries)
+    for entry in children:
+        child_stat = entry.stat(follow_symlinks=False)
+        _before_inner_delete(directory_descriptor, entry.name)
+        if stat.S_ISDIR(child_stat.st_mode):
+            child_descriptor = os.open(
+                entry.name,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
+                dir_fd=directory_descriptor,
+            )
+            try:
+                if not _same_stat(child_stat, os.fstat(child_descriptor)):
+                    raise OSError("workspace child changed")
+                _clean_directory(child_descriptor)
+            finally:
+                os.close(child_descriptor)
+            if not _entry_matches(
+                directory_descriptor, entry.name, identity(child_stat)
+            ):
+                raise OSError("workspace child changed")
+            os.rmdir(entry.name, dir_fd=directory_descriptor)
+        else:
+            if not _entry_matches(
+                directory_descriptor, entry.name, identity(child_stat)
+            ):
+                raise OSError("workspace child changed")
+            os.unlink(entry.name, dir_fd=directory_descriptor)
+
+
+def _entry_matches(
+    directory_descriptor: int, name: str, expected: tuple[int, int]
+) -> bool:
+    try:
+        value = os.lstat(name, dir_fd=directory_descriptor)
+    except FileNotFoundError:
+        return False
+    return identity(value) == expected
+
+
+def _same_stat(left: os.stat_result, right: os.stat_result) -> bool:
+    return (
+        identity(left) == identity(right)
+        and left.st_size == right.st_size
+        and left.st_mtime_ns == right.st_mtime_ns
+        and left.st_ctime_ns == right.st_ctime_ns
+    )
+
+
+def _before_inner_delete(_directory_descriptor: int, _name: str) -> None:
+    return
+
+
+def _before_final_rmdir(_path: Path) -> None:
+    return
 
 
 def _fail(request: NativeUnitRequest, detail: str) -> NativeUnitError:

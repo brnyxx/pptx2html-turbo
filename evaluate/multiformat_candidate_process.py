@@ -19,6 +19,7 @@ class CandidateProcessFailure(StrEnum):
     READER_FAILED = "reader-failed"
     LOG_OVERSIZE = "log-oversize"
     TERMINATION_FAILED = "termination-failed"
+    EXECUTABLE_UNTRUSTED = "executable-untrusted"
 
 
 class CandidateProcessError(CandidateCaptureError):
@@ -33,6 +34,7 @@ class CandidateProcessError(CandidateCaptureError):
             CandidateProcessFailure.READER_FAILED: "converter reader failed",
             CandidateProcessFailure.LOG_OVERSIZE: "converter log exceeds limit",
             CandidateProcessFailure.TERMINATION_FAILED: "converter termination failed",
+            CandidateProcessFailure.EXECUTABLE_UNTRUSTED: "converter executable is untrusted",
         }
         super().__init__(messages[failure])
 
@@ -46,16 +48,22 @@ def run_bounded_process(
     *,
     timeout_seconds: float,
     max_log_bytes: int,
+    executable: Path | None = None,
+    stdin_fd: int | None = None,
 ) -> int:
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         try:
+            _before_popen()
             process = subprocess.Popen(
                 command,
                 cwd=cwd,
                 env=environment,
+                stdin=stdin_fd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 start_new_session=True,
+                executable=executable.as_posix() if executable else None,
+                pass_fds=(stdin_fd,) if stdin_fd is not None else (),
             )
         except (OSError, ValueError) as error:
             raise CandidateProcessError(
@@ -121,10 +129,25 @@ def run_bounded_process(
                     termination_failures.append(wait_error)
         except (OSError, ValueError) as error:
             termination_failures.append(error)
+            if not _kill_process_group(process):
+                termination_failures.append(
+                    RuntimeError("process group survived wait failure")
+                )
+            else:
+                try:
+                    _ = process.wait(timeout=_termination_timeout(timeout_seconds))
+                except (OSError, subprocess.TimeoutExpired) as wait_error:
+                    termination_failures.append(wait_error)
         finally:
             deadline = time.monotonic() + _termination_timeout(timeout_seconds)
             for reader in readers:
                 reader.join(timeout=max(0.0, deadline - time.monotonic()))
+            if any(reader.is_alive() for reader in readers):
+                _interrupt_pipe(process.stdout)
+                _interrupt_pipe(process.stderr)
+                deadline = time.monotonic() + _termination_timeout(timeout_seconds)
+                for reader in readers:
+                    reader.join(timeout=max(0.0, deadline - time.monotonic()))
             if not any(reader.is_alive() for reader in readers):
                 _close_pipe(process.stdout)
                 _close_pipe(process.stderr)
@@ -193,6 +216,21 @@ def _close_pipe(pipe: _Closeable) -> None:
         return
 
 
+class _Interruptible(Protocol):
+    def fileno(self) -> int: ...
+
+
+def _interrupt_pipe(pipe: _Interruptible) -> None:
+    try:
+        os.close(pipe.fileno())
+    except (AttributeError, OSError, ValueError):
+        return
+
+
+def _before_popen() -> None:
+    return
+
+
 def _kill_process_group(process: subprocess.Popen[bytes]) -> bool:
     try:
         os.killpg(process.pid, signal.SIGKILL)
@@ -202,4 +240,4 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> bool:
             _ = process.kill()
         except (OSError, ValueError):
             return process.poll() is not None
-        return True
+        return process.poll() is not None
