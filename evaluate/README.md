@@ -108,6 +108,37 @@ authored binary-specific cases. Case IDs, ordinals, pair links, strata, and
 feature seeds are byte-deterministic. A plan does not claim corpus readiness;
 the corresponding source documents and native unit counts remain required.
 
+Materialize the 60 plan-bound modern/legacy pairs for each binary Office
+format with locked LibreOffice, Poppler, and font artifacts:
+
+```bash
+uv run --python 3.11 python -m evaluate.generate_multiformat_legacy_conformance \
+  --contract evaluate/multiformat/contract.v1.json \
+  --plan artifacts/multiformat-conformance-plan.json \
+  --docx-manifest artifacts/multiformat-docx-conformance/generation-manifest.json \
+  --xlsx-manifest artifacts/multiformat-xlsx-conformance/generation-manifest.json \
+  --pptx-manifest artifacts/multiformat-pptx-conformance/generation-manifest.json \
+  --output-dir artifacts/multiformat-legacy-pairs \
+  --soffice /locked/bin/soffice \
+  --pdfinfo /locked/bin/pdfinfo \
+  --font-bundle artifacts/font-bundle.json
+```
+
+The materializer verifies the contract, plan, all three modern snapshot
+manifests, every source hash and format, the exact pair links and strata, and
+the locked tool and font identities. It writes 60 DOC, 60 XLS, and 60 PPT
+sources plus immutable copies of their paired DOCX, XLSX, and PPTX bytes.
+Every legacy binary must reopen through LibreOffice and produce a structurally
+valid PDF with at least one page before publication. Physical PDF pagination
+does not redefine the contract's one conformance-case unit. Publication is
+staged, made read-only, rehashed, and finished by one rename.
+
+This snapshot has status `GENERATED`, not `READY`. Each legacy format still
+requires 40 independently authored binary-specific conformance cases, the
+separate 75-file blind track, and the 10 security cases. Corpus identity is the
+eventually admitted frozen source bytes and hashes; historical generator byte
+reproducibility is not part of that identity.
+
 Materialize the 100 planned PDF sources once with locked LibreOffice, Poppler,
 and font artifacts:
 
