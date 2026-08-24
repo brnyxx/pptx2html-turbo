@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from evaluate import multiformat_corpus_sources
 from evaluate.multiformat_corpus_items import object_list
+from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_public_pool import load_validated_public_pool_sources
 from evaluate.multiformat_public_pool_types import PublicPoolError
 from evaluate.multiformat_schema import object_value, string_value
@@ -82,15 +83,19 @@ class MultiFormatPublicPoolFilesystemTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = write_multiformat_public_pool_fixture(Path(temp_dir))
             source = self._first_source_path(fixture.manifest)
-            hard_link = source.with_name("attacker-hard-link.docx")
+            hard_link = Path(temp_dir) / "attacker-hard-link.docx"
             hard_link.hardlink_to(source)
 
-            with self.assertRaises(PublicPoolError):
+            with self.assertRaises(PublicPoolError) as raised:
                 _ = load_validated_public_pool_sources(
                     fixture.config,
                     fixture.manifest,
                 )
 
+            cause = raised.exception.__cause__
+            if not isinstance(cause, CorpusError):
+                raise AssertionError("source link failure was not chained")
+            self.assertEqual(cause.reason, "source.link")
             self.assertEqual(source.stat().st_nlink, 2)
             self.assertEqual(hard_link.stat().st_ino, source.stat().st_ino)
 
