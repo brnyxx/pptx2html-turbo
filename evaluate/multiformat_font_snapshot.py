@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 import re
-import shutil
 import stat
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluate import multiformat_font_filesystem as font_filesystem
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_candidate_fonts import (
     CandidateFontError,
@@ -18,12 +17,11 @@ from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
-    sha256_file,
     sha256_value,
     string_value,
 )
 from evaluate.multiformat_snapshot_publish import SnapshotPublishError, publish_snapshot
-from evaluate.multiformat_strict_json import read_strict_object
+from evaluate.multiformat_strict_json import parse_strict_object_bytes
 
 _FONT_NAME = re.compile(r"^(\d{4})-([0-9a-f]{64})(\.otf|\.ttf)$")
 
@@ -91,24 +89,30 @@ def validate_font_snapshot(
             raise FontSnapshotError(
                 "font snapshot fonts entry is not a directory", root / "fonts"
             )
-        manifest_identity = (manifest.lstat().st_dev, manifest.lstat().st_ino)
-        values = read_strict_object(manifest)
-        if (manifest.lstat().st_dev, manifest.lstat().st_ino) != manifest_identity:
-            raise FontSnapshotError("font bundle manifest changed", manifest)
+        manifest_file = font_filesystem.read_stable_file(manifest)
+        values = parse_strict_object_bytes(manifest_file.data)
         require_keys(values, {"schema_version", "fonts"}, "font_bundle")
-        if manifest.read_bytes() != canonicalize(values) + b"\n":
+        if manifest_file.data != canonicalize(values) + b"\n":
             raise FontSnapshotError("font bundle is not canonical JCS", manifest)
         if integer_value(values, "schema_version") != 1:
             raise FontSnapshotError("font bundle schema mismatch", manifest)
         fonts = object_list(values, "fonts", "font_bundle.fonts")
         if not fonts:
             raise FontSnapshotError("font bundle is empty", manifest)
-        _validate_manifest_entries(root, manifest, fonts)
+        font_files = _validate_manifest_entries(
+            root,
+            manifest,
+            fonts,
+            manifest_file.signature[:2],
+        )
         environment_sha256 = validate_font_bundle(manifest)
+        font_filesystem.revalidate_file(manifest, manifest_file)
+        for path, expected in font_files.items():
+            font_filesystem.revalidate_file(path, expected)
         return FontSnapshotSummary(
             files=1 + len(fonts),
             fonts=len(fonts),
-            manifest_sha256=sha256_file(manifest),
+            manifest_sha256=manifest_file.digest,
             environment_sha256=environment_sha256,
         )
     except (CandidateFontError, CorpusError, OSError, TypeError, ValueError) as error:
@@ -123,48 +127,17 @@ def _discover_fonts(font_dirs: Sequence[Path]) -> tuple[FontSource, ...]:
     digests: set[str] = set()
     for font_dir in font_dirs:
         root = _strict_path(font_dir, directory=True)
-        _walk_font_root(root, root, (sources, identities, digests))
+        for font in font_filesystem.discover_font_root(
+            root,
+            identities,
+            digests,
+        ):
+            sources.append(
+                FontSource(font.path, font.digest, font.suffix, font.identity)
+            )
     if not sources:
         raise FontSnapshotError("font roots contain no fonts")
     return tuple(sorted(sources, key=lambda item: (item.digest, item.suffix)))
-
-
-def _walk_font_root(
-    root: Path,
-    current: Path,
-    state: tuple[list[FontSource], set[tuple[int, int]], set[str]],
-) -> None:
-    sources, identities, digests = state
-    with os.scandir(current) as entries:
-        children = sorted(entries, key=lambda entry: entry.name)
-    for entry in children:
-        path = Path(entry.path)
-        information = entry.stat(follow_symlinks=False)
-        mode = information.st_mode
-        if stat.S_ISLNK(mode):
-            raise FontSnapshotError("font roots may not contain links", path)
-        if stat.S_ISDIR(mode):
-            _walk_font_root(root, path, state)
-            continue
-        if not stat.S_ISREG(mode) or information.st_nlink != 1:
-            raise FontSnapshotError(
-                "font root contains a non-regular or linked file", path
-            )
-        suffix = path.suffix.lower()
-        if suffix not in {".ttf", ".otf"}:
-            raise FontSnapshotError("unsupported font suffix", path)
-        resolved = path.resolve(strict=True)
-        if not resolved.is_relative_to(root):
-            raise FontSnapshotError("font escapes its root", path)
-        identity = (information.st_dev, information.st_ino)
-        if identity in identities:
-            raise FontSnapshotError("font inode is repeated", path)
-        identities.add(identity)
-        digest = sha256_file(resolved)
-        if digest in digests:
-            raise FontSnapshotError("font digest is repeated", path)
-        digests.add(digest)
-        sources.append(FontSource(resolved, digest, suffix, identity))
 
 
 def _write_snapshot(staging: Path, sources: Sequence[FontSource]) -> None:
@@ -173,22 +146,18 @@ def _write_snapshot(staging: Path, sources: Sequence[FontSource]) -> None:
     entries: list[JsonValue] = []
     for ordinal, source in enumerate(sources, start=1):
         destination = font_root / f"{ordinal:04d}-{source.digest}{source.suffix}"
-        information = source.source.stat(follow_symlinks=False)
-        source_identity = (information.st_dev, information.st_ino)
+        if source.identity is None:
+            raise FontSnapshotError("font source identity is missing", source.source)
+        font_filesystem.copy_font_file(
+            source.source,
+            source.identity,
+            source.digest,
+            destination,
+        )
+        source_after = font_filesystem.read_stable_file(source.source)
         if (
-            not stat.S_ISREG(information.st_mode)
-            or information.st_nlink != 1
-            or source.identity != source_identity
-            or sha256_file(source.source) != source.digest
-        ):
-            raise FontSnapshotError("font source changed", source.source)
-        shutil.copyfile(source.source, destination, follow_symlinks=False)
-        if (
-            not stat.S_ISREG((information := source.source.lstat()).st_mode)
-            or information.st_nlink != 1
-            or (information.st_dev, information.st_ino) != source_identity
-            or sha256_file(destination) != source.digest
-            or sha256_file(source.source) != source.digest
+            source_after.signature[:2] != source.identity
+            or source_after.digest != source.digest
         ):
             raise FontSnapshotError("copied font digest differs", destination)
         entries.append(
@@ -216,9 +185,10 @@ def _validate_manifest_entries(
     root: Path,
     manifest: Path,
     fonts: list[dict[str, JsonValue]],
-) -> None:
-    manifest_information = manifest.lstat()
-    identities = {(manifest_information.st_dev, manifest_information.st_ino)}
+    manifest_identity: tuple[int, int],
+) -> dict[Path, font_filesystem.StableFile]:
+    identities = {manifest_identity}
+    snapshots: dict[Path, font_filesystem.StableFile] = {}
     seen_digests: set[str] = set()
     expected_names: set[str] = set()
     previous: tuple[str, str] | None = None
@@ -259,17 +229,17 @@ def _validate_manifest_entries(
             raise FontSnapshotError(
                 "font bundle path escapes its snapshot root", candidate
             )
-        information = resolved.lstat()
-        identity = (information.st_dev, information.st_ino)
+        snapshot = font_filesystem.read_stable_file(candidate)
+        identity = snapshot.signature[:2]
         if identity in identities:
             raise FontSnapshotError("font snapshot reuses a file inode", candidate)
         identities.add(identity)
-        if sha256_file(candidate) != digest or not os.path.samestat(
-            information, resolved.lstat()
-        ):
+        if snapshot.digest != digest:
             raise FontSnapshotError("font bundle file hash mismatch", candidate)
+        snapshots[candidate] = snapshot
     actual_names = {entry.name for entry in (root / "fonts").iterdir()}
     if actual_names != expected_names:
         raise FontSnapshotError(
             "font bundle file set differs from its manifest", root / "fonts"
         )
+    return snapshots

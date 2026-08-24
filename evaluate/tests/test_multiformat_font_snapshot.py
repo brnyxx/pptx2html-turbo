@@ -176,6 +176,14 @@ class MultiFormatFontSnapshotTests(unittest.TestCase):
 
             (output / "extra").unlink()
             font = next((output / "fonts").iterdir())
+            outside = root / "outside.ttf"
+            outside.write_bytes(font.read_bytes())
+            font.unlink()
+            os.link(outside, font)
+            with self.assertRaises(FontSnapshotError):
+                validate_font_snapshot(output / "font-bundle.json", output)
+
+            font.unlink()
             font.write_bytes(b"changed")
             with self.assertRaises(FontSnapshotError):
                 validate_font_snapshot(output / "font-bundle.json", output)
@@ -188,7 +196,7 @@ class MultiFormatFontSnapshotTests(unittest.TestCase):
             output = root / "output"
             with (
                 mock.patch(
-                    "evaluate.multiformat_font_snapshot.shutil.copyfile",
+                    "evaluate.multiformat_font_filesystem.copy_font_file",
                     side_effect=OSError("copy failed"),
                 ),
                 self.assertRaises(FontSnapshotError),
