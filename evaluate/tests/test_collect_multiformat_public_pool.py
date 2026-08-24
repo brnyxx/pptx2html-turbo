@@ -208,50 +208,52 @@ class CollectMultiFormatPublicPoolTests(unittest.TestCase):
                 2,
             )
 
-    def test_loader_rejects_duplicate_cross_format_path(self) -> None:
+    def test_loader_rejects_duplicate_same_format_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             config, manifest = self._multi_format_fixture(root)
             values = read_strict_object(manifest)
             formats = object_value(values, "formats")
-            pdf_sources = object_list(
-                object_value(formats, "pdf"),
-                "sources",
-                "test",
-            )
             docx_sources = object_list(
                 object_value(formats, "docx"),
                 "sources",
                 "test",
             )
-            for source in pdf_sources:
-                _ = (manifest.parent / string_value(source, "path")).unlink()
-            pdf_sources[0]["path"] = string_value(docx_sources[0], "path")
+            first_source, second_source = docx_sources[:2]
+            second_path = manifest.parent / string_value(second_source, "path")
+            second_source["path"] = string_value(first_source, "path")
+            second_source["sha256"] = string_value(first_source, "sha256")
+            _ = second_path.unlink()
             write_canonical_json(manifest, values)
 
-            with self.assertRaises(PublicPoolError):
+            with self.assertRaisesRegex(
+                PublicPoolError,
+                "^public pool source path is duplicated$",
+            ):
                 _ = load_validated_public_pool_sources(config, manifest)
 
-    def test_loader_rejects_duplicate_cross_format_digest(self) -> None:
+    def test_loader_rejects_duplicate_same_format_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             config, manifest = self._multi_format_fixture(root)
             values = read_strict_object(manifest)
             formats = object_value(values, "formats")
-            pdf_sources = object_list(
-                object_value(formats, "pdf"),
-                "sources",
-                "test",
-            )
             docx_sources = object_list(
                 object_value(formats, "docx"),
                 "sources",
                 "test",
             )
-            pdf_sources[0]["sha256"] = string_value(docx_sources[0], "sha256")
+            first_source, second_source = docx_sources[:2]
+            first_path = manifest.parent / string_value(first_source, "path")
+            second_path = manifest.parent / string_value(second_source, "path")
+            _ = second_path.write_bytes(first_path.read_bytes())
+            second_source["sha256"] = string_value(first_source, "sha256")
             write_canonical_json(manifest, values)
 
-            with self.assertRaises(PublicPoolError):
+            with self.assertRaisesRegex(
+                PublicPoolError,
+                "^public pool source bytes are duplicated$",
+            ):
                 _ = load_validated_public_pool_sources(config, manifest)
 
     def test_validator_delegates_and_preserves_none_api(self) -> None:
