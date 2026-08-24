@@ -17,6 +17,10 @@ class PrimaryWriterError(Exception):
     pass
 
 
+def _write_complete(staging: Path) -> None:
+    (staging / "manifest.json").write_bytes(b"complete")
+
+
 class MultiFormatSnapshotPublishTests(unittest.TestCase):
     def test_complete_tree_is_renamed_without_ready_marker(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -108,7 +112,6 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
             self.assertEqual((replacement / "sentinel").read_bytes(), b"other")
             self.assertFalse((root / ".corpus.snapshot.lock").exists())
 
-    def test_cleanup_error_adds_note_without_masking_primary_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             destination = root / "corpus"
@@ -145,9 +148,7 @@ class MultiFormatSnapshotPublishTests(unittest.TestCase):
             ):
                 publish_snapshot(
                     destination,
-                    lambda staging: (staging / "manifest.json").write_bytes(
-                        b"complete"
-                    ),
+                    _write_complete,
                 )
 
             self.assertIs(

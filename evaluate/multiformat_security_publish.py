@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import NoReturn
@@ -22,10 +21,13 @@ class SecurityPublishFailure(StrEnum):
     PUBLICATION_FAILED = "publication-failed"
 
 
-@dataclass(frozen=True, slots=True)
 class SecurityPublishError(Exception):
-    path: Path
-    failure: SecurityPublishFailure
+    __slots__ = ("failure", "path")
+
+    def __init__(self, path: Path, failure: SecurityPublishFailure) -> None:
+        self.path = path
+        self.failure = failure
+        super().__init__(path, failure)
 
     def __str__(self) -> str:
         return f"security snapshot publication failed: {self.failure.value}"
