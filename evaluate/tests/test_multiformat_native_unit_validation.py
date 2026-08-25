@@ -10,6 +10,7 @@ from typing import final
 from unittest.mock import patch
 
 from evaluate.jcs import canonicalize
+from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_native_unit_capture import (
     NativeUnitCaptureInputs,
     capture_native_unit_inventory,
@@ -130,7 +131,7 @@ class MultiFormatNativeUnitValidationTests(unittest.TestCase):
             binding["sha256"] = hashlib.sha256(execution_bytes).hexdigest()
             _ = manifest_path.write_bytes(canonicalize(values) + b"\n")
 
-            self._assert_validation_fails()
+            _ = self._assert_validation_fails()
         finally:
             _ = execution_path.write_bytes(execution_before)
             _ = manifest_path.write_bytes(manifest_before)
@@ -150,7 +151,7 @@ class MultiFormatNativeUnitValidationTests(unittest.TestCase):
             binding["sha256"] = hashlib.sha256(execution_bytes).hexdigest()
             _ = manifest_path.write_bytes(canonicalize(values) + b"\n")
 
-            self._assert_validation_fails()
+            _ = self._assert_validation_fails()
         finally:
             _ = execution_path.write_bytes(execution_before)
             _ = manifest_path.write_bytes(manifest_before)
@@ -162,7 +163,9 @@ class MultiFormatNativeUnitValidationTests(unittest.TestCase):
         before = path.read_bytes()
         try:
             _ = path.write_bytes(b"%PDF-1.4\ntampered\n")
-            self._assert_validation_fails()
+            error = self._assert_validation_fails()
+            self.assertIs(error.document_format, DocumentFormat.DOC)
+            self.assertEqual(error.source_id, "blind-doc-001")
         finally:
             _ = path.write_bytes(before)
 
@@ -170,7 +173,7 @@ class MultiFormatNativeUnitValidationTests(unittest.TestCase):
         extra = self.fixture.output / "unexpected"
         try:
             _ = extra.write_bytes(b"unexpected")
-            self._assert_validation_fails()
+            _ = self._assert_validation_fails()
         finally:
             extra.unlink()
 
@@ -192,7 +195,7 @@ class MultiFormatNativeUnitValidationTests(unittest.TestCase):
         other.unlink()
         try:
             os.link(first, other)
-            self._assert_validation_fails()
+            _ = self._assert_validation_fails()
         finally:
             other.unlink()
             _ = other.write_bytes(before)
@@ -201,7 +204,7 @@ class MultiFormatNativeUnitValidationTests(unittest.TestCase):
         before = self.fixture.pdfinfo.read_bytes()
         try:
             _ = self.fixture.pdfinfo.write_bytes(before + b"\n# drift\n")
-            self._assert_validation_fails()
+            _ = self._assert_validation_fails()
         finally:
             _ = self.fixture.pdfinfo.write_bytes(before)
             _ = self.fixture.pdfinfo.chmod(0o755)
@@ -231,12 +234,13 @@ class MultiFormatNativeUnitValidationTests(unittest.TestCase):
             raise FixtureShapeError("fixture observations are malformed")
         return manifest_path, values, observations[0]
 
-    def _assert_validation_fails(self) -> None:
+    def _assert_validation_fails(self) -> NativeUnitError:
         with (
             patch("evaluate.multiformat_native_unit_validation._validate_pdf_count"),
-            self.assertRaises(NativeUnitError),
+            self.assertRaises(NativeUnitError) as raised,
         ):
             _ = validate_native_unit_inventory(self._inputs())
+        return raised.exception
 
     def _inputs(self) -> NativeUnitValidationInputs:
         return NativeUnitValidationInputs(

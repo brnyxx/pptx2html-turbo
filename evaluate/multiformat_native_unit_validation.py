@@ -16,7 +16,10 @@ from evaluate.multiformat_font_snapshot import (
 from evaluate.multiformat_native_unit_execution_validation import (
     NativeExecutionBindings,
 )
-from evaluate.multiformat_native_unit_record_validation import validate_source_record
+from evaluate.multiformat_native_unit_record_validation import (
+    source_failure,
+    validate_scoped_source,
+)
 from evaluate.multiformat_native_unit_stable_validation import stable_bytes
 from evaluate.multiformat_native_unit_tool_validation import (
     validate_pdf_count as _validate_pdf_count,
@@ -141,7 +144,7 @@ def load_native_unit_inventory(
         counts: list[NativeUnitCount] = []
         nonces: set[str] = set()
         for expected, source in zip(expected_sources, source_values, strict=True):
-            count, bindings = validate_source_record(
+            count, bindings = validate_scoped_source(
                 root,
                 inputs.pdfinfo,
                 pdfinfo_tool,
@@ -152,7 +155,7 @@ def load_native_unit_inventory(
                 _validate_pdf_count,
             )
             if expected_files & bindings:
-                raise _failure("inventory evidence path is duplicated")
+                raise source_failure(expected, "inventory evidence path is duplicated")
             expected_files.update(bindings)
             counts.append(
                 NativeUnitCount(

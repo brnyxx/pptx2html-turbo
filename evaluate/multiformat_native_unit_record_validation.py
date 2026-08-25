@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_corpus_items import object_list, require_keys
-from evaluate.multiformat_corpus_types import DocumentFormat
+from evaluate.multiformat_corpus_types import CorpusError, DocumentFormat
 from evaluate.multiformat_native_unit_execution_validation import (
     NativeExecutionBindings,
     validate_execution_record,
@@ -26,6 +26,58 @@ from evaluate.multiformat_strict_json import MAX_JSON_BYTES, parse_strict_object
 PdfCountValidator = Callable[[Path, LockedTool, Path, int], None]
 _MAX_PDF_BYTES = 64 * 1024 * 1024
 _MAX_PDFINFO_BYTES = 1024 * 1024
+
+
+def validate_scoped_source(
+    root: Path,
+    pdfinfo: Path,
+    pdfinfo_tool: LockedTool,
+    expected: ValidatedPublicPoolSource,
+    source: dict[str, JsonValue],
+    nonces: set[str],
+    execution_bindings: NativeExecutionBindings,
+    pdf_count_validator: PdfCountValidator,
+) -> tuple[int, set[str]]:
+    try:
+        return validate_source_record(
+            root,
+            pdfinfo,
+            pdfinfo_tool,
+            expected,
+            source,
+            nonces,
+            execution_bindings,
+            pdf_count_validator,
+        )
+    except NativeUnitError as error:
+        if (
+            error.document_format is expected.document_format
+            and error.source_id == expected.source_id
+        ):
+            raise
+        raise NativeUnitError(
+            error.failure,
+            expected.document_format,
+            expected.source_id,
+            error.detail,
+        ) from error
+    except (CorpusError, OSError, TypeError, ValueError) as error:
+        raise source_failure(
+            expected,
+            "inventory source validation failed",
+        ) from error
+
+
+def source_failure(
+    source: ValidatedPublicPoolSource,
+    detail: str,
+) -> NativeUnitError:
+    return NativeUnitError(
+        NativeUnitFailure.OUTPUT_INVALID,
+        source.document_format,
+        source.source_id,
+        detail,
+    )
 
 
 def validate_source_record(

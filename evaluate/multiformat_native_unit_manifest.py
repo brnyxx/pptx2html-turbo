@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_native_unit_types import (
     NativeObservation,
     NativeUnitError,
     NativeUnitFailure,
+    NativeUnitSource,
 )
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -41,20 +43,22 @@ def build_native_unit_manifest(
     sources: list[JsonValue] = []
     for offset in range(0, len(observations), 2):
         pair = observations[offset : offset + 2]
+        if len(pair) != 2:
+            source = pair[0].source if pair else None
+            raise _failure("native observation pair is incomplete", source)
         first, second = pair
         if (
-            len(pair) != 2
-            or first.source != second.source
+            first.source != second.source
             or first.unit_count <= 0
             or first.unit_count != second.unit_count
         ):
-            raise _failure("two clean observations disagree")
+            raise _failure("two clean observations disagree", first.source)
         sources.append(
             {
                 "id": first.source.source_id,
                 "format": first.source.document_format.value,
                 "path": first.source.relative_path,
-                "sha256": _source_sha256(executions[offset]),
+                "sha256": _source_sha256(executions[offset], first.source),
                 "unit_count": first.unit_count,
                 "observations": [_observation_value(item) for item in pair],
             }
@@ -147,9 +151,23 @@ def _observation_value(
     }
 
 
-def _source_sha256(execution: dict[str, JsonValue]) -> str:
-    return sha256_value(object_value(execution, "source"), "sha256")
+def _source_sha256(
+    execution: dict[str, JsonValue],
+    source: NativeUnitSource,
+) -> str:
+    try:
+        return sha256_value(object_value(execution, "source"), "sha256")
+    except (CorpusError, TypeError, ValueError) as error:
+        raise _failure("execution source identity is invalid", source) from error
 
 
-def _failure(detail: str) -> NativeUnitError:
-    return NativeUnitError(NativeUnitFailure.OUTPUT_INVALID, None, None, detail)
+def _failure(
+    detail: str,
+    source: NativeUnitSource | None = None,
+) -> NativeUnitError:
+    return NativeUnitError(
+        NativeUnitFailure.OUTPUT_INVALID,
+        source.document_format if source is not None else None,
+        source.source_id if source is not None else None,
+        detail,
+    )
