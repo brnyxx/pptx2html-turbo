@@ -5,11 +5,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluate.multiformat_candidate_artifacts import write_canonical_json
 from evaluate.multiformat_candidate_process import (
     CandidateProcessError,
     CandidateProcessFailure,
 )
 from evaluate.multiformat_corpus_types import DocumentFormat
+from evaluate.multiformat_font_snapshot import generate_font_snapshot
 from evaluate.multiformat_native_unit_types import (
     NativeProcessRequest,
     NativeUnitRequest,
@@ -20,6 +22,8 @@ from evaluate.multiformat_reference_routing import (
     RoutingIdentity,
     load_reference_routing,
 )
+from evaluate.multiformat_schema import JsonValue, sha256_file
+from evaluate.multiformat_source_fixture import write_positive_source
 
 ROOT = Path(__file__).resolve().parents[2]
 ROUTING_TABLE = ROOT / "evaluate/multiformat/reference-routing.v1.json"
@@ -57,6 +61,18 @@ class NativeUnitFixture:
             run=run,
             nonce=hashlib.sha256(f"{document_format.value}:{run}".encode()).hexdigest(),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class NativeInventoryFixture:
+    contract: Path
+    public_config: Path
+    public_pool_manifest: Path
+    routing: Path
+    font_manifest: Path
+    soffice: Path
+    pdfinfo: Path
+    output: Path
 
 
 class RecordingNativeRunner:
@@ -141,4 +157,105 @@ def make_native_unit_fixture(root: Path) -> NativeUnitFixture:
         pdfinfo=pdfinfo,
         font_bundle=font_bundle,
         routing=load_reference_routing(ROUTING_TABLE),
+    )
+
+
+def make_native_inventory_fixture(root: Path) -> NativeInventoryFixture:
+    pool = root / "pool"
+    pool.mkdir()
+    config_formats: dict[str, JsonValue] = {}
+    manifest_formats: dict[str, JsonValue] = {}
+    for document_format in sorted(DocumentFormat, key=lambda item: item.value):
+        groups: list[JsonValue] = []
+        sources: list[JsonValue] = []
+        for group_index in range(5):
+            producer = f"{document_format.value}-producer-{group_index + 1}"
+            repository = f"owner/{document_format.value}-repo-{group_index + 1}"
+            commit = hashlib.sha256(repository.encode()).hexdigest()[:40]
+            groups.append(
+                {
+                    "producer": producer,
+                    "repository": repository,
+                    "commit": commit,
+                    "license_spdx": "MIT",
+                    "quota": 15,
+                    "path_prefixes": ["fixtures/"],
+                    "static_paths": [],
+                }
+            )
+            for item_index in range(15):
+                ordinal = group_index * 15 + item_index + 1
+                source_id = f"blind-{document_format.value}-{ordinal:03d}"
+                relative = (
+                    f"sources/{document_format.value}/{producer}/"
+                    f"{ordinal:03d}.{document_format.value}"
+                )
+                source = pool / relative
+                source.parent.mkdir(parents=True, exist_ok=True)
+                write_positive_source(
+                    source,
+                    document_format.value,
+                    source_id,
+                )
+                sources.append(
+                    {
+                        "id": source_id,
+                        "path": relative,
+                        "sha256": sha256_file(source),
+                        "producer": producer,
+                        "source_uri": f"https://example.invalid/{relative}",
+                        "template_family": f"{producer}-template",
+                        "repository": repository,
+                        "commit": commit,
+                        "repository_path": f"fixtures/{source.name}",
+                        "license_spdx": "MIT",
+                        "applicable_metrics": ["visual", "content", "layout"],
+                        "background": "light",
+                    }
+                )
+        config_formats[document_format.value] = {
+            "expected_count": 75,
+            "groups": groups,
+        }
+        manifest_formats[document_format.value] = {
+            "expected_count": 75,
+            "sources": sources,
+        }
+    config = root / "public-config.json"
+    manifest = pool / "public-pool.json"
+    write_canonical_json(config, {"schema_version": 1, "formats": config_formats})
+    write_canonical_json(
+        manifest,
+        {
+            "schema_version": 1,
+            "status": "COLLECTED",
+            "formats": manifest_formats,
+        },
+    )
+    font_source = root / "font-source"
+    font_source.mkdir()
+    _ = (font_source / "fixture.ttf").write_bytes(b"fixture-font")
+    font_snapshot = root / "font-snapshot"
+    _ = generate_font_snapshot((font_source,), font_snapshot)
+    soffice = root / "soffice"
+    pdfinfo = root / "pdfinfo"
+    _ = soffice.write_text(
+        '#!/bin/sh\nif [ "${1-}" = "--version" ]; then\n  printf \'LibreOffice 26.2.2.2\\n\'\n  exit 0\nfi\noutdir=\'\'\nsource=\'\'\nprevious=\'\'\nfor argument in "$@"; do\n  if [ "$previous" = "--outdir" ]; then outdir="$argument"; fi\n  previous="$argument"\n  source="$argument"\ndone\nbase="${source##*/}"\nstem="${base%.*}"\nprintf \'%%PDF-1.4\\nfixture\\n\' > "$outdir/$stem.pdf"\n',
+        encoding="utf-8",
+    )
+    _ = pdfinfo.write_text(
+        "#!/bin/sh\nif [ \"${1-}\" = \"-v\" ]; then\n  printf 'pdfinfo version 26.03.0\\n' >&2\nelse\n  printf 'Pages:           1\\n'\nfi\n",
+        encoding="utf-8",
+    )
+    _ = soffice.chmod(0o755)
+    _ = pdfinfo.chmod(0o755)
+    return NativeInventoryFixture(
+        ROOT / "evaluate/multiformat/contract.v1.json",
+        config,
+        manifest,
+        ROUTING_TABLE,
+        font_snapshot / "font-bundle.json",
+        soffice,
+        pdfinfo,
+        root / "native-units",
     )
