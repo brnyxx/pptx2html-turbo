@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::fonts::substitution_registry;
 use crate::{NativeError, NativeResult};
 
 static WORKSPACE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -60,6 +61,19 @@ impl TemporaryWorkspace {
 
     pub(crate) fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Seeds the private LibreOffice profile with the east-Asian font
+    /// replacement table. LibreOffice merges this file on first launch, so it
+    /// must be written before any stage runs.
+    pub(crate) fn seed_font_substitution(&self, substitute: &str) -> NativeResult<()> {
+        let user = self.root.join("profile").join("user");
+        fs::create_dir_all(&user)?;
+        fs::write(
+            user.join("registrymodifications.xcu"),
+            substitution_registry(substitute),
+        )?;
+        Ok(())
     }
 }
 

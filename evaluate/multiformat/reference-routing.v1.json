@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "reference_profile": "libreoffice-poppler",
-  "canonicalizer_version": "1",
-  "canonicalizer_implementation_sha256": "9e519e600f0916f9db3b9a6b3715f4bcf5f3487acce5a6207095a80038d48bb7",
+  "canonicalizer_version": "2",
+  "canonicalizer_implementation_sha256": "547531d65133765274b06373a432246a6375b2f424e28f4ceb15b30030f4dfd5",
   "runtime": {
     "environment_whitelist": ["HOME", "LANG", "LC_ALL", "TZ"],
     "locale": "en-US",

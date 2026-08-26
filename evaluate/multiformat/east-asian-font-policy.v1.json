@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "platform": "darwin",
+  "rationale": "LibreOffice bundles no CJK font and its macOS backend has no fontconfig; CoreText CTFontCreateForString picks a different host face per process, so a named-but-unresolvable east-Asian family must be pinned by the documented LibreOffice font replacement table.",
+  "substituted_families": [
+    "Batang",
+    "BatangChe",
+    "DFKai-SB",
+    "Dotum",
+    "DotumChe",
+    "FangSong",
+    "Gulim",
+    "GulimChe",
+    "Gungsuh",
+    "GungsuhChe",
+    "KaiTi",
+    "MS Gothic",
+    "MS Mincho",
+    "MS PGothic",
+    "MS PMincho",
+    "MS UI Gothic",
+    "Malgun Gothic",
+    "Meiryo",
+    "Meiryo UI",
+    "Microsoft JhengHei",
+    "Microsoft YaHei",
+    "MingLiU",
+    "NSimSun",
+    "Noto Sans CJK HK",
+    "Noto Sans CJK JP",
+    "Noto Sans CJK KR",
+    "Noto Sans CJK SC",
+    "Noto Sans CJK TC",
+    "Noto Serif CJK JP",
+    "Noto Serif CJK KR",
+    "Noto Serif CJK SC",
+    "Noto Serif CJK TC",
+    "PMingLiU",
+    "SimHei",
+    "SimSun",
+    "Source Han Sans",
+    "Source Han Serif",
+    "Yu Gothic",
+    "Yu Mincho"
+  ],
+  "substitute_candidates": [
+    {
+      "family": "Arial Unicode MS",
+      "evidence": [
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
+      ]
+    },
+    {
+      "family": "Apple SD Gothic Neo",
+      "evidence": [
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+      ]
+    },
+    {
+      "family": "Hiragino Sans",
+      "evidence": [
+        "/System/Library/Fonts/Hiragino Sans GB.ttc"
+      ]
+    }
+  ]
+}

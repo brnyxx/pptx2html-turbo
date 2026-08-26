@@ -6,8 +6,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final, NewType, assert_never
 
-from evaluate.jcs import JcsError, canonicalize
 from evaluate import multiformat_reference_routing_schema as schema
+from evaluate.jcs import JcsError, canonicalize
 from evaluate.multiformat_conformance_pdf import pdf_canonicalizer_identity
 from evaluate.multiformat_schema import JsonValue
 from evaluate.multiformat_strict_json import StrictJsonError, read_strict_object
@@ -15,7 +15,6 @@ from evaluate.multiformat_strict_json import StrictJsonError, read_strict_object
 RoutingTableSha256 = NewType("RoutingTableSha256", str)
 
 _SCHEMA_VERSION: Final = 1
-_CANONICALIZER_VERSION: Final = "1"
 _TIMEOUT_SECONDS: Final = 120
 _ENVIRONMENT_WHITELIST: Final = ("HOME", "LANG", "LC_ALL", "TZ")
 _LOCALE: Final = "en-US"
@@ -134,7 +133,9 @@ def load_reference_routing(path: Path) -> RoutingIdentity:
         return RoutingIdentity(
             schema_version=_SCHEMA_VERSION,
             sha256=digest,
-            canonicalizer_version=_CANONICALIZER_VERSION,
+            # The canonicalizer owns its own version; duplicating it here once
+            # let the routing identity report a stale value after a bump.
+            canonicalizer_version=canonicalizer.version,
             canonicalizer_implementation_sha256=canonicalizer.implementation_sha256,
             environment_whitelist=_ENVIRONMENT_WHITELIST,
             locale=_LOCALE,

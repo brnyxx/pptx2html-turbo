@@ -7,6 +7,15 @@ from pathlib import Path
 from evaluate import multiformat_portable_lock_io as lock_io
 from evaluate import multiformat_portable_package_inventory as package_io
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
+from evaluate.multiformat_east_asian_fonts import (
+    load_policy as load_east_asian_policy,
+)
+from evaluate.multiformat_east_asian_fonts import (
+    lock_binding as east_asian_lock_binding,
+)
+from evaluate.multiformat_east_asian_fonts import (
+    require_substitute as require_east_asian_substitute,
+)
 from evaluate.multiformat_portable_lock import validate_reference_lock
 from evaluate.multiformat_portable_lock_io import (
     PortableLockIncompleteError,
@@ -129,6 +138,11 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
         "openssl": lock_io.tool_version(paths["openssl"], ("version",)),
         "receipt-signer": lock_io.tool_version(paths["receipt-signer"], ("--version",)),
     }
+    east_asian_policy = load_east_asian_policy()
+    east_asian_font = east_asian_lock_binding(
+        require_east_asian_substitute(east_asian_policy),
+        east_asian_policy,
+    )
     revision = current_project_revision(inputs.project_root)
     generated = output / "generated"
     generated.mkdir()
@@ -201,6 +215,7 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
             "font_bundle": lock_io.versioned(
                 root, paths["font-bundle"], sha256_file(paths["font-bundle"])[:16]
             ),
+            "east_asian_font": dict(east_asian_font),
             "configuration": lock_io.versioned(
                 root, paths["configuration"], sha256_file(paths["configuration"])[:16]
             ),

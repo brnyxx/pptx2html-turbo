@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use document2html_core::{DocumentFormat, DocumentInput};
 
 use crate::config::NativeBackendConfig;
+use crate::fonts::EastAsianFontPolicy;
 use crate::process::CommandSpec;
 use crate::runtime::NativeRuntimeInfo;
 use crate::stage::run_stage;
@@ -33,6 +34,12 @@ pub(crate) fn convert_office_to_pdf(
         .join("input")
         .join(format!("input.{}", format.extension()));
     fs::write(&input_path, input.data)?;
+    match &runtime.east_asian_fonts {
+        EastAsianFontPolicy::Pinned(substitute) => {
+            workspace.seed_font_substitution(&substitute.family)?;
+        }
+        EastAsianFontPolicy::PlatformDefault { .. } => {}
+    }
     let profile = file_uri(&workspace.root().join("profile"));
     let semantic_xlsx = if format == DocumentFormat::Xls {
         Some(convert_xls_to_xlsx(

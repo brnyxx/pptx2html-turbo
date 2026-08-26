@@ -8,6 +8,7 @@ from typing import cast
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.jcs import canonicalize
+from evaluate.multiformat_conformance_pdf import pdf_canonicalizer_identity
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptInput,
     PortableReceiptVerification,
@@ -25,6 +26,9 @@ from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, sha256_file
 from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
     rust_toolchain_lock_value,
+)
+from evaluate.tests.multiformat_east_asian_font_fixture import (
+    east_asian_font_binding,
 )
 
 _ROUTING = Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
@@ -211,8 +215,12 @@ class ReceiptFixture:
                 "poppler_metadata": {"version": "test", **binding["pdfinfo"]},
             },
             "routing_table_sha256": load_reference_routing(_ROUTING).sha256,
-            "canonicalizer": {"version": "1", **binding["canonicalizer"]},
+            "canonicalizer": {
+                "version": pdf_canonicalizer_identity().version,
+                **binding["canonicalizer"],
+            },
             "font_bundle": {"version": "test", **binding["fonts"]},
+            "east_asian_font": east_asian_font_binding(),
             "configuration": {"version": "test", **binding["configuration"]},
             "browser": {
                 "chromium": {"version": "test", **binding["chromium"]},

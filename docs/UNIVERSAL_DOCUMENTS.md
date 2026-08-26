@@ -42,6 +42,84 @@ the release security gate.
 LibreOffice command-line behavior is documented at:
 https://help.libreoffice.org/latest/en-US/text/shared/guide/start_parameters.html
 
+### East-Asian font determinism
+
+LibreOffice bundles no CJK-capable font, and its macOS backend contains no
+fontconfig: missing glyphs resolve through CoreText `CTFontCreateForString`.
+That fallback is not stable across processes, so a document requesting an
+absent family such as `Noto Sans CJK KR` selected a different host face on
+repeated runs, changing the embedded font name, the glyph advances, and
+therefore the shipped HTML bytes.
+
+On macOS the runtime seeds each private conversion profile with LibreOffice's
+documented font replacement table
+(`org.openoffice.Office.Common/Font/Substitution`), pinning the east-Asian
+families it cannot guarantee to one substitute family. The substitute is
+chosen from Apple base-install supplemental fonts, verified by reading the font
+file, and reported through the backend version as
+`east-asian-font <family> sha256:<digest> (<size> bytes)` so evidence binds the
+exact artifact that produced a conversion. If no candidate is installed the
+probe fails closed with `BackendUnavailable` rather than emitting
+nondeterministic output. Latin text is unaffected, and a family the host can
+already resolve is never rewritten.
+
+This is a CoreText remedy and is scoped to macOS. Other platforms resolve
+through fontconfig, which is deterministic for a fixed font set, so no
+substitution is applied and no substitute font is required; ordinary Linux
+conversion is unchanged.
+
+A family that a document does not name at all is outside this mechanism.
+CoreText fallback for an unnamed family is already stable, and PDF input never
+reaches LibreOffice.
+
+The signed reference producer applies the same policy independently, so
+reference and candidate cannot diverge. The family list and the ordered
+substitute candidates live in `evaluate/multiformat/east-asian-font-policy.v1.json`;
+`crates/document2html-native/src/fonts.rs` and
+`evaluate/multiformat_east_asian_fonts.py` are both pinned to that fixture and
+to `evaluate/multiformat/east-asian-font-substitution.golden.xml`, the registry
+both renderers must produce byte for byte. Parity tests fail on either side if
+the lists or the rendering drift.
+
+Each per-format outer lock records the selected font as `east_asian_font` with
+its family, absolute system path, SHA-256, byte size, and the digest of the
+policy that selected it. The substitute is an OS-provided font that cannot be
+redistributed into evidence, so determinism is bound by re-reading that file
+and comparing: a host whose font bytes, size, family, or policy differ from the
+wave's lock is refused rather than allowed to produce divergent output.
+
+LibreOffice also assigns PDF object ids in a run-dependent order, so two
+reference exports of one source carried identical faces and glyph subsets while
+differing in raw bytes. That ordering is font-independent: an ASCII-only
+document using two bundled Latin faces reorders the same way.
+
+Canonicalizer version 2 removes it. Objects are renumbered by a structural walk
+from the trailer `Root`, then `Info`, following each object's references in the
+order they appear in its dictionary; that order is a property of the document
+graph rather than of the exporting run. References, the xref table, and the
+trailer are rewritten to match, and numbering is dense, so a dropped object
+stream leaves no free slot. Only the structural part of an object is rewritten -
+stream payloads are copied byte for byte, so glyph subsets are untouched.
+
+Objects that no reference reaches are kept, never dropped, ordered after the
+reachable graph by a numbering-independent digest of their blanked structure and
+payload; an unresolved reference, or detached objects that digest identically,
+fails closed rather than inventing an order. Renumbering preserves rendered
+pages, `pdftotext` output, and `-bbox-layout` geometry.
+
+The canonicalizer is a one-way pipeline. `multiformat_pdf_types.py` is the
+dependency leaf holding the parsed-document types, the PDF name grammar, and the
+structural constants; the xref parser, Type1 normalizer, metadata writer, and
+object renumberer each depend on that leaf and never on the entry point, so
+every stage is imported statically with no lazy or type-only imports and the
+import graph is acyclic.
+
+Because the canonicalizer identity is bound into the routing table and every
+portable lock, version 2 invalidates locks produced by version 1. No final wave
+exists yet, so pre-production locks are regenerated rather than migrated.
+
+https://help.libreoffice.org/latest/en-US/text/shared/optionen/01010700.html
+
 ## Reference profiles
 
 The default required profile is `libreoffice-poppler`. Its signed production

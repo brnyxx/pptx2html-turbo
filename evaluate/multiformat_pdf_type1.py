@@ -4,7 +4,7 @@ import re
 import zlib
 from typing import Final
 
-from evaluate.multiformat_conformance_pdf import (
+from evaluate.multiformat_pdf_types import (
     PDF_TYPE1_KEYS,
     PdfConformanceError,
     PdfUnsupportedConstructError,

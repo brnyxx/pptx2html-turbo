@@ -290,4 +290,29 @@ EVALUATOR_FILES: tuple[str, ...] = (
     "evaluate/multiformat_portable_spreadsheet_formats.py",
     "evaluate/multiformat_portable_spreadsheet_numbers.py",
     "evaluate/tests/test_multiformat_portable_spreadsheet_semantics.py",
+    # East-Asian font resolution decides which face LibreOffice embeds, so it
+    # changes the shipped bytes the evaluator scores. The shared policy, both
+    # implementations of it, the profile seeding on the reference and candidate
+    # sides, the lock binding, and the parity/determinism tests are all bound
+    # into the manifest.
+    "evaluate/multiformat/east-asian-font-policy.v1.json",
+    "evaluate/multiformat/east-asian-font-substitution.golden.xml",
+    "evaluate/multiformat_east_asian_fonts.py",
+    # Canonical indirect-object numbering decides the reference bytes a wave
+    # admits, so the renumbering module and its permutation tests are bound too.
+    "evaluate/multiformat_pdf_types.py",
+    "evaluate/multiformat_pdf_order.py",
+    "evaluate/tests/multiformat_pdf_permutation_fixture.py",
+    "evaluate/tests/test_multiformat_pdf_canonical_order.py",
+    "evaluate/tests/multiformat_east_asian_docx_fixture.py",
+    "evaluate/tests/multiformat_east_asian_font_fixture.py",
+    "evaluate/tests/test_multiformat_east_asian_fonts.py",
+    "evaluate/tests/test_multiformat_east_asian_reference.py",
+    "crates/document2html-native/src/fonts.rs",
+    "crates/document2html-native/src/fonts_tests.rs",
+    "crates/document2html-native/src/sha256.rs",
+    "crates/document2html-native/src/runtime.rs",
+    "crates/document2html-native/src/workspace.rs",
+    "crates/document2html-native/tests/cjk_determinism_smoke.rs",
+    "crates/document2html-native/tests/support/cjk.rs",
 )

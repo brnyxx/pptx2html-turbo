@@ -202,7 +202,10 @@ class MultiFormatConformancePdfTests(unittest.TestCase):
                 DocumentFormat.PDF,
                 require_valid_format=True,
             )
-        self.assertIn(b"xref\n0 6\n", value)
+        # Canonical numbering is dense: the dropped ObjStm, its length, and
+        # the XRef object leave no free slot behind.
+        self.assertIn(b"xref\n0 5\n", value)
+        self.assertNotIn(b"0000000000 00000 f \n", value)
         self.assertNotIn(b"/Type /XRef", value)
         self.assertNotIn(b"/Type /ObjStm", value)
         self.assertIn(b"/CreationDate (D:20260821120319+09'00)", value)
@@ -249,7 +252,7 @@ class MultiFormatConformancePdfTests(unittest.TestCase):
             for index, (name, value) in enumerate(pdf.canonicalizer_sources())
         )
 
-        self.assertEqual(identity.version, "1")
+        self.assertEqual(identity.version, "2")
         self.assertRegex(identity.implementation_sha256, r"^[0-9a-f]{64}$")
         self.assertEqual(routing.canonicalizer_version, identity.version)
         self.assertEqual(

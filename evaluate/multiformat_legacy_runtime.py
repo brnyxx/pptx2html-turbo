@@ -16,6 +16,10 @@ from evaluate.multiformat_candidate_process import (
 )
 from evaluate.multiformat_corpus_sources import validate_source
 from evaluate.multiformat_corpus_types import CorpusError, DocumentFormat
+from evaluate.multiformat_east_asian_fonts import (
+    EastAsianFontError,
+    seed_host_profile,
+)
 from evaluate.multiformat_legacy_process import (
     LegacyProcessRequest,
     LegacyProcessRunner,
@@ -127,6 +131,7 @@ class _LegacyMaterializer:
             CandidateFontError,
             CandidateProcessError,
             CorpusError,
+            EastAsianFontError,
             KeyError,
             OSError,
             UnicodeError,
@@ -198,6 +203,10 @@ def _soffice_request(
     log_prefix: Path,
 ) -> LegacyProcessRequest:
     profile.mkdir()
+    # ``FONTCONFIG_FILE`` below is honoured on Linux but ignored by the macOS
+    # CoreText backend, so corpus fixtures need the same replacement table the
+    # reference producer and the shipped converter use.
+    _ = seed_host_profile(profile)
     return LegacyProcessRequest(
         (
             soffice.as_posix(),

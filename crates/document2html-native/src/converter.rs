@@ -7,6 +7,7 @@ use document2html_core::{
 };
 
 use crate::config::NativeBackendConfig;
+use crate::fonts::EastAsianFontPolicy;
 use crate::office::convert_office_to_pdf;
 use crate::poppler::{PdfHtmlScale, convert_pdf_to_html};
 use crate::runtime::{NativeRuntime, NativeRuntimeInfo};
@@ -97,8 +98,10 @@ impl NativeDocumentConverter {
             backend: BackendIdentity {
                 name: "libreoffice+poppler".to_owned(),
                 version: format!(
-                    "{}; {}",
-                    self.runtime.libreoffice.version, self.runtime.pdftohtml.version
+                    "{}; {}; {}",
+                    self.runtime.libreoffice.version,
+                    self.runtime.pdftohtml.version,
+                    east_asian_provenance(&self.runtime.east_asian_fonts)
                 ),
             },
             capabilities: native_runtime_capabilities(),
@@ -140,6 +143,22 @@ impl NativeDocumentConverter {
             },
             capabilities: native_runtime_capabilities(),
         })
+    }
+}
+
+/// Renders the east-Asian font provenance for the backend identity. A pinned
+/// substitute carries the family plus the digest of the exact file behind it,
+/// so evidence binds the artifact that produced the conversion rather than a
+/// family name any host could claim.
+fn east_asian_provenance(policy: &EastAsianFontPolicy) -> String {
+    match policy {
+        EastAsianFontPolicy::Pinned(substitute) => format!(
+            "east-asian-font {} sha256:{} ({} bytes)",
+            substitute.family, substitute.sha256, substitute.size_bytes
+        ),
+        EastAsianFontPolicy::PlatformDefault { reason } => {
+            format!("east-asian-font platform-default ({reason})")
+        }
     }
 }
 
@@ -185,5 +204,53 @@ const fn available(format: DocumentFormat, backend: &'static str) -> RuntimeCapa
         format,
         support: RuntimeSupport::Available,
         backend: Some(backend),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::fonts::{EastAsianFontPolicy, EastAsianSubstitute};
+
+    use super::east_asian_provenance;
+
+    #[test]
+    fn pinned_provenance_binds_the_font_digest_and_size() {
+        // Given
+        let policy = EastAsianFontPolicy::Pinned(EastAsianSubstitute {
+            family: "Arial Unicode MS".to_owned(),
+            path: std::path::PathBuf::from("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+            size_bytes: 23_278_008,
+            sha256: "b".repeat(64),
+        });
+
+        // When
+        let provenance = east_asian_provenance(&policy);
+
+        // Then
+        assert_eq!(
+            provenance,
+            format!(
+                "east-asian-font Arial Unicode MS sha256:{} (23278008 bytes)",
+                "b".repeat(64)
+            )
+        );
+    }
+
+    #[test]
+    fn platform_default_provenance_names_the_resolving_stack() {
+        // Given
+        let policy = EastAsianFontPolicy::PlatformDefault {
+            reason: "fontconfig resolves east-Asian families on this platform",
+        };
+
+        // When
+        let provenance = east_asian_provenance(&policy);
+
+        // Then
+        assert_eq!(
+            provenance,
+            "east-asian-font platform-default (fontconfig resolves east-Asian \
+             families on this platform)"
+        );
     }
 }

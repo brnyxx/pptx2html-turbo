@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 
 use crate::config::NativeBackendConfig;
+use crate::fonts::{EastAsianFontPolicy, resolve_policy};
 use crate::process::{CommandSpec, ProcessLimits, ProcessOutput, SystemCommandRunner};
 use crate::workspace::TemporaryWorkspace;
 use crate::{NativeError, NativeResult};
@@ -17,6 +18,10 @@ pub struct NativeRuntimeInfo {
     pub libreoffice: NativeToolInfo,
     pub pdftohtml: NativeToolInfo,
     pub pdfinfo: NativeToolInfo,
+    /// How this host resolves east-Asian families. `Pinned` carries the
+    /// substitute family and the digest of the exact font file behind it, so
+    /// evidence binds the artifact that produced a conversion.
+    pub east_asian_fonts: EastAsianFontPolicy,
 }
 
 #[derive(Debug, Clone)]
@@ -57,10 +62,18 @@ impl NativeRuntime {
         if poppler_release(&pdftohtml.version) != poppler_release(&pdfinfo.version) {
             return malformed("pdftohtml and pdfinfo versions do not match");
         }
+        let Some(east_asian_fonts) = resolve_policy() else {
+            return Err(NativeError::BackendUnavailable(
+                "no CJK-capable substitute font is installed, so east-Asian text \
+                 would resolve through the nondeterministic CoreText fallback"
+                    .to_owned(),
+            ));
+        };
         Ok(NativeRuntimeInfo {
             libreoffice,
             pdftohtml,
             pdfinfo,
+            east_asian_fonts,
         })
     }
 

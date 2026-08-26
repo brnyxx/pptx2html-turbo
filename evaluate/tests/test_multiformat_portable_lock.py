@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from evaluate.multiformat_conformance_pdf import pdf_canonicalizer_identity
 from evaluate.multiformat_evidence import oracle_lock_ready
 from evaluate.multiformat_portable_lock import (
     PortableLockError,
@@ -20,6 +21,9 @@ from evaluate.multiformat_portable_package_inventory import (
 from evaluate.multiformat_reference_profile import ReferenceProfile
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, sha256_file
+from evaluate.tests.multiformat_east_asian_font_fixture import (
+    east_asian_font_binding,
+)
 
 ROUTING_TABLE = (
     Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
@@ -293,8 +297,12 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                 "poppler_metadata": {"version": "test", **bindings["pdfinfo"]},
             },
             "routing_table_sha256": load_reference_routing(ROUTING_TABLE).sha256,
-            "canonicalizer": {"version": "1", **bindings["canonicalizer"]},
+            "canonicalizer": {
+                "version": pdf_canonicalizer_identity().version,
+                **bindings["canonicalizer"],
+            },
             "font_bundle": {"version": "test", **bindings["fonts"]},
+            "east_asian_font": east_asian_font_binding(),
             "configuration": {"version": "test", **bindings["configuration"]},
             "browser": {
                 "chromium": {"version": "test", **bindings["chromium"]},

@@ -3,6 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from evaluate.multiformat_candidate_process import run_bounded_process
+from evaluate.multiformat_east_asian_fonts import (
+    load_policy as load_east_asian_policy,
+)
+from evaluate.multiformat_east_asian_fonts import (
+    validate_lock_binding as validate_east_asian_binding,
+)
 from evaluate.multiformat_portable_receipt_trust import (
     load_portable_receipt_trust,
     verify_trusted_files,
@@ -71,6 +77,10 @@ def materialize_portable_references(
             root / string_value(object_value(sandbox, "executable"), "path"),
             root / string_value(object_value(sandbox, "profile"), "path"),
             verify_runtime,
+            validate_east_asian_binding(
+                object_value(lock, "east_asian_font"),
+                load_east_asian_policy(),
+            ),
         )
         routing = load_reference_routing(ROUTING)
         destination.mkdir()

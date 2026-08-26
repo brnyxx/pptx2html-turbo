@@ -4,6 +4,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TypeAlias
 
+from evaluate.multiformat_east_asian_fonts import (
+    EastAsianFontError,
+    EastAsianSubstitute,
+)
+from evaluate.multiformat_east_asian_fonts import (
+    load_policy as load_east_asian_policy,
+)
+from evaluate.multiformat_east_asian_fonts import (
+    validate_lock_binding as validate_east_asian_binding,
+)
 from evaluate.multiformat_evidence import EvidencePathError, resolve_evidence_path
 from evaluate.multiformat_portable_outer_sandbox import (
     RuntimeIdentity,
@@ -52,6 +62,7 @@ class PortableReferenceLockIdentity(ReferenceLockIdentity):
     scope_format: str
     corpus_path: Path
     corpus_sha256: str
+    east_asian_font: EastAsianSubstitute
 
 
 def validate_reference_lock(
@@ -99,6 +110,10 @@ def validate_reference_lock(
             binding = object_value(lock, field)
             string_value(binding, "version")
             _artifact_path(binding, evidence_root)
+        east_asian_font = validate_east_asian_binding(
+            object_value(lock, "east_asian_font"),
+            load_east_asian_policy(),
+        )
 
         browser = object_value(lock, "browser")
         chromium = object_value(browser, "chromium")
@@ -156,11 +171,14 @@ def validate_reference_lock(
             scope_format=scope_format,
             corpus_path=corpus_path,
             corpus_sha256=sha256_value(corpus_binding, "sha256"),
+            east_asian_font=east_asian_font,
         )
     except PortableLockIncompleteError:
         raise
     except PortableLockError:
         raise
+    except EastAsianFontError as error:
+        raise PortableLockError(str(error)) from error
     except (EvidencePathError, OSError, TypeError, UnicodeError, ValueError) as error:
         raise PortableLockError("portable reference lock is invalid") from error
 
@@ -187,6 +205,13 @@ def portable_lock_template() -> JsonObject:
         "routing_table_sha256": "",
         "canonicalizer": {**versioned},
         "font_bundle": {**versioned},
+        "east_asian_font": {
+            "family": "",
+            "path": "",
+            "sha256": "",
+            "size_bytes": 0,
+            "policy_sha256": "",
+        },
         "configuration": {**versioned},
         "browser": {"chromium": {**versioned}, "lock": {**binding}},
         "candidate_runtime_lock": {**binding},
