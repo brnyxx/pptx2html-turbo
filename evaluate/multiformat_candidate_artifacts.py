@@ -116,8 +116,6 @@ def _regular_source(source_value: Path) -> Path:
         raise CandidateArtifactError(
             f"runtime artifact is not a regular file: {resolved}"
         )
-    if value.st_nlink != 1:
-        raise CandidateArtifactError(f"runtime artifact is hardlinked: {resolved}")
     return resolved
 
 
@@ -170,8 +168,8 @@ def _copy_regular(source_value: str | Path, destination_value: str | Path) -> st
     source_descriptor = os.open(source, flags)
     try:
         before = os.fstat(source_descriptor)
-        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
-            raise CandidateArtifactError(f"runtime artifact is not private: {source}")
+        if not stat.S_ISREG(before.st_mode):
+            raise CandidateArtifactError(f"runtime artifact is not regular: {source}")
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination_descriptor = os.open(
             destination,
@@ -215,10 +213,6 @@ def _source_tree_identity(root: Path) -> tuple[tuple[str, tuple[int, ...]], ...]
                 raise CandidateArtifactError(
                     f"runtime package symlink escapes root: {relative}"
                 )
-        elif stat.S_ISREG(information.st_mode) and information.st_nlink != 1:
-            raise CandidateArtifactError(
-                f"runtime package contains hardlink: {relative}"
-            )
         if not (
             stat.S_ISREG(information.st_mode)
             or stat.S_ISDIR(information.st_mode)

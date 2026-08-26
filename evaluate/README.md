@@ -525,7 +525,8 @@ uses the distinct candidate key only through the signed attestation and uses
 private, lock-bound runtime snapshots for execution. Every runtime file is a
 new single-link inode under `runtime-inputs`; package links are accepted only
 when they resolve inside the package and are materialized as private regular
-files. Escaping links, hardlinks, special files, and output aliases fail closed.
+files. Stable source hardlinks are copied rather than linked; escaping links,
+special files, and every destination alias or hardlink fail closed.
 The capture retains each snapshot's path, inode, mode, size, timestamps, and
 hash, then revalidates that identity before and after each clean run and before
 and after receipt verification. Thus mutate-execute-restore cannot pass receipt

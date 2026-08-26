@@ -29,23 +29,29 @@ class CandidateRuntimeArtifactTests(unittest.TestCase):
             self.assertEqual(snapshot.read_bytes(), b"verified-runtime")
             self.assertEqual(snapshot.stat().st_nlink, 1)
 
-    def test_rejects_aliases_and_escaping_package_descendants(self) -> None:
+    def test_hardlinked_source_is_copied_to_a_private_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             evidence_root = root / "evidence"
             evidence_root.mkdir()
             source = root / "tool"
-            source.write_bytes(b"runtime")
+            source.write_bytes(b"locked-runtime")
             alias = root / "tool-alias"
             alias.hardlink_to(source)
 
-            with self.assertRaisesRegex(CandidateArtifactError, "hardlinked"):
-                materialize_runtime_artifacts(
-                    {"converter_binary": source},
-                    evidence_root,
-                    evidence_root / "hardlink-snapshot",
-                )
+            artifacts = materialize_runtime_artifacts(
+                {"converter_binary": source},
+                evidence_root,
+                evidence_root / "hardlink-snapshot",
+            )
+            snapshot = artifacts["converter_binary"]
+            alias.write_bytes(b"changed-runtime")
 
+            self.assertEqual(snapshot.read_bytes(), b"locked-runtime")
+            self.assertEqual(snapshot.stat().st_nlink, 1)
+            self.assertNotEqual(snapshot.stat().st_ino, source.stat().st_ino)
+
+    def test_rejects_symlinks_and_escaping_package_descendants(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             evidence_root = root / "evidence"

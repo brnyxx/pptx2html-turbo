@@ -48,6 +48,16 @@ class CaptureMultiFormatCandidatesTests(unittest.TestCase):
 
             capture = json.loads(result.capture.read_text(encoding="utf-8"))
             determinism = json.loads(result.determinism.read_text(encoding="utf-8"))
+            runtime = json.loads(result.runtime_identity.read_text(encoding="utf-8"))
+            chromium_snapshot = (
+                fixture.evidence_root / runtime["artifacts"]["chromium_binary"]["path"]
+            )
+            self.assertGreater(fixture.chromium.stat().st_nlink, 1)
+            self.assertEqual(chromium_snapshot.stat().st_nlink, 1)
+            self.assertNotEqual(
+                (chromium_snapshot.stat().st_dev, chromium_snapshot.stat().st_ino),
+                (fixture.chromium.stat().st_dev, fixture.chromium.stat().st_ino),
+            )
             self.assertEqual(capture["status"], "READY")
             self.assertEqual(len(capture["units"]), 7)
             self.assertEqual(len(capture["files"]), 6)
