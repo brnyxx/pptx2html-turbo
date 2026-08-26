@@ -225,6 +225,7 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
                 "executor": _binding(root, paths["executor"]),
             },
             "scope": {
+                "format": document_format,
                 "contract": _binding(root, paths["contract"]),
                 "evaluator": _binding(root, paths["evaluator"]),
                 "corpus": _binding(root, corpus),
