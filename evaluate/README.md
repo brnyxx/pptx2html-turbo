@@ -591,12 +591,18 @@ done
 Before signing, the create-only sentinel command uses `O_EXCL` to publish a
 readable file inside the reference root, so reruns cannot overwrite it. A
 bounded unsandboxed control must reach the exact external endpoint;
-then bounded probes through the final outer-lock sandbox must deny that endpoint
-and the sentinel. The signature binds `control=reachable`, `sandbox=denied`, the
-reference root, and the sentinel. Reference capture writes beneath that denied
-root. Candidate capture and each single security case re-exec their complete
-converter, LibreOffice, and Chromium process trees under the exact sandbox and
-repeat only the denial probes before use. Browser loading still intercepts one
+then bounded probes through the final outer-lock sandbox must deny that endpoint,
+local Unix-socket creation, and the sentinel. The generated profile grants only
+LibreOffice's required `network-bind` operation, scoped to the locked
+LibreOffice executable and its fixed `/private/tmp/OSL_PIPE_*_SingleOfficeIPC_*`
+name shape; it grants no Unix-socket connection permission. Poppler, Chromium,
+and Playwright use inherited pipes and Mach IPC. The signature binds
+`control=reachable`, `sandbox=denied`, the reference root, and
+the sentinel. Reference capture writes beneath that denied root. Candidate
+capture and each single security case re-exec their complete converter,
+LibreOffice, and Chromium process trees under the exact sandbox and repeat the
+denial probes before use, including an in-process Unix-socket bind probe that a
+forged active marker cannot skip. Browser loading still intercepts one
 synthetic HTTP document and rejects every other request as defense-in-depth.
 The signature binds the observed results, exact sandbox executable/profile,
 sentinel, outer-lock scope, and font environment. Self-authored JSON is

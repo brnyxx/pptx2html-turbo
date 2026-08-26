@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import socket
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Final
@@ -13,6 +14,14 @@ NETWORK_SCRIPT: Final = (
 ORACLE_SCRIPT: Final = (
     "import os,pathlib; pathlib.Path(os.environ['ORACLE_SENTINEL']).read_bytes()"
 )
+UNIX_SOCKET_SCRIPT: Final = """\
+import socket
+import tempfile
+from pathlib import Path
+with tempfile.TemporaryDirectory(prefix="candidate-unix-probe-") as temporary:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+        listener.bind((Path(temporary) / "listener.sock").as_posix())
+"""
 _PROBE_TIMEOUT_SECONDS: Final = 2.0
 
 
@@ -26,6 +35,7 @@ def require_current_process_isolation(
     """Probe sandbox restrictions without delegating them to child processes."""
     require_oracle_denied(oracle_root, sentinel)
     require_network_denied(endpoint)
+    require_unix_socket_denied()
 
 
 def require_oracle_denied(oracle_root: Path, sentinel: Path) -> None:
@@ -48,6 +58,16 @@ def require_network_denied(endpoint: str) -> None:
         )
     finally:
         connection.close()
+
+
+def require_unix_socket_denied() -> None:
+    with tempfile.TemporaryDirectory(prefix="candidate-unix-probe-") as temporary:
+        path = Path(temporary) / "listener.sock"
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            _require_permission_denied(
+                lambda: listener.bind(path.as_posix()),
+                "candidate Unix socket creation",
+            )
 
 
 def _open_directory(path: Path) -> None:
@@ -86,7 +106,9 @@ __all__ = [
     "NETWORK_ENDPOINT",
     "NETWORK_SCRIPT",
     "ORACLE_SCRIPT",
+    "UNIX_SOCKET_SCRIPT",
     "require_current_process_isolation",
     "require_network_denied",
     "require_oracle_denied",
+    "require_unix_socket_denied",
 ]

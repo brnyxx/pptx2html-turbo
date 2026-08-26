@@ -41,6 +41,7 @@ class CandidateRuntimeProfile:
     evidence_root: Path | None = None
     sandbox_executable: Path | None = None
     sandbox_profile: Path | None = None
+    libreoffice: Path | None = None
 
     @property
     def portable(self) -> bool:
@@ -118,6 +119,7 @@ def resolve_candidate_runtime_profile(
             raise CandidateRuntimeProfileError("candidate Chromium versions differ")
         signer = object_value(lock, "signer")
         sandbox = object_value(lock, "sandbox")
+        tools = object_value(lock, "tools")
         return CandidateRuntimeProfile(
             2,
             identity.profile,
@@ -139,6 +141,7 @@ def resolve_candidate_runtime_profile(
             evidence_root,
             _bound_path(object_value(sandbox, "executable"), evidence_root),
             _bound_path(object_value(sandbox, "profile"), evidence_root),
+            _bound_path(object_value(tools, "libreoffice"), evidence_root),
         )
     except CandidateRuntimeProfileError:
         raise

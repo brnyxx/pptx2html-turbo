@@ -48,7 +48,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
     def test_deterministic_fake_sandbox_exercises_success_on_any_host(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            sandbox = self._fixture(root, denied={"network", "oracle"})
+            sandbox = self._fixture(root, denied={"network", "unix-socket", "oracle"})
             observe_sandbox(sandbox)
             with (
                 mock.patch.dict(
@@ -67,6 +67,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             )
             command, environment = sandbox_command(sandbox, ["converter", "input"])
             self.assertEqual(command[-2:], ["converter", "input"])
+            self.assertIn(f"LIBREOFFICE={sandbox.libreoffice.as_posix()}", command)
             self.assertEqual(
                 environment["PPTX2HTML_CANDIDATE_SANDBOX"],
                 sha256_file(sandbox.profile),
@@ -85,11 +86,29 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             observe_network_control()
 
     def test_unsandboxed_passthrough_and_network_capable_profiles_fail(self) -> None:
-        for denied in (set(), {"oracle"}):
+        for denied in (set(), {"oracle"}, {"network", "oracle"}):
             with self.subTest(denied=denied), tempfile.TemporaryDirectory() as temp:
                 sandbox = self._fixture(Path(temp), denied=denied)
                 with self.assertRaisesRegex(CandidateSandboxError, "probe failed"):
                     observe_sandbox(sandbox)
+
+    def test_forged_marker_cannot_hide_local_unix_socket_access(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            sandbox = self._fixture(Path(temp), denied={"network", "oracle"})
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"PPTX2HTML_CANDIDATE_SANDBOX": sha256_file(sandbox.profile)},
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox_probe.require_oracle_denied"
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox_probe.require_network_denied"
+                ),
+                self.assertRaisesRegex(CandidateSandboxError, "Unix socket"),
+            ):
+                require_active_sandbox(sandbox)
 
     def test_forged_marker_cannot_hide_readable_non_sentinel_oracle_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -132,7 +151,11 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 ),
                 mock.patch(
                     "evaluate.multiformat_candidate_sandbox.resolve_locked_sandbox",
-                    return_value=(sandbox.executable, sandbox.profile),
+                    return_value=(
+                        sandbox.executable,
+                        sandbox.profile,
+                        sandbox.libreoffice,
+                    ),
                 ),
                 mock.patch(
                     "evaluate.multiformat_candidate_sandbox.resolve_attested_sandbox",
@@ -152,8 +175,13 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_direct_denial_probe_has_deterministic_fake_positive_fixture(self) -> None:
-        denied_socket = mock.Mock()
-        denied_socket.connect.side_effect = PermissionError(1, "denied")
+        denied_network = mock.Mock()
+        denied_network.connect.side_effect = PermissionError(1, "denied")
+        denied_unix = mock.MagicMock()
+        denied_unix.__enter__.return_value = denied_unix
+        denied_unix.bind.side_effect = PermissionError(1, "denied")
+        temporary = mock.MagicMock()
+        temporary.__enter__.return_value = "/tmp/candidate-unix-probe"
         with (
             mock.patch(
                 "evaluate.multiformat_candidate_sandbox_probe.os.scandir",
@@ -165,14 +193,19 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             ),
             mock.patch(
                 "evaluate.multiformat_candidate_sandbox_probe.socket.socket",
-                return_value=denied_socket,
+                side_effect=(denied_network, denied_unix),
+            ),
+            mock.patch(
+                "evaluate.multiformat_candidate_sandbox_probe.tempfile.TemporaryDirectory",
+                return_value=temporary,
             ),
         ):
             require_current_process_isolation(
                 Path("/oracle"), Path("/oracle/sentinel"), "1.1.1.1:443"
             )
-        denied_socket.settimeout.assert_called_once()
-        denied_socket.close.assert_called_once()
+        denied_network.settimeout.assert_called_once()
+        denied_network.close.assert_called_once()
+        denied_unix.bind.assert_called_once()
 
     def test_offline_host_failure_is_not_accepted_as_network_denial(self) -> None:
         offline_socket = mock.Mock()
@@ -209,7 +242,9 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 ) as digest,
             ):
                 resolved = resolve_attested_sandbox(
-                    values, root, sandbox.executable, sandbox.profile
+                    values,
+                    root,
+                    (sandbox.executable, sandbox.profile, sandbox.libreoffice),
                 )
             hashed_paths = {call.args[0] for call in digest.call_args_list}
             self.assertEqual(resolved.executable, sandbox.executable)
@@ -241,8 +276,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                     resolve_attested_sandbox(
                         values,
                         root,
-                        sandbox.executable,
-                        sandbox.profile,
+                        (sandbox.executable, sandbox.profile, sandbox.libreoffice),
                     )
 
     @staticmethod
@@ -291,7 +325,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 probe = os.environ.get('PPTX2HTML_SANDBOX_PROBE')
                 if probe in {denied!r}:
                     raise SystemExit(77)
-                if probe in {{'network', 'oracle'}}:
+                if probe in {{'network', 'unix-socket', 'oracle'}}:
                     raise SystemExit(0)
                 raise SystemExit(subprocess.run(args, check=False).returncode)
                 """
@@ -299,7 +333,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             encoding="utf-8",
         )
         executable.chmod(0o755)
-        return CandidateSandbox(executable, profile, oracle_root, sentinel)
+        return CandidateSandbox(executable, profile, executable, oracle_root, sentinel)
 
 
 if __name__ == "__main__":

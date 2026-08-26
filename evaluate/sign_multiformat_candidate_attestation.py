@@ -85,11 +85,17 @@ def sign_candidate_attestation(
             character not in "0123456789abcdef" for character in run_nonce
         ):
             raise CandidateAttestationSignError("candidate run nonce is malformed")
-        sandbox_executable, sandbox_profile = resolve_locked_sandbox(lock, root)
+        sandbox_executable, sandbox_profile, libreoffice = resolve_locked_sandbox(
+            lock, root
+        )
         resolved_oracle_root = oracle_root.resolve(strict=True)
         sentinel = oracle_sentinel.resolve(strict=True)
         sandbox = CandidateSandbox(
-            sandbox_executable, sandbox_profile, resolved_oracle_root, sentinel
+            sandbox_executable,
+            sandbox_profile,
+            libreoffice,
+            resolved_oracle_root,
+            sentinel,
         )
         observe_network_control()
         observe_sandbox(sandbox)

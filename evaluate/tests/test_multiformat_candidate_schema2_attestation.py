@@ -174,6 +174,7 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
             evidence_root=evidence_root,
             sandbox_executable=sandbox_executable,
             sandbox_profile=sandbox_profile,
+            libreoffice=sandbox_executable,
         )
 
 

@@ -129,13 +129,17 @@ def verify_candidate_attestation(
         profile.evidence_root is None
         or profile.sandbox_executable is None
         or profile.sandbox_profile is None
+        or profile.libreoffice is None
     ):
         raise CandidateAttestationError("portable sandbox lock binding is missing")
     sandbox = resolve_attested_sandbox(
         values,
         profile.evidence_root,
-        profile.sandbox_executable,
-        profile.sandbox_profile,
+        (
+            profile.sandbox_executable,
+            profile.sandbox_profile,
+            profile.libreoffice,
+        ),
     )
     expected: dict[str, JsonValue] = {
         "schema_version": 3,

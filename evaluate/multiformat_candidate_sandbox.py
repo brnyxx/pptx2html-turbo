@@ -13,6 +13,7 @@ from evaluate.multiformat_candidate_sandbox_probe import (
     NETWORK_ENDPOINT,
     NETWORK_SCRIPT,
     ORACLE_SCRIPT,
+    UNIX_SOCKET_SCRIPT,
     require_current_process_isolation,
 )
 from evaluate.multiformat_candidate_types import CandidateCaptureError
@@ -40,6 +41,7 @@ class CandidateSandboxError(CandidateCaptureError, ValueError):
 class CandidateSandbox:
     executable: Path
     profile: Path
+    libreoffice: Path
     oracle_root: Path
     sentinel: Path
 
@@ -60,17 +62,22 @@ class CandidateSandbox:
         return _binding(root, self.sentinel)
 
 
-def resolve_locked_sandbox(lock: dict[str, JsonValue], root: Path) -> tuple[Path, Path]:
+def resolve_locked_sandbox(
+    lock: dict[str, JsonValue], root: Path
+) -> tuple[Path, Path, Path]:
     sandbox = object_value(lock, "sandbox")
+    tools = object_value(lock, "tools")
     return (
         _bound_path(root, object_value(sandbox, "executable")),
         _bound_path(root, object_value(sandbox, "profile")),
+        _bound_path(root, object_value(tools, "libreoffice")),
     )
 
 
 def resolve_attested_sandbox(
-    values: dict[str, JsonValue], root: Path, executable: Path, profile: Path
+    values: dict[str, JsonValue], root: Path, locked: tuple[Path, Path, Path]
 ) -> CandidateSandbox:
+    executable, profile, libreoffice = locked
     attested_executable = _bound_path(root, object_value(values, "sandbox_executable"))
     attested_profile = _bound_path(root, object_value(values, "sandbox_profile"))
     locked_paths = (executable.resolve(strict=True), profile.resolve(strict=True))
@@ -89,7 +96,7 @@ def resolve_attested_sandbox(
     )
     if not sentinel.is_relative_to(oracle_root) or sentinel == oracle_root:
         raise CandidateSandboxError("candidate oracle sentinel escapes oracle root")
-    return CandidateSandbox(executable, profile, oracle_root, sentinel)
+    return CandidateSandbox(executable, profile, libreoffice, oracle_root, sentinel)
 
 
 def observe_network_control() -> None:
@@ -110,6 +117,7 @@ def observe_sandbox(
             ) from error
     _probe(sandbox, "control", "raise SystemExit(0)", expect_denied=False)
     _probe(sandbox, "network", NETWORK_SCRIPT, expect_denied=True)
+    _probe(sandbox, "unix-socket", UNIX_SOCKET_SCRIPT, expect_denied=True)
     _probe(sandbox, "oracle", ORACLE_SCRIPT, expect_denied=True)
 
 
@@ -125,16 +133,16 @@ def enter_locked_sandbox(
         return
     root = evidence_root.resolve(strict=True)
     validate_reference_lock(lock_path, root)
-    executable, profile = resolve_locked_sandbox(lock, root)
+    locked = resolve_locked_sandbox(lock, root)
     values = read_strict_object(attestation_path.resolve(strict=True))
-    sandbox = resolve_attested_sandbox(values, root, executable, profile)
-    if os.environ.get(_ACTIVE_ENV) == sha256_file(profile):
+    sandbox = resolve_attested_sandbox(values, root, locked)
+    if os.environ.get(_ACTIVE_ENV) == sha256_file(sandbox.profile):
         _require_current_process_isolation(sandbox)
         return
     command, environment = sandbox_command(
         sandbox, [sys.executable, "-m", module, *argv]
     )
-    os.execve(executable, command, environment)
+    os.execve(sandbox.executable, command, environment)
 
 
 def require_active_sandbox(sandbox: CandidateSandbox) -> None:
@@ -163,6 +171,8 @@ def sandbox_command(
         f"ORACLE_ROOT={sandbox.oracle_root.as_posix()}",
         "-D",
         f"ORACLE_SENTINEL={sandbox.sentinel.as_posix()}",
+        "-D",
+        f"LIBREOFFICE={sandbox.libreoffice.as_posix()}",
         "-f",
         sandbox.profile.as_posix(),
         *command,

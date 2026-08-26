@@ -208,13 +208,19 @@ def versioned(root: Path, path: Path, version: str) -> dict[str, JsonValue]:
 
 
 def write_sandbox_profile(path: Path) -> None:
-    path.write_text(
-        "(version 1)\n(allow default)\n(deny network*)\n"
-        "(allow network* (local unix-socket))\n"
-        "(allow network* (remote unix-socket))\n"
-        '(deny file-read* (subpath (param "ORACLE_ROOT")))\n',
-        encoding="utf-8",
+    profile = "\n".join(
+        (
+            "(version 1)",
+            "(allow default)",
+            "(deny network*)",
+            '(if (param "LIBREOFFICE")',
+            '  (with-filter (process-path (param "LIBREOFFICE"))',
+            "    (allow network-bind",
+            '      (local unix-socket (regex #"^/private/tmp/OSL_PIPE_[0-9]+_SingleOfficeIPC_[0-9a-f]+$")))))',
+            '(deny file-read* (subpath (param "ORACLE_ROOT")))',
+        )
     )
+    path.write_text(profile + "\n", encoding="utf-8")
 
 
 def write_sandbox_wrapper(path: Path, executable: Path) -> None:
