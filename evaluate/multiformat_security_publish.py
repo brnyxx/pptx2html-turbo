@@ -50,6 +50,7 @@ def publish_security_snapshot(
     lock = resolved_parent / f".{target.name}.security-sources.lock"
     lock_descriptor, lock_identity = _acquire_lock(lock)
     staging: Path | None = None
+    staging_descriptor: int | None = None
     staging_identity: _Identity | None = None
     published = False
     try:
@@ -64,7 +65,11 @@ def publish_security_snapshot(
                 dir=resolved_parent,
             )
         )
-        staging_identity = _identity(staging.stat())
+        # Hold an open descriptor on the staging directory so the kernel
+        # cannot recycle its inode number while publication is in flight;
+        # otherwise the (device, inode) ownership checks are unsound on
+        # filesystems that promptly reuse inode numbers (e.g. ext4).
+        staging_descriptor, staging_identity = _open_staging(staging)
         writer(staging)
         if os.path.lexists(target):
             raise SecurityPublishError(
@@ -89,6 +94,7 @@ def publish_security_snapshot(
         cleanup_error = _cleanup(
             published,
             staging,
+            staging_descriptor,
             staging_identity,
             lock_descriptor,
             lock,
@@ -123,9 +129,18 @@ def _identity(value: os.stat_result) -> _Identity:
     return _Identity(value.st_dev, value.st_ino)
 
 
+def _open_staging(path: Path) -> tuple[int, _Identity]:
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_DIRECTORY", 0)
+    flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    return descriptor, _identity(os.fstat(descriptor))
+
+
 def _cleanup(
     published: bool,
     staging: Path | None,
+    staging_descriptor: int | None,
     staging_identity: _Identity | None,
     lock_descriptor: int,
     lock: Path,
@@ -137,6 +152,11 @@ def _cleanup(
             _remove_owned_directory(staging, staging_identity)
         except OSError as error:
             first_error = error
+    if staging_descriptor is not None:
+        try:
+            os.close(staging_descriptor)
+        except OSError as error:
+            first_error = first_error or error
     try:
         os.close(lock_descriptor)
     except OSError as error:
