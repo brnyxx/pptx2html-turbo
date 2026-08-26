@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import platform
 from pathlib import Path
 from typing import cast
 
@@ -23,6 +22,10 @@ from evaluate.tests.multiformat_candidate_runtime_evidence_fixture import (
     runtime_evidence,
 )
 from evaluate.tests.multiformat_metric_artifact_fixture import binding
+from evaluate.tests.multiformat_outer_lock_fixture import (
+    PORTABLE_TEST_ARCHITECTURE,
+    PORTABLE_TEST_OS,
+)
 from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
 
 
@@ -132,8 +135,8 @@ class PortableCaptureFixture:
                 "chromium": tools["browser_version"],
                 "executable_sha256": tools["chromium_sha256"],
                 "playwright": tools["playwright"],
-                "os": platform.system(),
-                "architecture": platform.machine(),
+                "os": PORTABLE_TEST_OS,
+                "architecture": PORTABLE_TEST_ARCHITECTURE,
                 "font_environment_sha256": tools["font_environment_sha256"],
             },
             "candidate_runtime": {
@@ -196,8 +199,8 @@ class PortableCaptureFixture:
                 self.trust.evaluator_sha256,
                 self.trust.lock_sha256,
             )
-            os_name = platform.system()
-            architecture = platform.machine()
+            os_name = self.trust.platform_os
+            architecture = self.trust.architecture
             python = "3.11.0"
         else:
             tools = {

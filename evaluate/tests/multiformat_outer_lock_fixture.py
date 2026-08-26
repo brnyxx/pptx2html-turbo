@@ -14,6 +14,8 @@ from evaluate.tests.multiformat_east_asian_font_fixture import (
 )
 
 _ROUTING = Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
+PORTABLE_TEST_OS = "Linux"
+PORTABLE_TEST_ARCHITECTURE = "arm64"
 
 
 def write_portable_receipt_lock(
@@ -69,8 +71,8 @@ def write_portable_receipt_lock(
         json.dumps(
             {
                 "schema_version": 1,
-                "os": "Linux",
-                "architecture": "arm64",
+                "os": PORTABLE_TEST_OS,
+                "architecture": PORTABLE_TEST_ARCHITECTURE,
                 "locale": "en-US",
                 "timezone": "UTC",
                 "rendering_dpi": 144,
@@ -89,7 +91,10 @@ def write_portable_receipt_lock(
         "schema_version": 2,
         "status": "locked",
         "reference_profile": "libreoffice-poppler",
-        "platform": {"os": "Linux", "architecture": "arm64"},
+        "platform": {
+            "os": PORTABLE_TEST_OS,
+            "architecture": PORTABLE_TEST_ARCHITECTURE,
+        },
         "rust_toolchain": rust_toolchain_lock_value(),
         "tools": {
             "libreoffice": {"version": "test", **binding["soffice"]},
