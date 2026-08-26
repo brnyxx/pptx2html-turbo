@@ -25,6 +25,7 @@ from evaluate.tests.multiformat_hard_gate_fixture import (
 )
 from evaluate.tests.multiformat_metric_artifact_fixture import (
     binding,
+    pair_digests,
     sha256,
     write_unit_artifacts,
 )
@@ -107,14 +108,13 @@ def write_metrics(
                     "artifacts": artifacts,
                 }
             )
-        blind.append(
-            {
-                "source_id": source["id"],
-                "source_sha256": source["sha256"],
-                "critical_defect": False,
-                "units": units,
-            }
-        )
+        record: dict[str, JsonValue] = {
+            "source_id": source["id"],
+            "source_sha256": source["sha256"],
+            "critical_defect": False,
+            "units": list(units),
+        }
+        blind.append(record)
     python = Path(sys.executable).resolve().as_posix()
     commands_path = root / f"{document_format}-commands.json"
     cargo = subprocess.run(
@@ -253,9 +253,9 @@ def write_metrics(
             "command_plan": binding(root, commands_path),
             "command_plan_sha256": command_plan.sha256,
         },
-        "conformance": {"units": conformance},
-        "blind": {"files": blind},
-        "security": {"cases": security},
+        "conformance": {"units": list(conformance)},
+        "blind": {"files": list(blind)},
+        "security": {"cases": list(security)},
         "determinism": determinism_value,
         "review": review,
         "quality": quality,
@@ -299,13 +299,7 @@ def _signed_reviews(
             for (reviewer_id, role), key in zip(reviewers, keys, strict=True)
         ],
         "pairs": [
-            {
-                "pair_id": pair_id,
-                "reference_png_sha256": oracle[pair_id]["png"]["sha256"],
-                "candidate_png_sha256": candidate[pair_id]["png"]["sha256"],
-                "reference_inventory_sha256": oracle[pair_id]["inventory"]["sha256"],
-                "candidate_inventory_sha256": candidate[pair_id]["inventory"]["sha256"],
-            }
+            pair_digests(oracle[pair_id], candidate[pair_id], pair_id)
             for pair_id in sorted(pair_ids)
         ],
     }

@@ -78,6 +78,7 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_office_oracle_batch_materialize.py",
     "evaluate/multiformat_office_oracle_finalize_runtime.py",
     "evaluate/multiformat_office_oracle_inventory.py",
+    "evaluate/multiformat_office_oracle_layout.py",
     "evaluate/multiformat_office_oracle_manifest.py",
     "evaluate/multiformat_office_oracle_runtime.py",
     "evaluate/multiformat_public_pool.py",

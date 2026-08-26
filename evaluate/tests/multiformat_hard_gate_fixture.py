@@ -5,7 +5,13 @@ from pathlib import Path
 
 from evaluate.multiformat_command_evidence import CommandPlan, command_value
 from evaluate.multiformat_schema import JsonValue
-from evaluate.tests.multiformat_metric_artifact_fixture import binding
+from evaluate.tests.multiformat_metric_artifact_fixture import (
+    binding,
+    integer_field,
+    object_field,
+    pair_digests,
+    text_field,
+)
 
 
 class HardGateFixtureError(Exception):
@@ -83,7 +89,9 @@ def determinism_run(
             if run_id == 1:
                 html_binding = candidate_file["html"]
             else:
-                candidate_html = root / candidate_file["html"]["path"]
+                candidate_html = root / text_field(
+                    object_field(candidate_file, "html"), "path"
+                )
                 html = run_root / f"{stem}.html"
                 html.write_bytes(candidate_html.read_bytes())
                 html_binding = binding(root, html)
@@ -91,16 +99,18 @@ def determinism_run(
             png: list[dict[str, JsonValue]] = []
             source_units = sorted(
                 (unit for unit in candidate_units if unit["source_id"] == source["id"]),
-                key=lambda unit: unit["ordinal"],
+                key=lambda unit: integer_field(unit, "ordinal"),
             )
             if len(source_units) != unit_count:
                 raise HardGateFixtureError("candidate fixture unit mismatch")
             unit_inventories: list[dict[str, JsonValue]] = []
             for ordinal, unit in enumerate(source_units, start=1):
                 if run_id == 1:
-                    unit_inventories.append(unit["inventory"])
+                    unit_inventories.append(object_field(unit, "inventory"))
                 else:
-                    candidate_inventory = root / unit["inventory"]["path"]
+                    candidate_inventory = root / text_field(
+                        object_field(unit, "inventory"), "path"
+                    )
                     run_inventory = run_root / f"{stem}-{ordinal}-inventory.json"
                     run_inventory.write_bytes(candidate_inventory.read_bytes())
                     unit_inventories.append(binding(root, run_inventory))
@@ -117,23 +127,25 @@ def determinism_run(
             )
             for ordinal, unit in enumerate(source_units, start=1):
                 if run_id == 1:
-                    png.append(unit["png"])
+                    png.append(object_field(unit, "png"))
                 else:
-                    candidate_path = root / unit["png"]["path"]
+                    candidate_path = root / text_field(
+                        object_field(unit, "png"), "path"
+                    )
                     png_path = run_root / f"{stem}-{ordinal}.png"
                     png_path.write_bytes(candidate_path.read_bytes())
                     png.append(binding(root, png_path))
-            files.append(
-                {
-                    "track": track,
-                    "source_id": source["id"],
-                    "source_sha256": source["sha256"],
-                    "html": html_binding,
-                    "inventory": binding(root, inventory),
-                    "png": png,
-                }
-            )
-    return {"run_id": run_id, "files": files}
+            record: dict[str, JsonValue] = {
+                "track": track,
+                "source_id": source["id"],
+                "source_sha256": source["sha256"],
+                "html": html_binding,
+                "inventory": binding(root, inventory),
+                "png": list(png),
+            }
+            files.append(record)
+    result: dict[str, JsonValue] = {"run_id": run_id, "files": list(files)}
+    return result
 
 
 def reviewer(
@@ -166,15 +178,7 @@ def reviewer(
                 "corpus_manifest_sha256": corpus_hash,
                 "pairs": [
                     {
-                        "pair_id": pair_id,
-                        "reference_png_sha256": oracle[pair_id]["png"]["sha256"],
-                        "candidate_png_sha256": candidate[pair_id]["png"]["sha256"],
-                        "reference_inventory_sha256": oracle[pair_id]["inventory"][
-                            "sha256"
-                        ],
-                        "candidate_inventory_sha256": candidate[pair_id]["inventory"][
-                            "sha256"
-                        ],
+                        **pair_digests(oracle[pair_id], candidate[pair_id], pair_id),
                         "decision": "PASS",
                     }
                     for pair_id in pair_ids

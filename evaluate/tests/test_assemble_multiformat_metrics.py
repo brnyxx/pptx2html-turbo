@@ -40,6 +40,7 @@ from evaluate.multiformat_schema import (
     read_object,
     sha256_file,
     sha256_value,
+    string_list,
     string_value,
 )
 from evaluate.sign_multiformat_review_decision import sign_review_decision
@@ -652,8 +653,10 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             },
         )
         signed: list[Path] = []
-        for index, template_value in enumerate(summary["decision_templates"]):
-            template = Path(str(template_value))
+        for index, template_value in enumerate(
+            string_list(summary, "decision_templates")
+        ):
+            template = Path(template_value)
             value = read_object(template)
             for pair in object_list(value, "pairs", "review.pairs"):
                 pair["decision"] = "PASS"

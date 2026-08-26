@@ -6,28 +6,46 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluate.multiformat_corpus_items import object_list, require_keys
+from evaluate.multiformat_corpus_items import (
+    canonical_identity,
+    object_list,
+    require_keys,
+)
+from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_review_materialize import (
     ReviewMaterializeError,
     load_review_decision,
+    reviewer_trusts,
 )
-from evaluate.multiformat_schema import integer_value, string_value
+from evaluate.multiformat_schema import (
+    JsonValue,
+    integer_value,
+    sha256_file,
+    string_value,
+)
 from evaluate.multiformat_strict_json import read_strict_object
 
 
 def validate_completed_review(
     packet_path: Path, decision_path: Path
-) -> dict[str, object]:
+) -> dict[str, JsonValue]:
     packet = read_strict_object(packet_path)
     require_keys(
         packet,
-        {"schema_version", "status", "checklist_version", "bindings", "pairs"},
+        {
+            "schema_version",
+            "status",
+            "checklist_version",
+            "bindings",
+            "reviewers",
+            "pairs",
+        },
         "review.packet",
     )
     if (
-        integer_value(packet, "schema_version") != 1
-        or string_value(packet, "status") != "INCOMPLETE"
-        or string_value(packet, "checklist_version") != "multiformat-review-v1"
+        integer_value(packet, "schema_version") != 2
+        or string_value(packet, "status") != "READY"
+        or string_value(packet, "checklist_version") != "multiformat-review-v2"
     ):
         raise ReviewMaterializeError("unsupported review packet schema")
     pair_ids: set[str] = set()
@@ -47,7 +65,16 @@ def validate_completed_review(
         if pair_id in pair_ids:
             raise ReviewMaterializeError(f"duplicate review packet pair: {pair_id}")
         pair_ids.add(pair_id)
-    decision = load_review_decision(decision_path, frozenset(pair_ids))
+    trusts = reviewer_trusts(packet)
+    signer = canonical_identity(
+        string_value(read_strict_object(decision_path), "reviewer_id"), "reviewer_id"
+    )
+    trust = trusts.get(signer)
+    if trust is None:
+        raise ReviewMaterializeError("review decision signer is not packet-bound")
+    decision = load_review_decision(
+        decision_path, frozenset(pair_ids), sha256_file(packet_path), trust
+    )
     return {
         "status": "VALID",
         "reviewer_id": decision.reviewer_id,
@@ -69,7 +96,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         summary = validate_completed_review(args.review_packet, args.decision)
-    except (ReviewMaterializeError, OSError, TypeError, ValueError) as error:
+    except (
+        CorpusError,
+        ReviewMaterializeError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         sys.stdout.write(
             json.dumps({"status": "FAIL", "reason": str(error)}, sort_keys=True) + "\n"
         )

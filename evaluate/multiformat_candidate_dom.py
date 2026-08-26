@@ -19,16 +19,17 @@ def inventory_value(
     texts = [] if spreadsheet else _text_values(raw.get("texts"), pixel_scale)
     cells = _cell_values(raw.get("cells"), pixel_scale) if spreadsheet else []
     objects = _object_values(raw.get("objects"), pixel_scale)
-    return {
+    result: dict[str, JsonValue] = {
         "schema_version": 1,
         "unit_id": unit_id,
-        "texts": texts,
-        "cells": cells,
-        "objects": objects,
+        "texts": list(texts),
+        "cells": list(cells),
+        "objects": list(objects),
         # The rendered DOM has no notion of an unreproducible number format;
         # attribution refusals originate in the reference extractor.
         "unattributed_cells": [],
     }
+    return result
 
 
 def _text_values(value: JsonValue, scale: float) -> list[dict[str, JsonValue]]:
@@ -98,9 +99,14 @@ def _object_values(value: JsonValue, scale: float) -> list[dict[str, JsonValue]]
 
 
 def _records(value: JsonValue, reason: str) -> list[dict[str, JsonValue]]:
-    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+    if not isinstance(value, list):
         raise MetricError(reason, "expected object list")
-    return value
+    result: list[dict[str, JsonValue]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise MetricError(reason, "expected object list")
+        result.append(item)
+    return result
 
 
 def _box(record: dict[str, JsonValue], scale: float) -> list[JsonValue]:

@@ -20,11 +20,13 @@ class PortableReceiptIdentityError(ValueError):
     """A receipt identity or caller-provided replay identity is invalid."""
 
 
-class _ReceiptIdentitySeal:
+class ReceiptIdentitySeal:
+    """Unforgeable marker; only this module's constant marks verification."""
+
     __slots__ = ()
 
 
-_IDENTITY_SEAL: Final = _ReceiptIdentitySeal()
+_IDENTITY_SEAL: Final = ReceiptIdentitySeal()
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +39,7 @@ class PortableReceiptIdentity:
     scope_sha256: str
     artifact_root_sha256: str
     artifacts: tuple[StableFileIdentity, ...]
-    _seal: _ReceiptIdentitySeal
+    _seal: ReceiptIdentitySeal
 
     def is_verified(self) -> bool:
         return self._seal is _IDENTITY_SEAL
@@ -114,6 +116,7 @@ __all__ = [
     "PortableReceiptIdentity",
     "PortableReceiptIdentityError",
     "PortableReceiptVerification",
+    "ReceiptIdentitySeal",
     "VerifiedPortableReceipt",
     "finalize_receipt_identity",
     "reject_prior_replay",

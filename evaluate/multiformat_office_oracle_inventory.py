@@ -1,37 +1,21 @@
 from __future__ import annotations
 
 import hashlib
-import math
 from collections import defaultdict
-from dataclasses import dataclass
 from pathlib import Path
-from xml.etree import ElementTree
 
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
 from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_office_oracle_batch import (
     OfficeOracleBatchFile,
 )
+from evaluate.multiformat_office_oracle_layout import (
+    LayoutPage,
+    OfficeOracleInventoryError,
+    layout_pages,
+)
 from evaluate.multiformat_schema import JsonValue, string_value
 from evaluate.multiformat_strict_json import read_strict_object
-
-
-class OfficeOracleInventoryError(Exception):
-    pass
-
-
-@dataclass(frozen=True, slots=True)
-class LayoutLine:
-    value: str
-    box: tuple[float, float, float, float]
-    baseline: float
-
-
-@dataclass(frozen=True, slots=True)
-class LayoutPage:
-    width: float
-    height: float
-    lines: tuple[LayoutLine, ...]
 
 
 def write_office_oracle_inventories(
@@ -39,7 +23,7 @@ def write_office_oracle_inventories(
     unit_ids: list[str],
     output_dir: Path,
 ) -> list[Path]:
-    pages = _layout_pages(source.layout)
+    pages = layout_pages(source.layout)
     if len(pages) != len(source.units) or len(unit_ids) != len(pages):
         raise OfficeOracleInventoryError("office layout page count differs")
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -64,67 +48,18 @@ def write_office_oracle_inventories(
             else _text_items(page, scale_x, scale_y)
         )
         path = output_dir / f"unit-{index + 1}.json"
-        write_canonical_json(
-            path,
-            {
-                "schema_version": 1,
-                "unit_id": unit_id,
-                "texts": texts,
-                "cells": _scaled_cells(cells[index], scale_x, scale_y),
-                "objects": [],
-                # Repeated per unit so any single inventory carries the proof.
-                "unattributed_cells": unattributed,
-            },
-        )
+        inventory: dict[str, JsonValue] = {
+            "schema_version": 1,
+            "unit_id": unit_id,
+            "texts": list(texts),
+            "cells": list(_scaled_cells(cells[index], scale_x, scale_y)),
+            "objects": [],
+            # Repeated per unit so any single inventory carries the proof.
+            "unattributed_cells": unattributed,
+        }
+        write_canonical_json(path, inventory)
         result.append(path)
     return result
-
-
-def _layout_pages(path: Path) -> list[LayoutPage]:
-    value = path.read_bytes()
-    upper = value.upper()
-    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
-        raise OfficeOracleInventoryError("office layout XML is unsafe")
-    try:
-        root = ElementTree.fromstring(value)
-    except ElementTree.ParseError as error:
-        raise OfficeOracleInventoryError("office layout XML is invalid") from error
-    result: list[LayoutPage] = []
-    for page in (item for item in root.iter() if _local_name(item.tag) == "page"):
-        width = _attribute(page, "width")
-        height = _attribute(page, "height")
-        if width <= 0 or height <= 0:
-            raise OfficeOracleInventoryError("office layout page is invalid")
-        lines = tuple(
-            parsed
-            for item in page.iter()
-            if _local_name(item.tag) == "line"
-            and (parsed := _layout_line(item)) is not None
-        )
-        result.append(LayoutPage(width, height, lines))
-    if not result:
-        raise OfficeOracleInventoryError("office layout has no pages")
-    return result
-
-
-def _layout_line(element: ElementTree.Element) -> LayoutLine | None:
-    words = [
-        item
-        for item in element.iter()
-        if _local_name(item.tag) == "word" and (item.text or "").strip()
-    ]
-    if not words:
-        return None
-    value = " ".join((item.text or "").strip() for item in words)
-    x_min = min(_attribute(item, "xMin") for item in words)
-    y_min = min(_attribute(item, "yMin") for item in words)
-    x_max = max(_attribute(item, "xMax") for item in words)
-    y_max = max(_attribute(item, "yMax") for item in words)
-    return LayoutLine(
-        value,
-        (x_min, y_min, x_max - x_min, y_max - y_min),
-        y_max,
-    )
 
 
 def _text_items(
@@ -188,16 +123,15 @@ def _spreadsheet_cells(
             page_index, line_index, line = match
             used.add((page_index, line_index))
             coordinate = string_value(cell, "address").replace("$", "")
-            result[page_index].append(
-                {
-                    "identity": f"cell|{name}|{coordinate}",
-                    "worksheet": name,
-                    "coordinate": coordinate,
-                    "displayed_value": display,
-                    "box": list(line.box),
-                    "baseline": line.baseline,
-                }
-            )
+            record: dict[str, JsonValue] = {
+                "identity": f"cell|{name}|{coordinate}",
+                "worksheet": name,
+                "coordinate": coordinate,
+                "displayed_value": display,
+                "box": [float(item) for item in line.box],
+                "baseline": line.baseline,
+            }
+            result[page_index].append(record)
     return result
 
 
@@ -210,26 +144,20 @@ def _unattributed_cells(semantic_path: Path) -> list[JsonValue]:
         "worksheets",
         "office.semantic.worksheets",
     ):
-        raw = worksheet.get("unattributed_cells")
-        if raw is None:
+        if worksheet.get("unattributed_cells") is None:
             continue
-        if not isinstance(raw, list):
-            raise OfficeOracleInventoryError(
-                "office semantic unattributed_cells must be a list"
-            )
         for item in object_list(
             worksheet,
             "unattributed_cells",
             "office.semantic.unattributed_cells",
         ):
-            result.append(
-                {
-                    "worksheet": string_value(item, "worksheet"),
-                    "address": string_value(item, "address"),
-                    "number_format": string_value(item, "number_format"),
-                    "reason": string_value(item, "reason"),
-                }
-            )
+            refusal: dict[str, JsonValue] = {
+                "worksheet": string_value(item, "worksheet"),
+                "address": string_value(item, "address"),
+                "number_format": string_value(item, "number_format"),
+                "reason": string_value(item, "reason"),
+            }
+            result.append(refusal)
     return result
 
 
@@ -240,26 +168,39 @@ def _scaled_cells(
 ) -> list[dict[str, JsonValue]]:
     result: list[dict[str, JsonValue]] = []
     for order, value in enumerate(values, start=1):
-        box = value["box"]
         baseline = value["baseline"]
-        if not isinstance(box, list) or not isinstance(baseline, int | float):
+        if not isinstance(baseline, int | float) or isinstance(baseline, bool):
             raise OfficeOracleInventoryError("office cell geometry is invalid")
-        result.append(
-            {
-                **value,
-                "box": _scale_box(tuple(float(item) for item in box), scale_x, scale_y),
-                "baseline": baseline * scale_y,
-                "order": order,
-            }
-        )
+        scaled: dict[str, JsonValue] = {
+            **value,
+            "box": _scale_json_box(value["box"], scale_x, scale_y),
+            "baseline": baseline * scale_y,
+            "order": order,
+        }
+        result.append(scaled)
     return result
+
+
+def _scale_json_box(
+    value: JsonValue,
+    scale_x: float,
+    scale_y: float,
+) -> list[JsonValue]:
+    if not isinstance(value, list):
+        raise OfficeOracleInventoryError("office cell geometry is invalid")
+    box: list[float] = []
+    for item in value:
+        if not isinstance(item, int | float) or isinstance(item, bool):
+            raise OfficeOracleInventoryError("office cell geometry is invalid")
+        box.append(float(item))
+    return _scale_box(tuple(box), scale_x, scale_y)
 
 
 def _scale_box(
     box: tuple[float, ...],
     scale_x: float,
     scale_y: float,
-) -> list[float]:
+) -> list[JsonValue]:
     if len(box) != 4:
         raise OfficeOracleInventoryError("office box is invalid")
     return [
@@ -270,17 +211,4 @@ def _scale_box(
     ]
 
 
-def _attribute(element: ElementTree.Element, name: str) -> float:
-    try:
-        value = float(element.attrib[name])
-    except (KeyError, ValueError) as error:
-        raise OfficeOracleInventoryError(
-            "office layout attribute is invalid"
-        ) from error
-    if not math.isfinite(value):
-        raise OfficeOracleInventoryError("office layout attribute is non-finite")
-    return value
-
-
-def _local_name(value: str) -> str:
-    return value.rsplit("}", 1)[-1]
+__all__ = ["OfficeOracleInventoryError", "write_office_oracle_inventories"]

@@ -24,6 +24,7 @@ from evaluate.multiformat_command_evidence import (
     load_command_plan,
 )
 from evaluate.multiformat_review_materialize import (
+    ReviewerTrust,
     ReviewMaterializeError,
     load_review_decision,
     load_review_packet,
@@ -34,6 +35,47 @@ from evaluate.sign_multiformat_review_decision import (
     ReviewSigningError,
     sign_review_decision,
 )
+from evaluate.validate_multiformat_review_decision import validate_completed_review
+
+
+def _objects(values: dict[str, JsonValue], field: str) -> list[dict[str, JsonValue]]:
+    value = values[field]
+    if not isinstance(value, list):
+        raise TypeError(field)
+    result: list[dict[str, JsonValue]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise TypeError(field)
+        result.append(item)
+    return result
+
+
+def _string(values: dict[str, JsonValue], field: str) -> str:
+    value = values[field]
+    if not isinstance(value, str):
+        raise TypeError(field)
+    return value
+
+
+def _mapping(values: dict[str, JsonValue], field: str) -> dict[str, JsonValue]:
+    value = values[field]
+    if not isinstance(value, dict):
+        raise TypeError(field)
+    return value
+
+
+def _values(values: dict[str, JsonValue], field: str) -> list[JsonValue]:
+    value = values[field]
+    if not isinstance(value, list):
+        raise TypeError(field)
+    return value
+
+
+def _text(value: JsonValue) -> str:
+    if not isinstance(value, str):
+        raise TypeError("expected a string")
+    return value
+
 
 CARGO = subprocess.run(
     ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
@@ -143,7 +185,7 @@ class CommandPlanMaterializerTests(unittest.TestCase):
                 PERFORMANCE,
             )
             value = read_object(path)
-            value["security"]["argv_sha256"] = "0" * 64
+            _mapping(value, "security")["argv_sha256"] = "0" * 64
             path.write_text(json.dumps(value), encoding="utf-8")
             with self.assertRaises(CommandEvidenceError):
                 load_command_plan(path)
@@ -200,8 +242,9 @@ class ReviewAuthenticationTests(unittest.TestCase):
             signed = []
             for index, template in enumerate(templates):
                 value = read_object(template)
-                value["pairs"][0]["decision"] = "PASS"
-                value["pairs"][0]["critical_defect"] = False
+                pair = _objects(value, "pairs")[0]
+                pair["decision"] = "PASS"
+                pair["critical_defect"] = False
                 template.write_text(json.dumps(value), encoding="utf-8")
                 output = root / f"signed-{index}.json"
                 sign_review_decision(template, keys[index], output)
@@ -210,20 +253,71 @@ class ReviewAuthenticationTests(unittest.TestCase):
                     output,
                     frozenset({"pair-1"}),
                     packet_hash,
-                    trusts[value["reviewer_id"]],
+                    trusts[_string(value, "reviewer_id")],
                 )
                 self.assertEqual(decision.decisions["pair-1"], ("PASS", False))
             with self.assertRaises(ReviewSigningError):
                 sign_review_decision(templates[0], keys[0], signed[0])
+
+    def test_validate_cli_binds_packet_trust_to_the_signed_decision(self) -> None:
+        """The CLI must verify the signature against packet-bound trust.
+
+        It previously called the verifier without the packet hash and reviewer
+        trust, so a completed review could never be validated at all.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packet, templates, keys, _trusts, _hash = self._packet(root)
+            value = read_object(templates[0])
+            _objects(value, "pairs")[0].update(
+                {"decision": "PASS", "critical_defect": False}
+            )
+            templates[0].write_text(json.dumps(value), encoding="utf-8")
+            signed = root / "validated.json"
+            sign_review_decision(templates[0], keys[0], signed)
+
+            summary = validate_completed_review(packet, signed)
+
+            self.assertEqual(summary["status"], "VALID")
+            self.assertEqual(summary["reviewer_id"], "alice")
+            self.assertEqual(summary["reviewer_role"], "visual")
+            self.assertEqual(summary["pair_count"], 1)
+
+    def test_validate_cli_rejects_foreign_key_and_unbound_signer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packet, templates, keys, _trusts, _hash = self._packet(root)
+            value = read_object(templates[0])
+            _objects(value, "pairs")[0].update(
+                {"decision": "PASS", "critical_defect": False}
+            )
+            templates[0].write_text(json.dumps(value), encoding="utf-8")
+            signed = root / "validated.json"
+            sign_review_decision(templates[0], keys[0], signed)
+
+            foreign = read_object(signed)
+            foreign["reviewer_id"] = "carol"
+            unbound = root / "unbound.json"
+            unbound.write_text(json.dumps(foreign), encoding="utf-8")
+            with self.assertRaises(ReviewMaterializeError):
+                validate_completed_review(packet, unbound)
+
+            second = root / "second"
+            second.mkdir()
+            other_packet, _t, _k, _tr, _h = self._packet(second)
+            with self.assertRaises(ReviewMaterializeError):
+                validate_completed_review(other_packet, signed)
 
     def test_rejects_unsigned_wrong_key_duplicate_key_and_edited_decision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             _packet, templates, keys, trusts, packet_hash = self._packet(root)
             value = read_object(templates[0])
-            value["pairs"][0].update({"decision": "PASS", "critical_defect": False})
+            _objects(value, "pairs")[0].update(
+                {"decision": "PASS", "critical_defect": False}
+            )
             templates[0].write_text(json.dumps(value), encoding="utf-8")
-            trust = trusts[value["reviewer_id"]]
+            trust = trusts[_string(value, "reviewer_id")]
             with self.assertRaises(ReviewMaterializeError):
                 load_review_decision(
                     templates[0], frozenset({"pair-1"}), packet_hash, trust
@@ -242,7 +336,7 @@ class ReviewAuthenticationTests(unittest.TestCase):
             signed = root / "signed.json"
             sign_review_decision(templates[0], keys[0], signed)
             edited = read_object(signed)
-            edited["pairs"][0]["decision"] = "FAIL"
+            _objects(edited, "pairs")[0]["decision"] = "FAIL"
             signed.write_text(json.dumps(edited), encoding="utf-8")
             with self.assertRaises(ReviewMaterializeError):
                 load_review_decision(signed, frozenset({"pair-1"}), packet_hash, trust)
@@ -260,8 +354,16 @@ class ReviewAuthenticationTests(unittest.TestCase):
                     bindings=self._bindings(),
                 )
 
-    def _packet(self, root: Path):
-        private_paths = []
+    def _packet(
+        self, root: Path
+    ) -> tuple[
+        Path,
+        tuple[Path, ...],
+        tuple[Path, ...],
+        dict[str, ReviewerTrust],
+        str,
+    ]:
+        private_paths: list[Path] = []
         for index in range(2):
             key = Ed25519PrivateKey.generate()
             private = root / f"private-{index}.key"
@@ -282,7 +384,7 @@ class ReviewAuthenticationTests(unittest.TestCase):
             ),
             bindings=self._bindings(),
         )
-        packet = Path(str(summary["review_packet"]))
+        packet = Path(_string(summary, "review_packet"))
         trusts, packet_hash = load_review_packet(
             packet,
             frozenset({"pair-1"}),
@@ -290,7 +392,9 @@ class ReviewAuthenticationTests(unittest.TestCase):
             self._capture("c", "d"),
             self._bindings(),
         )
-        templates = tuple(Path(str(value)) for value in summary["decision_templates"])
+        templates = tuple(
+            Path(_text(value)) for value in _values(summary, "decision_templates")
+        )
         return packet, templates, tuple(private_paths), trusts, packet_hash
 
     @staticmethod

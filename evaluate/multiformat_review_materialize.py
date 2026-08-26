@@ -84,16 +84,18 @@ def load_review_packet(
     ):
         raise ReviewMaterializeError("review packet scope differs")
     pairs = object_list(values, "pairs", "review.packet.pairs")
-    if {string_value(pair, "pair_id") for pair in pairs} != set(expected_pairs) or len(
-        pairs
-    ) != len(expected_pairs):
+    identifiers = [string_value(pair, "pair_id") for pair in pairs]
+    if set(identifiers) != set(expected_pairs) or len(pairs) != len(expected_pairs):
         raise ReviewMaterializeError("review packet pair set differs")
-    for pair in pairs:
-        pair_id = string_value(pair, "pair_id")
+    for pair_id, pair in zip(identifiers, pairs, strict=True):
         if pair != review_pair_artifacts(pair_id, oracle, candidate):
             raise ReviewMaterializeError(
                 f"review packet artifact scope differs: {pair_id}"
             )
+    return reviewer_trusts(values), sha256_file(path)
+
+
+def reviewer_trusts(values: dict[str, JsonValue]) -> dict[str, ReviewerTrust]:
     trusts: dict[str, ReviewerTrust] = {}
     roles: set[str] = set()
     keys: set[bytes] = set()
@@ -132,7 +134,7 @@ def load_review_packet(
         raise ReviewMaterializeError(
             "review packet requires two distinct reviewer keys"
         )
-    return trusts, sha256_file(path)
+    return trusts
 
 
 def load_review_decision(

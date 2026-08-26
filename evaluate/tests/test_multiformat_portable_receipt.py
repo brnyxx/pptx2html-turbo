@@ -14,9 +14,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptError,
+    PortableReceiptIdentity,
     PortableReceiptVerification,
     verify_portable_receipt,
 )
+from evaluate.multiformat_portable_receipt_identity import ReceiptIdentitySeal
 from evaluate.multiformat_schema import JsonValue
 from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
 
@@ -159,14 +161,19 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                     fixture.verify()
 
     def test_unsigned_prior_receipt_cannot_influence_replay(self) -> None:
+        """An identity that never passed verification must be refused.
+
+        Only the verifier may seal an identity, so a caller-built replay input
+        cannot launder an unsigned receipt into replay state.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = ReceiptFixture(Path(temp_dir))
             fixture.sign()
-            unsigned = fixture.root / "unsigned.json"
-            unsigned.write_text(json.dumps({"nonce": fixture.nonce}), encoding="utf-8")
+            forged = _unsealed_identity(fixture.nonce, fixture.trust.scope_sha256)
+            self.assertFalse(forged.is_verified())
             verification = PortableReceiptVerification(
                 trust=fixture.trust,
-                prior_receipts=(unsigned,),
+                prior_receipts=(forged,),
             )
 
             with self.assertRaisesRegex(PortableReceiptError, "identity"):
@@ -258,6 +265,21 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                 fixture.verify()
 
 
+def _unsealed_identity(nonce: str, scope_sha256: str) -> PortableReceiptIdentity:
+    """Builds a replay identity that the verifier never sealed."""
+    return PortableReceiptIdentity(
+        payload_sha256="0" * 64,
+        public_key_sha256="1" * 64,
+        nonce=nonce,
+        batch_id="portable-batch-1",
+        signer_identity="multiformat-portable-reference-v1",
+        scope_sha256=scope_sha256,
+        artifact_root_sha256="2" * 64,
+        artifacts=(),
+        _seal=ReceiptIdentitySeal(),
+    )
+
+
 def _string(value: dict[str, JsonValue], field: str) -> str:
     result = value[field]
     if not isinstance(result, str):
@@ -272,12 +294,18 @@ def _mapping(value: dict[str, JsonValue], field: str) -> dict[str, JsonValue]:
     return result
 
 
-def _objects(value: dict[str, JsonValue], field: str) -> list[dict[str, JsonValue]]:
+def _objects(value: dict[str, JsonValue], field: str) -> list[JsonValue]:
+    """Narrows a JSON array while keeping the receipt's own list identity.
+
+    Callers mutate the result to build attack receipts, so returning a copy
+    would silently drop the edit.
+    """
     result = value[field]
-    if not isinstance(result, list) or not all(
-        isinstance(item, dict) for item in result
-    ):
+    if not isinstance(result, list):
         raise TypeError(field)
+    for item in result:
+        if not isinstance(item, dict):
+            raise TypeError(field)
     return result
 
 
@@ -285,8 +313,22 @@ def _set(value: dict[str, JsonValue], path: str, replacement: JsonValue) -> None
     current: JsonValue = value
     parts = path.split(".")
     for part in parts[:-1]:
-        current = current[int(part)] if isinstance(current, list) else current[part]
+        current = _child(current, part)
+    _assign(current, parts[-1], replacement)
+
+
+def _child(current: JsonValue, part: str) -> JsonValue:
     if isinstance(current, list):
-        current[int(parts[-1])] = replacement
+        return current[int(part)]
+    if isinstance(current, dict):
+        return current[part]
+    raise TypeError(part)
+
+
+def _assign(current: JsonValue, part: str, replacement: JsonValue) -> None:
+    if isinstance(current, list):
+        current[int(part)] = replacement
+    elif isinstance(current, dict):
+        current[part] = replacement
     else:
-        current[parts[-1]] = replacement
+        raise TypeError(part)
