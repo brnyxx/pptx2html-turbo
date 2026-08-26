@@ -24,9 +24,20 @@ try {
     await cp(join(repoRoot, relativePath), destination);
   }
 
+  // Derive the tag from the manifest so a version bump cannot break this
+  // contract: hardcoding a version made every release fail the demo check
+  // at the earlier manifest check instead.
+  const manifest = await readFile(
+    join(tempRoot, 'crates/pptx2html-wasm/Cargo.toml'),
+    'utf8',
+  );
+  const manifestVersion = manifest.match(/^version = "(.+)"$/m)?.[1];
+  assert.ok(manifestVersion, 'manifest version must be readable');
+  const releaseTag = `v${manifestVersion}`;
+
   const invalidTagResult = spawnSync(
     'bash',
-    [join(tempRoot, 'scripts/read_release_version.sh'), 'v2.0.1;echo injected'],
+    [join(tempRoot, 'scripts/read_release_version.sh'), `${releaseTag};echo injected`],
     { encoding: 'utf8' },
   );
   assert.notEqual(
@@ -38,11 +49,11 @@ try {
 
   const demoPath = join(tempRoot, 'crates/pptx2html-wasm/demo/index.html');
   const demo = await readFile(demoPath, 'utf8');
-  await writeFile(demoPath, demo.replaceAll('v2.0.1', 'v9.9.9'));
+  await writeFile(demoPath, demo.replaceAll(releaseTag, 'v9.9.9'));
 
   const result = spawnSync(
     'bash',
-    [join(tempRoot, 'scripts/read_release_version.sh'), 'v2.0.1'],
+    [join(tempRoot, 'scripts/read_release_version.sh'), releaseTag],
     { encoding: 'utf8' },
   );
 

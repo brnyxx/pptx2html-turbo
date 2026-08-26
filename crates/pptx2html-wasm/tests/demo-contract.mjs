@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 const demoPath = fileURLToPath(new URL('../demo/index.html', import.meta.url));
 const html = await readFile(demoPath, 'utf8');
-const expectedVersion = process.argv[2] ?? '2.0.1';
+const manifestPath = fileURLToPath(new URL('../Cargo.toml', import.meta.url));
+const manifestVersion = (await readFile(manifestPath, 'utf8')).match(
+  /^version = "(.+)"$/m,
+)?.[1];
+assert.ok(manifestVersion, 'manifest version must be readable');
+const expectedVersion = process.argv[2] ?? manifestVersion;
 
 function tagWithId(id) {
   const match = html.match(new RegExp(`<[^>]+\\bid="${id}"[^>]*>`));
