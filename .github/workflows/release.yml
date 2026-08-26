@@ -11,8 +11,8 @@ env:
   CARGO_TERM_COLOR: always
   PACKAGE_NAME: '@briank-dev/pptx-to-html'
   PACKAGE_AUTHOR: 'Brian Kim <hyungjoo.drb@gmail.com>'
-  PACKAGE_HOMEPAGE: 'https://github.com/kim62210/pptx2html-turbo'
-  PACKAGE_BUGS_URL: 'https://github.com/kim62210/pptx2html-turbo/issues'
+  PACKAGE_HOMEPAGE: 'https://github.com/brnyxx/pptx2html-turbo'
+  PACKAGE_BUGS_URL: 'https://github.com/brnyxx/pptx2html-turbo/issues'
   PACKAGE_DESCRIPTION: 'Convert PPTX slides to high-fidelity HTML in the browser — pure Rust/WASM, zero dependencies'
 
 jobs:

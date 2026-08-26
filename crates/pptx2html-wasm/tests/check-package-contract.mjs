@@ -23,8 +23,8 @@ assert.equal(packageJson.module, './index.js');
 assert.equal(packageJson.types, './index.d.ts');
 assert.ok(packageJson.files.includes('index.js'));
 assert.ok(packageJson.files.includes('index.d.ts'));
-assert.equal(packageJson.homepage, 'https://github.com/kim62210/pptx2html-turbo');
-assert.equal(packageJson.bugs.url, 'https://github.com/kim62210/pptx2html-turbo/issues');
+assert.equal(packageJson.homepage, 'https://github.com/brnyxx/pptx2html-turbo');
+assert.equal(packageJson.bugs.url, 'https://github.com/brnyxx/pptx2html-turbo/issues');
 
 const declarations = await readFile(path.join(packageDir, 'pptx2html_wasm.d.ts'), 'utf8');
 const facadeDeclarations = await readFile(path.join(packageDir, 'index.d.ts'), 'utf8');

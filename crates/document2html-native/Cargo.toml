@@ -4,7 +4,7 @@ version = "2.0.1"
 edition = "2024"
 description = "Native Office and PDF backends for document2html"
 license = "MIT"
-repository = "https://github.com/kim62210/pptx2html-turbo"
+repository = "https://github.com/brnyxx/pptx2html-turbo"
 keywords = ["document", "html", "converter", "office", "pdf"]
 categories = ["command-line-utilities"]
 

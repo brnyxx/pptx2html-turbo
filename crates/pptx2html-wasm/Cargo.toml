@@ -4,8 +4,8 @@ version = "2.0.1"
 edition = "2024"
 description = "WASM bindings for pptx2html — convert PPTX to HTML in the browser"
 license = "MIT"
-repository = "https://github.com/kim62210/pptx2html-turbo"
-homepage = "https://github.com/kim62210/pptx2html-turbo"
+repository = "https://github.com/brnyxx/pptx2html-turbo"
+homepage = "https://github.com/brnyxx/pptx2html-turbo"
 keywords = ["pptx", "html", "wasm", "converter", "presentation"]
 categories = ["wasm", "parser-implementations"]
 

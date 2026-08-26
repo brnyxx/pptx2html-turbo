@@ -4,7 +4,7 @@ version = "2.0.1"
 edition = "2024"
 description = "Browser WASM bindings for format detection and PPTX document conversion"
 license = "MIT"
-repository = "https://github.com/kim62210/pptx2html-turbo"
+repository = "https://github.com/brnyxx/pptx2html-turbo"
 keywords = ["document", "html", "wasm", "office", "pptx"]
 categories = ["wasm"]
 

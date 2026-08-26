@@ -10,8 +10,8 @@ Poppler executables.
 The primary npm package is `@briank-dev/pptx-to-html`. The repository and
 internal Rust crate names remain `pptx2html-*` for compatibility.
 
-**[Live Demo](https://kim62210.github.io/pptx2html-turbo/)** — try it in your browser, no installation needed.
-**[Releases](https://github.com/kim62210/pptx2html-turbo/releases)** — download CLI artifacts and read versioned release notes.
+**[Live Demo](https://brnyxx.github.io/pptx2html-turbo/)** — try it in your browser, no installation needed.
+**[Releases](https://github.com/brnyxx/pptx2html-turbo/releases)** — download CLI artifacts and read versioned release notes.
 
 ## Universal document engine
 
@@ -150,7 +150,7 @@ Rust library consumers can depend on the release tag directly:
 
 ```toml
 [dependencies]
-pptx2html-core = { git = "https://github.com/kim62210/pptx2html-turbo", tag = "v2.0.1" }
+pptx2html-core = { git = "https://github.com/brnyxx/pptx2html-turbo", tag = "v2.0.1" }
 ```
 
 ## Usage

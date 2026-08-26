@@ -4,7 +4,7 @@ version = "2.0.1"
 edition = "2024"
 description = "ECMA-376 based pure Rust PPTX to HTML converter — core library"
 license = "MIT"
-repository = "https://github.com/kim62210/pptx2html-turbo"
+repository = "https://github.com/brnyxx/pptx2html-turbo"
 keywords = ["pptx", "html", "converter", "ooxml", "presentation"]
 categories = ["parser-implementations"]
 

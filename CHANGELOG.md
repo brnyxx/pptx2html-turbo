@@ -207,7 +207,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2] - 2026-03-30
 
 ### Open Source
-- Correct repository metadata to point at `kim62210/pptx2html-turbo`
+- Correct repository metadata to point at `brnyxx/pptx2html-turbo`
 
 ## [1.0.1] - 2026-03-30
 

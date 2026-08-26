@@ -55,7 +55,7 @@ assert.doesNotMatch(html, /meta\.innerHTML\s*=/);
 assert.match(html, /fitScaleToContainer\(\)/);
 assert.match(html, /syncScaleInputs\(fitScaleToContainer\(\)\)/);
 assert.match(html, /controls\.style\.display = 'none';\s+currentBuffer = null;\s+currentInfo = null;/);
-assert.match(html, /href="https:\/\/github\.com\/kim62210\/pptx2html-turbo\/releases"/);
+assert.match(html, /href="https:\/\/github\.com\/brnyxx\/pptx2html-turbo\/releases"/);
 
 const versions = new Set(
   [...html.matchAll(/\bv(\d+\.\d+\.\d+)\b/g)].map((match) => match[1]),

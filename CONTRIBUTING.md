@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ```bash
 # Clone the repository
-git clone https://github.com/kim62210/pptx2html-turbo.git
+git clone https://github.com/brnyxx/pptx2html-turbo.git
 cd pptx2html-turbo
 
 # Build all crates
@@ -92,7 +92,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full pipeline diagram and module 
 
 ## Reporting Issues
 
-- Use the [issue tracker](https://github.com/kim62210/pptx2html-turbo/issues)
+- Use the [issue tracker](https://github.com/brnyxx/pptx2html-turbo/issues)
 - Include a minimal PPTX file that reproduces the issue if possible
 - Describe expected vs actual output
 

@@ -111,7 +111,7 @@ with the same API and release versions during migration.
 
 ## Project
 
-- Repository: https://github.com/kim62210/pptx2html-turbo
-- Issues: https://github.com/kim62210/pptx2html-turbo/issues
-- Demo: https://kim62210.github.io/pptx2html-turbo/
+- Repository: https://github.com/brnyxx/pptx2html-turbo
+- Issues: https://github.com/brnyxx/pptx2html-turbo/issues
+- Demo: https://brnyxx.github.io/pptx2html-turbo/
 - License: MIT

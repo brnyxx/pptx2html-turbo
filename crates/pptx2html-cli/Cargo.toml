@@ -5,7 +5,7 @@ edition = "2024"
 default-run = "pptx2html"
 description = "CLI tool for converting PPTX to HTML"
 license = "MIT"
-repository = "https://github.com/kim62210/pptx2html-turbo"
+repository = "https://github.com/brnyxx/pptx2html-turbo"
 keywords = ["pptx", "html", "cli", "converter", "presentation"]
 categories = ["command-line-utilities"]
 

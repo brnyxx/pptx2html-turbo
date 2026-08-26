@@ -4,21 +4,21 @@
 #       GitHub Native Review는 여기서, 에이전트 dispatch는 multica daemon이 처리.
 
 # 기본: 저장소 관리자 (사용자 본인)
-*                       @kim62210
+*                       @brnyxx
 
 # ADR은 항상 본인 검토 필수 (HITL 예외)
-/docs/adr/              @kim62210
+/docs/adr/              @brnyxx
 
 # CI/보안 설정 변경은 본인 검토
-/.github/               @kim62210
-/.multica/              @kim62210
-/deploy/                @kim62210
-/infra/                 @kim62210
-Dockerfile              @kim62210
-docker-compose*.yml     @kim62210
+/.github/               @brnyxx
+/.multica/              @brnyxx
+/deploy/                @brnyxx
+/infra/                 @brnyxx
+Dockerfile              @brnyxx
+docker-compose*.yml     @brnyxx
 
 # 시크릿·마이그레이션
-*secrets*               @kim62210
-*.env*                  @kim62210
-/migrations/            @kim62210
-*.sql                   @kim62210
+*secrets*               @brnyxx
+*.env*                  @brnyxx
+/migrations/            @brnyxx
+*.sql                   @brnyxx

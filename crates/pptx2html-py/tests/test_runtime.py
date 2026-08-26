@@ -92,15 +92,15 @@ class PythonBindingRuntimeTests(unittest.TestCase):
         project_urls = metadata.metadata("pptx2html").get_all("Project-URL") or []
 
         self.assertIn(
-            "Repository, https://github.com/kim62210/pptx2html-turbo",
+            "Repository, https://github.com/brnyxx/pptx2html-turbo",
             project_urls,
         )
         self.assertIn(
-            "Issues, https://github.com/kim62210/pptx2html-turbo/issues",
+            "Issues, https://github.com/brnyxx/pptx2html-turbo/issues",
             project_urls,
         )
         self.assertIn(
-            "Homepage, https://github.com/kim62210/pptx2html-turbo",
+            "Homepage, https://github.com/brnyxx/pptx2html-turbo",
             project_urls,
         )
 
