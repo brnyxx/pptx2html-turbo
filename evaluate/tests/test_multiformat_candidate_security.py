@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-import json
 import io
+import json
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest import mock
 from types import SimpleNamespace
+from unittest import mock
+
+from playwright.sync_api import sync_playwright
 
 from evaluate.multiformat_candidate_conversion import CandidateConversionError
-from playwright.sync_api import sync_playwright
 from evaluate.multiformat_candidate_security import (
     CandidateSecurityError,
-    CandidateSecuritySource,
     CandidateSecurityResult,
+    CandidateSecuritySource,
     capture_candidate_security,
     execute_candidate_security_case,
 )
@@ -28,6 +29,8 @@ from evaluate.multiformat_corpus_types import DocumentFormat, SecurityOutcome
 from evaluate.multiformat_schema import sha256_file
 from evaluate.run_multiformat_security_case import (
     load_exact_security_source,
+)
+from evaluate.run_multiformat_security_case import (
     main as security_case_main,
 )
 
@@ -124,8 +127,12 @@ class CandidateSecurityTests(unittest.TestCase):
                 mock.patch(
                     "evaluate.run_multiformat_security_case.preflight_candidate_capture",
                     return_value=SimpleNamespace(
-                        runtime_profile=SimpleNamespace(portable=True)
+                        runtime_profile=SimpleNamespace(portable=True),
+                        sandbox=object(),
                     ),
+                ),
+                mock.patch(
+                    "evaluate.run_multiformat_security_case.require_active_sandbox"
                 ),
                 mock.patch(
                     "evaluate.run_multiformat_security_case.load_exact_security_source",

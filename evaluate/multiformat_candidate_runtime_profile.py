@@ -38,6 +38,9 @@ class CandidateRuntimeProfile:
     project_revision: str
 
     signer_id: str
+    evidence_root: Path | None = None
+    sandbox_executable: Path | None = None
+    sandbox_profile: Path | None = None
 
     @property
     def portable(self) -> bool:
@@ -114,6 +117,7 @@ def resolve_candidate_runtime_profile(
         if string_value(browser_lock, "chromium") != browser_version:
             raise CandidateRuntimeProfileError("candidate Chromium versions differ")
         signer = object_value(lock, "signer")
+        sandbox = object_value(lock, "sandbox")
         return CandidateRuntimeProfile(
             2,
             identity.profile,
@@ -132,6 +136,9 @@ def resolve_candidate_runtime_profile(
             identity.routing.sha256,
             revision,
             string_value(signer, "signer_id"),
+            evidence_root,
+            _bound_path(object_value(sandbox, "executable"), evidence_root),
+            _bound_path(object_value(sandbox, "profile"), evidence_root),
         )
     except CandidateRuntimeProfileError:
         raise

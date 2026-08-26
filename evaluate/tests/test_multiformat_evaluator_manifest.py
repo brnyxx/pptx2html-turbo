@@ -77,6 +77,18 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             self.assertIn(path, PORTABLE_WAVE_TEST_FILES)
             self.assertIn(path, EVALUATOR_FILES)
 
+    def test_manifest_binds_candidate_process_isolation_and_regressions(self) -> None:
+        production = (
+            "evaluate/multiformat_candidate_attestation_signing_io.py",
+            "evaluate/multiformat_candidate_sandbox.py",
+        )
+        regression = "evaluate/tests/test_multiformat_candidate_process_isolation.py"
+        for path in production:
+            self.assertIn(path, PORTABLE_WAVE_ENGINE_FILES)
+            self.assertIn(path, EVALUATOR_FILES)
+        self.assertIn(regression, PORTABLE_WAVE_TEST_FILES)
+        self.assertIn(regression, EVALUATOR_FILES)
+
     def test_manifest_boundary_includes_portable_lock_validation(self) -> None:
         self.assertIn("evaluate/multiformat_reference_profile.py", EVALUATOR_FILES)
         self.assertIn("evaluate/multiformat_portable_lock.py", EVALUATOR_FILES)

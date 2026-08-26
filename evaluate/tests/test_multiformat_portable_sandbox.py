@@ -11,18 +11,25 @@ class PortableSandboxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             profile = Path(temp_dir) / "profile.sb"
             profile.write_text(
-                "(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n"
+                '(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n(deny file-read* (literal (param "ORACLE_SENTINEL")))\n'
             )
+            sentinel = Path(temp_dir) / "golden-sentinel"
+            sentinel.write_text("readable before sandbox", encoding="utf-8")
+            prefix = [
+                "/usr/bin/sandbox-exec",
+                "-D",
+                f"ORACLE_SENTINEL={sentinel.resolve(strict=True)}",
+                "-f",
+                str(profile),
+            ]
             local = subprocess.run(
-                ["/usr/bin/sandbox-exec", "-f", str(profile), "/bin/echo", "ok"],
+                [*prefix, "/bin/echo", "ok"],
                 capture_output=True,
                 check=False,
             )
             denied = subprocess.run(
                 [
-                    "/usr/bin/sandbox-exec",
-                    "-f",
-                    str(profile),
+                    *prefix,
                     "/usr/bin/python3",
                     "-c",
                     "import socket;socket.create_connection(('127.0.0.1',9),.1)",
@@ -30,8 +37,14 @@ class PortableSandboxTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            golden = subprocess.run(
+                [*prefix, "/bin/cat", str(sentinel)],
+                capture_output=True,
+                check=False,
+            )
             self.assertEqual(local.returncode, 0)
             self.assertNotEqual(denied.returncode, 0)
+            self.assertNotEqual(golden.returncode, 0)
 
 
 if __name__ == "__main__":

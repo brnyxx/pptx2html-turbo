@@ -489,6 +489,7 @@ for format in $FORMATS; do
   candidate_nonce="$("$OPENSSL" rand -hex 32)"
   reference_nonce="$("$OPENSSL" rand -hex 32)"
   attestation="$WAVE/attestations/$format.json"
+  oracle_sentinel="$WAVE/oracle-sentinels/$format"
 
   "$PYTHON" -m evaluate.sign_multiformat_candidate_attestation \
     --evidence-root "$EVIDENCE_ROOT" \
@@ -498,6 +499,7 @@ for format in $FORMATS; do
     --contract "$bound_contract" \
     --corpus "$corpus" \
     --evaluator "$bound_evaluator" \
+    --oracle-sentinel "$oracle_sentinel" \
     --run-nonce "$candidate_nonce"
 
   "$PYTHON" -m evaluate.capture_multiformat_portable_references \
@@ -532,10 +534,16 @@ for format in $FORMATS; do
 done
 ```
 
-Browser loading uses one intercepted synthetic HTTP document and rejects every
-other resource request. The signed attestation proves disabled network access,
-denied oracle access, the exact outer-lock scope, and the locked font
-environment. Self-authored JSON is rejected. After both candidate runs, the
+The oracle sentinel must be an existing, readable evidence-root file containing
+oracle-only bytes. Before signing, bounded probes through the final outer-lock
+sandbox require a successful control process plus denied external-network and
+sentinel reads. Candidate capture and each single security case re-exec their
+complete converter, LibreOffice, and Chromium process trees under that exact
+sandbox and repeat the probes before use. Browser loading still intercepts one
+synthetic HTTP document and rejects every other request as defense-in-depth.
+The signature binds the observed results, exact sandbox executable/profile,
+sentinel, outer-lock scope, and font environment. Self-authored JSON is
+rejected. After both candidate runs, the
 outer signer emits a separate receipt binding the nonce, runtime identity,
 execution log, determinism manifest, and canonical root of every HTML,
 inventory, PNG, runtime binary, and package file.

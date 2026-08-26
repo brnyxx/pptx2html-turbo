@@ -2,21 +2,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate.multiformat_candidate_manifest import write_candidate_manifests
 from evaluate.multiformat_candidate_artifacts import materialize_runtime_artifacts
+from evaluate.multiformat_candidate_manifest import write_candidate_manifests
 from evaluate.multiformat_candidate_preflight import preflight_candidate_capture
+from evaluate.multiformat_candidate_preflight_types import CandidatePreflight
 from evaluate.multiformat_candidate_run import capture_clean_run
+from evaluate.multiformat_candidate_runtime_lock import (
+    validate_candidate_runtime,
+)
+from evaluate.multiformat_candidate_sandbox import require_active_sandbox
+from evaluate.multiformat_candidate_security import capture_candidate_security
 from evaluate.multiformat_candidate_sources import (
     CandidateSourceSet,
     load_candidate_sources,
 )
-from evaluate.multiformat_candidate_security import capture_candidate_security
-from evaluate.multiformat_candidate_types import CandidateManifestPaths
-from evaluate.multiformat_candidate_preflight_types import CandidatePreflight
-from evaluate.multiformat_candidate_types import CandidateCaptureError
-from evaluate.multiformat_candidate_types import CandidateRuntimePaths
-from evaluate.multiformat_candidate_runtime_lock import (
-    validate_candidate_runtime,
+from evaluate.multiformat_candidate_types import (
+    CandidateCaptureError,
+    CandidateManifestPaths,
+    CandidateRuntimePaths,
 )
 from evaluate.multiformat_schema import sha256_file
 
@@ -97,6 +100,10 @@ def capture_candidate_evidence(
         require_clean_worktree=require_clean_worktree,
         require_release_binary=require_release_binary,
     )
+    if preflight.runtime_profile.portable:
+        if preflight.sandbox is None:
+            raise CandidateCaptureError("candidate sandbox attestation is missing")
+        require_active_sandbox(preflight.sandbox)
     output_dir.mkdir(parents=True, exist_ok=True)
     runtime, runtime_artifacts = materialize_candidate_runtime(
         preflight, evidence_root, output_dir

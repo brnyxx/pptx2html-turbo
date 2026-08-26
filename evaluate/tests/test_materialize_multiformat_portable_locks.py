@@ -45,6 +45,8 @@ class PortableLockMaterializerTests(unittest.TestCase):
             local = subprocess.run(
                 [
                     sandbox.as_posix(),
+                    "-D",
+                    "ORACLE_SENTINEL=/dev/null",
                     "-f",
                     (first.output_dir / "generated/portable-reference.sb").as_posix(),
                     "/bin/echo",

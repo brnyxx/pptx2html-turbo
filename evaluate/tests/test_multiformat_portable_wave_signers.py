@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import textwrap
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -312,6 +313,8 @@ class CandidateAttestationSignerTests(unittest.TestCase):
             fixture, contract, corpus, evaluator = self._candidate_lock(
                 evidence, public
             )
+            sandbox, profile, sentinel = self._sandbox_fixture(evidence)
+            self._bind_sandbox(fixture.lock, evidence, sandbox, profile)
             output = evidence / "candidate/attestation.json"
             sign_candidate_attestation(
                 evidence,
@@ -321,6 +324,7 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                 contract,
                 corpus,
                 evaluator,
+                oracle_sentinel=sentinel,
                 run_nonce="c" * 64,
             )
             value = json.loads(output.read_text(encoding="utf-8"))
@@ -332,10 +336,29 @@ class CandidateAttestationSignerTests(unittest.TestCase):
             self.assertEqual(
                 value,
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "status": "PASS",
                     "network_isolation": True,
                     "golden_access": "denied",
+                    "sandbox_executable": {
+                        "path": sandbox.relative_to(evidence).as_posix(),
+                        "sha256": _sha(sandbox),
+                    },
+                    "sandbox_profile": {
+                        "path": profile.relative_to(evidence).as_posix(),
+                        "sha256": _sha(profile),
+                    },
+                    "network_probe": {
+                        "endpoint": "1.1.1.1:443",
+                        "result": "denied",
+                    },
+                    "golden_probe": {
+                        "sentinel": {
+                            "path": sentinel.relative_to(evidence).as_posix(),
+                            "sha256": _sha(sentinel),
+                        },
+                        "result": "denied",
+                    },
                     "project_revision": "6" * 40,
                     "font_environment_sha256": "b" * 64,
                     "font_isolation": "locked-bundle-only",
@@ -362,6 +385,8 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                 fixture, contract, corpus, evaluator = self._candidate_lock(
                     evidence, public
                 )
+                sandbox, profile, sentinel = self._sandbox_fixture(evidence)
+                self._bind_sandbox(fixture.lock, evidence, sandbox, profile)
                 output = (
                     base / "escaped.json"
                     if attack == "escape"
@@ -381,6 +406,7 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                         contract,
                         corpus,
                         evaluator,
+                        oracle_sentinel=sentinel,
                         run_nonce="d" * 64,
                     )
                     output = evidence / "candidate/second.json"
@@ -393,8 +419,97 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                         contract,
                         corpus,
                         evaluator,
+                        oracle_sentinel=sentinel,
                         run_nonce="d" * 64,
                     )
+
+    def test_passthrough_sandbox_and_readable_sentinel_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            evidence = base / "evidence"
+            evidence.mkdir()
+            key = Ed25519PrivateKey.generate()
+            private = base / "candidate.pem"
+            private.write_bytes(_private_pem(key))
+            private.chmod(0o600)
+            public = evidence / "candidate.pem"
+            public.write_bytes(_public_pem(key))
+            fixture, contract, corpus, evaluator = self._candidate_lock(
+                evidence, public
+            )
+            sandbox, profile, sentinel = self._sandbox_fixture(
+                evidence, passthrough=True
+            )
+            self._bind_sandbox(fixture.lock, evidence, sandbox, profile)
+            with self.assertRaisesRegex(ValueError, "sandbox probe failed"):
+                sign_candidate_attestation(
+                    evidence,
+                    evidence / "attestation.json",
+                    private,
+                    fixture.lock,
+                    contract,
+                    corpus,
+                    evaluator,
+                    oracle_sentinel=sentinel,
+                    run_nonce="e" * 64,
+                )
+
+    @staticmethod
+    def _sandbox_fixture(
+        evidence: Path, *, passthrough: bool = False
+    ) -> tuple[Path, Path, Path]:
+        profile = evidence / "candidate.sb"
+        profile.write_text("(version 1)\n", encoding="utf-8")
+        sentinel = evidence / "oracle-golden-sentinel"
+        sentinel.write_text("oracle bytes", encoding="utf-8")
+        sandbox = evidence / "sandbox-exec"
+        denied = "set()" if passthrough else "{'network', 'golden'}"
+        sandbox.write_text(
+            "#!"
+            + sys.executable
+            + "\n"
+            + textwrap.dedent(
+                f"""
+                import os, subprocess, sys
+                args = sys.argv[1:]
+                while args and args[0] in {{'-D', '-f'}}:
+                    args = args[2:]
+                if os.environ.get('PPTX2HTML_SANDBOX_PROBE') in {denied}:
+                    raise SystemExit(73)
+                raise SystemExit(subprocess.run(args, check=False).returncode)
+                """
+            ),
+            encoding="utf-8",
+        )
+        sandbox.chmod(0o755)
+        return sandbox, profile, sentinel
+
+    @staticmethod
+    def _bind_sandbox(
+        lock_path: Path, evidence: Path, sandbox: Path, profile: Path
+    ) -> None:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        lock["sandbox"] = {
+            "executable": {
+                "path": sandbox.relative_to(evidence).as_posix(),
+                "sha256": _sha(sandbox),
+            },
+            "profile": {
+                "path": profile.relative_to(evidence).as_posix(),
+                "sha256": _sha(profile),
+            },
+        }
+        attestation_binding = lock["runtime"]["attestation"]
+        attestation_path = evidence / attestation_binding["path"]
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+        attestation["sandbox_executable"] = lock["sandbox"]["executable"]
+        attestation["sandbox_profile"] = lock["sandbox"]["profile"]
+        attestation_path.write_text(
+            json.dumps(attestation, sort_keys=True),
+            encoding="utf-8",
+        )
+        attestation_binding["sha256"] = _sha(attestation_path)
+        lock_path.write_text(json.dumps(lock, sort_keys=True), encoding="utf-8")
 
     @staticmethod
     def _candidate_lock(

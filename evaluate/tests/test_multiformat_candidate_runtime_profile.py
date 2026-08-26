@@ -237,6 +237,20 @@ class CandidateRuntimeProfileTests(unittest.TestCase):
         font_path.write_text(
             json.dumps({"schema_version": 1, "fonts": []}), encoding="utf-8"
         )
+        sandbox = fixture.root / "locked/sandbox-exec"
+        sandbox.write_bytes(b"sandbox")
+        profile = fixture.root / "locked/candidate.sb"
+        profile.write_bytes(b"profile")
+        lock["sandbox"] = {
+            "executable": {
+                "path": "locked/sandbox-exec",
+                "sha256": sha256_file(sandbox),
+            },
+            "profile": {
+                "path": "locked/candidate.sb",
+                "sha256": sha256_file(profile),
+            },
+        }
         lock["browser"]["lock"]["sha256"] = sha256_file(browser_path)
         lock["candidate_runtime_lock"]["sha256"] = sha256_file(runtime_path)
         lock["font_bundle"]["sha256"] = sha256_file(font_path)

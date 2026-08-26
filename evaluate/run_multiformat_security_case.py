@@ -9,6 +9,10 @@ from pathlib import Path
 
 from evaluate.multiformat_candidate_capture import materialize_candidate_runtime
 from evaluate.multiformat_candidate_preflight import preflight_candidate_capture
+from evaluate.multiformat_candidate_sandbox import (
+    enter_locked_sandbox,
+    require_active_sandbox,
+)
 from evaluate.multiformat_candidate_security import (
     CandidateSecurityError,
     CandidateSecuritySource,
@@ -73,9 +77,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    args = parse_args(raw_argv)
     output_created = False
     try:
+        enter_locked_sandbox(
+            args.evidence_root,
+            args.oracle_lock,
+            args.sandbox_attestation,
+            "evaluate.run_multiformat_security_case",
+            raw_argv,
+        )
         evidence_root = args.evidence_root.resolve(strict=True)
         paths = (
             args.contract,
@@ -108,6 +120,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if not preflight.runtime_profile.portable:
             raise CandidateSecurityError("security command requires a portable runtime")
+        if preflight.sandbox is None:
+            raise CandidateSecurityError("candidate sandbox attestation is missing")
+        require_active_sandbox(preflight.sandbox)
         document_format, source = load_exact_security_source(
             args.contract, args.corpus_manifest, args.source_id, args.source
         )

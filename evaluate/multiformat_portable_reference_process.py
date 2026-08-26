@@ -12,6 +12,7 @@ _SANDBOX_PROFILE = (
     "(version 1)\n(allow default)\n(deny network*)\n"
     "(allow network* (local unix-socket))\n"
     "(allow network* (remote unix-socket))\n"
+    '(deny file-read* (literal (param "ORACLE_SENTINEL")))\n'
 )
 
 
@@ -61,4 +62,11 @@ def _sandbox(
     profile = sandbox_profile.resolve(strict=True)
     if profile.read_text(encoding="utf-8") != _SANDBOX_PROFILE:
         raise PortableReferenceProcessError("portable sandbox profile differs")
-    return sandbox, "-f", profile.as_posix(), *command
+    return (
+        sandbox,
+        "-D",
+        "ORACLE_SENTINEL=/dev/null",
+        "-f",
+        profile.as_posix(),
+        *command,
+    )

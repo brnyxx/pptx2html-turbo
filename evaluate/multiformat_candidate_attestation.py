@@ -5,8 +5,14 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluate.multiformat_candidate_signature import verify_ed25519_json
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
+from evaluate.multiformat_candidate_sandbox import (
+    CandidateSandbox,
+    golden_probe_value,
+    network_probe_value,
+    resolve_attested_sandbox,
+)
+from evaluate.multiformat_candidate_signature import verify_ed25519_json
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -27,6 +33,7 @@ class VerifiedAttestation:
     verifier_id: str
     font_environment_sha256: str
     run_nonce: str
+    sandbox: CandidateSandbox | None = None
 
 
 def verify_signed_payload(
@@ -118,11 +125,27 @@ def verify_candidate_attestation(
     nonce = sha256_value(values, "run_nonce")
     font_environment = sha256_value(values, "font_environment_sha256")
     verifier_id = string_value(profile.sandbox_verifier, "verifier_id")
+    if (
+        profile.evidence_root is None
+        or profile.sandbox_executable is None
+        or profile.sandbox_profile is None
+    ):
+        raise CandidateAttestationError("portable sandbox lock binding is missing")
+    sandbox = resolve_attested_sandbox(
+        values,
+        profile.evidence_root,
+        profile.sandbox_executable,
+        profile.sandbox_profile,
+    )
     expected: dict[str, JsonValue] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "PASS",
         "network_isolation": True,
         "golden_access": "denied",
+        "sandbox_executable": sandbox.executable_binding(profile.evidence_root),
+        "sandbox_profile": sandbox.profile_binding(profile.evidence_root),
+        "network_probe": network_probe_value(),
+        "golden_probe": golden_probe_value(profile.evidence_root, sandbox.sentinel),
         "project_revision": project_revision,
         "font_environment_sha256": font_environment,
         "font_isolation": "locked-bundle-only",
@@ -144,7 +167,7 @@ def verify_candidate_attestation(
         profile.sandbox_verifier,
         "candidate sandbox verifier",
     )
-    return VerifiedAttestation(verifier_id, font_environment, nonce)
+    return VerifiedAttestation(verifier_id, font_environment, nonce, sandbox)
 
 
 def verify_signed_attestation(

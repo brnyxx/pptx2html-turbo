@@ -7,11 +7,19 @@ from evaluate.multiformat_candidate_attestation import (
     attestation_scope_sha256,
     verify_candidate_attestation,
 )
+from evaluate.multiformat_candidate_fonts import prepare_font_environment
 from evaluate.multiformat_candidate_preflight_runtime import (
-    resolve_candidate_input_paths,
     require_candidate_evidence_root,
+    resolve_candidate_input_paths,
 )
 from evaluate.multiformat_candidate_preflight_types import CandidatePreflight
+from evaluate.multiformat_candidate_runtime_lock import (
+    require_browser_lock,
+    validate_candidate_runtime,
+)
+from evaluate.multiformat_candidate_runtime_lock import (
+    require_clean_worktree as assert_clean_worktree,
+)
 from evaluate.multiformat_candidate_runtime_profile import (
     resolve_candidate_runtime_profile,
 )
@@ -25,12 +33,6 @@ from evaluate.multiformat_candidate_types import (
 from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_evaluator_manifest import validate_evaluator_manifest
 from evaluate.multiformat_evidence import oracle_lock_ready
-from evaluate.multiformat_candidate_fonts import prepare_font_environment
-from evaluate.multiformat_candidate_runtime_lock import (
-    require_browser_lock,
-    require_clean_worktree as assert_clean_worktree,
-    validate_candidate_runtime,
-)
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import (
@@ -229,6 +231,7 @@ def preflight_candidate_capture(
             },
             font_environment.manifest_sha256,
             profile,
+            verified_attestation.sandbox,
         )
     except CandidatePreflightError:
         raise

@@ -3,10 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from evaluate.multiformat_candidate_capture import capture_candidate_evidence
+from evaluate.multiformat_candidate_sandbox import enter_locked_sandbox
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_metric_types import MetricError
 
@@ -37,8 +38,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    args = parse_args(raw_argv)
     try:
+        enter_locked_sandbox(
+            args.evidence_root,
+            args.oracle_lock,
+            args.sandbox_attestation,
+            "evaluate.capture_multiformat_candidates",
+            raw_argv,
+        )
         result = capture_candidate_evidence(
             args.project_root,
             args.contract,
