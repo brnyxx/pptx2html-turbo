@@ -24,6 +24,7 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/multiformat_candidate_security_browser.py",
     "evaluate/multiformat_candidate_signature.py",
     "evaluate/materialize_multiformat_candidate_sandbox_keypair.py",
+    "evaluate/materialize_multiformat_portable_reference_keypair.py",
     "evaluate/materialize_multiformat_portable_receipt_wrapper.py",
     "evaluate/multiformat_portable_receipt_executor.py",
     "evaluate/sign_multiformat_candidate_attestation.py",
@@ -51,6 +52,9 @@ PORTABLE_WAVE_TEST_FILES = (
     "evaluate/tests/test_multiformat_candidate_security.py",
     "evaluate/tests/test_multiformat_candidate_portable_roles.py",
     "evaluate/tests/test_multiformat_portable_wave_signers.py",
+    "evaluate/tests/test_multiformat_portable_reference_keypair.py",
     "evaluate/tests/test_assemble_multiformat_metrics.py",
     "evaluate/tests/test_multiformat_command_review_tools.py",
+    "evaluate/tests/multiformat_per_format_gate_fixture.py",
+    "evaluate/tests/test_multiformat_per_format_lock_gate.py",
 )
