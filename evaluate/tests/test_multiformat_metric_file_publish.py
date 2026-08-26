@@ -22,11 +22,15 @@ from evaluate.multiformat_metric_manifest import (
     MetricsAssemblyError,
     publish_validated_metrics,
 )
+from evaluate.multiformat_schema import JsonValue
 
 VICTIM_BYTES = b'{"victim": true}\n'
 PAYLOAD = b'{"schema_version": 2}\n'
 DECOY_BYTES = b'{"decoy": "what a path validator would inspect"}\n'
-METRICS_VALUE = {"schema_version": 2, "status": "READY"}
+METRICS_VALUE: dict[str, JsonValue] = {
+    "schema_version": 2,
+    "status": "READY",
+}
 
 
 def _identity(path: Path) -> tuple[int, int]:

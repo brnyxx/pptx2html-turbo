@@ -510,9 +510,7 @@ class CandidateAttestationSignerTests(unittest.TestCase):
         sentinel = oracle_root / ".candidate-denial-sentinel"
         sentinel.write_text("oracle bytes", encoding="utf-8")
         sandbox = evidence / "sandbox-exec"
-        denied = (
-            "set()" if passthrough else "{'network', 'oracle', 'unix-socket'}"
-        )
+        denied = "set()" if passthrough else "{'network', 'oracle', 'unix-socket'}"
         sandbox.write_text(
             "#!"
             + sys.executable
