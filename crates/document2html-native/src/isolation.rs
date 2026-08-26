@@ -56,11 +56,13 @@ fn strict_platform_wrapper(
     command: CommandSpec,
     workspace_root: &Path,
 ) -> NativeResult<CommandSpec> {
-    let executable = ["/usr/bin/bwrap", "/usr/local/bin/bwrap"]
+    let Some(executable) = ["/usr/bin/bwrap", "/usr/local/bin/bwrap"]
         .into_iter()
         .map(std::path::PathBuf::from)
         .find(|candidate| candidate.is_file())
-        .ok_or_else(|| NativeError::BackendUnavailable("bwrap is not installed".to_owned()))?;
+    else {
+        return unavailable("bwrap is not installed");
+    };
     Ok(wrap(
         command,
         &IsolationLauncher {
