@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -44,85 +45,93 @@ def assemble_metrics(
     timeout_seconds: int = 120,
 ) -> None:
     evidence_root = evidence_root.resolve(strict=True)
+    project_root = project_root.resolve(strict=True)
     if timeout_seconds <= 0:
         raise MetricsAssemblyError("timeout must be positive")
-    if execution_output_dir.exists() and any(execution_output_dir.iterdir()):
-        raise MetricsAssemblyError("execution output directory is not empty")
-    execution_output_dir.mkdir(parents=True, exist_ok=True)
-    context = prepare_metric_context(
-        project_root,
-        contract_path,
-        corpus_path,
-        evaluator_path,
-        oracle_lock_path,
-        oracle_capture_path,
-        candidate_capture_path,
-        evidence_root,
-    )
-    plan = load_command_plan(commands_path)
-    substitutions = {
-        "project_revision": context.project_revision,
-        "evaluator_hash": context.evaluator_hash,
-        "corpus_hash": context.corpus_hash,
-        "format": context.spec.document_format.value,
-    }
-    security = run_security_cases(
-        plan,
-        corpus_path,
-        evidence_root,
-        execution_output_dir,
-        project_revision=context.project_revision,
-        evaluator_hash=context.evaluator_hash,
-        corpus_hash=context.corpus_hash,
-        timeout_seconds=timeout_seconds,
-    )
-    quality = run_quality_commands(
-        plan,
-        evidence_root,
-        execution_output_dir,
-        bindings=substitutions,
-        timeout_seconds=timeout_seconds,
-    )
-    performance = run_performance_command(
-        plan,
-        evidence_root,
-        execution_output_dir,
-        bindings=substitutions,
-        timeout_seconds=timeout_seconds,
-    )
+    if execution_output_dir.exists():
+        raise MetricsAssemblyError("execution output directory already exists")
+    execution_output_dir.mkdir(parents=True)
     try:
-        reviews, critical_defects = materialize_review_attestations(
-            review_paths,
-            context.spec.pair_ids(),
-            context.oracle,
-            context.candidate,
-            context.evaluator_hash,
-            context.corpus_hash,
-            context.project_revision,
+        context = prepare_metric_context(
+            project_root,
+            contract_path,
+            corpus_path,
+            evaluator_path,
+            oracle_lock_path,
+            oracle_capture_path,
+            candidate_capture_path,
             evidence_root,
-            execution_output_dir / "reviews",
         )
-    except ReviewMaterializeError as error:
-        raise MetricsAssemblyError(str(error)) from error
-    conformance, blind = derive_metric_tracks(context, critical_defects)
-    value = build_metrics_manifest(
-        context,
-        conformance,
-        blind,
-        security,
-        reviews,
-        quality,
-        performance,
-    )
-    publish_validated_metrics(
-        value,
-        output_path,
-        context,
-        contract_path,
-        corpus_path,
-        evidence_root,
-        oracle_lock_path,
-    )
+        plan = load_command_plan(commands_path)
+        substitutions = {
+            "project_revision": context.project_revision,
+            "evaluator_hash": context.evaluator_hash,
+            "corpus_hash": context.corpus_hash,
+            "format": context.spec.document_format.value,
+        }
+        security = run_security_cases(
+            plan,
+            corpus_path,
+            evidence_root,
+            execution_output_dir,
+            project_revision=context.project_revision,
+            evaluator_hash=context.evaluator_hash,
+            corpus_hash=context.corpus_hash,
+            working_directory=project_root,
+            timeout_seconds=timeout_seconds,
+        )
+        quality = run_quality_commands(
+            plan,
+            evidence_root,
+            execution_output_dir,
+            bindings=substitutions,
+            working_directory=project_root,
+            timeout_seconds=timeout_seconds,
+        )
+        performance = run_performance_command(
+            plan,
+            evidence_root,
+            execution_output_dir,
+            bindings=substitutions,
+            working_directory=project_root,
+            timeout_seconds=timeout_seconds,
+        )
+        try:
+            reviews, critical_defects = materialize_review_attestations(
+                review_paths,
+                context.spec.pair_ids(),
+                context.oracle,
+                context.candidate,
+                context.evaluator_hash,
+                context.corpus_hash,
+                context.project_revision,
+                evidence_root,
+                execution_output_dir / "reviews",
+            )
+        except ReviewMaterializeError as error:
+            raise MetricsAssemblyError(str(error)) from error
+        conformance, blind = derive_metric_tracks(context, critical_defects)
+        value = build_metrics_manifest(
+            context,
+            conformance,
+            blind,
+            security,
+            reviews,
+            quality,
+            performance,
+        )
+        publish_validated_metrics(
+            value,
+            output_path,
+            context,
+            contract_path,
+            corpus_path,
+            evidence_root,
+            oracle_lock_path,
+        )
+    except BaseException:
+        shutil.rmtree(execution_output_dir)
+        raise
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

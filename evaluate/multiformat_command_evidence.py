@@ -1,25 +1,22 @@
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from evaluate.multiformat_candidate_artifacts import (
-    evidence_binding,
-    write_canonical_json,
-)
+from evaluate import multiformat_candidate_artifacts as artifacts
+from evaluate import multiformat_candidate_process as process
 from evaluate.multiformat_corpus_items import object_list, require_keys
 from evaluate.multiformat_evidence import resolve_evidence_path
 from evaluate.multiformat_schema import (
     JsonValue,
     boolean_value,
     object_value,
-    read_object,
     string_list,
     string_value,
 )
 from evaluate.multiformat_strict_json import read_strict_object
+from evaluate.multiformat_subprocess import clean_subprocess_environment
 
 
 class CommandEvidenceError(RuntimeError):
@@ -55,24 +52,25 @@ def run_security_cases(
     project_revision: str,
     evaluator_hash: str,
     corpus_hash: str,
+    working_directory: Path,
     timeout_seconds: int,
 ) -> list[JsonValue]:
-    tracks = object_value(read_strict_object(corpus_path), "tracks")
+    corpus = read_strict_object(corpus_path)
+    tracks = object_value(corpus, "tracks")
     sources = object_list(object_value(tracks, "security"), "items", "security")
     result: list[JsonValue] = []
     for source in sources:
         source_id = string_value(source, "id")
         expected = string_value(source, "expected_outcome")
         source_path = resolve_evidence_path(
-            corpus_path.parent,
-            string_value(source, "path"),
+            corpus_path.parent, string_value(source, "path")
         )
         substitutions = {
             "source": source_path.as_posix(),
             "source_id": source_id,
             "case_family": string_value(source, "case_family"),
             "expected_outcome": expected,
-            "format": string_value(read_object(corpus_path), "format"),
+            "format": string_value(corpus, "format"),
         }
         execution = output_dir / "security" / f"{source_id}.json"
         observed = _run_json_command(
@@ -80,6 +78,7 @@ def run_security_cases(
             substitutions,
             execution.with_suffix(".stdout"),
             execution.with_suffix(".stderr"),
+            working_directory,
             timeout_seconds,
         )
         require_keys(
@@ -119,13 +118,9 @@ def run_security_cases(
             "corpus_manifest_sha256": corpus_hash,
         }
         execution.parent.mkdir(parents=True, exist_ok=True)
-        write_canonical_json(execution, value)
-        result.append(
-            {
-                "source_id": source_id,
-                "execution": evidence_binding(evidence_root, execution),
-            }
-        )
+        artifacts.write_canonical_json(execution, value)
+        binding = artifacts.evidence_binding(evidence_root, execution)
+        result.append({"source_id": source_id, "execution": binding})
     return result
 
 
@@ -135,6 +130,7 @@ def run_quality_commands(
     output_dir: Path,
     *,
     bindings: dict[str, str],
+    working_directory: Path,
     timeout_seconds: int,
 ) -> dict[str, JsonValue]:
     result: dict[str, JsonValue] = {}
@@ -145,6 +141,7 @@ def run_quality_commands(
             bindings,
             path.with_suffix(".stdout"),
             path.with_suffix(".stderr"),
+            working_directory,
             timeout_seconds,
         )
         value: dict[str, JsonValue] = {
@@ -157,8 +154,8 @@ def run_quality_commands(
             "corpus_manifest_sha256": bindings["corpus_hash"],
         }
         path.parent.mkdir(parents=True, exist_ok=True)
-        write_canonical_json(path, value)
-        result[command_id] = evidence_binding(evidence_root, path)
+        artifacts.write_canonical_json(path, value)
+        result[command_id] = artifacts.evidence_binding(evidence_root, path)
     return result
 
 
@@ -168,6 +165,7 @@ def run_performance_command(
     output_dir: Path,
     *,
     bindings: dict[str, str],
+    working_directory: Path,
     timeout_seconds: int,
 ) -> dict[str, JsonValue]:
     path = output_dir / "performance.json"
@@ -176,6 +174,7 @@ def run_performance_command(
         bindings,
         path.with_suffix(".stdout"),
         path.with_suffix(".stderr"),
+        working_directory,
         timeout_seconds,
     )
     passed = exit_code == 0
@@ -188,8 +187,8 @@ def run_performance_command(
         "corpus_manifest_sha256": bindings["corpus_hash"],
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_canonical_json(path, value)
-    return {"evidence": evidence_binding(evidence_root, path)}
+    artifacts.write_canonical_json(path, value)
+    return {"evidence": artifacts.evidence_binding(evidence_root, path)}
 
 
 def _run_json_command(
@@ -197,9 +196,12 @@ def _run_json_command(
     substitutions: dict[str, str],
     stdout: Path,
     stderr: Path,
+    working_directory: Path,
     timeout_seconds: int,
 ) -> dict[str, JsonValue]:
-    exit_code = _run_command(argv, substitutions, stdout, stderr, timeout_seconds)
+    exit_code = _run_command(
+        argv, substitutions, stdout, stderr, working_directory, timeout_seconds
+    )
     if exit_code != 0:
         raise CommandEvidenceError(f"security command exited {exit_code}")
     try:
@@ -213,22 +215,36 @@ def _run_command(
     substitutions: dict[str, str],
     stdout: Path,
     stderr: Path,
+    working_directory: Path,
     timeout_seconds: int,
 ) -> int:
     if not argv:
         raise CommandEvidenceError("command cannot be empty")
     stdout.parent.mkdir(parents=True, exist_ok=True)
+    environment_root = stdout.parent / ".command-environment"
+    environment_root.mkdir(parents=True, exist_ok=True)
+    environment = clean_subprocess_environment()
+    environment.update(
+        {
+            "HOME": environment_root.as_posix(),
+            "TMPDIR": environment_root.as_posix(),
+            "TEMP": environment_root.as_posix(),
+            "TMP": environment_root.as_posix(),
+            "TZ": "UTC",
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+        }
+    )
     command = tuple(argument.format_map(substitutions) for argument in argv)
     try:
-        with stdout.open("wb") as output, stderr.open("wb") as errors:
-            completed = subprocess.run(
-                command,
-                stdin=subprocess.DEVNULL,
-                stdout=output,
-                stderr=errors,
-                check=False,
-                timeout=timeout_seconds,
-            )
-    except (OSError, KeyError, ValueError, subprocess.TimeoutExpired) as error:
+        return process.run_bounded_process(
+            command,
+            working_directory,
+            environment,
+            stdout,
+            stderr,
+            timeout_seconds=timeout_seconds,
+            max_log_bytes=8 * 1024 * 1024,
+        )
+    except (process.CandidateProcessError, OSError, KeyError, ValueError) as error:
         raise CommandEvidenceError(f"command failed: {command[0]}") from error
-    return completed.returncode
