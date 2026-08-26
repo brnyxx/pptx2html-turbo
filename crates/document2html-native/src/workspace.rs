@@ -33,11 +33,13 @@ impl TemporaryWorkspace {
         set_owner_only_permissions(&root)?;
         let input = root.join("input");
         let office = root.join("office");
+        let spreadsheet = root.join("spreadsheet");
         let poppler = root.join("poppler");
         let profile = root.join("profile");
         for directory in [
             &input,
             &office,
+            &spreadsheet,
             &poppler,
             &profile,
             &root.join("home"),
@@ -98,6 +100,7 @@ mod tests {
         // When
         assert!(workspace.root().join("input").is_dir());
         assert!(workspace.root().join("office").is_dir());
+        assert!(workspace.root().join("spreadsheet").is_dir());
         assert!(workspace.root().join("poppler").is_dir());
         assert!(workspace.root().join("profile").is_dir());
         drop(workspace);

@@ -3,13 +3,14 @@ use std::fs;
 use document2html_core::{
     BackendIdentity, CoreDocumentConverter, DocumentConversionOptions, DocumentConversionResult,
     DocumentDiagnostic, DocumentFormat, DocumentInput, RuntimeCapability, RuntimeSupport, UnitKind,
-    detect_format,
+    detect_format, parse_xlsx_semantics,
 };
 
 use crate::config::NativeBackendConfig;
 use crate::office::convert_office_to_pdf;
 use crate::poppler::{PdfHtmlScale, convert_pdf_to_html};
 use crate::runtime::{NativeRuntime, NativeRuntimeInfo};
+use crate::spreadsheet_html::annotate_spreadsheet_html;
 use crate::stage::isolation_diagnostic;
 use crate::workspace::TemporaryWorkspace;
 use crate::{NativeError, NativeResult};
@@ -62,9 +63,9 @@ impl NativeDocumentConverter {
         options: &DocumentConversionOptions,
     ) -> NativeResult<DocumentConversionResult> {
         let workspace = TemporaryWorkspace::create()?;
-        let pdf = convert_office_to_pdf(input, format, &self.config, &self.runtime, &workspace)?;
-        let normalized = convert_pdf_to_html(
-            &pdf,
+        let office = convert_office_to_pdf(input, format, &self.config, &self.runtime, &workspace)?;
+        let mut normalized = convert_pdf_to_html(
+            &office.pdf,
             options.asset_mode,
             if format == DocumentFormat::Ppt {
                 PdfHtmlScale::Presentation
@@ -75,6 +76,14 @@ impl NativeDocumentConverter {
             &self.runtime,
             &workspace,
         )?;
+        if matches!(format, DocumentFormat::Xlsx | DocumentFormat::Xls) {
+            let semantics = if let Some(path) = office.semantic_xlsx {
+                parse_xlsx_semantics(&fs::read(path)?)?
+            } else {
+                parse_xlsx_semantics(input.data)?
+            };
+            normalized.html = annotate_spreadsheet_html(&normalized.html, &semantics);
+        }
         Ok(DocumentConversionResult {
             format,
             html: normalized.html,

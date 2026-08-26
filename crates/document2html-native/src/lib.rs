@@ -10,6 +10,7 @@ mod pdfinfo;
 mod poppler;
 mod process;
 mod runtime;
+mod spreadsheet_html;
 mod stage;
 mod workspace;
 
