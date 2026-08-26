@@ -32,6 +32,37 @@ from evaluate.tests.multiformat_metric_artifact_fixture import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+# Fixed test-only reviewer seeds. Deterministic keys let a test edit a signed
+# decision and re-sign it canonically, which a freshly generated key forbids.
+REVIEWER_SEEDS: dict[str, bytes] = {
+    "reviewer-1": bytes(range(32)),
+    "reviewer-2": bytes(range(32, 64)),
+}
+REVIEWER_ROLES: dict[str, str] = {
+    "reviewer-1": "visual",
+    "reviewer-2": "semantic-security",
+}
+
+
+def reviewer_key(reviewer_id: str) -> Ed25519PrivateKey:
+    """Returns the deterministic test-only signing key for one reviewer."""
+    return Ed25519PrivateKey.from_private_bytes(REVIEWER_SEEDS[reviewer_id])
+
+
+def sign_decision_value(decision: dict[str, JsonValue]) -> bytes:
+    """Canonically re-signs an edited decision with its reviewer's key."""
+    key = reviewer_key(_reviewer_id(decision))
+    payload = {field: decision[field] for field in decision if field != "signature"}
+    signature = key.sign(canonicalize(payload)).hex()
+    return canonicalize({**payload, "signature": signature})
+
+
+def _reviewer_id(decision: dict[str, JsonValue]) -> str:
+    value = decision["reviewer_id"]
+    if not isinstance(value, str):
+        raise TypeError("reviewer_id")
+    return value
+
 
 def write_metrics(
     contract: Path,
@@ -276,8 +307,10 @@ def _signed_reviews(
 ) -> dict[str, JsonValue]:
     oracle = {str(unit["unit_id"]): unit for unit in oracle_units}
     candidate = {str(unit["unit_id"]): unit for unit in candidate_units}
-    keys = (Ed25519PrivateKey.generate(), Ed25519PrivateKey.generate())
-    reviewers = (("reviewer-1", "visual"), ("reviewer-2", "semantic-security"))
+    reviewers = tuple(
+        (reviewer_id, REVIEWER_ROLES[reviewer_id]) for reviewer_id in REVIEWER_SEEDS
+    )
+    keys = tuple(reviewer_key(reviewer_id) for reviewer_id, _role in reviewers)
     review_root = root / "reviews"
     review_root.mkdir(exist_ok=True)
     packet_path = review_root / f"{document_format}-packet.json"
@@ -325,8 +358,7 @@ def _signed_reviews(
                 for pair_id in sorted(pair_ids)
             ],
         }
-        signed = {**decision, "signature": key.sign(canonicalize(decision)).hex()}
         path = review_root / f"{document_format}-{reviewer_id}.json"
-        path.write_bytes(canonicalize(signed))
+        path.write_bytes(sign_decision_value(decision))
         decisions.append(binding(root, path))
     return {"packet": binding(root, packet_path), "decisions": decisions}
