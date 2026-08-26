@@ -515,9 +515,11 @@ fn sample_sizes(payload: &[u8]) -> Option<Vec<usize>> {
             return None;
         }
         payload[12..]
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|raw| {
-                usize::try_from(u32::from_be_bytes(raw.try_into().ok()?))
+                usize::try_from(u32::from_be_bytes(*raw))
                     .ok()
                     .filter(|size| *size > 0)
             })
@@ -570,7 +572,9 @@ fn sample_to_chunk(payload: &[u8]) -> Option<Vec<StscEntry>> {
         return None;
     }
     let entries = payload[8..]
-        .chunks_exact(12)
+        .as_chunks::<12>()
+        .0
+        .iter()
         .map(|raw| {
             Some(StscEntry {
                 first_chunk: usize::try_from(u32::from_be_bytes(raw[0..4].try_into().ok()?))
