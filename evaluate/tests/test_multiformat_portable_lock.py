@@ -217,6 +217,7 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                 "executor": bindings["executor"],
             },
             "scope": {
+                "format": "docx",
                 "contract": bindings["contract"],
                 "evaluator": bindings["evaluator"],
                 "corpus": bindings["corpus"],

@@ -42,6 +42,9 @@ class PortableLockIncompleteError(PortableLockError):
 @dataclass(frozen=True, slots=True)
 class PortableReferenceLockIdentity(ReferenceLockIdentity):
     routing: RoutingIdentity
+    scope_format: str
+    corpus_path: Path
+    corpus_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +115,12 @@ def validate_reference_lock(
         _artifact_path(object_value(signer, "executor"), evidence_root)
 
         scope = object_value(lock, "scope")
-        for field in ("contract", "evaluator", "corpus"):
+        scope_format = string_value(scope, "format")
+        if scope_format not in {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"}:
+            raise PortableLockError("portable scope format is unsupported")
+        corpus_binding = object_value(scope, "corpus")
+        corpus_path = _artifact_path(corpus_binding, evidence_root)
+        for field in ("contract", "evaluator"):
             _artifact_path(object_value(scope, field), evidence_root)
         _revision_value(scope, "project_revision")
 
@@ -136,6 +144,9 @@ def validate_reference_lock(
             profile=ReferenceProfile.LIBREOFFICE_POPPLER,
             sha256=sha256_file(path),
             routing=routing,
+            scope_format=scope_format,
+            corpus_path=corpus_path,
+            corpus_sha256=sha256_value(corpus_binding, "sha256"),
         )
     except PortableLockIncompleteError:
         raise
@@ -174,6 +185,7 @@ def portable_lock_template() -> JsonObject:
             "executor": {**binding},
         },
         "scope": {
+            "format": "",
             "contract": {**binding},
             "evaluator": {**binding},
             "corpus": {**binding},

@@ -171,6 +171,7 @@ class ReceiptFixture:
                 "executor": binding["executor"],
             },
             "scope": {
+                "format": "docx",
                 "contract": binding["contract"],
                 "evaluator": binding["evaluator"],
                 "corpus": self._binding(corpus),

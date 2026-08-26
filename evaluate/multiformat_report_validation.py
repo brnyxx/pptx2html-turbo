@@ -5,7 +5,9 @@ from pathlib import Path
 from evaluate.multiformat_evaluator_manifest import validate_evaluator_manifest
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_metrics import validate_metrics_evidence
+from evaluate.multiformat_portable_lock import PortableReferenceLockIdentity
 from evaluate.multiformat_report import acceptance_failures, build_report
+from evaluate.multiformat_schema import sha256_file
 from evaluate.multiformat_schema import JsonValue, object_value
 
 
@@ -50,3 +52,31 @@ def validate_generated_report(
         return failures
     except MetricError as error:
         return [error.reason]
+
+
+def validate_oracle_scope(
+    identity: PortableReferenceLockIdentity | None,
+    document_format: str,
+    corpus_path: Path,
+) -> list[str]:
+    if identity is None:
+        return []
+    if identity.scope_format != document_format:
+        return ["oracle_lock_scope"]
+    if (
+        identity.corpus_path.resolve() != corpus_path.resolve()
+        or identity.corpus_sha256 != sha256_file(corpus_path)
+    ):
+        return ["oracle_lock_corpus"]
+    return []
+
+
+def require_equal(
+    values: dict[str, JsonValue],
+    field: str,
+    expected: JsonValue,
+    reason: str,
+    failures: list[str],
+) -> None:
+    if values.get(field) != expected:
+        failures.append(reason)

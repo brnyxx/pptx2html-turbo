@@ -18,8 +18,14 @@ PPTX, DOCX, DOC, XLSX, XLS, PPT, and PDF:
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/reports \
-  --oracle-lock evaluate/multiformat/oracle-lock.json
+  --oracle-lock-dir evaluate/multiformat/oracle-locks
 ```
+
+The lock directory must contain exactly `pdf.json`, `doc.json`, `docx.json`,
+`ppt.json`, `pptx.json`, `xls.json`, and `xlsx.json`. Equivalently, repeat
+`--oracle-lock format=PATH` once for each format. The singular
+`--oracle-lock PATH` form is retained only for legacy shared schema-1 Office
+flows; a shared lock cannot substitute for the seven schema-2 portable locks.
 
 The machine-consumed contract is
 `evaluate/multiformat/contract.v1.json`. Every format must independently pass
