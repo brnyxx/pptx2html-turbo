@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import Callable
 from enum import StrEnum
@@ -39,21 +38,12 @@ def publish_security_snapshot(
 ) -> None:
     """Publish a security snapshot through the format-neutral publisher."""
 
-    def write_compatibility_snapshot(staging: Path) -> None:
-        legacy_lock = staging.parent / (f".{destination.name}.security-sources.lock")
-        if os.path.lexists(legacy_lock):
-            raise SecurityPublishError(
-                legacy_lock,
-                SecurityPublishFailure.LOCKED,
-            )
-        writer(staging)
-
     try:
         try:
             publish_snapshot(
                 destination,
-                write_compatibility_snapshot,
-                lock_namespace="security-snapshot",
+                writer,
+                lock_namespace="security-sources",
             )
         finally:
             active_error = sys.exception()

@@ -146,6 +146,19 @@ class MultiFormatSecurityPublishTests(unittest.TestCase):
             self.assertEqual(lock.read_bytes(), b"other")
             self.assertFalse(destination.exists())
 
+    def test_security_publisher_acquires_the_legacy_cooperative_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "security"
+            with mock.patch(
+                "evaluate.multiformat_security_publish.publish_snapshot"
+            ) as publisher:
+                publish_security_snapshot(destination, lambda staging: None)
+
+            self.assertEqual(
+                publisher.call_args.kwargs["lock_namespace"],
+                "security-sources",
+            )
+
     def test_substituted_lock_is_not_unlinked(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -172,7 +185,7 @@ class MultiFormatSecurityPublishTests(unittest.TestCase):
         raise PrimaryWriterError("primary")
 
     def _lock(self, root: Path) -> Path:
-        return root / ".security.security-snapshot.lock"
+        return root / ".security.security-sources.lock"
 
 
 if __name__ == "__main__":
