@@ -29,6 +29,7 @@ from evaluate.multiformat_schema import (
 )
 from evaluate.tests.multiformat_corpus_fixture import write_corpus
 from evaluate.tests.multiformat_gate_fixture import MultiFormatGateFixture
+from evaluate.tests.multiformat_metrics_fixture import patched_reviewer_registry
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
@@ -219,6 +220,7 @@ class MultiFormatCorpusAdmissionTests(unittest.TestCase):
                 return VisualScores(score, score, score, score), dimensions
 
             with (
+                patched_reviewer_registry(),
                 mock.patch(
                     "evaluate.multiformat_evaluator_manifest.importlib.metadata.version",
                     side_effect=lambda name: string_value(dependencies, name),

@@ -191,6 +191,9 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue((PROJECT_ROOT / path).is_file(), path)
 
+    def test_evaluator_file_set_has_no_duplicates(self) -> None:
+        self.assertEqual(len(EVALUATOR_FILES), len(set(EVALUATOR_FILES)))
+
     def test_manifest_boundary_includes_portable_lock_validation(self) -> None:
         self.assertIn("evaluate/multiformat_reference_profile.py", EVALUATOR_FILES)
         self.assertIn("evaluate/multiformat_portable_lock.py", EVALUATOR_FILES)

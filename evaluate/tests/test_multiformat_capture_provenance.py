@@ -81,7 +81,7 @@ class MultiFormatCaptureProvenanceTests(unittest.TestCase):
                 fixture.verification(),
             )
 
-            self.assertEqual(verified.nonce, "a" * 64)
+            self.assertEqual(verified.nonce, fixture.nonce)
 
     def test_outer_roles_cannot_swap_artifacts_bound_by_upstream_producers(
         self,

@@ -311,8 +311,6 @@ EVALUATOR_FILES: tuple[str, ...] = (
     "crates/document2html-native/src/fonts.rs",
     "crates/document2html-native/src/fonts_tests.rs",
     "crates/document2html-native/src/sha256.rs",
-    "crates/document2html-native/src/runtime.rs",
-    "crates/document2html-native/src/workspace.rs",
     "crates/document2html-native/tests/cjk_determinism_smoke.rs",
     "crates/document2html-native/tests/support/cjk.rs",
 )
