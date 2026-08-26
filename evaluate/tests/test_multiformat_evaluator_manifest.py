@@ -33,6 +33,9 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, EVALUATOR_FILES)
 
+    def test_manifest_binds_evidence_scaffold_producer(self) -> None:
+        self.assertIn("evaluate/scaffold_multiformat_evidence.py", EVALUATOR_FILES)
+
     def test_manifest_binds_exact_portable_receipt_boundary(self) -> None:
         expected = {
             "evaluate/multiformat_portable_receipt.py",

@@ -241,6 +241,7 @@ EVALUATOR_FILES = (
     "evaluate/tests/test_multiformat_metrics_gate.py",
     "evaluate/tests/test_multiformat_report.py",
     "evaluate/tests/test_multiformat_visual_metrics.py",
+    "evaluate/scaffold_multiformat_evidence.py",
     "evaluate/tests/test_scaffold_multiformat_evidence.py",
     "crates/document2html-native/src/converter.rs",
     "crates/document2html-native/src/poppler.rs",
