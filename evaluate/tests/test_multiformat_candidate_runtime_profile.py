@@ -251,6 +251,15 @@ class CandidateRuntimeProfileTests(unittest.TestCase):
                 "sha256": sha256_file(profile),
             },
         }
+        attestation_path = fixture.root / lock["runtime"]["attestation"]["path"]
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+        attestation["sandbox_executable"] = lock["sandbox"]["executable"]
+        attestation["sandbox_profile"] = lock["sandbox"]["profile"]
+        attestation_path.write_text(
+            json.dumps(attestation, sort_keys=True),
+            encoding="utf-8",
+        )
+        lock["runtime"]["attestation"]["sha256"] = sha256_file(attestation_path)
         lock["browser"]["lock"]["sha256"] = sha256_file(browser_path)
         lock["candidate_runtime_lock"]["sha256"] = sha256_file(runtime_path)
         lock["font_bundle"]["sha256"] = sha256_file(font_path)

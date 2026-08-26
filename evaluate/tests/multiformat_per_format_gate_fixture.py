@@ -32,6 +32,11 @@ class PerFormatGateFixture(MultiFormatGateFixture):
             "public-key",
             "executor",
             "contract",
+            "candidate-public-key",
+            "openssl",
+            "receipt-signer",
+            "sandbox-exec",
+            "sandbox-profile",
             "attestation",
         )
         paths: dict[str, Path] = {}
@@ -51,6 +56,9 @@ class PerFormatGateFixture(MultiFormatGateFixture):
                     "timezone": "UTC",
                     "rendering_dpi": 144,
                     "network_isolation": True,
+                    "sandbox_executable": self._binding(root, paths["sandbox-exec"]),
+                    "sandbox_host_artifact": self._binding(root, paths["sandbox-exec"]),
+                    "sandbox_profile": self._binding(root, paths["sandbox-profile"]),
                 },
                 sort_keys=True,
             ),
@@ -89,6 +97,15 @@ class PerFormatGateFixture(MultiFormatGateFixture):
                         "lock": binding["browser-lock"],
                     },
                     "candidate_runtime_lock": binding["candidate-runtime-lock"],
+                    "candidate_sandbox": {
+                        "public_key": binding["candidate-public-key"],
+                        "openssl": binding["openssl"],
+                        "receipt_signer": binding["receipt-signer"],
+                    },
+                    "sandbox": {
+                        "executable": binding["sandbox-exec"],
+                        "profile": binding["sandbox-profile"],
+                    },
                     "signer": {
                         "algorithm": "ed25519",
                         "signer_id": "multiformat-portable-reference-v1",
