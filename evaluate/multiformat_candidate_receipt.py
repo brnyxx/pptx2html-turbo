@@ -14,6 +14,7 @@ from evaluate.multiformat_candidate_attestation import (
 )
 from evaluate.multiformat_candidate_portable_receipt import (
     write_portable_candidate_receipt,
+    ReceiptExecutor,
 )
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_types import (
@@ -55,20 +56,23 @@ def write_execution_receipt(
     runs: tuple[CandidateRun, CandidateRun],
     runtime_artifacts: dict[str, Path],
     security_artifacts: tuple[Path, ...] = (),
+    portable_execute: ReceiptExecutor | None = None,
 ) -> Path:
     if runtime_profile.portable:
         generated = {
-            runtime_identity: "runtime-identity",
-            execution_log: "execution-log",
-            determinism: "determinism-manifest",
+            runtime_identity: "capture-runtime-identity",
+            execution_log: "capture-execution-log",
+            determinism: "capture-candidate-determinism",
         }
         for run in runs:
             for source in run.sources:
-                generated[source.html] = "candidate-html"
-                generated[source.inventory_manifest] = "inventory-manifest"
+                generated[source.html] = "capture-candidate-html"
+                generated[source.inventory_manifest] = (
+                    "capture-candidate-inventory-manifest"
+                )
                 for unit in source.units:
-                    generated[unit.png] = "candidate-png"
-                    generated[unit.inventory] = "candidate-inventory"
+                    generated[unit.png] = "capture-unit-png"
+                    generated[unit.inventory] = "capture-unit-inventory"
         for artifact in security_artifacts:
             generated[artifact] = "security-execution"
         return write_portable_candidate_receipt(
@@ -77,10 +81,14 @@ def write_execution_receipt(
             oracle_lock,
             receipt_signer,
             nonce=run_nonce,
+            execute=portable_execute,
+            require_capture_roles=True,
             batch_id=f"candidate-{corpus_sha256[:16]}",
             artifacts=generated,
         )
     artifacts = _artifact_bindings(evidence_root, runs, runtime_artifacts)
+    artifact_values: list[JsonValue] = list(artifacts)
+    artifact_root_payload: dict[str, JsonValue] = {"artifacts": artifact_values}
     payload: dict[str, JsonValue] = {
         "schema_version": 1,
         "status": "PASS",
@@ -98,9 +106,9 @@ def write_execution_receipt(
         "execution_log_sha256": sha256_file(execution_log),
         "determinism_sha256": sha256_file(determinism),
         "artifact_root_sha256": hashlib.sha256(
-            canonical_payload({"artifacts": artifacts})
+            canonical_payload(artifact_root_payload)
         ).hexdigest(),
-        "artifacts": artifacts,
+        "artifacts": artifact_values,
     }
     request = output_dir / "receipt-request.json"
     receipt = output_dir / "execution-receipt.json"

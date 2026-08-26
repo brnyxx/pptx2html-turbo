@@ -8,6 +8,7 @@ from evaluate.multiformat_candidate_process import run_bounded_process
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptVerification,
+    PortableReceiptIdentity,
     verify_portable_receipt,
 )
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
@@ -17,6 +18,22 @@ from evaluate.multiformat_subprocess import clean_subprocess_environment
 
 class CandidatePortableReceiptError(CandidateCaptureError):
     pass
+
+
+_REQUIRED_CAPTURE_ROLES = frozenset(
+    {
+        "capture-runtime-identity",
+        "capture-execution-log",
+        "capture-unit-png",
+        "capture-unit-inventory",
+        "capture-candidate-html",
+        "capture-candidate-determinism",
+    }
+)
+
+_OPTIONAL_CAPTURE_ROLES = frozenset(
+    {"capture-candidate-inventory-manifest", "security-execution"}
+)
 
 
 ReceiptExecutor = Callable[[Path, Path, Path], None]
@@ -32,6 +49,7 @@ def write_portable_candidate_receipt(
     batch_id: str,
     artifacts: dict[Path, str],
     execute: ReceiptExecutor | None = None,
+    require_capture_roles: bool = False,
 ) -> Path:
     """Request and verify a host-signed portable candidate receipt."""
     try:
@@ -57,6 +75,8 @@ def write_portable_candidate_receipt(
         )
         if verified.nonce != nonce or verified.scope_sha256 != trust.scope_sha256:
             raise CandidatePortableReceiptError("portable receipt identity differs")
+        if require_capture_roles:
+            validate_candidate_capture_roles(verified)
         return receipt
     except CandidatePortableReceiptError:
         raise
@@ -74,6 +94,21 @@ def _record(root: Path, path: Path, role: str) -> dict[str, JsonValue]:
         "size": resolved.stat().st_size,
         "role": role,
     }
+
+
+def validate_candidate_capture_roles(identity: PortableReceiptIdentity) -> None:
+    roles = {artifact.role for artifact in identity.artifacts}
+    missing = _REQUIRED_CAPTURE_ROLES - roles
+    if missing:
+        raise CandidatePortableReceiptError(
+            f"portable candidate capture roles differ: {sorted(missing)[0]}"
+        )
+
+    unexpected = roles - _REQUIRED_CAPTURE_ROLES - _OPTIONAL_CAPTURE_ROLES
+    if unexpected:
+        raise CandidatePortableReceiptError(
+            f"portable candidate capture role is unsupported: {sorted(unexpected)[0]}"
+        )
 
 
 def _execute(executor: Path, request: Path, output: Path) -> None:
@@ -102,5 +137,6 @@ def _execute(executor: Path, request: Path, output: Path) -> None:
 __all__ = [
     "CandidatePortableReceiptError",
     "ReceiptExecutor",
+    "validate_candidate_capture_roles",
     "write_portable_candidate_receipt",
 ]

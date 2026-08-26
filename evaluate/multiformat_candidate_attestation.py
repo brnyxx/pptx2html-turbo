@@ -9,8 +9,6 @@ from evaluate.multiformat_candidate_signature import verify_ed25519_json
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_schema import (
-    boolean_value,
-    integer_value,
     JsonValue,
     object_value,
     sha256_file,
@@ -117,23 +115,23 @@ def verify_candidate_attestation(
     signature = values.pop("signature", None)
     if not isinstance(signature, str) or not signature:
         raise CandidateAttestationError("portable sandbox signature is missing")
-    expected_strings: dict[str, str] = {
-        "status": "PASS",
-        "golden_access": "denied",
-        "project_revision": project_revision,
-        "font_isolation": "locked-bundle-only",
-        "verifier_id": string_value(profile.sandbox_verifier, "verifier_id"),
-        "scope_sha256": scope_sha256,
-    }
-    if integer_value(values, "schema_version") != 1 or any(
-        string_value(values, field) != expected
-        for field, expected in expected_strings.items()
-    ):
-        raise CandidateAttestationError("portable sandbox attestation mismatch")
-    if not boolean_value(values, "network_isolation"):
-        raise CandidateAttestationError("portable sandbox network is not isolated")
     nonce = sha256_value(values, "run_nonce")
     font_environment = sha256_value(values, "font_environment_sha256")
+    verifier_id = string_value(profile.sandbox_verifier, "verifier_id")
+    expected: dict[str, JsonValue] = {
+        "schema_version": 1,
+        "status": "PASS",
+        "network_isolation": True,
+        "golden_access": "denied",
+        "project_revision": project_revision,
+        "font_environment_sha256": font_environment,
+        "font_isolation": "locked-bundle-only",
+        "run_nonce": nonce,
+        "verifier_id": verifier_id,
+        "scope_sha256": scope_sha256,
+    }
+    if values != expected:
+        raise CandidateAttestationError("portable sandbox attestation mismatch")
     if font_environment != sha256_value(
         profile.browser_lock, "font_environment_sha256"
     ):
@@ -146,9 +144,7 @@ def verify_candidate_attestation(
         profile.sandbox_verifier,
         "candidate sandbox verifier",
     )
-    return VerifiedAttestation(
-        string_value(profile.sandbox_verifier, "verifier_id"), font_environment, nonce
-    )
+    return VerifiedAttestation(verifier_id, font_environment, nonce)
 
 
 def verify_signed_attestation(

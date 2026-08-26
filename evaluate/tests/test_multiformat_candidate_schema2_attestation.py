@@ -28,6 +28,7 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
             "payload",
             "transplant",
             "outer-reuse",
+            "extra-field",
         ):
             with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
@@ -54,6 +55,8 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                 }
                 if attack == "transplant":
                     payload["scope_sha256"] = "e" * 64
+                elif attack == "extra-field":
+                    payload["unrecognized"] = "signed-but-not-allowed"
                 write_signed_attestation(attestation, candidate, payload)
                 key = candidate.public_key
                 if attack == "wrong-key":
