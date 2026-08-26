@@ -12,8 +12,6 @@ from evaluate.multiformat_ready_tree_fs import scan_tree
 from evaluate.multiformat_ready_tree_types import TreeIdentityError
 from evaluate.multiformat_schema import JsonValue
 
-_ASSEMBLY_MANIFEST_NAME: Final = "assembly-manifest.json"
-
 
 @dataclass(frozen=True, slots=True)
 class TreeIdentity:

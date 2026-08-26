@@ -167,7 +167,7 @@ class PortableSpreadsheetSemanticsTests(unittest.TestCase):
     def test_shared_cases_match_the_rust_core(self) -> None:
         cases = _load_cases()
         # Guard against a silently truncated or unparsed fixture.
-        self.assertGreaterEqual(len(cases), 20)
+        self.assertGreaterEqual(len(cases), 35)
         for case in cases:
             with self.subTest(case=case.name):
                 with tempfile.TemporaryDirectory() as temp_dir:

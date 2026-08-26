@@ -244,7 +244,12 @@ EVALUATOR_FILES = (
     "evaluate/tests/test_multiformat_visual_metrics.py",
     "evaluate/scaffold_multiformat_evidence.py",
     "evaluate/tests/test_scaffold_multiformat_evidence.py",
+    "crates/document2html-core/src/lib.rs",
     "crates/document2html-native/src/converter.rs",
+    "crates/document2html-native/src/lib.rs",
+    "crates/document2html-native/src/office.rs",
+    "crates/document2html-native/tests/xls_conversion_smoke.rs",
+    "crates/document2html-native/tests/xlsx_conversion_smoke.rs",
     "crates/document2html-native/src/poppler.rs",
     "crates/document2html-native/src/process.rs",
     "crates/document2html-native/src/process_tests.rs",
@@ -255,6 +260,7 @@ EVALUATOR_FILES = (
     # tests are bound into the manifest.
     "crates/document2html-core/src/spreadsheet.rs",
     "crates/document2html-core/src/spreadsheet/display.rs",
+    "crates/document2html-core/src/spreadsheet/number.rs",
     "crates/document2html-core/src/spreadsheet/package.rs",
     "crates/document2html-core/src/spreadsheet/styles.rs",
     "crates/document2html-core/src/spreadsheet/worksheet.rs",
@@ -267,5 +273,6 @@ EVALUATOR_FILES = (
     "crates/document2html-native/src/spreadsheet_html_tests.rs",
     "evaluate/multiformat/xlsx-semantic-cases.v1.json",
     "evaluate/multiformat_portable_spreadsheet_formats.py",
+    "evaluate/multiformat_portable_spreadsheet_numbers.py",
     "evaluate/tests/test_multiformat_portable_spreadsheet_semantics.py",
 )

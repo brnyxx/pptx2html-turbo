@@ -6,13 +6,23 @@
       "name": "boolean_true",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" t=\"b\"><v>1</v></c>",
-      "expected": [{ "address": "A1", "display": "TRUE" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "TRUE"
+        }
+      ]
     },
     {
       "name": "boolean_false",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" t=\"b\"><v>0</v></c>",
-      "expected": [{ "address": "A1", "display": "FALSE" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "FALSE"
+        }
+      ]
     },
     {
       "name": "boolean_out_of_domain_value",
@@ -82,13 +92,23 @@
       "name": "iso_date_cell_midnight",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" t=\"d\"><v>2026-08-26T00:00:00</v></c>",
-      "expected": [{ "address": "A1", "display": "2026-08-26" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "2026-08-26"
+        }
+      ]
     },
     {
       "name": "iso_date_cell_with_time",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" t=\"d\"><v>2026-08-26T13:45:30</v></c>",
-      "expected": [{ "address": "A1", "display": "2026-08-26T13:45:30" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "2026-08-26T13:45:30"
+        }
+      ]
     },
     {
       "name": "iso_date_cell_invalid_calendar_day",
@@ -96,34 +116,167 @@
       "reason": "2026 is not a leap year, so the value is unattributable rather than fatal.",
       "worksheet_cells": "<c r=\"A1\" t=\"d\"><v>2026-02-29</v></c>",
       "expected": [],
-      "unattributed": [{ "address": "A1" }]
+      "unattributed": [
+        {
+          "address": "A1"
+        }
+      ]
     },
     {
       "name": "custom_percent_two_decimals",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>0.5</v></c>",
       "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.00%\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
-      "expected": [{ "address": "A1", "display": "50.00%" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "50.00%"
+        }
+      ]
     },
     {
       "name": "builtin_percent_no_decimals",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>0.5</v></c>",
       "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"9\"/></cellXfs>",
-      "expected": [{ "address": "A1", "display": "50%" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "50%"
+        }
+      ]
     },
     {
       "name": "builtin_short_date_serial",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>46265</v></c>",
       "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs>",
-      "expected": [{ "address": "A1", "display": "2026-08-31" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "2026-08-31"
+        }
+      ]
     },
     {
       "name": "plain_number_without_styles",
       "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\"><v>42</v></c>",
-      "expected": [{ "address": "A1", "display": "42" }]
+      "expected": [
+        {
+          "address": "A1",
+          "display": "42"
+        }
+      ]
+    },
+    {
+      "name": "builtin_two_decimals",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>3.5</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"2\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "3.50"
+        }
+      ]
+    },
+    {
+      "name": "builtin_grouped_integer",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>1234567</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"3\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1,234,567"
+        }
+      ]
+    },
+    {
+      "name": "custom_two_decimals",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>3.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.00\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "3.50"
+        }
+      ]
+    },
+    {
+      "name": "custom_grouped_two_decimals",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>1234.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"#,##0.00\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1,234.50"
+        }
+      ]
+    },
+    {
+      "name": "custom_grouped_negative_uses_minus_sign",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>-1234.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"#,##0.00\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "-1,234.50"
+        }
+      ]
+    },
+    {
+      "name": "accounting_negative_uses_parentheses",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>-1234.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"#,##0.00;(#,##0.00)\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "(1,234.50)"
+        }
+      ]
+    },
+    {
+      "name": "currency_locale_prefix",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>1234.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"[$$-409]#,##0.00\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "$1,234.50"
+        }
+      ]
+    },
+    {
+      "name": "colour_token_does_not_block_numeric_rendering",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>1.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"[Red]0.00\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1.50"
+        }
+      ]
+    },
+    {
+      "name": "optional_fraction_placeholder_is_unattributable",
+      "outcome": "accept",
+      "reason": "'#' and '?' suppress or pad trailing zeros, which is not reproduced, so the cell must not publish a guessed value.",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>1.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.###\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [],
+      "unattributed": [
+        {
+          "address": "A1"
+        }
+      ]
     },
     {
       "name": "unreproducible_currency_format_is_unattributable",
@@ -132,7 +285,85 @@
       "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>12.5</v></c>",
       "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"44\"/></cellXfs>",
       "expected": [],
-      "unattributed": [{ "address": "A1" }]
+      "unattributed": [
+        {
+          "address": "A1"
+        }
+      ]
+    },
+    {
+      "name": "serial_date_first_day",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>1</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1900-01-01"
+        }
+      ]
+    },
+    {
+      "name": "serial_date_second_day",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>2</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1900-01-02"
+        }
+      ]
+    },
+    {
+      "name": "serial_date_last_before_phantom_leap_day",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>59</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1900-02-28"
+        }
+      ]
+    },
+    {
+      "name": "serial_date_phantom_leap_day_is_refused",
+      "outcome": "accept",
+      "reason": "Serial 60 is the 1900 system's phantom 1900-02-29, which never existed.",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>60</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs>",
+      "expected": [],
+      "unattributed": [
+        {
+          "address": "A1"
+        }
+      ]
+    },
+    {
+      "name": "serial_date_after_phantom_leap_day",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>61</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1900-03-01"
+        }
+      ]
+    },
+    {
+      "name": "serial_datetime_rounds_into_next_day",
+      "outcome": "accept",
+      "reason": "Rounding up from 23:59:59.5 must carry into the next day, never emit 24:00:00.",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>61.99999999</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"22\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1900-03-02T00:00:00"
+        }
+      ]
     }
   ]
 }

@@ -38,6 +38,7 @@ NATIVE_READY_ENGINE_FILES = (
     "evaluate/multiformat_snapshot_filesystem.py",
     "evaluate/multiformat_snapshot_lock.py",
     "evaluate/multiformat_snapshot_publish.py",
+    "evaluate/multiformat_snapshot_publish_types.py",
     "evaluate/assemble_multiformat_ready_corpora.py",
     "evaluate/validate_multiformat_ready_corpora.py",
     "evaluate/multiformat_ready_assembly.py",

@@ -192,6 +192,10 @@ def _validate_diagnostics(
         "PROCESS_ISOLATION_UNAVAILABLE",
     }:
         raise CandidateConversionError("native runtime isolation diagnostics failed")
+    # A truncated cell scan abandons all coordinate attribution, so the
+    # conversion cannot back spreadsheet cell evidence at all.
+    if "SPREADSHEET_CELL_SCAN_TRUNCATED" in codes:
+        raise CandidateConversionError("spreadsheet cell scan truncated")
 
 
 def _sha256(path: Path) -> str:

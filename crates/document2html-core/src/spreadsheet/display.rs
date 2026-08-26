@@ -5,7 +5,7 @@
 //! conversion; it yields [`Display::Unattributable`] so the cell is excluded
 //! from coordinate attribution while the document still converts.
 
-use super::styles::NumberFormat;
+use super::number::{DecimalFormat, NumberFormat};
 
 /// Outcome of rendering a stored value for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,14 +23,58 @@ const SERIAL_EPOCH_OFFSET: i64 = 25_569;
 const SECONDS_PER_DAY: i64 = 86_400;
 
 /// Renders `raw` for display under `format`.
-pub(super) fn formatted_value(raw: &str, format: NumberFormat) -> Display {
+pub(super) fn formatted_value(raw: &str, format: &NumberFormat) -> Display {
     match format {
         NumberFormat::General => Display::Trusted(raw.to_owned()),
-        NumberFormat::Percent { decimals } => percent(raw, decimals),
+        NumberFormat::Decimal(spec) => decimal(raw, spec),
+        NumberFormat::Percent { decimals } => percent(raw, *decimals),
         NumberFormat::IsoDate => serial_to_iso(raw, false),
         NumberFormat::IsoDateTime => serial_to_iso(raw, true),
         NumberFormat::Unsupported => Display::Unattributable,
     }
+}
+
+/// Renders fixed-point decimals with optional grouping and currency text.
+fn decimal(raw: &str, spec: &DecimalFormat) -> Display {
+    let Ok(value) = raw.parse::<f64>() else {
+        return Display::Unattributable;
+    };
+    if !value.is_finite() {
+        return Display::Unattributable;
+    }
+    let negative = value.is_sign_negative() && value != 0.0;
+    let rendered = format!("{:.*}", spec.decimals, value.abs());
+    let (integer, fraction) = match rendered.split_once('.') {
+        Some((integer, fraction)) => (integer, Some(fraction)),
+        None => (rendered.as_str(), None),
+    };
+    let mut digits = if spec.grouped {
+        group_thousands(integer)
+    } else {
+        integer.to_owned()
+    };
+    if let Some(fraction) = fraction {
+        digits.push('.');
+        digits.push_str(fraction);
+    }
+    let body = format!("{}{digits}{}", spec.prefix, spec.suffix);
+    Display::Trusted(match (negative, spec.parenthesized_negative) {
+        (false, _) => body,
+        (true, true) => format!("({body})"),
+        (true, false) => format!("-{body}"),
+    })
+}
+
+fn group_thousands(digits: &str) -> String {
+    let mut output = String::with_capacity(digits.len() + digits.len() / 3);
+    let count = digits.len();
+    for (index, value) in digits.char_indices() {
+        if index > 0 && (count - index).is_multiple_of(3) {
+            output.push(',');
+        }
+        output.push(value);
+    }
+    output
 }
 
 fn percent(raw: &str, decimals: usize) -> Display {
@@ -48,11 +92,21 @@ fn serial_to_iso(raw: &str, with_time: bool) -> Display {
     if !serial.is_finite() || serial < 1.0 {
         return Display::Unattributable;
     }
-    let days = serial.trunc() as i64;
+    let mut days = serial.trunc() as i64;
     // Round the fractional day to whole seconds so 0.5 lands exactly on noon.
-    let seconds =
-        ((serial.fract() * SECONDS_PER_DAY as f64).round() as i64).clamp(0, SECONDS_PER_DAY);
-    let unix_days = days - SERIAL_EPOCH_OFFSET;
+    let mut seconds = (serial.fract() * SECONDS_PER_DAY as f64).round() as i64;
+    // Rounding up from 23:59:59.5 carries into the next day rather than
+    // emitting an out-of-range 24:00:00.
+    if seconds >= SECONDS_PER_DAY {
+        seconds -= SECONDS_PER_DAY;
+        days += 1;
+    }
+    if seconds < 0 {
+        seconds = 0;
+    }
+    let Some(unix_days) = unix_days_from_serial(days) else {
+        return Display::Unattributable;
+    };
     let (year, month, day) = civil_from_days(unix_days);
     if !with_time {
         return Display::Trusted(format!("{year:04}-{month:02}-{day:02}"));
@@ -61,6 +115,22 @@ fn serial_to_iso(raw: &str, with_time: bool) -> Display {
     Display::Trusted(format!(
         "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}"
     ))
+}
+
+/// Converts a 1900-system serial day number to days since 1970-01-01.
+///
+/// The 1900 system contains a phantom 1900-02-29 at serial 60 that never
+/// existed. Serials below it are one day ahead of a pure linear mapping, so
+/// they are shifted; serial 60 itself denotes no real date and is refused.
+fn unix_days_from_serial(days: i64) -> Option<i64> {
+    match days {
+        ..=0 => None,
+        // 1 => 1900-01-01 ... 59 => 1900-02-28
+        1..=59 => Some(days - SERIAL_EPOCH_OFFSET + 1),
+        // The phantom leap day is not a real calendar date.
+        60 => None,
+        _ => Some(days - SERIAL_EPOCH_OFFSET),
+    }
 }
 
 /// Days since 1970-01-01 to a proleptic Gregorian calendar date.

@@ -249,6 +249,131 @@ fn large_sheet_matching_cost_stays_near_linear() {
     assert_eq!(large.annotations, 1600);
 }
 
+/// A truncated scan must discard every annotation.
+///
+/// Uniqueness is only provable when the whole document was inspected. Here a
+/// value appears once before the token cutoff and again after it, so a matcher
+/// that kept pre-cutoff results would wrongly annotate it as unique.
+#[test]
+fn truncated_scan_discards_all_annotations() {
+    let cutoff = super::matching_max_tokens();
+    // "dup" sits in the first node; the filler crosses the cutoff, and the
+    // second "dup" lands in a node the scan never reaches.
+    let filler: String = (0..=cutoff).map(|index| format!("f{index} ")).collect();
+    let html = format!(
+        concat!(
+            r#"<html><body><div id="page1-div">"#,
+            "<p>dup</p><p>{}</p><p>dup</p><p>solo</p>",
+            "</div></body></html>"
+        ),
+        filler
+    );
+    let semantics = SpreadsheetSemantics {
+        cells: vec![cell("S", "A1", "dup"), cell("S", "B2", "solo")],
+    };
+
+    let annotated = annotate_spreadsheet_html(&html, &semantics);
+
+    // Nothing may be annotated, not even the value that looked unique.
+    assert_eq!(annotated.html, html);
+    let codes: Vec<&str> = annotated
+        .diagnostics
+        .iter()
+        .map(|value| value.code.as_str())
+        .collect();
+    assert_eq!(codes, vec!["SPREADSHEET_CELL_SCAN_TRUNCATED"]);
+}
+
+/// Many distinct phrase widths must not multiply the matching cost.
+///
+/// A widths-by-windows matcher performs one lookup per (token, width) pair, so
+/// adding widths alone multiplies its work. The trie walk advances only along
+/// live prefixes, so widths that share no leading token cost one failed
+/// transition each.
+#[test]
+fn distinct_phrase_widths_do_not_multiply_matching_cost() {
+    let tokens = 4_000usize;
+    let narrow = width_cost(tokens, 1);
+    let wide = width_cost(tokens, 150);
+
+    // 150x more widths must not cost anything close to 150x more work.
+    let ratio = wide.probes as f64 / narrow.probes.max(1) as f64;
+    assert!(
+        ratio < 2.0,
+        "probe growth {ratio} indicates width-dependent matching \
+         (narrow={} wide={})",
+        narrow.probes,
+        wide.probes
+    );
+    // The bound must hold per token, independent of the width count.
+    assert!(
+        wide.probes < tokens * 4,
+        "probes {} exceed the token-linear bound",
+        wide.probes
+    );
+}
+
+/// Adversarial input: every cell value shares a long common prefix with the
+/// rendered text, forcing the deepest legal walk at every token position.
+/// The cost must still be bounded by the longest live prefix, not by width
+/// count times token count.
+#[test]
+fn shared_prefix_phrases_stay_within_the_depth_bound() {
+    let depth = 40usize;
+    let tokens = 2_000usize;
+    let body: String = (0..tokens).map(|_| "p ").collect();
+    let html = format!(r#"<html><body><div id="page1-div"><p>{body}</p></div></body></html>"#);
+    // Values "p", "p p", ... "p p ... p": every width is a live prefix.
+    let cells: Vec<_> = (1..=depth)
+        .map(|width| {
+            let phrase = vec!["p"; width].join(" ");
+            cell("S", &format!("A{width}"), &phrase)
+        })
+        .collect();
+    let semantics = SpreadsheetSemantics { cells };
+
+    let annotated = annotate_spreadsheet_html(&html, &semantics);
+
+    // Walks stop at the deepest stored phrase, so work is tokens * depth and
+    // never tokens * tokens.
+    assert!(
+        annotated.probes <= tokens * (depth + 1),
+        "probes {} exceed the depth bound",
+        annotated.probes
+    );
+    // Every value repeats, so all are ambiguous and nothing is annotated.
+    assert_eq!(annotated.html, html);
+    assert!(
+        annotated
+            .diagnostics
+            .iter()
+            .any(|value| value.code == "SPREADSHEET_CELL_AMBIGUOUS")
+    );
+}
+
+fn width_cost(tokens: usize, widths: usize) -> ProbeCost {
+    let body: String = (0..tokens).map(|index| format!("w{index} ")).collect();
+    let html = format!(r#"<html><body><div id="page1-div"><p>{body}</p></div></body></html>"#);
+    // Each cell uses a distinct width and tokens absent from the document.
+    let cells: Vec<_> = (1..=widths)
+        .map(|width| {
+            let phrase = (0..width)
+                .map(|part| format!("z{width}_{part}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            cell("S", &format!("A{width}"), &phrase)
+        })
+        .collect();
+    let semantics = SpreadsheetSemantics { cells };
+
+    let annotated = annotate_spreadsheet_html(&html, &semantics);
+
+    ProbeCost {
+        probes: annotated.probes,
+        annotations: annotated.html.matches("data-cell-coordinate=").count(),
+    }
+}
+
 struct ProbeCost {
     probes: usize,
     annotations: usize,

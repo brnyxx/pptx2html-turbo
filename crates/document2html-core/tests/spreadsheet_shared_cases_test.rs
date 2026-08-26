@@ -39,7 +39,7 @@ fn shared_cases_agree_with_the_portable_extractor() {
     let cases = load_cases();
     // Guard against a silently truncated or unparsed fixture.
     assert!(
-        cases.len() >= 20,
+        cases.len() >= 35,
         "expected the full shared case set, parsed {}",
         cases.len()
     );

@@ -6,7 +6,6 @@ import stat
 import sys
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
@@ -20,6 +19,11 @@ from evaluate.multiformat_snapshot_filesystem import (
     verify_directory_identity,
 )
 from evaluate.multiformat_snapshot_lock import acquire_lock
+from evaluate.multiformat_snapshot_publish_types import (
+    CleanupState as _CleanupState,
+    Identity as _Identity,
+    InvalidLockNamespaceError as _InvalidLockNamespaceError,
+)
 
 _DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
 _NOFOLLOW_FLAGS = getattr(os, "O_NOFOLLOW", 0)
@@ -41,34 +45,6 @@ class SnapshotPublishError(Exception):
 
     def __str__(self) -> str:
         return f"snapshot publication failed: {self.failure.value}"
-
-
-@dataclass(frozen=True, slots=True)
-class _InvalidLockNamespaceError(ValueError):
-    namespace: str
-
-    def __str__(self) -> str:
-        return "lock_namespace must be a lowercase ASCII token"
-
-
-@dataclass(frozen=True, slots=True)
-class _Identity:
-    device: int
-    inode: int
-
-
-@dataclass(frozen=True, slots=True)
-class _CleanupState:
-    parent_descriptor: int
-    staging: Path | None
-    target: Path
-    staging_descriptor: int | None
-    staging_identity: _Identity | None
-    renamed: bool
-    lock_descriptor: int
-    lock: Path
-    lock_identity: _Identity
-    published: bool
 
 
 def publish_snapshot(

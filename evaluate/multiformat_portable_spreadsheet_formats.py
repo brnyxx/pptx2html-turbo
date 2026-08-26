@@ -1,9 +1,11 @@
 """Number-format resolution for portable XLSX display text.
 
 Mirrors `crates/document2html-core/src/spreadsheet/styles.rs` and
-`display.rs`. Only a bounded subset of ECMA-376 format codes is reproduced;
-anything else yields `UNATTRIBUTABLE` so the cell still converts but is
-excluded from coordinate attribution instead of publishing a value that
+`display.rs`. Format-code classification lives in
+`multiformat_portable_spreadsheet_numbers`.
+
+An unreproducible format yields `UNATTRIBUTABLE` so the cell still converts
+but is excluded from coordinate attribution instead of publishing a value that
 differs from what a spreadsheet application shows.
 """
 
@@ -12,144 +14,84 @@ from __future__ import annotations
 from typing import Final
 from xml.etree import ElementTree
 
+from evaluate.multiformat_portable_spreadsheet_numbers import (
+    DECIMAL,
+    GENERAL,
+    ISO_DATE,
+    ISO_DATE_TIME,
+    PERCENT,
+    UNSUPPORTED,
+    ResolvedFormat,
+    builtin_format,
+    classify_format_code,
+    render_decimal,
+)
+
 MAIN: Final = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
 # Sentinel for a value whose visible text cannot be reproduced.
 UNATTRIBUTABLE: Final = object()
 
-GENERAL: Final = "general"
-PERCENT: Final = "percent"
-ISO_DATE: Final = "iso_date"
-ISO_DATE_TIME: Final = "iso_date_time"
-UNSUPPORTED: Final = "unsupported"
-
-# Built-in numFmt ids reproduced here, matching the Rust core exactly.
-# 0 General, 1 `0`, 2 `0.00`, 3/4 thousands-separated, 49 Text.
-_BUILTIN: Final[dict[str, tuple[str, int]]] = {
-    "0": (GENERAL, 0),
-    "1": (GENERAL, 0),
-    "2": (GENERAL, 0),
-    "3": (GENERAL, 0),
-    "4": (GENERAL, 0),
-    "49": (GENERAL, 0),
-    "9": (PERCENT, 0),
-    "10": (PERCENT, 2),
-    "14": (ISO_DATE, 0),
-    "15": (ISO_DATE, 0),
-    "16": (ISO_DATE, 0),
-    "17": (ISO_DATE, 0),
-    "22": (ISO_DATE_TIME, 0),
-}
-
 # Days from the 1900 serial epoch to 1970-01-01, accounting for the
 # spreadsheet's non-existent 1900-02-29 leap day.
 _SERIAL_EPOCH_OFFSET: Final = 25_569
 _SECONDS_PER_DAY: Final = 86_400
-_NUMERIC_PLACEHOLDERS: Final = frozenset("0#.,-+ ?")
-_PERCENT_PLACEHOLDERS: Final = frozenset("0#., ?")
 
 
-def parse_styles(root: ElementTree.Element) -> list[tuple[str, int]]:
+def parse_styles(root: ElementTree.Element) -> list[ResolvedFormat]:
     """Builds the cell-format table from a parsed `xl/styles.xml` root."""
     custom = {
         item.attrib["numFmtId"]: item.attrib["formatCode"]
         for item in root.iter(f"{{{MAIN}}}numFmt")
         if "numFmtId" in item.attrib and "formatCode" in item.attrib
     }
-    formats: list[tuple[str, int]] = []
+    formats: list[ResolvedFormat] = []
     for container in root.iter(f"{{{MAIN}}}cellXfs"):
         for item in container.findall(f"{{{MAIN}}}xf"):
             identity = item.attrib.get("numFmtId", "0")
-            formats.append(_resolve(identity, custom))
+            code = custom.get(identity)
+            formats.append(
+                classify_format_code(code)
+                if code is not None
+                else builtin_format(identity)
+            )
     return formats
 
 
 def cell_format(
-    formats: list[tuple[str, int]], style_index: str | None
-) -> tuple[str, int]:
+    formats: list[ResolvedFormat], style_index: str | None
+) -> ResolvedFormat:
     """Resolves a cell's `s` attribute against the style table."""
     if style_index is None:
-        return (GENERAL, 0)
+        return ResolvedFormat(GENERAL)
     try:
         index = int(style_index)
     except ValueError:
-        return (UNSUPPORTED, 0)
+        return ResolvedFormat(UNSUPPORTED)
     if 0 <= index < len(formats):
         return formats[index]
     # A missing entry means no format was applied.
-    return (GENERAL, 0)
+    return ResolvedFormat(GENERAL)
 
 
-def _resolve(identity: str, custom: dict[str, str]) -> tuple[str, int]:
-    code = custom.get(identity)
-    if code is not None:
-        return _classify(code)
-    return _BUILTIN.get(identity, (UNSUPPORTED, 0))
-
-
-def _classify(code: str) -> tuple[str, int]:
-    section = code.split(";", 1)[0]
-    stripped = _strip_literals(section)
-    if not stripped:
-        return (UNSUPPORTED, 0)
-    if "%" in stripped:
-        return _percent_format(stripped)
-    lowered = stripped.lower()
-    if any(marker in lowered for marker in "ydm"):
-        if any(marker in lowered for marker in "hs"):
-            return (ISO_DATE_TIME, 0)
-        return (ISO_DATE, 0)
-    if all(character in _NUMERIC_PLACEHOLDERS for character in stripped):
-        return (GENERAL, 0)
-    return (UNSUPPORTED, 0)
-
-
-def _strip_literals(code: str) -> str:
-    output: list[str] = []
-    index = 0
-    length = len(code)
-    while index < length:
-        character = code[index]
-        if character == '"':
-            index += 1
-            while index < length and code[index] != '"':
-                index += 1
-        elif character == "[":
-            while index < length and code[index] != "]":
-                index += 1
-        elif character in {"\\", "_"}:
-            index += 1
-        elif character == "*":
-            pass
-        else:
-            output.append(character)
-        index += 1
-    return "".join(output)
-
-
-def _percent_format(code: str) -> tuple[str, int]:
-    numeric = code.replace("%", "")
-    decimals = 0
-    if "." in numeric:
-        decimals = numeric.split(".", 1)[1].count("0")
-    if all(character in _PERCENT_PLACEHOLDERS for character in numeric):
-        return (PERCENT, decimals)
-    return (UNSUPPORTED, 0)
-
-
-def formatted_value(raw: str, resolved: tuple[str, int]) -> str | object:
+def formatted_value(raw: str, resolved: ResolvedFormat) -> str | object:
     """Renders `raw` under `resolved`, or `UNATTRIBUTABLE`."""
-    kind, decimals = resolved
-    if kind == GENERAL:
+    if resolved.kind == GENERAL:
         return raw
-    if kind == PERCENT:
+    if resolved.kind == DECIMAL:
         try:
             value = float(raw)
         except ValueError:
             return UNATTRIBUTABLE
-        return f"{value * 100:.{decimals}f}%"
-    if kind in {ISO_DATE, ISO_DATE_TIME}:
-        return _serial_to_iso(raw, kind == ISO_DATE_TIME)
+        return render_decimal(value, resolved.spec)
+    if resolved.kind == PERCENT:
+        try:
+            value = float(raw)
+        except ValueError:
+            return UNATTRIBUTABLE
+        return f"{value * 100:.{resolved.decimals}f}%"
+    if resolved.kind in {ISO_DATE, ISO_DATE_TIME}:
+        return _serial_to_iso(raw, resolved.kind == ISO_DATE_TIME)
     return UNATTRIBUTABLE
 
 
@@ -162,12 +104,36 @@ def _serial_to_iso(raw: str, with_time: bool) -> str | object:
         return UNATTRIBUTABLE
     days = int(serial)
     fraction = serial - days
-    seconds = min(max(round(fraction * _SECONDS_PER_DAY), 0), _SECONDS_PER_DAY)
-    year, month, day = _civil_from_days(days - _SERIAL_EPOCH_OFFSET)
+    seconds = round(fraction * _SECONDS_PER_DAY)
+    # Rounding up from 23:59:59.5 carries into the next day rather than
+    # emitting an out-of-range 24:00:00.
+    if seconds >= _SECONDS_PER_DAY:
+        seconds -= _SECONDS_PER_DAY
+        days += 1
+    seconds = max(seconds, 0)
+    unix_days = _unix_days_from_serial(days)
+    if unix_days is None:
+        return UNATTRIBUTABLE
+    year, month, day = _civil_from_days(unix_days)
     if not with_time:
         return f"{year:04d}-{month:02d}-{day:02d}"
     hour, minute, second = seconds // 3600, (seconds % 3600) // 60, seconds % 60
     return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:{second:02d}"
+
+
+def _unix_days_from_serial(days: int) -> int | None:
+    """Converts a 1900-system serial day number to days since 1970-01-01.
+
+    The 1900 system contains a phantom 1900-02-29 at serial 60 that never
+    existed. Serials below it are one day ahead of a pure linear mapping, so
+    they are shifted; serial 60 itself denotes no real date and is refused.
+    """
+    if days <= 0 or days == 60:
+        return None
+    if days <= 59:
+        # 1 => 1900-01-01 ... 59 => 1900-02-28
+        return days - _SERIAL_EPOCH_OFFSET + 1
+    return days - _SERIAL_EPOCH_OFFSET
 
 
 def _civil_from_days(days: int) -> tuple[int, int, int]:

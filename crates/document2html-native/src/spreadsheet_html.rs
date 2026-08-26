@@ -17,6 +17,9 @@ use diagnostics::{
     unreproducible_format_diagnostic,
 };
 use matching::scan_occurrences;
+
+#[cfg(test)]
+use matching::max_match_tokens as matching_max_tokens;
 use text::{body_range, normalize};
 
 struct Annotation {
@@ -77,6 +80,18 @@ pub(crate) fn annotate_spreadsheet_html(
         .collect();
 
     let scan = scan_occurrences(html, &content, &wanted);
+    // A truncated scan never saw the whole document, so "exactly one
+    // occurrence" is unproven for every value: a second occurrence could sit
+    // past the cutoff. Discard all annotations rather than emit a subset whose
+    // uniqueness was never established.
+    if scan.truncated {
+        return AnnotatedSpreadsheetHtml {
+            html: html.to_owned(),
+            diagnostics: vec![truncated_diagnostic()],
+            #[cfg(test)]
+            probes: scan.probes,
+        };
+    }
     let mut annotations = Vec::new();
     let mut ambiguous = 0usize;
     for (value, cells) in &cells_by_value {
@@ -116,9 +131,6 @@ pub(crate) fn annotate_spreadsheet_html(
     }
     if unreproducible > 0 {
         result.push(unreproducible_format_diagnostic(unreproducible));
-    }
-    if scan.truncated {
-        result.push(truncated_diagnostic());
     }
 
     let mut output = html.to_owned();

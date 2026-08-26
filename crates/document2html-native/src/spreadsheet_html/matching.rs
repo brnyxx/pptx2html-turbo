@@ -1,11 +1,12 @@
 //! Indexed occurrence matching.
 //!
-//! Rendered text is scanned once and looked up against a hash index of wanted
-//! cell values. Cost is `O(tokens * distinct cell word-widths)` with hash
-//! lookups rather than the `O(cells * nodes)` scan it replaces, so cell count
-//! and document size no longer multiply.
+//! Cell values are compiled into a token-keyed trie, then rendered text is
+//! scanned once. From each token position the walk advances only while the
+//! consumed tokens remain a live prefix of some cell value, so the operation
+//! count is bounded by `tokens * max_live_prefix_depth` and is independent of
+//! how many distinct phrase widths the workbook uses.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::ops::Range;
 
 use super::text::{normalized_chars, phrase_text, text_nodes, word_spans};
@@ -15,17 +16,67 @@ use super::text::{normalized_chars, phrase_text, text_nodes, word_spans};
 /// turning annotation into an unbounded amount of work.
 const MAX_MATCH_TOKENS: usize = 1 << 20;
 
+/// Trie over whitespace-delimited tokens of the wanted cell values.
+#[derive(Default)]
+struct PhraseTrie<'a> {
+    nodes: Vec<TrieNode<'a>>,
+}
+
+#[derive(Default)]
+struct TrieNode<'a> {
+    children: HashMap<&'a str, usize>,
+    /// Set when this node terminates a complete cell value.
+    value: Option<&'a str>,
+}
+
+impl<'a> PhraseTrie<'a> {
+    fn build(values: impl Iterator<Item = &'a str>) -> Self {
+        let mut trie = Self {
+            nodes: vec![TrieNode::default()],
+        };
+        for value in values {
+            let mut current = 0usize;
+            for token in value.split(' ').filter(|token| !token.is_empty()) {
+                current = match trie.nodes[current].children.get(token) {
+                    Some(next) => *next,
+                    None => {
+                        let next = trie.nodes.len();
+                        trie.nodes.push(TrieNode::default());
+                        let _ = trie.nodes[current].children.insert(token, next);
+                        next
+                    }
+                };
+            }
+            if current != 0 {
+                trie.nodes[current].value = Some(value);
+            }
+        }
+        trie
+    }
+
+    fn child(&self, node: usize, token: &str) -> Option<usize> {
+        self.nodes[node].children.get(token).copied()
+    }
+
+    fn value(&self, node: usize) -> Option<&'a str> {
+        self.nodes[node].value
+    }
+
+    fn is_empty(&self) -> bool {
+        self.nodes.len() == 1
+    }
+}
+
 pub(super) struct OccurrenceScan<'a> {
     pub(super) occurrences: HashMap<&'a str, Vec<(usize, usize)>>,
     pub(super) truncated: bool,
-    /// Phrase lookups performed. Exposed so tests can assert the matching cost
-    /// grows with input size instead of with cells x nodes.
+    /// Trie transitions attempted. Exposed so tests can pin the cost model.
     #[cfg(test)]
     pub(super) probes: usize,
 }
 
 /// Walks the body once, skipping tags and raw-text element bodies, and records
-/// every whitespace-delimited token span that matches a wanted cell value.
+/// every token span that matches a wanted cell value.
 pub(super) fn scan_occurrences<'a>(
     html: &str,
     content: &Range<usize>,
@@ -36,16 +87,15 @@ pub(super) fn scan_occurrences<'a>(
     #[cfg(test)]
     let mut probes = 0usize;
     let mut truncated = false;
-    let keys: HashMap<&str, &'a str> = wanted.keys().map(|value| (*value, *value)).collect();
-    // Only the word counts some cell value actually has can ever match, so
-    // phrase widths outside this set are never even formed.
-    let widths: Vec<usize> = keys
-        .keys()
-        .map(|value| value.split(' ').count())
-        .filter(|width| *width > 0)
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
+    let trie = PhraseTrie::build(wanted.keys().copied());
+    if trie.is_empty() {
+        return OccurrenceScan {
+            occurrences,
+            truncated,
+            #[cfg(test)]
+            probes,
+        };
+    }
 
     for (start, end) in text_nodes(html, content) {
         if tokens >= MAX_MATCH_TOKENS {
@@ -55,20 +105,22 @@ pub(super) fn scan_occurrences<'a>(
         let decoded = normalized_chars(&html[start..end]);
         let words = word_spans(&decoded);
         tokens = tokens.saturating_add(words.len());
-        for width in &widths {
-            if *width > words.len() {
-                continue;
-            }
-            for window in words.windows(*width) {
-                let first = &window[0];
-                let last = &window[*width - 1];
+        for (index, first) in words.iter().enumerate() {
+            let mut node = 0usize;
+            // Advance only while the consumed tokens stay a live prefix, so a
+            // token that matches nothing costs a single failed transition.
+            for last in &words[index..] {
+                let token = phrase_text(&decoded, last.0, last.1);
                 #[cfg(test)]
                 {
                     probes = probes.saturating_add(1);
                 }
-                let phrase = phrase_text(&decoded, first.0, last.1);
-                if let Some(key) = keys.get(phrase.as_str()) {
-                    occurrences.entry(*key).or_default().push((
+                let Some(next) = trie.child(node, token.as_str()) else {
+                    break;
+                };
+                node = next;
+                if let Some(value) = trie.value(node) {
+                    occurrences.entry(value).or_default().push((
                         start + decoded[first.0].start,
                         start + decoded[last.1 - 1].end,
                     ));

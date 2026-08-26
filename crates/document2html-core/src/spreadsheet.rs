@@ -6,6 +6,7 @@ use zip::ZipArchive;
 use crate::{DocumentError, DocumentResult};
 
 mod display;
+mod number;
 mod package;
 mod styles;
 mod worksheet;

@@ -102,15 +102,20 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
         for path in (
             "crates/document2html-core/src/spreadsheet.rs",
             "crates/document2html-core/src/spreadsheet/display.rs",
+            "crates/document2html-core/src/spreadsheet/number.rs",
             "crates/document2html-core/src/spreadsheet/package.rs",
             "crates/document2html-core/src/spreadsheet/styles.rs",
             "crates/document2html-core/src/spreadsheet/worksheet.rs",
+            "crates/document2html-core/src/lib.rs",
+            "crates/document2html-native/src/lib.rs",
+            "crates/document2html-native/src/office.rs",
             "crates/document2html-native/src/spreadsheet_html.rs",
             "crates/document2html-native/src/spreadsheet_html/diagnostics.rs",
             "crates/document2html-native/src/spreadsheet_html/matching.rs",
             "crates/document2html-native/src/spreadsheet_html/text.rs",
             "evaluate/multiformat_portable_spreadsheet.py",
             "evaluate/multiformat_portable_spreadsheet_formats.py",
+            "evaluate/multiformat_portable_spreadsheet_numbers.py",
             "evaluate/multiformat/xlsx-semantic-cases.v1.json",
         ):
             with self.subTest(path=path):
@@ -119,6 +124,8 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "crates/document2html-core/tests/spreadsheet_semantics_test.rs",
             "crates/document2html-core/tests/spreadsheet_shared_cases_test.rs",
             "crates/document2html-native/src/spreadsheet_html_tests.rs",
+            "crates/document2html-native/tests/xls_conversion_smoke.rs",
+            "crates/document2html-native/tests/xlsx_conversion_smoke.rs",
             "evaluate/tests/test_multiformat_portable_spreadsheet_semantics.py",
         ):
             with self.subTest(path=path):

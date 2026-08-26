@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from evaluate.multiformat_portable_spreadsheet_numbers import ResolvedFormat
 from evaluate.multiformat_portable_spreadsheet_formats import (
     UNATTRIBUTABLE,
     cell_format,
@@ -121,7 +122,7 @@ def _worksheet_path(target: str) -> str:
     return path
 
 
-def _styles(archive: zipfile.ZipFile) -> list[tuple[str, int]]:
+def _styles(archive: zipfile.ZipFile) -> list[ResolvedFormat]:
     try:
         root = _xml(archive, "xl/styles.xml")
     except KeyError:
@@ -143,7 +144,7 @@ def _shared_strings(archive: zipfile.ZipFile) -> list[str]:
 def _cell_value(
     cell: ElementTree.Element,
     shared: list[str],
-    styles: list[tuple[str, int]],
+    styles: list[ResolvedFormat],
 ) -> tuple[dict[str, JsonValue] | None, dict[str, JsonValue] | None]:
     """Returns `(cell, diagnostic)`; exactly one is set for a present value."""
     address = cell.attrib.get("r", "").replace("$", "")
@@ -186,7 +187,7 @@ def _cell_value(
                 {
                     "address": address,
                     "stored_value": raw,
-                    "number_format": resolved[0],
+                    "number_format": resolved.kind,
                     "reason": "number format display text is not reproduced",
                 },
             )

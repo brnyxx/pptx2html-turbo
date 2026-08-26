@@ -141,7 +141,7 @@ fn displayed_value(
             Ok((!cell.value.is_empty()).then(|| Display::Trusted(cell.value.clone())))
         }
         Some("n") | None => Ok((!cell.value.is_empty())
-            .then(|| formatted_value(&cell.value, styles.format(cell.style.as_deref())))),
+            .then(|| formatted_value(&cell.value, &styles.format(cell.style.as_deref())))),
         Some(_) => Err(DocumentError::UnsupportedFormat),
     }
 }
