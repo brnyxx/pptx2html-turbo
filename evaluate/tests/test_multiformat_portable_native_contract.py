@@ -87,6 +87,27 @@ class PortableNativeRuntimeContractTests(unittest.TestCase):
             # Then: schema-1 inner compatibility is preserved.
             self.assertEqual(identity.schema_version, 2)
 
+    def test_linux_flat_inner_lock_tampering_breaks_outer_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            # Given: a valid Linux flat-tool lock with a bound schema-1 inner lock.
+            root, lock_path, lock = (
+                portable_lock_test.MultiFormatPortableLockTests._portable_lock(
+                    Path(temp)
+                )
+            )
+            self._set_platform(root, lock, ("Linux", "x86_64"))
+            self._write_bound_runtime(root, lock, {"schema_version": 1})
+
+            # When: the inner runtime bytes change without rebinding the outer lock.
+            self._runtime_path(root, lock).write_text(
+                json.dumps({"schema_version": 1, "tampered": True}),
+                encoding="utf-8",
+            )
+
+            # Then: outer validation rejects the stale candidate-runtime digest.
+            with self.assertRaises(PortableLockError):
+                validate_reference_lock(lock_path, root)
+
     def test_darwin_outer_lock_requires_all_native_inventories(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             # Given: an inventory-less Darwin outer lock.

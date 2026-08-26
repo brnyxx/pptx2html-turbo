@@ -29,12 +29,12 @@ def validate_native_package_runtime_binding(
     resolve_binding: ArtifactResolver,
 ) -> None:
     """Bind outer native package inventories to the inner candidate runtime lock."""
-    expected = _outer_inventory_hashes(lock)
-    if expected is None:
-        return
     runtime_path = resolve_binding(
         object_value(lock, "candidate_runtime_lock"), evidence_root
     )
+    expected = _outer_inventory_hashes(lock)
+    if expected is None:
+        return
     runtime_lock = read_strict_object(runtime_path)
     if integer_value(runtime_lock, "schema_version") != 2:
         raise PortableLockIoError("portable native candidate lock schema differs")
