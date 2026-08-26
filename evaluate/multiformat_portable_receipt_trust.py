@@ -24,6 +24,10 @@ from evaluate.multiformat_portable_receipt_validation import (
     reject_identity_aliases,
     verify_stable_file,
 )
+from evaluate.multiformat_portable_trust_artifacts import (
+    load_lock_artifacts,
+    revalidate_package_inventories,
+)
 from evaluate.multiformat_reference_profile import ReferenceProfile
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -58,7 +62,7 @@ def load_portable_receipt_trust(
         lock = read_strict_object(lock_path)
         if sha256_file(lock_path) != identity.sha256:
             raise PortableReceiptTrustError("portable lock changed after validation")
-        lock_artifacts = _lock_artifacts(
+        lock_artifacts = load_lock_artifacts(
             lock_path,
             lock,
             evidence_root,
@@ -135,6 +139,7 @@ def verify_trusted_files(
     current_lock = tuple(
         _reverify(trust, artifact) for artifact in trust.lock_artifacts
     )
+    revalidate_package_inventories(trust.evidence_root, current_lock)
     current_sources = tuple(_reverify(trust, source) for source in trust.sources)
     if current_lock != trust.lock_artifacts or current_sources != trust.sources:
         raise PortableReceiptTrustError("portable receipt trusted identity changed")
@@ -155,39 +160,6 @@ def _reverify(
     )
 
 
-def _lock_artifacts(
-    lock_path: Path,
-    lock: JsonObject,
-    root: Path,
-    lock_sha256: str,
-) -> tuple[StableFileIdentity, ...]:
-    tools = object_value(lock, "tools")
-    signer = object_value(lock, "signer")
-    scope = object_value(lock, "scope")
-    runtime = object_value(lock, "runtime")
-    browser = object_value(lock, "browser")
-    bindings = (
-        ("portable-lock", _file_binding(lock_path, root, lock_sha256)),
-        ("tool:libreoffice", object_value(tools, "libreoffice")),
-        ("tool:poppler-render", object_value(tools, "poppler_render")),
-        ("tool:poppler-text", object_value(tools, "poppler_text")),
-        ("tool:poppler-metadata", object_value(tools, "poppler_metadata")),
-        ("canonicalizer", object_value(lock, "canonicalizer")),
-        ("font-bundle", object_value(lock, "font_bundle")),
-        ("configuration", object_value(lock, "configuration")),
-        ("browser:chromium", object_value(browser, "chromium")),
-        ("browser:lock", object_value(browser, "lock")),
-        ("candidate-runtime-lock", object_value(lock, "candidate_runtime_lock")),
-        ("public-key", object_value(signer, "public_key")),
-        ("executor", object_value(signer, "executor")),
-        ("contract", object_value(scope, "contract")),
-        ("evaluator", object_value(scope, "evaluator")),
-        ("corpus-manifest", object_value(scope, "corpus")),
-        ("attestation", object_value(runtime, "attestation")),
-    )
-    return tuple(_bound_identity(binding, root, role) for role, binding in bindings)
-
-
 def _tools(lock: JsonObject) -> tuple[ToolIdentity, ...]:
     values = object_value(lock, "tools")
     records = (
@@ -204,24 +176,3 @@ def _tools(lock: JsonObject) -> tuple[ToolIdentity, ...]:
         )
         for role, record in records
     )
-
-
-def _bound_identity(
-    binding: JsonObject,
-    root: Path,
-    role: str,
-) -> StableFileIdentity:
-    return verify_stable_file(
-        root,
-        string_value(binding, "path"),
-        sha256_value(binding, "sha256"),
-        None,
-        role,
-    )
-
-
-def _file_binding(path: Path, root: Path, digest: str) -> JsonObject:
-    relative = (
-        path.resolve(strict=True).relative_to(root.resolve(strict=True)).as_posix()
-    )
-    return {"path": relative, "sha256": digest}

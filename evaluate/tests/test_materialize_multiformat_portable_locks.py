@@ -13,9 +13,11 @@ from evaluate.materialize_multiformat_portable_locks import (
     materialize_portable_locks,
 )
 from evaluate.materialize_multiformat_portable_locks_cli import parse_args
-from evaluate.multiformat_portable_lock_io import (
-    bind_font_bundle,
+from evaluate.multiformat_portable_lock_io import bind_font_bundle
+from evaluate.multiformat_portable_package_inventory import (
+    PortableLockIoError,
     bind_package_executable,
+    validate_package_inventory,
 )
 from evaluate.multiformat_portable_reference_artifacts import load_raw_private_key
 from evaluate.multiformat_revision import current_project_revision
@@ -99,13 +101,40 @@ class PortableLockMaterializerTests(unittest.TestCase):
             sibling.write_bytes(b"data")
             evidence = root / "evidence"
             evidence.mkdir()
-            bound = bind_package_executable(executable, evidence, evidence / "package")
-            self.assertTrue((bound.parents[1] / "Resources/data").is_file())
+            destination = evidence / "package"
+            bound = bind_package_executable(executable, evidence, destination)
+            copied_sibling = bound.parents[1] / "Resources/data"
+            self.assertTrue(copied_sibling.is_file())
+            inventory = destination / "inventory.json"
+            entries = validate_package_inventory(inventory, evidence)
+            self.assertEqual(
+                [entry.path for entry in entries],
+                ["Contents/MacOS/tool", "Contents/Resources/data"],
+            )
+            copied_sibling.write_bytes(b"tampered")
+            with self.assertRaisesRegex(PortableLockIoError, "inventory differs"):
+                validate_package_inventory(inventory, evidence)
             fonts = root / "fonts"
             fonts.mkdir()
             (fonts / "font.ttf").write_bytes(b"font")
             manifest = bind_font_bundle(fonts, evidence, evidence / "fonts")
             self.assertIn("font.ttf", manifest.read_text())
+
+    def test_app_package_rejects_escaping_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            app = root / "Source.app"
+            executable = app / "Contents/MacOS/tool"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"tool")
+            outside = root / "outside"
+            outside.write_bytes(b"outside")
+            (app / "Contents/escape").symlink_to(outside)
+            evidence = root / "evidence"
+            evidence.mkdir()
+
+            with self.assertRaisesRegex(PortableLockIoError, "symlink escapes"):
+                bind_package_executable(executable, evidence, evidence / "package")
 
     def test_cli_help_and_bad_input(self) -> None:
         with self.assertRaises(SystemExit) as help_exit:

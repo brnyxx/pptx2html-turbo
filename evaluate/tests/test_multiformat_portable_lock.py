@@ -12,6 +12,10 @@ from evaluate.multiformat_portable_lock import (
     portable_lock_template,
     validate_reference_lock,
 )
+from evaluate.multiformat_portable_package_inventory import (
+    bind_package_executable_with_inventory,
+    package_binding,
+)
 from evaluate.multiformat_reference_profile import ReferenceProfile
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, sha256_file
@@ -135,6 +139,68 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                     validate_reference_lock(path, root)
                 self.assertFalse(oracle_lock_ready(path))
 
+    def test_candidate_and_reference_sandbox_substitution_fails_closed(self) -> None:
+        mutations = (
+            ("candidate_sandbox.public_key.sha256", "0" * 64),
+            ("candidate_sandbox.openssl.sha256", "1" * 64),
+            ("candidate_sandbox.receipt_signer.sha256", "2" * 64),
+            ("sandbox.executable.sha256", "3" * 64),
+            ("sandbox.profile.sha256", "4" * 64),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temp_dir:
+                root, path, lock = self._portable_lock(Path(temp_dir))
+                self._set(lock, field, value)
+                self._write(path, lock)
+
+                with self.assertRaises(PortableLockError):
+                    validate_reference_lock(path, root)
+
+    def test_locked_app_sibling_and_symlink_tampering_fails_closed(self) -> None:
+        for tool_name, attack in (
+            ("libreoffice", "sibling"),
+            ("chromium", "symlink"),
+        ):
+            with (
+                self.subTest(tool=tool_name, attack=attack),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                root, path, lock = self._portable_lock(Path(temp_dir))
+                source_app = root.parent / f"{root.name}-{tool_name}.app"
+                executable = source_app / "Contents/MacOS/tool"
+                resource = source_app / "Contents/Resources/data"
+                executable.parent.mkdir(parents=True)
+                resource.parent.mkdir(parents=True)
+                executable.write_bytes(b"tool")
+                resource.write_bytes(b"resource")
+                (resource.parent / "alias").symlink_to("data")
+                bound, inventory = bind_package_executable_with_inventory(
+                    executable, root, root / "artifacts" / f"{tool_name}-package"
+                )
+                self.assertIsNotNone(inventory)
+                tool = (
+                    self._mapping(self._mapping(lock, "tools"), "libreoffice")
+                    if tool_name == "libreoffice"
+                    else self._mapping(self._mapping(lock, "browser"), "chromium")
+                )
+                tool.clear()
+                tool.update(package_binding(root, bound, "test", inventory))
+                self._write(path, lock)
+                validate_reference_lock(path, root)
+
+                copied_resource = bound.parents[1] / "Resources/data"
+                if attack == "sibling":
+                    copied_resource.write_bytes(b"tampered")
+                else:
+                    alias = copied_resource.with_name("alias")
+                    alias.unlink()
+                    outside = root.parent / f"{root.name}-outside"
+                    outside.write_bytes(b"outside")
+                    alias.symlink_to(outside)
+
+                with self.assertRaises(PortableLockError):
+                    validate_reference_lock(path, root)
+
     def test_runtime_attestation_drift_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, path, lock = self._portable_lock(Path(temp_dir))
@@ -171,6 +237,8 @@ class MultiFormatPortableLockTests(unittest.TestCase):
             ("soffice", "pdftoppm", "pdftotext", "pdfinfo", "canonicalizer")
             + ("fonts", "configuration", "chromium", "candidate-runtime-lock")
             + ("public-key", "executor", "contract", "evaluator", "corpus")
+            + ("candidate-public-key", "openssl", "receipt-signer")
+            + ("sandbox-exec", "sandbox-profile", "sandbox-host")
         )
         artifacts = {name: cls._artifact(root, name, name.encode()) for name in names}
         attestation = cls._artifact(root, "attestation", b"")
@@ -184,6 +252,9 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                 "timezone": "UTC",
                 "rendering_dpi": 144,
                 "network_isolation": True,
+                "sandbox_executable": cls._binding(root, artifacts["sandbox-exec"]),
+                "sandbox_host_artifact": cls._binding(root, artifacts["sandbox-host"]),
+                "sandbox_profile": cls._binding(root, artifacts["sandbox-profile"]),
             },
         )
         bindings = {
@@ -209,6 +280,15 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                 "lock": bindings["configuration"],
             },
             "candidate_runtime_lock": bindings["candidate-runtime-lock"],
+            "candidate_sandbox": {
+                "public_key": bindings["candidate-public-key"],
+                "openssl": bindings["openssl"],
+                "receipt_signer": bindings["receipt-signer"],
+            },
+            "sandbox": {
+                "executable": bindings["sandbox-exec"],
+                "profile": bindings["sandbox-profile"],
+            },
             "signer": {
                 "algorithm": "ed25519",
                 "signer_id": "multiformat-portable-reference-v1",

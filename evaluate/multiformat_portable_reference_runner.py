@@ -1,37 +1,45 @@
 from __future__ import annotations
 
-import platform
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
-from evaluate.multiformat_candidate_process import (
-    CandidateProcessError,
-    run_bounded_process,
-)
+from evaluate.multiformat_candidate_process import CandidateProcessError
 from evaluate.multiformat_candidate_sources import CandidateSource
 from evaluate.multiformat_conformance_pdf import (
     PdfConformanceError,
     canonicalize_pdf_bytes,
 )
 from evaluate.multiformat_office_oracle_batch import OfficeOracleBatchFile
-from evaluate.multiformat_portable_spreadsheet import extract_xlsx_semantics
 from evaluate.multiformat_portable_reference_outputs import (
     PortableReferenceOutputError,
+)
+from evaluate.multiformat_portable_reference_outputs import (
     executable as _executable,
+)
+from evaluate.multiformat_portable_reference_outputs import (
     expand as _expand,
+)
+from evaluate.multiformat_portable_reference_outputs import (
     page_count as _page_count,
+)
+from evaluate.multiformat_portable_reference_outputs import (
     page_images as _page_images,
 )
+from evaluate.multiformat_portable_reference_process import (
+    PortableReferenceProcessError,
+    PortableReferenceProcessIncompleteError,
+    run_trusted_process,
+)
+from evaluate.multiformat_portable_spreadsheet import extract_xlsx_semantics
 from evaluate.multiformat_reference_routing import (
     DocumentFormat,
     RoutingIdentity,
     ToolRole,
 )
 from evaluate.multiformat_schema import sha256_file
-
-MAX_LOG_BYTES = 8 * 1024 * 1024
 
 
 class PortableReferenceRunError(ValueError):
@@ -50,6 +58,7 @@ class PortableReferenceTools:
     poppler_text: Path
     sandbox_exec: Path
     sandbox_profile: Path
+    verify_runtime: Callable[[], None]
 
     def path_for(self, role: ToolRole) -> Path:
         return {
@@ -107,8 +116,9 @@ def run_reference_source(
             arguments = tuple(
                 _expand(argument, values) for argument in command.arguments
             )
-            _run(
-                _sandbox(tools, (executable, *arguments)),
+            _run_reference_process(
+                tools,
+                (executable, *arguments),
                 output_dir,
                 environment,
                 index,
@@ -147,7 +157,14 @@ def run_reference_source(
     if document_format is DocumentFormat.XLSX:
         write_canonical_json(semantic, extract_xlsx_semantics(staged))
     elif document_format is DocumentFormat.XLS:
-        xlsx = _convert_xls_semantics(staged, output_dir, profile, environment, tools)
+        xlsx = _convert_xls_semantics(
+            staged,
+            output_dir,
+            profile,
+            environment,
+            tools,
+            len(route.commands) + 1,
+        )
         write_canonical_json(semantic, extract_xlsx_semantics(xlsx))
     else:
         write_canonical_json(semantic, {})
@@ -168,6 +185,7 @@ def _convert_xls_semantics(
     profile: Path,
     environment: dict[str, str],
     tools: PortableReferenceTools,
+    command_index: int,
 ) -> Path:
     target = root / "xlsx-semantic"
     target.mkdir()
@@ -185,48 +203,36 @@ def _convert_xls_semantics(
         target.as_posix(),
         source.as_posix(),
     )
-    _run(_sandbox(tools, command), root, environment, 5, 120)
+    _run_reference_process(tools, command, root, environment, command_index, 120)
     output = target / "source.xlsx"
     if not output.is_file():
         raise PortableReferenceRunError("LibreOffice emitted no semantic XLSX")
     return output
 
 
-def _sandbox(
-    tools: PortableReferenceTools, command: tuple[str, ...]
-) -> tuple[str, ...]:
-    if platform.system() != "Darwin":
-        raise PortableReferenceIncompleteError(
-            "portable network sandbox is unsupported on this host"
-        )
-    executable = _executable(tools.sandbox_exec)
-    profile = tools.sandbox_profile.resolve(strict=True)
-    if (
-        profile.read_text(encoding="utf-8")
-        != "(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n"
-    ):
-        raise PortableReferenceRunError("portable sandbox profile differs")
-    return executable, "-f", profile.as_posix(), *command
-
-
-def _run(
+def _run_reference_process(
+    tools: PortableReferenceTools,
     command: tuple[str, ...],
     cwd: Path,
     environment: dict[str, str],
     index: int,
     timeout: int,
 ) -> None:
-    result = run_bounded_process(
-        command,
-        cwd,
-        environment,
-        cwd / f"command-{index}.stdout",
-        cwd / f"command-{index}.stderr",
-        timeout_seconds=timeout,
-        max_log_bytes=MAX_LOG_BYTES,
-    )
-    if result != 0:
-        raise PortableReferenceRunError(f"portable reference command {index} failed")
+    try:
+        run_trusted_process(
+            command,
+            cwd,
+            environment,
+            index,
+            timeout,
+            tools.sandbox_exec,
+            tools.sandbox_profile,
+            tools.verify_runtime,
+        )
+    except PortableReferenceProcessIncompleteError as error:
+        raise PortableReferenceIncompleteError(str(error)) from error
+    except PortableReferenceProcessError as error:
+        raise PortableReferenceRunError(str(error)) from error
 
 
 def _after_command(_source: Path) -> None:

@@ -119,6 +119,10 @@ def verify_stable_file(
     )
     if len(set(identities)) != 1 or first_digest != second_digest:
         raise ReceiptValidationError("portable receipt file changed across hash passes")
+    if first_before.st_nlink != 1:
+        raise ReceiptValidationError(
+            "portable receipt artifact has an external hardlink alias"
+        )
     if first_digest != expected_sha256 or (
         expected_size is not None and first_before.st_size != expected_size
     ):

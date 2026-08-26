@@ -105,6 +105,12 @@ class ReceiptFixture:
                 "executor": b"executor",
                 "contract": b"contract",
                 "evaluator": b"evaluator",
+                "candidate-public-key": b"candidate-public-key",
+                "openssl": b"openssl",
+                "receipt-signer": b"receipt-signer",
+                "sandbox-exec": b"sandbox-exec",
+                "sandbox-profile": b"sandbox-profile",
+                "sandbox-host": b"sandbox-host",
             }.items()
         }
         source = self._artifact("corpus/source.docx", b"source")
@@ -123,6 +129,7 @@ class ReceiptFixture:
             ),
             encoding="utf-8",
         )
+        binding = {name: self._binding(path) for name, path in artifacts.items()}
         attestation = self.root / "locked/attestation.json"
         attestation.write_text(
             json.dumps(
@@ -134,12 +141,14 @@ class ReceiptFixture:
                     "timezone": "UTC",
                     "rendering_dpi": 144,
                     "network_isolation": True,
+                    "sandbox_executable": binding["sandbox-exec"],
+                    "sandbox_host_artifact": binding["sandbox-host"],
+                    "sandbox_profile": binding["sandbox-profile"],
                 },
                 sort_keys=True,
             ),
             encoding="utf-8",
         )
-        binding = {name: self._binding(path) for name, path in artifacts.items()}
         candidate_runtime = self.candidate_runtime_lock
         if candidate_runtime is not None:
             binding["candidate-runtime-lock"] = self._binding(candidate_runtime)
@@ -163,6 +172,15 @@ class ReceiptFixture:
                 "lock": binding["browser-lock"],
             },
             "candidate_runtime_lock": binding["candidate-runtime-lock"],
+            "candidate_sandbox": {
+                "public_key": binding["candidate-public-key"],
+                "openssl": binding["openssl"],
+                "receipt_signer": binding["receipt-signer"],
+            },
+            "sandbox": {
+                "executable": binding["sandbox-exec"],
+                "profile": binding["sandbox-profile"],
+            },
             "signer": {
                 "algorithm": "ed25519",
                 "signer_id": "multiformat-portable-reference-v1",

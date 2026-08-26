@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import shlex
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -11,6 +11,7 @@ from evaluate.multiformat_candidate_process import (
     CandidateProcessError,
     run_bounded_process,
 )
+from evaluate.multiformat_portable_package_inventory import PortableLockIoError
 from evaluate.multiformat_schema import JsonValue, sha256_file, string_value
 from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.multiformat_subprocess import clean_subprocess_environment
@@ -18,7 +19,11 @@ from evaluate.multiformat_subprocess import clean_subprocess_environment
 MAX_VERSION_BYTES = 1024 * 1024
 
 
-class PortableLockIoError(ValueError):
+class PortableLockMaterializeError(ValueError):
+    pass
+
+
+class PortableLockIncompleteError(PortableLockMaterializeError):
     pass
 
 
@@ -130,20 +135,6 @@ def bind_corpus(source: Path, root: Path, destination_root: Path) -> Path:
     destination = destination_root / document_format
     shutil.copytree(resolved.parent, destination)
     return destination / resolved.name
-
-
-def bind_package_executable(source: Path, root: Path, destination: Path) -> Path:
-    resolved = source.resolve(strict=True)
-    if resolved.is_relative_to(root):
-        return resolved
-    package = next(
-        (item for item in (resolved, *resolved.parents) if item.suffix == ".app"), None
-    )
-    if package is None:
-        return bind_file(resolved, root, destination)
-    copied = destination / package.name
-    shutil.copytree(package, copied, symlinks=True)
-    return copied / resolved.relative_to(package)
 
 
 def bind_font_bundle(source: Path, root: Path, destination: Path) -> Path:

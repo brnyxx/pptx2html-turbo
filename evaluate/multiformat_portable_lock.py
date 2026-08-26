@@ -5,6 +5,12 @@ from pathlib import Path
 from typing import Final, TypeAlias
 
 from evaluate.multiformat_evidence import EvidencePathError, resolve_evidence_path
+from evaluate.multiformat_portable_outer_sandbox import (
+    RuntimeIdentity,
+    validate_outer_sandbox,
+    validate_runtime_attestation,
+)
+from evaluate.multiformat_portable_package_inventory import validate_package_binding
 from evaluate.multiformat_reference_profile import (
     ReferenceLockIdentity,
     ReferenceProfile,
@@ -47,15 +53,6 @@ class PortableReferenceLockIdentity(ReferenceLockIdentity):
     corpus_sha256: str
 
 
-@dataclass(frozen=True, slots=True)
-class _RuntimeIdentity:
-    system: str
-    architecture: str
-    locale: str
-    timezone: str
-    dpi: int
-
-
 def validate_reference_lock(
     path: Path,
     evidence_root: Path,
@@ -83,7 +80,11 @@ def validate_reference_lock(
         ):
             tool = object_value(tools, name)
             string_value(tool, "version")
-            _artifact_path(tool, evidence_root)
+            executable = _artifact_path(tool, evidence_root)
+            if name == "libreoffice":
+                validate_package_binding(
+                    tool, executable, evidence_root, _artifact_path
+                )
         routing = load_reference_routing(_ROUTING_TABLE)
         if sha256_value(lock, "routing_table_sha256") != routing.sha256:
             raise PortableLockError("portable routing table digest mismatch")
@@ -100,9 +101,12 @@ def validate_reference_lock(
         browser = object_value(lock, "browser")
         chromium = object_value(browser, "chromium")
         string_value(chromium, "version")
-        _artifact_path(chromium, evidence_root)
+        chromium_path = _artifact_path(chromium, evidence_root)
+        validate_package_binding(chromium, chromium_path, evidence_root, _artifact_path)
         _artifact_path(object_value(browser, "lock"), evidence_root)
         _artifact_path(object_value(lock, "candidate_runtime_lock"), evidence_root)
+
+        sandbox = validate_outer_sandbox(lock, evidence_root, _artifact_path)
 
         signer = object_value(lock, "signer")
         if string_value(signer, "algorithm") != "ed25519":
@@ -135,9 +139,12 @@ def validate_reference_lock(
             object_value(runtime, "attestation"),
             evidence_root,
         )
-        _validate_attestation(
+        validate_runtime_attestation(
             attestation_path,
-            _RuntimeIdentity(system, architecture, locale, timezone, dpi),
+            RuntimeIdentity(system, architecture, locale, timezone, dpi),
+            evidence_root,
+            sandbox,
+            _artifact_path,
         )
         return PortableReferenceLockIdentity(
             schema_version=2,
@@ -177,6 +184,12 @@ def portable_lock_template() -> JsonObject:
         "configuration": {**versioned},
         "browser": {"chromium": {**versioned}, "lock": {**binding}},
         "candidate_runtime_lock": {**binding},
+        "candidate_sandbox": {
+            "public_key": {**binding},
+            "openssl": {**binding},
+            "receipt_signer": {**binding},
+        },
+        "sandbox": {"executable": {**binding}, "profile": {**binding}},
         "signer": {
             "algorithm": "ed25519",
             "signer_id": _SIGNER_ID,
@@ -226,25 +239,3 @@ def _revision_value(values: JsonObject, field: str) -> str:
     ):
         raise PortableLockError("portable project revision is malformed")
     return revision
-
-
-def _validate_attestation(path: Path, runtime: _RuntimeIdentity) -> None:
-    values = read_strict_object(path)
-    if integer_value(values, "schema_version") != 1:
-        raise PortableLockError("portable attestation schema is unsupported")
-    expected_strings = {
-        "os": runtime.system,
-        "architecture": runtime.architecture,
-        "locale": runtime.locale,
-        "timezone": runtime.timezone,
-    }
-    if any(
-        string_value(values, field) != expected
-        for field, expected in expected_strings.items()
-    ):
-        raise PortableLockError("portable runtime attestation does not match")
-    if integer_value(values, "rendering_dpi") != runtime.dpi or not boolean_value(
-        values,
-        "network_isolation",
-    ):
-        raise PortableLockError("portable runtime attestation does not match")

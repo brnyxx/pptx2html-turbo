@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
+from evaluate.multiformat_portable_receipt_trust import (
+    load_portable_receipt_trust,
+    verify_trusted_files,
+)
 from evaluate.multiformat_portable_reference_artifacts import load_raw_private_key
 from evaluate.multiformat_portable_reference_manifest import (
     write_portable_reference_manifests,
@@ -17,6 +20,8 @@ from evaluate.multiformat_portable_reference_sources import (
 )
 from evaluate.multiformat_reference_routing import (
     DocumentFormat as RoutingDocumentFormat,
+)
+from evaluate.multiformat_reference_routing import (
     load_reference_routing,
 )
 from evaluate.multiformat_schema import object_value, string_value
@@ -54,6 +59,10 @@ def materialize_portable_references(
         by_role = {item.role: root / item.path for item in trust.lock_artifacts}
         lock = read_strict_object(portable_lock)
         sandbox = object_value(lock, "sandbox")
+
+        def verify_runtime() -> None:
+            _ = verify_trusted_files(trust)
+
         tools = PortableReferenceTools(
             by_role["tool:libreoffice"],
             by_role["tool:poppler-metadata"],
@@ -61,6 +70,7 @@ def materialize_portable_references(
             by_role["tool:poppler-text"],
             root / string_value(object_value(sandbox, "executable"), "path"),
             root / string_value(object_value(sandbox, "profile"), "path"),
+            verify_runtime,
         )
         routing = load_reference_routing(ROUTING)
         destination.mkdir()

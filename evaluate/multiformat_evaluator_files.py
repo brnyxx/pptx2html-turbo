@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-from evaluate.multiformat_evaluator_security_files import (
-    SECURITY_ENGINE_FILES,
-    SECURITY_TEST_FILES,
-    SECURITY_WRITER_FILES,
-)
 from evaluate.multiformat_evaluator_native_ready_files import (
     NATIVE_READY_ENGINE_FILES,
     NATIVE_READY_TEST_FILES,
@@ -12,6 +7,11 @@ from evaluate.multiformat_evaluator_native_ready_files import (
 from evaluate.multiformat_evaluator_portable_wave_files import (
     PORTABLE_WAVE_ENGINE_FILES,
     PORTABLE_WAVE_TEST_FILES,
+)
+from evaluate.multiformat_evaluator_security_files import (
+    SECURITY_ENGINE_FILES,
+    SECURITY_TEST_FILES,
+    SECURITY_WRITER_FILES,
 )
 
 EVALUATOR_FILES = (
@@ -69,7 +69,6 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_subprocess.py",
     "evaluate/multiformat_evidence.py",
     "evaluate/multiformat_reference_profile.py",
-    "evaluate/multiformat_portable_lock.py",
     "evaluate/multiformat/reference-routing.v1.json",
     "evaluate/multiformat_reference_routing.py",
     "evaluate/multiformat_scaffold_templates.py",
@@ -117,11 +116,6 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_capture_profile.py",
     "evaluate/multiformat_capture_provenance.py",
     "evaluate/multiformat_capture_upstream.py",
-    "evaluate/multiformat_portable_capture.py",
-    "evaluate/multiformat_portable_receipt.py",
-    "evaluate/multiformat_portable_receipt_context.py",
-    "evaluate/multiformat_portable_receipt_trust.py",
-    "evaluate/multiformat_portable_receipt_validation.py",
     "evaluate/multiformat_capture_receipt.py",
     "evaluate/multiformat_capture_rendering.py",
     "evaluate/multiformat_capture_runtime.py",
@@ -171,8 +165,6 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_revision.py",
     "evaluate/assemble_multiformat_report.py",
     "evaluate/tests/multiformat_capture_fixture.py",
-    "evaluate/tests/multiformat_portable_capture_fixture.py",
-    "evaluate/tests/multiformat_portable_receipt_fixture.py",
     "evaluate/tests/multiformat_attestation_fixture.py",
     "evaluate/tests/multiformat_candidate_pipeline_fixture.py",
     "evaluate/tests/multiformat_candidate_fake_runtime.py",
@@ -222,7 +214,6 @@ EVALUATOR_FILES = (
     "evaluate/tests/test_multiformat_office_oracle_workflow.py",
     "evaluate/tests/test_multiformat_subprocess.py",
     "evaluate/tests/test_multiformat_reference_profile.py",
-    "evaluate/tests/test_multiformat_portable_lock.py",
     "evaluate/tests/test_multiformat_reference_routing.py",
     "evaluate/tests/test_capture_multiformat_candidates.py",
     "evaluate/tests/test_multiformat_candidate_browser.py",
@@ -233,8 +224,6 @@ EVALUATOR_FILES = (
     "evaluate/tests/test_multiformat_candidate_preflight.py",
     "evaluate/tests/test_multiformat_candidate_sources.py",
     "evaluate/tests/test_multiformat_capture_provenance.py",
-    "evaluate/tests/test_multiformat_portable_receipt.py",
-    "evaluate/tests/test_multiformat_portable_receipt_trust_flow.py",
     "evaluate/tests/test_jcs.py",
     "evaluate/tests/test_admit_multiformat_corpus.py",
     "evaluate/tests/test_multiformat_atomic_publish.py",

@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 import zlib
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -29,6 +30,8 @@ class PortableReferenceRunnerTests(unittest.TestCase):
             source = root / "input.pptx"
             source.write_bytes(b"presentation")
             tools = self._tools(root, 960, 540)
+            runtime_verifier = mock.Mock(wraps=tools.verify_runtime)
+            tools = replace(tools, verify_runtime=runtime_verifier)
             spec = CandidateSource(
                 "conformance",
                 "deck",
@@ -55,9 +58,56 @@ class PortableReferenceRunnerTests(unittest.TestCase):
                 (result.units[0].width, result.units[0].height), (960, 540)
             )
             canonicalize.assert_called_once()
+            self.assertEqual(runtime_verifier.call_count, 4)
 
-    def test_source_drift_and_dimension_mismatch_fail(self) -> None:
-        for attack in ("drift", "dimensions"):
+    def test_xls_semantic_process_uses_next_route_log_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "input.xls"
+            source.write_bytes(b"spreadsheet")
+            tools = self._tools(root, 960, 540)
+            spec = CandidateSource(
+                "conformance",
+                "sheet",
+                sha256_file(source),
+                source,
+                (CandidateUnitSpec("sheet-1", 1),),
+            )
+            routing = load_reference_routing(ROUTING)
+            xls_route = next(
+                route for route in routing.routes if route.format is DocumentFormat.XLS
+            )
+            expanded = replace(
+                xls_route, commands=(*xls_route.commands, xls_route.commands[-1])
+            )
+            routing = replace(
+                routing,
+                routes=tuple(
+                    expanded if route is xls_route else route
+                    for route in routing.routes
+                ),
+            )
+            with (
+                mock.patch(
+                    "evaluate.multiformat_portable_reference_runner.canonicalize_pdf_bytes",
+                    return_value=b"pdf",
+                ),
+                mock.patch(
+                    "evaluate.multiformat_portable_reference_runner.extract_xlsx_semantics",
+                    return_value={},
+                ),
+                mock.patch(
+                    "evaluate.multiformat_portable_reference_runner._convert_xls_semantics",
+                    return_value=root / "semantic.xlsx",
+                ) as convert,
+            ):
+                run_reference_source(
+                    spec, DocumentFormat.XLS, routing, tools, root / "output"
+                )
+            self.assertEqual(convert.call_args.args[-1], 6)
+
+    def test_source_runtime_drift_and_dimension_mismatch_fail(self) -> None:
+        for attack in ("drift", "runtime", "dimensions"):
             with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)
                 source = root / "input.pptx"
@@ -74,11 +124,17 @@ class PortableReferenceRunnerTests(unittest.TestCase):
                     source,
                     (CandidateUnitSpec("slide-1", 1),),
                 )
-                mutation = (
-                    (lambda path: path.write_bytes(b"changed"))
-                    if attack == "drift"
-                    else (lambda _path: None)
-                )
+
+                def mutation(
+                    path: Path,
+                    attack: str = attack,
+                    tools: PortableReferenceTools = tools,
+                ) -> None:
+                    if attack == "drift":
+                        path.write_bytes(b"changed")
+                    elif attack == "runtime":
+                        tools.poppler_render.write_bytes(b"changed")
+
                 with (
                     mock.patch(
                         "evaluate.multiformat_portable_reference_runner.canonicalize_pdf_bytes",
@@ -125,6 +181,13 @@ class PortableReferenceRunnerTests(unittest.TestCase):
             "pdftotext",
             'import json,pathlib,sys\np=pathlib.Path.cwd();(p/\'pdftotext.argv.json\').write_text(json.dumps(sys.argv[1:]));pathlib.Path(sys.argv[-1]).write_text(\'<doc><page width="960" height="540"><line><word xMin="1" yMin="1" xMax="2" yMax="2">x</word></line></page></doc>\')',
         )
+        runtime = (soffice, pdfinfo, pdftoppm, pdftotext, profile)
+        expected = {path: sha256_file(path) for path in runtime}
+
+        def verify_runtime() -> None:
+            if any(sha256_file(path) != digest for path, digest in expected.items()):
+                raise PortableReferenceRunError("portable reference runtime drifted")
+
         return PortableReferenceTools(
             soffice,
             pdfinfo,
@@ -132,6 +195,7 @@ class PortableReferenceRunnerTests(unittest.TestCase):
             pdftotext,
             Path("/usr/bin/sandbox-exec"),
             profile,
+            verify_runtime,
         )
 
     @staticmethod
