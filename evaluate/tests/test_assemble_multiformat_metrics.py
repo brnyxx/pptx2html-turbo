@@ -416,20 +416,27 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             }
 
         def command_result(argv, *args, **kwargs):
-            if "--release" in argv:
+            if "evaluate.check_exactness_contract" in argv:
+                role = "contract_checks"
+            elif "clippy" in argv:
+                role = "diagnostics"
+            elif "build" in argv:
+                role = "builds"
+            elif "--release" in argv:
                 if fixture.performance_mode == "block":
                     raise CommandEvidenceError("command timed out")
                 return 7 if fixture.performance_mode == "fail" else 0
-            role = argv[-1]
+            else:
+                role = "tests"
             return 7 if fixture.quality_failure == role else 0
 
         with (
             mock.patch(
-                "evaluate.multiformat_command_evidence._run_json_command",
+                "evaluate.multiformat_command_runtime._run_json_command",
                 side_effect=security_result,
             ),
             mock.patch(
-                "evaluate.multiformat_command_evidence._run_command",
+                "evaluate.multiformat_command_runtime._run_command",
                 side_effect=command_result,
             ),
         ):
@@ -510,22 +517,56 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             text=True,
         ).stdout.strip()
         env = Path("/usr/bin/env").resolve().as_posix()
+        path_arg = "PATH=/usr/bin:/bin"
         quality = {
-            "tests": (env, cargo, "test", "tests"),
-            "builds": (env, cargo, "build", "builds"),
-            "diagnostics": (env, cargo, "clippy", "diagnostics"),
+            "tests": (
+                env,
+                path_arg,
+                cargo,
+                "test",
+                "-p",
+                "document2html-core",
+                "-p",
+                "document2html-native",
+            ),
+            "builds": (
+                env,
+                path_arg,
+                cargo,
+                "build",
+                "--release",
+                "-p",
+                "pptx2html-cli",
+                "--bin",
+                "document2html",
+            ),
+            "diagnostics": (
+                env,
+                path_arg,
+                cargo,
+                "clippy",
+                "-p",
+                "document2html-core",
+                "-p",
+                "document2html-native",
+                "--all-targets",
+                "--",
+                "-D",
+                "warnings",
+            ),
             "contract_checks": (
                 python,
                 "-m",
                 "evaluate.check_exactness_contract",
-                "contract_checks",
+                "--repo-root",
+                PROJECT_ROOT.as_posix(),
             ),
         }
         materialize_command_plan(
             commands,
             (python, "-m", "evaluate.run_multiformat_security_case"),
             quality,
-            (env, cargo, "test", "--release", "performance"),
+            (env, path_arg, cargo, "test", "--release", "-p", "document2html-native"),
         )
         return Fixture(
             root,

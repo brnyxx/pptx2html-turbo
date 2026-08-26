@@ -44,6 +44,8 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/sign_multiformat_candidate_attestation.py",
     "evaluate/assemble_multiformat_metrics.py",
     "evaluate/multiformat_command_evidence.py",
+    "evaluate/multiformat_command_plan.py",
+    "evaluate/multiformat_command_runtime.py",
     "evaluate/multiformat_metric_manifest.py",
     "evaluate/multiformat_review_materialize.py",
     "evaluate/materialize_multiformat_command_plan.py",

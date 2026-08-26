@@ -22,11 +22,28 @@ class ReviewSigningError(RuntimeError):
 
 
 def _private_key(path: Path) -> Ed25519PrivateKey:
-    resolved = path.resolve(strict=True)
-    mode = stat.S_IMODE(resolved.stat().st_mode)
-    if mode & 0o077:
-        raise ReviewSigningError("reviewer private key permissions are not private")
-    value = resolved.read_bytes()
+    try:
+        before = path.lstat()
+        if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+            raise ReviewSigningError("reviewer private key is not a regular file")
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except ReviewSigningError:
+        raise
+    except OSError as error:
+        raise ReviewSigningError("reviewer private key is unavailable") from error
+    try:
+        current = os.fstat(descriptor)
+        if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (
+            before.st_dev,
+            before.st_ino,
+        ):
+            raise ReviewSigningError("reviewer private key changed during open")
+        if stat.S_IMODE(current.st_mode) & 0o077:
+            raise ReviewSigningError("reviewer private key permissions are not private")
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            value = stream.read()
+    finally:
+        os.close(descriptor)
     if len(value) == 32:
         return Ed25519PrivateKey.from_private_bytes(value)
     loaded = serialization.load_pem_private_key(value, password=None)

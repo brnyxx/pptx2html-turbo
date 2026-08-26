@@ -121,16 +121,55 @@ def write_metrics(
         ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
     ).stdout.strip()
     env = Path("/usr/bin/env").resolve().as_posix()
+    path_arg = "PATH=/usr/bin:/bin"
     materialize_command_plan(
         commands_path,
         (python, "-m", "evaluate.run_multiformat_security_case"),
         {
-            "tests": (env, cargo, "test"),
-            "builds": (env, cargo, "build"),
-            "diagnostics": (env, cargo, "clippy"),
-            "contract_checks": (python, "-m", "evaluate.check_exactness_contract"),
+            "tests": (
+                env,
+                path_arg,
+                cargo,
+                "test",
+                "-p",
+                "document2html-core",
+                "-p",
+                "document2html-native",
+            ),
+            "builds": (
+                env,
+                path_arg,
+                cargo,
+                "build",
+                "--release",
+                "-p",
+                "pptx2html-cli",
+                "--bin",
+                "document2html",
+            ),
+            "diagnostics": (
+                env,
+                path_arg,
+                cargo,
+                "clippy",
+                "-p",
+                "document2html-core",
+                "-p",
+                "document2html-native",
+                "--all-targets",
+                "--",
+                "-D",
+                "warnings",
+            ),
+            "contract_checks": (
+                python,
+                "-m",
+                "evaluate.check_exactness_contract",
+                "--repo-root",
+                PROJECT_ROOT.as_posix(),
+            ),
         },
-        (env, cargo, "test", "--release"),
+        (env, path_arg, cargo, "test", "--release", "-p", "document2html-native"),
     )
     command_plan = load_command_plan(commands_path)
     security = security_records(

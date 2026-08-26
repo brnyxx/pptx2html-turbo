@@ -560,16 +560,11 @@ CARGO="$(rustup which cargo)"
 RUST_BIN="$(dirname "$(rustup which rustc)")"
 TOOL_PATH="$RUST_BIN:/opt/homebrew/bin:/usr/bin:/bin"
 
-# Each private/public file is exactly 32 raw Ed25519 bytes. Private files are
-# held by different reviewers and must be mode 0600; public files are mode 0644.
-VISUAL_REVIEWER_PRIVATE="/secure/reviewers/visual.ed25519.private"
-VISUAL_REVIEWER_PUBLIC="/secure/reviewers/visual.ed25519.public"
-SEMANTIC_REVIEWER_PRIVATE="/secure/reviewers/semantic.ed25519.private"
-SEMANTIC_REVIEWER_PUBLIC="/secure/reviewers/semantic.ed25519.public"
-chmod 0600 "$VISUAL_REVIEWER_PRIVATE" "$SEMANTIC_REVIEWER_PRIVATE"
-for key in \
-  "$VISUAL_REVIEWER_PRIVATE" "$VISUAL_REVIEWER_PUBLIC" \
-  "$SEMANTIC_REVIEWER_PRIVATE" "$SEMANTIC_REVIEWER_PUBLIC"; do
+# The producer receives only the two distinct raw 32-byte Ed25519 public keys.
+# Reviewer private keys never enter the producer workspace or environment.
+VISUAL_REVIEWER_PUBLIC="/reviewer-public-keys/visual.ed25519.public"
+SEMANTIC_REVIEWER_PUBLIC="/reviewer-public-keys/semantic.ed25519.public"
+for key in "$VISUAL_REVIEWER_PUBLIC" "$SEMANTIC_REVIEWER_PUBLIC"; do
   test "$(wc -c < "$key" | tr -d ' ')" = 32
 done
 cmp -s "$VISUAL_REVIEWER_PUBLIC" "$SEMANTIC_REVIEWER_PUBLIC" && exit 1
@@ -629,30 +624,43 @@ the matching generated template to that reviewer. Each reviewer makes a private
 copy, changes every null decision/critical-defect value, signs with their own
 private key, and returns only the signed output:
 
+The visual reviewer runs this only in their private workspace after receiving
+`review-packet.json` and the generated `decision-visual-reviewer-FORMAT.json`.
+The private key is a nonsymlink, regular raw 32-byte Ed25519 file with mode 0600:
+
 ```bash
+REVIEW_WORKSPACE="/private/visual-review"
+VISUAL_REVIEWER_PRIVATE="$REVIEW_WORKSPACE/visual.ed25519.private"
+chmod 0600 "$VISUAL_REVIEWER_PRIVATE"
 for format in $FORMATS; do
-  review_dir="$WAVE/review/$format"
-  packet="$review_dir/review-packet.json"
-  visual_template="$review_dir/decision-visual-reviewer-$format.json"
-  semantic_template="$review_dir/decision-semantic-security-reviewer-$format.json"
-
-  # Independent handoff: visual receives only packet + visual_template;
-  # semantic-security receives only packet + semantic_template. Each reviewer
-  # completes their exact template in a private workspace and returns it here.
-  visual_completed="$review_dir/completed-visual-reviewer-$format.json"
-  semantic_completed="$review_dir/completed-semantic-security-reviewer-$format.json"
-  test -f "$packet" -a -f "$visual_template" -a -f "$semantic_template"
-  test -f "$visual_completed" -a -f "$semantic_completed"
-
+  decision="$REVIEW_WORKSPACE/$format/decision-visual-reviewer-$format.json"
+  # Independently inspect the packet artifacts, then replace every null in
+  # this exact decision file with the reviewer's decision/critical-defect value.
   "$PYTHON" -m evaluate.sign_multiformat_review_decision \
-    --decision "$visual_completed" \
+    --decision "$decision" \
     --private-key "$VISUAL_REVIEWER_PRIVATE" \
-    --output "$review_dir/decision-visual-signed.json"
-  "$PYTHON" -m evaluate.sign_multiformat_review_decision \
-    --decision "$semantic_completed" \
-    --private-key "$SEMANTIC_REVIEWER_PRIVATE" \
-    --output "$review_dir/decision-semantic-signed.json"
+    --output "$REVIEW_WORKSPACE/$format/decision-visual-signed.json"
 done
+# Return only each decision-visual-signed.json to the producer.
+```
+
+The semantic-security reviewer independently runs the corresponding loop in a
+different private workspace after receiving only the packet and their generated
+template:
+
+```bash
+REVIEW_WORKSPACE="/private/semantic-security-review"
+SEMANTIC_REVIEWER_PRIVATE="$REVIEW_WORKSPACE/semantic.ed25519.private"
+chmod 0600 "$SEMANTIC_REVIEWER_PRIVATE"
+for format in $FORMATS; do
+  decision="$REVIEW_WORKSPACE/$format/decision-semantic-security-reviewer-$format.json"
+  # Independently inspect and complete every null in this exact decision file.
+  "$PYTHON" -m evaluate.sign_multiformat_review_decision \
+    --decision "$decision" \
+    --private-key "$SEMANTIC_REVIEWER_PRIVATE" \
+    --output "$REVIEW_WORKSPACE/$format/decision-semantic-signed.json"
+done
+# Return only each decision-semantic-signed.json to the producer.
 ```
 
 The assembler verifies both signatures and packet-bound keys before publishing

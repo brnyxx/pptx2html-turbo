@@ -39,6 +39,56 @@ CARGO = subprocess.run(
     ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
 ).stdout.strip()
 ENV = Path("/usr/bin/env").resolve().as_posix()
+ROOT = Path(__file__).resolve().parents[2].as_posix()
+PATH_ARG = "PATH=/usr/bin:/bin"
+PERFORMANCE = (ENV, PATH_ARG, CARGO, "test", "--release", "-p", "document2html-native")
+
+
+def _quality(python: str) -> dict[str, tuple[str, ...]]:
+    return {
+        "tests": (
+            ENV,
+            PATH_ARG,
+            CARGO,
+            "test",
+            "-p",
+            "document2html-core",
+            "-p",
+            "document2html-native",
+        ),
+        "builds": (
+            ENV,
+            PATH_ARG,
+            CARGO,
+            "build",
+            "--release",
+            "-p",
+            "pptx2html-cli",
+            "--bin",
+            "document2html",
+        ),
+        "diagnostics": (
+            ENV,
+            PATH_ARG,
+            CARGO,
+            "clippy",
+            "-p",
+            "document2html-core",
+            "-p",
+            "document2html-native",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ),
+        "contract_checks": (
+            python,
+            "-m",
+            "evaluate.check_exactness_contract",
+            "--repo-root",
+            ROOT,
+        ),
+    }
 
 
 class CommandPlanMaterializerTests(unittest.TestCase):
@@ -53,15 +103,8 @@ class CommandPlanMaterializerTests(unittest.TestCase):
                 "--source",
                 "{source}",
             )
-            quality = {
-                "tests": (ENV, CARGO, "test"),
-                "builds": (ENV, CARGO, "build"),
-                "diagnostics": (ENV, CARGO, "clippy"),
-                "contract_checks": (python, "-m", "evaluate.check_exactness_contract"),
-            }
-            summary = materialize_command_plan(
-                output, security, quality, (ENV, CARGO, "test", "--release")
-            )
+            quality = _quality(python)
+            summary = materialize_command_plan(output, security, quality, PERFORMANCE)
             plan = load_command_plan(output)
             self.assertEqual(summary["command_plan_sha256"], sha256_file(output))
             self.assertEqual(plan.security.argv, security)
@@ -73,12 +116,7 @@ class CommandPlanMaterializerTests(unittest.TestCase):
 
     def test_rejects_shell_fake_security_and_edited_identities(self) -> None:
         python = Path(sys.executable).resolve().as_posix()
-        quality = {
-            "tests": (ENV, CARGO, "test"),
-            "builds": (ENV, CARGO, "build"),
-            "diagnostics": (ENV, CARGO, "clippy"),
-            "contract_checks": (python, "-m", "evaluate.check_exactness_contract"),
-        }
+        quality = _quality(python)
         attacks = (
             ("/bin/sh", "-c", "echo fake"),
             (python, "-m", "fake_security"),
@@ -94,7 +132,7 @@ class CommandPlanMaterializerTests(unittest.TestCase):
                     Path(temporary) / "commands.json",
                     security,
                     quality,
-                    (ENV, CARGO, "test", "--release"),
+                    PERFORMANCE,
                 )
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "commands.json"
@@ -102,7 +140,7 @@ class CommandPlanMaterializerTests(unittest.TestCase):
                 path,
                 (python, "-m", "evaluate.run_multiformat_security_case"),
                 quality,
-                (ENV, CARGO, "test", "--release"),
+                PERFORMANCE,
             )
             value = read_object(path)
             value["security"]["argv_sha256"] = "0" * 64
@@ -113,16 +151,15 @@ class CommandPlanMaterializerTests(unittest.TestCase):
     def test_rejects_shells_and_fake_quality_or_performance_roles(self) -> None:
         python = Path(sys.executable).resolve().as_posix()
         security = (python, "-m", "evaluate.run_multiformat_security_case")
-        valid = {
-            "tests": (ENV, CARGO, "test"),
-            "builds": (ENV, CARGO, "build"),
-            "diagnostics": (ENV, CARGO, "clippy"),
-            "contract_checks": (python, "-m", "evaluate.check_exactness_contract"),
-        }
+        valid = _quality(python)
         attacks = (
             ("tests", ("/bin/sh", "-c", "exit 0")),
             ("builds", (python, "-c", "raise SystemExit(0)")),
-            ("diagnostics", (ENV, CARGO, "test")),
+            ("tests", (ENV, "LD_PRELOAD=/tmp/fake", CARGO, "test")),
+            ("builds", (ENV, "RUSTC_WRAPPER=/tmp/fake", CARGO, "build")),
+            ("tests", (*valid["tests"], "--no-run")),
+            ("performance", (*PERFORMANCE, "--no-run")),
+            ("diagnostics", (ENV, PATH_ARG, CARGO, "test")),
             ("contract_checks", (python, "-m", "fake_contract")),
         )
         for role, argv in attacks:
@@ -132,12 +169,16 @@ class CommandPlanMaterializerTests(unittest.TestCase):
                 self.assertRaises(CommandPlanMaterializeError),
             ):
                 quality = dict(valid)
-                quality[role] = argv
+                performance = PERFORMANCE
+                if role == "performance":
+                    performance = argv
+                else:
+                    quality[role] = argv
                 materialize_command_plan(
                     Path(temporary) / "commands.json",
                     security,
                     quality,
-                    (ENV, CARGO, "test", "--release"),
+                    performance,
                 )
         with (
             tempfile.TemporaryDirectory() as temporary,
@@ -189,6 +230,15 @@ class ReviewAuthenticationTests(unittest.TestCase):
                 )
             with self.assertRaises(ReviewSigningError):
                 sign_review_decision(templates[0], keys[1], root / "wrong.json")
+            symlink = root / "private-symlink.key"
+            symlink.symlink_to(keys[0])
+            with self.assertRaises(ReviewSigningError):
+                sign_review_decision(templates[0], symlink, root / "symlink.json")
+            directory = root / "private-key-directory"
+            directory.mkdir()
+            os.chmod(directory, 0o700)
+            with self.assertRaises(ReviewSigningError):
+                sign_review_decision(templates[0], directory, root / "directory.json")
             signed = root / "signed.json"
             sign_review_decision(templates[0], keys[0], signed)
             edited = read_object(signed)
