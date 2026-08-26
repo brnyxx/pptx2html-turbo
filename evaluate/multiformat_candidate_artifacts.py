@@ -48,7 +48,7 @@ def materialize_runtime_artifacts(
         raise CandidateArtifactError("runtime artifact output is a symlink")
     output_dir.mkdir(parents=True, exist_ok=True)
     result: dict[str, Path] = {}
-    package_entries: list[dict[str, JsonValue]] = []
+    package_entries: list[JsonValue] = []
     copied_packages: dict[Path, Path] = {}
     font_config: Path | None = None
     for name, source_value in sorted(artifacts.items()):
@@ -87,10 +87,11 @@ def materialize_runtime_artifacts(
         _copy_regular(source, destination)
         result[name] = destination
     package_manifest = output_dir / "runtime-package-manifest.json"
-    write_canonical_json(
-        package_manifest,
-        {"schema_version": 1, "entries": package_entries},
-    )
+    package_manifest_value: dict[str, JsonValue] = {
+        "schema_version": 1,
+        "entries": package_entries,
+    }
+    write_canonical_json(package_manifest, package_manifest_value)
     result["runtime_package_manifest"] = package_manifest
     _seal_snapshot_tree(output_dir)
     return RuntimeArtifactSnapshots.capture(output_dir, result)
