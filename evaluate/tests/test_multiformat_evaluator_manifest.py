@@ -79,6 +79,7 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
 
     def test_manifest_binds_candidate_process_isolation_and_regressions(self) -> None:
         production = (
+            "evaluate/create_multiformat_oracle_sentinel.py",
             "evaluate/multiformat_candidate_attestation_signing_io.py",
             "evaluate/multiformat_candidate_sandbox.py",
         )

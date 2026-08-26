@@ -2,6 +2,7 @@ from __future__ import annotations
 
 PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/multiformat_evaluator_portable_wave_files.py",
+    "evaluate/create_multiformat_oracle_sentinel.py",
     "evaluate/capture_multiformat_portable_references.py",
     "evaluate/materialize_multiformat_portable_locks.py",
     "evaluate/materialize_multiformat_portable_locks_cli.py",

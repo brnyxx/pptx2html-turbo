@@ -46,6 +46,8 @@ class PortableLockMaterializerTests(unittest.TestCase):
                 [
                     sandbox.as_posix(),
                     "-D",
+                    "ORACLE_ROOT=/var/empty",
+                    "-D",
                     "ORACLE_SENTINEL=/dev/null",
                     "-f",
                     (first.output_dir / "generated/portable-reference.sb").as_posix(),

@@ -212,7 +212,7 @@ def write_sandbox_profile(path: Path) -> None:
         "(version 1)\n(allow default)\n(deny network*)\n"
         "(allow network* (local unix-socket))\n"
         "(allow network* (remote unix-socket))\n"
-        '(deny file-read* (literal (param "ORACLE_SENTINEL")))\n',
+        '(deny file-read* (subpath (param "ORACLE_ROOT")))\n',
         encoding="utf-8",
     )
 

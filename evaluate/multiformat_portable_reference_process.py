@@ -12,7 +12,7 @@ _SANDBOX_PROFILE = (
     "(version 1)\n(allow default)\n(deny network*)\n"
     "(allow network* (local unix-socket))\n"
     "(allow network* (remote unix-socket))\n"
-    '(deny file-read* (literal (param "ORACLE_SENTINEL")))\n'
+    '(deny file-read* (subpath (param "ORACLE_ROOT")))\n'
 )
 
 
@@ -64,6 +64,8 @@ def _sandbox(
         raise PortableReferenceProcessError("portable sandbox profile differs")
     return (
         sandbox,
+        "-D",
+        "ORACLE_ROOT=/var/empty",
         "-D",
         "ORACLE_SENTINEL=/dev/null",
         "-f",

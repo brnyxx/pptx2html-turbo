@@ -44,7 +44,9 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                 sandbox.write_bytes(b"sandbox")
                 sandbox_profile = root / "profile.sb"
                 sandbox_profile.write_bytes(b"profile")
-                sentinel = root / "golden-sentinel"
+                oracle_root = root / "reference"
+                oracle_root.mkdir()
+                sentinel = oracle_root / ".candidate-denial-sentinel"
                 sentinel.write_bytes(b"golden")
                 profile = self._profile(
                     verifier,
@@ -56,7 +58,7 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                 self.assertNotEqual(profile.receipt_public_key, candidate.public_key)
                 attestation = root / "attestation.json"
                 payload: dict[str, JsonValue] = {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "status": "PASS",
                     "network_isolation": True,
                     "golden_access": "denied",
@@ -70,11 +72,13 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                     },
                     "network_probe": {
                         "endpoint": "1.1.1.1:443",
-                        "result": "denied",
+                        "control": "reachable",
+                        "sandbox": "denied",
                     },
-                    "golden_probe": {
+                    "oracle_probe": {
+                        "root": {"path": oracle_root.name},
                         "sentinel": {
-                            "path": sentinel.name,
+                            "path": sentinel.relative_to(root).as_posix(),
                             "sha256": sha256_file(sentinel),
                         },
                         "result": "denied",

@@ -8,8 +8,8 @@ from pathlib import Path
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_sandbox import (
     CandidateSandbox,
-    golden_probe_value,
     network_probe_value,
+    oracle_probe_value,
     resolve_attested_sandbox,
 )
 from evaluate.multiformat_candidate_signature import verify_ed25519_json
@@ -138,14 +138,14 @@ def verify_candidate_attestation(
         profile.sandbox_profile,
     )
     expected: dict[str, JsonValue] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "status": "PASS",
         "network_isolation": True,
         "golden_access": "denied",
         "sandbox_executable": sandbox.executable_binding(profile.evidence_root),
         "sandbox_profile": sandbox.profile_binding(profile.evidence_root),
         "network_probe": network_probe_value(),
-        "golden_probe": golden_probe_value(profile.evidence_root, sandbox.sentinel),
+        "oracle_probe": oracle_probe_value(profile.evidence_root, sandbox),
         "project_revision": project_revision,
         "font_environment_sha256": font_environment,
         "font_isolation": "locked-bundle-only",

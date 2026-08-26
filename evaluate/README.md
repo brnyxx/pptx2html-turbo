@@ -489,7 +489,13 @@ for format in $FORMATS; do
   candidate_nonce="$("$OPENSSL" rand -hex 32)"
   reference_nonce="$("$OPENSSL" rand -hex 32)"
   attestation="$WAVE/attestations/$format.json"
-  oracle_sentinel="$WAVE/oracle-sentinels/$format"
+  oracle_root="$WAVE/reference"
+  oracle_sentinel="$oracle_root/.candidate-denial-$format"
+  "$PYTHON" -m evaluate.create_multiformat_oracle_sentinel \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --oracle-root "$oracle_root" \
+    --sentinel "$oracle_sentinel" \
+    --format "$format"
 
   "$PYTHON" -m evaluate.sign_multiformat_candidate_attestation \
     --evidence-root "$EVIDENCE_ROOT" \
@@ -499,6 +505,7 @@ for format in $FORMATS; do
     --contract "$bound_contract" \
     --corpus "$corpus" \
     --evaluator "$bound_evaluator" \
+    --oracle-root "$oracle_root" \
     --oracle-sentinel "$oracle_sentinel" \
     --run-nonce "$candidate_nonce"
 
@@ -534,12 +541,15 @@ for format in $FORMATS; do
 done
 ```
 
-The oracle sentinel must be an existing, readable evidence-root file containing
-oracle-only bytes. Before signing, bounded probes through the final outer-lock
-sandbox require a successful control process plus denied external-network and
-sentinel reads. Candidate capture and each single security case re-exec their
-complete converter, LibreOffice, and Chromium process trees under that exact
-sandbox and repeat the probes before use. Browser loading still intercepts one
+Before signing, the create-only sentinel command uses `O_EXCL` to publish a
+readable file inside the reference root, so reruns cannot overwrite it. A
+bounded unsandboxed control must reach the exact external endpoint;
+then bounded probes through the final outer-lock sandbox must deny that endpoint
+and the sentinel. The signature binds `control=reachable`, `sandbox=denied`, the
+reference root, and the sentinel. Reference capture writes beneath that denied
+root. Candidate capture and each single security case re-exec their complete
+converter, LibreOffice, and Chromium process trees under the exact sandbox and
+repeat only the denial probes before use. Browser loading still intercepts one
 synthetic HTTP document and rejects every other request as defense-in-depth.
 The signature binds the observed results, exact sandbox executable/profile,
 sentinel, outer-lock scope, and font environment. Self-authored JSON is

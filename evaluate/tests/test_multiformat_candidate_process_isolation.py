@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -9,9 +10,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from evaluate.create_multiformat_oracle_sentinel import (
+    OracleSentinelCreateError,
+    create_oracle_sentinel,
+)
 from evaluate.multiformat_candidate_sandbox import (
     CandidateSandbox,
     CandidateSandboxError,
+    observe_network_control,
     observe_sandbox,
     require_active_sandbox,
     resolve_attested_sandbox,
@@ -21,10 +27,21 @@ from evaluate.multiformat_schema import JsonValue, object_value, sha256_file
 
 
 class CandidateProcessIsolationTests(unittest.TestCase):
+    def test_oracle_sentinel_is_create_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            evidence = Path(temp)
+            oracle_root = evidence / "reference"
+            sentinel = oracle_root / ".candidate-denial-pptx"
+            created = create_oracle_sentinel(evidence, oracle_root, sentinel, "pptx")
+            original = created.read_bytes()
+            with self.assertRaisesRegex(OracleSentinelCreateError, "already exists"):
+                create_oracle_sentinel(evidence, oracle_root, sentinel, "pptx")
+            self.assertEqual(created.read_bytes(), original)
+
     def test_deterministic_fake_sandbox_exercises_success_on_any_host(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            sandbox = self._fixture(root, denied={"network", "golden"})
+            sandbox = self._fixture(root, denied={"network", "oracle"})
             observe_sandbox(sandbox)
             with mock.patch.dict(
                 os.environ,
@@ -38,8 +55,20 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 sha256_file(sandbox.profile),
             )
 
+    def test_offline_host_cannot_turn_sandbox_connection_failure_into_pass(
+        self,
+    ) -> None:
+        with (
+            mock.patch(
+                "evaluate.multiformat_candidate_sandbox.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 1),
+            ),
+            self.assertRaisesRegex(CandidateSandboxError, "positive network control"),
+        ):
+            observe_network_control()
+
     def test_unsandboxed_passthrough_and_network_capable_profiles_fail(self) -> None:
-        for denied in (set(), {"golden"}):
+        for denied in (set(), {"oracle"}):
             with self.subTest(denied=denied), tempfile.TemporaryDirectory() as temp:
                 sandbox = self._fixture(Path(temp), denied=denied)
                 with self.assertRaisesRegex(CandidateSandboxError, "probe failed"):
@@ -53,7 +82,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                     os.environ,
                     {"PPTX2HTML_CANDIDATE_SANDBOX": sha256_file(sandbox.profile)},
                 ),
-                self.assertRaisesRegex(CandidateSandboxError, "golden"),
+                self.assertRaisesRegex(CandidateSandboxError, "oracle"),
             ):
                 require_active_sandbox(sandbox)
 
@@ -61,7 +90,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
         for attack in ("path", "executable-mutation", "profile-mutation"):
             with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
-                sandbox = self._fixture(root, denied={"network", "golden"})
+                sandbox = self._fixture(root, denied={"network", "oracle"})
                 values = self._attestation(root, sandbox)
                 if attack == "path":
                     replacement = root / "replacement"
@@ -93,8 +122,13 @@ class CandidateProcessIsolationTests(unittest.TestCase):
         result: dict[str, JsonValue] = {
             "sandbox_executable": binding(sandbox.executable),
             "sandbox_profile": binding(sandbox.profile),
-            "network_probe": {"endpoint": "1.1.1.1:443", "result": "denied"},
-            "golden_probe": {
+            "network_probe": {
+                "endpoint": "1.1.1.1:443",
+                "control": "reachable",
+                "sandbox": "denied",
+            },
+            "oracle_probe": {
+                "root": {"path": sandbox.oracle_root.relative_to(root).as_posix()},
                 "sentinel": binding(sandbox.sentinel),
                 "result": "denied",
             },
@@ -105,7 +139,9 @@ class CandidateProcessIsolationTests(unittest.TestCase):
     def _fixture(root: Path, *, denied: set[str]) -> CandidateSandbox:
         profile = root / "profile.sb"
         profile.write_text("fixture profile", encoding="utf-8")
-        sentinel = root / "oracle-golden-sentinel"
+        oracle_root = root / "reference"
+        oracle_root.mkdir()
+        sentinel = oracle_root / ".candidate-denial-sentinel"
         sentinel.write_text("readable outside sandbox", encoding="utf-8")
         executable = root / "sandbox-exec"
         executable.write_text(
@@ -121,7 +157,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 probe = os.environ.get('PPTX2HTML_SANDBOX_PROBE')
                 if probe in {denied!r}:
                     raise SystemExit(77)
-                if probe in {{'network', 'golden'}}:
+                if probe in {{'network', 'oracle'}}:
                     raise SystemExit(0)
                 raise SystemExit(subprocess.run(args, check=False).returncode)
                 """
@@ -129,7 +165,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             encoding="utf-8",
         )
         executable.chmod(0o755)
-        return CandidateSandbox(executable, profile, sentinel)
+        return CandidateSandbox(executable, profile, oracle_root, sentinel)
 
 
 if __name__ == "__main__":

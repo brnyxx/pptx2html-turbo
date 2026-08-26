@@ -13,6 +13,7 @@ import textwrap
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest import mock
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -293,6 +294,15 @@ class PortableReceiptExecutorTests(unittest.TestCase):
 
 
 class CandidateAttestationSignerTests(unittest.TestCase):
+    network_control: mock.Mock = mock.Mock()
+
+    def setUp(self) -> None:
+        patcher = mock.patch(
+            "evaluate.sign_multiformat_candidate_attestation.observe_network_control"
+        )
+        self.network_control = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_distinct_keypair_and_post_lock_signature(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
@@ -324,9 +334,11 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                 contract,
                 corpus,
                 evaluator,
+                oracle_root=sentinel.parent,
                 oracle_sentinel=sentinel,
                 run_nonce="c" * 64,
             )
+            self.network_control.assert_called_once_with()
             value = json.loads(output.read_text(encoding="utf-8"))
             signature = base64.b64decode(value.pop("signature"), validate=True)
             loaded = serialization.load_pem_public_key(public.read_bytes())
@@ -336,7 +348,7 @@ class CandidateAttestationSignerTests(unittest.TestCase):
             self.assertEqual(
                 value,
                 {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "status": "PASS",
                     "network_isolation": True,
                     "golden_access": "denied",
@@ -350,9 +362,13 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                     },
                     "network_probe": {
                         "endpoint": "1.1.1.1:443",
-                        "result": "denied",
+                        "control": "reachable",
+                        "sandbox": "denied",
                     },
-                    "golden_probe": {
+                    "oracle_probe": {
+                        "root": {
+                            "path": sentinel.parent.relative_to(evidence).as_posix()
+                        },
                         "sentinel": {
                             "path": sentinel.relative_to(evidence).as_posix(),
                             "sha256": _sha(sentinel),
@@ -406,6 +422,7 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                         contract,
                         corpus,
                         evaluator,
+                        oracle_root=sentinel.parent,
                         oracle_sentinel=sentinel,
                         run_nonce="d" * 64,
                     )
@@ -419,6 +436,7 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                         contract,
                         corpus,
                         evaluator,
+                        oracle_root=sentinel.parent,
                         oracle_sentinel=sentinel,
                         run_nonce="d" * 64,
                     )
@@ -450,6 +468,7 @@ class CandidateAttestationSignerTests(unittest.TestCase):
                     contract,
                     corpus,
                     evaluator,
+                    oracle_root=sentinel.parent,
                     oracle_sentinel=sentinel,
                     run_nonce="e" * 64,
                 )
@@ -460,10 +479,12 @@ class CandidateAttestationSignerTests(unittest.TestCase):
     ) -> tuple[Path, Path, Path]:
         profile = evidence / "candidate.sb"
         profile.write_text("(version 1)\n", encoding="utf-8")
-        sentinel = evidence / "oracle-golden-sentinel"
+        oracle_root = evidence / "reference"
+        oracle_root.mkdir()
+        sentinel = oracle_root / ".candidate-denial-sentinel"
         sentinel.write_text("oracle bytes", encoding="utf-8")
         sandbox = evidence / "sandbox-exec"
-        denied = "set()" if passthrough else "{'network', 'golden'}"
+        denied = "set()" if passthrough else "{'network', 'oracle'}"
         sandbox.write_text(
             "#!"
             + sys.executable
