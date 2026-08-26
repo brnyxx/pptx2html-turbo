@@ -30,14 +30,28 @@ def extract_xlsx_semantics(path: Path) -> dict[str, JsonValue]:
                 if not name or target is None:
                     raise SpreadsheetSemanticError("XLSX worksheet identity is invalid")
                 root = _xml(archive, target)
-                cells = [_cell_value(cell, shared) for cell in root.findall(f".//{{{MAIN}}}c")]
-                worksheets.append({"name": name, "cells": [cell for cell in cells if cell is not None]})
+                cells = [
+                    _cell_value(cell, shared)
+                    for cell in root.findall(f".//{{{MAIN}}}c")
+                ]
+                worksheets.append(
+                    {
+                        "name": name,
+                        "cells": [cell for cell in cells if cell is not None],
+                    }
+                )
             if not worksheets:
                 raise SpreadsheetSemanticError("XLSX workbook has no worksheets")
             return {"worksheets": worksheets}
     except SpreadsheetSemanticError:
         raise
-    except (KeyError, OSError, ValueError, zipfile.BadZipFile, ElementTree.ParseError) as error:
+    except (
+        KeyError,
+        OSError,
+        ValueError,
+        zipfile.BadZipFile,
+        ElementTree.ParseError,
+    ) as error:
         raise SpreadsheetSemanticError("XLSX semantic extraction failed") from error
 
 
@@ -66,10 +80,15 @@ def _shared_strings(archive: zipfile.ZipFile) -> list[str]:
         root = _xml(archive, "xl/sharedStrings.xml")
     except KeyError:
         return []
-    return ["".join(text.text or "" for text in item.findall(f".//{{{MAIN}}}t")) for item in root.findall(f"{{{MAIN}}}si")]
+    return [
+        "".join(text.text or "" for text in item.findall(f".//{{{MAIN}}}t"))
+        for item in root.findall(f"{{{MAIN}}}si")
+    ]
 
 
-def _cell_value(cell: ElementTree.Element, shared: list[str]) -> dict[str, JsonValue] | None:
+def _cell_value(
+    cell: ElementTree.Element, shared: list[str]
+) -> dict[str, JsonValue] | None:
     address = cell.attrib.get("r", "").replace("$", "")
     if not address:
         raise SpreadsheetSemanticError("XLSX cell coordinate is missing")
@@ -83,7 +102,9 @@ def _cell_value(cell: ElementTree.Element, shared: list[str]) -> dict[str, JsonV
             try:
                 display = shared[int(display)]
             except (IndexError, ValueError) as error:
-                raise SpreadsheetSemanticError("XLSX shared string is invalid") from error
+                raise SpreadsheetSemanticError(
+                    "XLSX shared string is invalid"
+                ) from error
         elif kind == "b":
             display = "TRUE" if display == "1" else "FALSE"
     return None if not display else {"address": address, "display": display}
