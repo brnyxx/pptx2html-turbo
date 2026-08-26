@@ -1322,4 +1322,3 @@ Leave aggregate signed admission, runtime security outcomes, metrics, and
 - [ ] Review execution evidence, commits, artifact identities, and status
   language.
 - [ ] Integrate only after all five lanes pass.
-

@@ -781,4 +781,3 @@ The task is complete only after:
 12. Main repeats the relevant artifact and quality gates.
 
 Generated font, inventory, and corpus artifacts are not committed or pushed.
-
