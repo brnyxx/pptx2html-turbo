@@ -504,10 +504,12 @@ cannot dominate the result.
 
 The default required profile is `libreoffice-poppler`:
 
-- DOCX, DOC, XLSX, XLS, PPTX, and PPT use locked LibreOffice PDF export plus
-  locked Poppler metadata, rendering, and text extraction on supported macOS or
-  Linux hosts.
+- On supported macOS hosts, DOCX, DOC, XLSX, XLS, PPTX, and PPT use locked
+  LibreOffice PDF export plus locked Poppler metadata, rendering, and text
+  extraction.
 - PDF uses the same locked Poppler stages directly, without LibreOffice.
+- Linux supports native conversion, but signed profile capture remains
+  `INCOMPLETE` until a Linux process-sandbox backend is implemented.
 
 Its schema-2 portable lock records the platform, routing-table and
 canonicalizer identities, tool/font/browser/runtime hashes, frozen corpus and

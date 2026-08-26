@@ -479,8 +479,9 @@ Results are logged to `autoresearch/results.tsv`. See `autoresearch/program.md` 
 
 ## Evaluation
 
-Universal seven-format acceptance uses the default signed macOS/Linux
-`libreoffice-poppler` profile described above. The following legacy PPTX
+Universal seven-format acceptance uses the default signed macOS
+`libreoffice-poppler` profile described above; Linux remains conversion-only
+until its process-sandbox backend exists. The following legacy PPTX
 fidelity loop is a separate regression and `exact`-promotion track: it treats
 PowerPoint-native references as the primary oracle for that stricter tier and
 LibreOffice references as a secondary regression signal.

@@ -44,13 +44,16 @@ https://help.libreoffice.org/latest/en-US/text/shared/guide/start_parameters.htm
 
 ## Reference profiles
 
-The default required profile is `libreoffice-poppler`. On supported macOS and
-Linux hosts, the six Office formats use locked LibreOffice PDF export followed
-by locked Poppler rendering/text extraction; PDF uses locked Poppler directly.
-The profile runs over the seven frozen format corpora and requires a schema-2
-portable lock, signed receipt, and SHA-256 binding for every admitted source,
-tool, runtime, and output. Missing, stale, substituted, or tampered evidence
-remains `INCOMPLETE` or `FAIL`.
+The default required profile is `libreoffice-poppler`. Its signed production
+capture currently runs on supported macOS hosts: the six Office formats use
+locked LibreOffice PDF export followed by locked Poppler rendering/text
+extraction, while PDF uses locked Poppler directly. Linux supports native
+conversion with the same tools, but cannot complete the signed profile until a
+Linux process-sandbox backend is implemented. The profile runs over the seven
+frozen format corpora and requires a schema-2 portable lock, signed receipt,
+and SHA-256 binding for every admitted source, tool, runtime, and output.
+Missing, stale, substituted, or tampered evidence remains `INCOMPLETE` or
+`FAIL`.
 
 Signed Microsoft Office/Windows oracle evidence remains supported as the
 optional `microsoft-office` profile. It is not a prerequisite for the default
@@ -176,7 +179,13 @@ Run the gate:
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/reports \
-  --oracle-lock evaluate/multiformat/oracle-lock.json
+  --oracle-lock pptx=evaluate/multiformat/oracle-locks/pptx.json \
+  --oracle-lock docx=evaluate/multiformat/oracle-locks/docx.json \
+  --oracle-lock doc=evaluate/multiformat/oracle-locks/doc.json \
+  --oracle-lock xlsx=evaluate/multiformat/oracle-locks/xlsx.json \
+  --oracle-lock xls=evaluate/multiformat/oracle-locks/xls.json \
+  --oracle-lock ppt=evaluate/multiformat/oracle-locks/ppt.json \
+  --oracle-lock pdf=evaluate/multiformat/oracle-locks/pdf.json
 ```
 
 Exit codes are 0 for `PASS`, 1 for `FAIL`, and 2 for `INCOMPLETE`.
@@ -297,7 +306,13 @@ declared evidence root, rejects traversal, and re-hashes each file:
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/wave/reports \
-  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --oracle-lock pptx=evaluate/multiformat/wave/oracle-locks/pptx.json \
+  --oracle-lock docx=evaluate/multiformat/wave/oracle-locks/docx.json \
+  --oracle-lock doc=evaluate/multiformat/wave/oracle-locks/doc.json \
+  --oracle-lock xlsx=evaluate/multiformat/wave/oracle-locks/xlsx.json \
+  --oracle-lock xls=evaluate/multiformat/wave/oracle-locks/xls.json \
+  --oracle-lock ppt=evaluate/multiformat/wave/oracle-locks/ppt.json \
+  --oracle-lock pdf=evaluate/multiformat/wave/oracle-locks/pdf.json \
   --evidence-root evaluate/multiformat/wave
 ```
 
