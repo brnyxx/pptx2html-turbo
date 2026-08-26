@@ -69,6 +69,27 @@ class PortableLockMaterializerTests(unittest.TestCase):
             )
             self.assertEqual(local.returncode, 0)
 
+    def test_rejects_producer_selected_fake_rust_toolchain_before_signing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            inputs = self._fixture(Path(temp_dir))
+            fake_bin = inputs.evidence_root / "fake-rust-toolchain"
+            fake_bin.mkdir()
+            for name in ("cargo", "rustc"):
+                executable = fake_bin / name
+                executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                executable.chmod(0o755)
+
+            with self.assertRaisesRegex(ValueError, "evaluator"):
+                materialize_portable_locks(
+                    replace(
+                        inputs,
+                        cargo=fake_bin / "cargo",
+                        rustc=fake_bin / "rustc",
+                    )
+                )
+
+            self.assertFalse(inputs.output_dir.exists())
+
     def test_bad_private_permissions_and_overwrite_fail(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             inputs = self._fixture(Path(temp_dir))

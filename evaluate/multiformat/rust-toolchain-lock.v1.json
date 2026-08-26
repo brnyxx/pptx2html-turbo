@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "identities": [
+    {
+      "platform": {"os": "Darwin", "architecture": "arm64"},
+      "cargo": {
+        "sha256": "c512bff73c86143b557463f021d0c3d5b0490d97d65040ba59ea2b3427784758",
+        "version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+      },
+      "rustc": {
+        "sha256": "b829b733131d4e1673eeebd1f34d06ae1e9ff4977b051313cf42e2a9e79ecf1c",
+        "version_verbose": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2"
+      }
+    }
+  ]
+}

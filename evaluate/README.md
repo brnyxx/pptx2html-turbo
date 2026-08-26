@@ -444,8 +444,9 @@ candidate attestation.
 ```bash
 package_soffice="$SOFFICE"
 package_chromium="$CHROMIUM"
-# Resolve the evaluator-selected rustup toolchain before accepting any producer
-# command plan. These exact paths and bytes become part of every outer lock.
+# Resolve paths dynamically; the materializer accepts them only when their
+# bytes and versions match the evaluator-controlled, revision-bound
+# evaluate/multiformat/rust-toolchain-lock.v1.json identity for this platform.
 CARGO="$(rustup which cargo)"
 RUSTC="$(rustup which rustc)"
 
@@ -627,11 +628,14 @@ worksheet and coordinate metadata, never visual position.
 Create one production command plan and blank two-reviewer packet per format.
 The schema-v3 plan records each typed role, canonical argv SHA-256, resolved
 executable SHA-256, and the exact evaluator outer lock that authorized its Rust
-toolchain. The outer-lock materializer resolves and hashes evaluator-selected
-`cargo` and `rustc` executables; command-plan materialization cannot replace
-those identities with producer-selected paths or hashes. Legitimate rustup
-toolchains remain supported because their resolved toolchain `bin` directory is
-locked rather than a workstation-specific path being hardcoded. The security
+toolchain. Before signing, the outer-lock materializer requires the resolved
+`cargo` and `rustc` bytes and versions to match the platform entry in tracked
+`evaluate/multiformat/rust-toolchain-lock.v1.json`. That lock, its loader, and
+its tests are revision-bound through `EVALUATOR_FILES`; callers cannot redirect
+the trust source. Command-plan materialization therefore cannot replace those
+identities with producer-selected paths or hashes. Legitimate qualified rustup
+toolchains remain supported because paths are resolved dynamically and only
+identity bytes are fixed; no workstation path is hardcoded. The security
 role accepts only the current Python runtime's exact
 `-m evaluate.run_multiformat_security_case` entry point; shells and substitute
 security executables fail closed. Metrics match the plan to the authoritative

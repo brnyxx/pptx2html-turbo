@@ -24,6 +24,7 @@ EVALUATOR_FILES: tuple[str, ...] = (
     "evaluate/validate_multiformat_public_pool.py",
     "evaluate/multiformat/contract.v1.json",
     "evaluate/multiformat/evaluator-lock.v1.json",
+    "evaluate/multiformat/rust-toolchain-lock.v1.json",
     "evaluate/multiformat/legacy-binary-sources.v1.json",
     "evaluate/multiformat/public-pool-sources.v1.json",
     "evaluate/requirements.txt",

@@ -17,7 +17,7 @@ from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_tr
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_rust_toolchain import (
-    rust_toolchain_identity,
+    evaluator_rust_toolchain_identity,
     rust_toolchain_value,
 )
 from evaluate.multiformat_schema import JsonValue, sha256_file, string_value
@@ -69,7 +69,7 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
         raise PortableLockIncompleteError(
             "portable runtime artifact is unavailable"
         ) from error
-    rust_toolchain = rust_toolchain_identity(inputs.cargo, inputs.rustc)
+    rust_toolchain = evaluator_rust_toolchain_identity(inputs.cargo, inputs.rustc)
     root, output, public_key = prepare_key_material(
         inputs.project_root,
         inputs.evidence_root,

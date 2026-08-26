@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -84,9 +86,16 @@ class RustToolchainRuntimeTrustTests(unittest.TestCase):
         root = root.resolve(strict=True)
         cargo = root / "cargo"
         rustc = root / "rustc"
-        for executable in (cargo, rustc):
-            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            executable.chmod(0o755)
+        for name, destination in (("cargo", cargo), ("rustc", rustc)):
+            source = Path(
+                subprocess.run(
+                    ["rustup", "which", name],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+            )
+            shutil.copy2(source, destination)
         outer_lock = root / "outer-lock.json"
         outer_lock.write_text(
             json.dumps(
