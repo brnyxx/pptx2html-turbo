@@ -60,8 +60,14 @@ class PortableReferenceContractTests(unittest.TestCase):
                     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row><c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>42</t></is></c></row></sheetData></worksheet>',
                 )
             value = extract_xlsx_semantics(path)
+            worksheets = value.get("worksheets")
+            if not isinstance(worksheets, list) or not worksheets:
+                self.fail("spreadsheet semantics must contain worksheets")
+            worksheet = worksheets[0]
+            if not isinstance(worksheet, dict):
+                self.fail("spreadsheet worksheet must be an object")
             self.assertEqual(
-                value["worksheets"][0]["cells"],
+                worksheet.get("cells"),
                 [
                     {"address": "A1", "display": "Alpha Beta"},
                     {"address": "B1", "display": "42"},
