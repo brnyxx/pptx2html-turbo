@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import platform
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
-
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.multiformat_candidate_artifacts import (
     evidence_binding,
@@ -12,14 +11,12 @@ from evaluate.multiformat_candidate_artifacts import (
 )
 from evaluate.multiformat_candidate_sources import CandidateSourceSet
 from evaluate.multiformat_capture_manifest import validate_capture_manifest
-from evaluate.multiformat_metric_links import load_metric_spec
 from evaluate.multiformat_inventory import parse_inventory
+from evaluate.multiformat_metric_links import load_metric_spec
 from evaluate.multiformat_office_oracle_batch import OfficeOracleBatchFile
 from evaluate.multiformat_office_oracle_inventory import write_office_oracle_inventories
 from evaluate.multiformat_portable_receipt import (
-    PortableReceiptInput,
     PortableReceiptVerification,
-    sign_portable_receipt,
     verify_portable_receipt,
 )
 from evaluate.multiformat_portable_receipt_trust import PortableReceiptTrustContext
@@ -32,15 +29,18 @@ class PortableReferenceManifestError(ValueError):
     pass
 
 
+ReceiptExecutor = Callable[[Path, Path, Path], None]
+
+
 def write_portable_reference_manifests(
     root: Path,
     source_set: CandidateSourceSet,
     batches: list[OfficeOracleBatchFile],
     trust: PortableReceiptTrustContext,
-    private_key: Ed25519PrivateKey,
+    receipt_executor: Path,
     *,
-    nonce: str,
     batch_id: str,
+    execute: ReceiptExecutor,
 ) -> Path:
     units: list[dict[str, JsonValue]] = []
     signed: list[tuple[Path, str]] = []
@@ -126,11 +126,21 @@ def write_portable_reference_manifests(
         ]
     )
     receipt = root / "portable-receipt.json"
+    request = root / "portable-receipt-request.json"
     records = artifact_records(trust.evidence_root, signed)
-    sign_portable_receipt(
-        receipt, PortableReceiptInput(trust, nonce, batch_id, records), private_key
+    write_canonical_json(
+        request,
+        {
+            "schema_version": 2,
+            "scope_sha256": trust.scope_sha256,
+            "batch_id": batch_id,
+            "artifacts": cast(JsonValue, records),
+        },
     )
-    verify_portable_receipt(receipt, PortableReceiptVerification(trust))
+    execute(receipt_executor, request, receipt)
+    verified = verify_portable_receipt(receipt, PortableReceiptVerification(trust))
+    if verified.scope_sha256 != trust.scope_sha256:
+        raise PortableReferenceManifestError("portable receipt identity differs")
     common: dict[str, JsonValue] = {
         "schema_version": 1,
         "status": "READY",

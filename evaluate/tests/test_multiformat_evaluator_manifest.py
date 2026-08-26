@@ -69,7 +69,7 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
         expected = {
             "evaluate/multiformat_portable_receipt.py",
             "evaluate/multiformat_portable_receipt_identity.py",
-            "evaluate/multiformat_portable_receipt_replay.py",
+            "evaluate/multiformat_portable_receipt_nonce.py",
             "evaluate/multiformat_portable_receipt_context.py",
             "evaluate/multiformat_portable_receipt_trust.py",
             "evaluate/multiformat_portable_receipt_validation.py",
@@ -81,6 +81,7 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/tests/test_multiformat_candidate_portable_receipt.py",
             "evaluate/tests/test_multiformat_portable_wave_signers.py",
             "evaluate/tests/test_multiformat_portable_receipt.py",
+            "evaluate/tests/test_multiformat_portable_receipt_nonce.py",
             "evaluate/tests/test_multiformat_portable_receipt_trust_flow.py",
         }
         actual = {
@@ -259,13 +260,14 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/multiformat_portable_capture.py",
             "evaluate/multiformat_portable_receipt.py",
             "evaluate/multiformat_portable_receipt_identity.py",
-            "evaluate/multiformat_portable_receipt_replay.py",
+            "evaluate/multiformat_portable_receipt_nonce.py",
             "evaluate/multiformat_portable_receipt_context.py",
             "evaluate/multiformat_portable_receipt_trust.py",
             "evaluate/multiformat_portable_receipt_validation.py",
             "evaluate/tests/multiformat_portable_capture_fixture.py",
             "evaluate/tests/multiformat_portable_receipt_fixture.py",
             "evaluate/tests/test_multiformat_portable_receipt.py",
+            "evaluate/tests/test_multiformat_portable_receipt_nonce.py",
             "evaluate/tests/test_multiformat_portable_receipt_trust_flow.py",
         ):
             with self.subTest(path=path):

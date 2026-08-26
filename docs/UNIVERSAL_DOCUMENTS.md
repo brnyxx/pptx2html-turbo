@@ -241,7 +241,12 @@ native dimensions, DOM inventories, and all run-2 artifacts are fail-closed and
 digest-bound.
 The trusted host receipt signer runs only after capture and signs the runtime,
 execution, determinism, and complete artifact root; replayed preflight
-attestations cannot authorize a different evidence set.
+attestations cannot authorize a different evidence set. Portable receipt
+schema 2 keeps the canonical runtime nonce field but makes it a signer-derived
+SHA-256 claim identity over a fixed domain, complete scope, batch identity,
+artifact root, and canonical receipt path. Request schema 2 contains no nonce.
+Exact replay is byte-identical; any batch, artifact, scope, or path variant has
+a different nonce unless SHA-256 collides. No mutable replay state is used.
 
 ```bash
 uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \

@@ -21,8 +21,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--portable-lock", type=Path, required=True)
     parser.add_argument("--evidence-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--private-key", type=Path, required=True)
-    parser.add_argument("--run-nonce", required=True)
+    parser.add_argument("--receipt-executor", type=Path, required=True)
     parser.add_argument("--batch-id", required=True)
     return parser.parse_args(argv)
 
@@ -36,8 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.portable_lock,
             args.evidence_root,
             args.output_dir,
-            args.private_key,
-            nonce=args.run_nonce,
+            args.receipt_executor,
             batch_id=args.batch_id,
         )
     except (PortableReferenceMaterializeError, OSError, ValueError) as error:

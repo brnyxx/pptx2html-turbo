@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-VERSION: Final = "materialize-multiformat-portable-receipt-wrapper 2"
+VERSION: Final = "materialize-multiformat-portable-receipt-wrapper 5"
 _MODULE = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*")
 
 
@@ -46,7 +46,13 @@ def materialize_portable_receipt_wrapper(
             raise PortableReceiptWrapperError(
                 "receipt private key must remain outside project and evidence"
             )
-        if not stat.S_ISREG(key.stat().st_mode):
+        key_info = key.stat()
+        if (
+            not stat.S_ISREG(key_info.st_mode)
+            or stat.S_IMODE(key_info.st_mode) != 0o600
+            or key_info.st_uid != os.geteuid()
+            or key_info.st_nlink != 1
+        ):
             raise PortableReceiptWrapperError("receipt private key is invalid")
         if not _MODULE.fullmatch(module):
             raise PortableReceiptWrapperError("receipt executor module is invalid")
@@ -142,7 +148,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-VERSION = "multiformat-portable-receipt-executor 2"
+VERSION = "multiformat-portable-receipt-executor 5"
 LOCK = Path({lock.as_posix()!r})
 EVIDENCE_ROOT = Path({root.as_posix()!r})
 PRIVATE_KEY = Path({key.as_posix()!r})

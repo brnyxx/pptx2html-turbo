@@ -8,8 +8,8 @@ import stat
 import subprocess
 import sys
 import tempfile
-import threading
 import textwrap
+import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -54,9 +54,8 @@ class PortableReceiptExecutorTests(unittest.TestCase):
             request.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "scope_sha256": fixture.trust.scope_sha256,
-                        "nonce": fixture.nonce,
                         "batch_id": "portable-batch-1",
                         "artifacts": fixture.artifacts,
                     },
@@ -82,6 +81,15 @@ class PortableReceiptExecutorTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
+            receipt_bytes = output.read_bytes()
+            repeated = subprocess.run(
+                [wrapper, "--request", request, "--output", output],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(repeated.returncode, 0, repeated.stderr)
+            self.assertEqual(output.read_bytes(), receipt_bytes)
             identity = verify_portable_receipt(
                 output, PortableReceiptVerification(fixture.trust)
             )
@@ -120,9 +128,8 @@ class PortableReceiptExecutorTests(unittest.TestCase):
             request.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "scope_sha256": fixture.trust.scope_sha256,
-                        "nonce": fixture.nonce,
                         "batch_id": "frozen",
                         "artifacts": fixture.artifacts,
                     }
@@ -180,7 +187,7 @@ class PortableReceiptExecutorTests(unittest.TestCase):
                         "evaluate.multiformat_portable_receipt_executor",
                     )
 
-    def test_concurrent_cross_path_replay_publishes_exactly_one_receipt(self) -> None:
+    def test_concurrent_cross_path_claims_publish_distinct_receipts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
             evidence = base / "evidence"
@@ -193,9 +200,8 @@ class PortableReceiptExecutorTests(unittest.TestCase):
             request.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "scope_sha256": fixture.trust.scope_sha256,
-                        "nonce": fixture.nonce,
                         "batch_id": "concurrent",
                         "artifacts": fixture.artifacts,
                     }
@@ -209,7 +215,11 @@ class PortableReceiptExecutorTests(unittest.TestCase):
                 barrier.wait(timeout=5)
                 try:
                     execute_receipt_request(
-                        request, output, fixture.lock, evidence, private
+                        request,
+                        output,
+                        fixture.lock,
+                        evidence,
+                        private,
                     )
                 except ValueError:
                     return False
@@ -218,8 +228,15 @@ class PortableReceiptExecutorTests(unittest.TestCase):
             with ThreadPoolExecutor(max_workers=2) as pool:
                 results = list(pool.map(execute, outputs))
 
-            self.assertEqual(results.count(True), 1)
-            self.assertEqual(sum(path.exists() for path in outputs), 1)
+            self.assertEqual(results.count(True), 2)
+            self.assertEqual(sum(path.exists() for path in outputs), 2)
+            identities = [
+                verify_portable_receipt(
+                    path, PortableReceiptVerification(fixture.trust)
+                )
+                for path in outputs
+            ]
+            self.assertNotEqual(identities[0].nonce, identities[1].nonce)
 
     def test_wrong_key_tamper_extra_key_escape_overwrite_and_permissions_fail(
         self,
@@ -228,6 +245,8 @@ class PortableReceiptExecutorTests(unittest.TestCase):
             "wrong-key",
             "tamper",
             "extra-key",
+            "caller-nonce",
+            "schema-v1",
             "path-escape",
             "overwrite",
             "permissions",
@@ -252,14 +271,17 @@ class PortableReceiptExecutorTests(unittest.TestCase):
                     outside.write_bytes(b"portable reference")
                     record["path"] = "../outside"
                 value = {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "scope_sha256": fixture.trust.scope_sha256,
-                    "nonce": fixture.nonce,
                     "batch_id": "batch",
                     "artifacts": [record],
                 }
                 if attack == "extra-key":
                     value["unexpected"] = True
+                elif attack == "caller-nonce":
+                    value["nonce"] = "0" * 64
+                elif attack == "schema-v1":
+                    value["schema_version"] = 1
                 request = evidence / "request.json"
                 request.write_text(json.dumps(value), encoding="utf-8")
                 output = evidence / "receipt.json"
@@ -267,7 +289,11 @@ class PortableReceiptExecutorTests(unittest.TestCase):
                     output.write_bytes(b"reserved")
                 with self.assertRaises(ValueError):
                     execute_receipt_request(
-                        request, output, fixture.lock, evidence, private
+                        request,
+                        output,
+                        fixture.lock,
+                        evidence,
+                        private,
                     )
                 if attack == "overwrite":
                     self.assertEqual(output.read_bytes(), b"reserved")
@@ -484,7 +510,9 @@ class CandidateAttestationSignerTests(unittest.TestCase):
         sentinel = oracle_root / ".candidate-denial-sentinel"
         sentinel.write_text("oracle bytes", encoding="utf-8")
         sandbox = evidence / "sandbox-exec"
-        denied = "set()" if passthrough else "{'network', 'oracle'}"
+        denied = (
+            "set()" if passthrough else "{'network', 'oracle', 'unix-socket'}"
+        )
         sandbox.write_text(
             "#!"
             + sys.executable

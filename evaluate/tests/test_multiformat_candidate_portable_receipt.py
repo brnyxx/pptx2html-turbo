@@ -26,12 +26,13 @@ class CandidatePortableReceiptTests(unittest.TestCase):
 
             def execute(_executor: Path, request: Path, receipt: Path) -> None:
                 value = json.loads(request.read_text(encoding="utf-8"))
+                self.assertEqual(value["schema_version"], 2)
                 self.assertEqual(value["scope_sha256"], fixture.trust.scope_sha256)
+                self.assertNotIn("nonce", value)
                 sign_portable_receipt(
                     receipt,
                     PortableReceiptInput(
                         trust=fixture.trust,
-                        nonce=value["nonce"],
                         batch_id=value["batch_id"],
                         artifacts=value["artifacts"],
                     ),
@@ -43,7 +44,6 @@ class CandidatePortableReceiptTests(unittest.TestCase):
                 output,
                 fixture.lock,
                 fixture.root / "locked/executor",
-                nonce="b" * 64,
                 batch_id="candidate-docx",
                 artifacts={fixture.artifact: "candidate-output"},
                 execute=execute,

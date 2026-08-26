@@ -14,11 +14,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptError,
-    PortableReceiptIdentity,
-    PortableReceiptVerification,
     verify_portable_receipt,
 )
-from evaluate.multiformat_portable_receipt_identity import ReceiptIdentitySeal
 from evaluate.multiformat_schema import JsonValue
 from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
 
@@ -36,6 +33,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             digest = hashlib.sha256(payload_bytes).digest()
             signature = bytes.fromhex(_string(receipt, "signature"))
 
+            self.assertEqual(receipt["schema_version"], 2)
             self.assertEqual(identity.payload_sha256, digest.hex())
             self.assertEqual(
                 identity.artifacts[0].inode, fixture.artifact.stat().st_ino
@@ -50,7 +48,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as attacker_dir,
         ):
             trusted = ReceiptFixture(Path(trusted_dir))
-            attacker = ReceiptFixture(Path(attacker_dir), nonce=trusted.nonce)
+            attacker = ReceiptFixture(Path(attacker_dir))
             attacker.sign()
             trusted.receipt.write_bytes(attacker.receipt.read_bytes())
 
@@ -131,21 +129,23 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             ):
                 fixture.verify()
 
-    def test_persistent_replay_claim_allows_same_path_and_rejects_copy(self) -> None:
+    def test_exact_receipt_is_idempotent_and_copy_path_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = ReceiptFixture(Path(temp_dir))
             fixture.sign()
+            receipt_bytes = fixture.receipt.read_bytes()
 
             first = fixture.verify()
             second = fixture.verify()
             copied = fixture.root / "copied-receipt.json"
-            copied.write_bytes(fixture.receipt.read_bytes())
+            copied.write_bytes(receipt_bytes)
 
             self.assertEqual(first, second)
-            with self.assertRaisesRegex(PortableReceiptError, "replayed"):
+            self.assertEqual(fixture.receipt.read_bytes(), receipt_bytes)
+            with self.assertRaisesRegex(PortableReceiptError, "nonce"):
                 verify_portable_receipt(copied, fixture.verification())
 
-    def test_persistent_replay_rejects_same_scope_nonce_variant(self) -> None:
+    def test_batch_and_artifact_variants_derive_distinct_valid_nonces(self) -> None:
         for variant in ("batch", "artifacts"):
             with (
                 self.subTest(variant=variant),
@@ -153,108 +153,21 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             ):
                 fixture = ReceiptFixture(Path(temp_dir))
                 fixture.sign()
-                fixture.verify()
+                first = fixture.verify()
+                batch_id = "portable-batch-1"
                 if variant == "batch":
-                    fixture.sign(batch_id="portable-batch-2")
+                    batch_id = "portable-batch-2"
                 else:
                     artifact = fixture._artifact("outputs/semantic.json", b"{}")
                     fixture.artifacts.append(
                         fixture._artifact_record(path=artifact, role="semantic")
                     )
                     fixture.artifacts.sort(key=lambda item: str(item["path"]))
-                    fixture.sign()
-
-                with self.assertRaisesRegex(PortableReceiptError, "replayed"):
-                    fixture.verify()
-
-    def test_persistent_replay_allows_different_scope_or_nonce(self) -> None:
-        for variant in ("scope", "nonce"):
-            with (
-                self.subTest(variant=variant),
-                tempfile.TemporaryDirectory() as temp_dir,
-            ):
-                root = Path(temp_dir)
-                fixture = ReceiptFixture(root)
-                fixture.sign()
-                first = fixture.verify()
-                if variant == "scope":
-                    fixture = ReceiptFixture(root, nonce=first.nonce)
-                else:
-                    fixture.nonce = "b" * 64
-                fixture.sign()
+                fixture.sign(batch_id=batch_id)
 
                 second = fixture.verify()
 
-                self.assertNotEqual(
-                    (first.scope_sha256, first.nonce),
-                    (second.scope_sha256, second.nonce),
-                )
-                self.assertEqual(
-                    len(list((root / ".portable-receipt-claims").glob("*.json"))),
-                    2,
-                )
-
-    def test_tampered_overpermissive_or_linked_replay_claim_fails_closed(
-        self,
-    ) -> None:
-        for attack in ("tamper", "permissions", "hardlink"):
-            with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp_dir:
-                fixture = ReceiptFixture(Path(temp_dir))
-                fixture.sign()
-                fixture.verify()
-                claim = next((fixture.root / ".portable-receipt-claims").glob("*.json"))
-                if attack == "tamper":
-                    claim.write_bytes(b"{}")
-                elif attack == "permissions":
-                    claim.chmod(0o644)
-                else:
-                    os.link(claim, fixture.root / "claim-alias.json")
-
-                with self.assertRaises(PortableReceiptError):
-                    fixture.verify()
-
-    def test_unsigned_prior_receipt_cannot_influence_replay(self) -> None:
-        """An identity that never passed verification must be refused.
-
-        Only the verifier may seal an identity, so a caller-built replay input
-        cannot launder an unsigned receipt into replay state.
-        """
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fixture = ReceiptFixture(Path(temp_dir))
-            fixture.sign()
-            forged = _unsealed_identity(fixture.nonce, fixture.trust.scope_sha256)
-            self.assertFalse(forged.is_verified())
-            verification = PortableReceiptVerification(
-                trust=fixture.trust,
-                prior_receipts=(forged,),
-            )
-
-            with self.assertRaisesRegex(PortableReceiptError, "identity"):
-                fixture.verify(verification)
-
-    def test_cross_scope_identity_does_not_control_replay(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as first_dir,
-            tempfile.TemporaryDirectory() as second_dir,
-        ):
-            first = ReceiptFixture(Path(first_dir))
-            second = ReceiptFixture(Path(second_dir), nonce=first.nonce)
-            first.sign()
-            second.sign()
-            prior = second.verify()
-
-            identity = first.verify(first.verification((prior,)))
-
-            self.assertEqual(identity.nonce, first.nonce)
-
-    def test_same_scope_verified_nonce_replay_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fixture = ReceiptFixture(Path(temp_dir))
-            fixture.sign()
-            prior = fixture.verify()
-
-            with self.assertRaisesRegex(PortableReceiptError, "nonce"):
-                fixture.verify(fixture.verification((prior,)))
+                self.assertNotEqual(second.nonce, first.nonce)
 
     def test_duplicate_noncanonical_malformed_and_signed_field_tamper_fail(
         self,
@@ -275,6 +188,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                     fixture.verify()
 
         for path, replacement in (
+            ("schema_version", 1),
             ("runtime.nonce", "0" * 64),
             ("runtime.executor_sha256", "0" * 64),
             ("runtime.reference_lock.sha256", "0" * 64),
@@ -316,21 +230,6 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             fixture.receipt.write_bytes(canonicalize(receipt))
             with self.assertRaises(PortableReceiptError):
                 fixture.verify()
-
-
-def _unsealed_identity(nonce: str, scope_sha256: str) -> PortableReceiptIdentity:
-    """Builds a replay identity that the verifier never sealed."""
-    return PortableReceiptIdentity(
-        payload_sha256="0" * 64,
-        public_key_sha256="1" * 64,
-        nonce=nonce,
-        batch_id="portable-batch-1",
-        signer_identity="multiformat-portable-reference-v1",
-        scope_sha256=scope_sha256,
-        artifact_root_sha256="2" * 64,
-        artifacts=(),
-        _seal=ReceiptIdentitySeal(),
-    )
 
 
 def _string(value: dict[str, JsonValue], field: str) -> str:

@@ -33,7 +33,7 @@ from evaluate.multiformat_schema import (
 )
 from evaluate.multiformat_strict_json import parse_strict_object_bytes
 
-VERSION: Final = "multiformat-portable-receipt-executor 1"
+VERSION: Final = "multiformat-portable-receipt-executor 3"
 MAX_REQUEST_BYTES: Final = 1024 * 1024
 MAX_ARTIFACTS: Final = 4096
 MAX_ARTIFACT_BYTES: Final = 2 * 1024 * 1024 * 1024
@@ -61,7 +61,6 @@ def execute_receipt_request(
         scope = sha256_value(request, "scope_sha256")
         if scope != trust.scope_sha256:
             raise PortableReceiptExecutorError("receipt request scope differs")
-        nonce = sha256_value(request, "nonce")
         batch_id = string_value(request, "batch_id")
         if len(batch_id.encode("utf-8")) > 256:
             raise PortableReceiptExecutorError("receipt batch identity is too large")
@@ -70,9 +69,10 @@ def execute_receipt_request(
         private_key = _load_raw_private_key(private_key_path, root)
         if destination.exists():
             verified = verify_portable_receipt(
-                destination, PortableReceiptVerification(trust)
+                destination,
+                PortableReceiptVerification(trust),
             )
-            _require_requested_identity(verified, nonce, batch_id, artifacts)
+            _require_requested_identity(verified, batch_id, artifacts)
             return destination
         descriptor, name = tempfile.mkstemp(
             prefix=f".{destination.name}.", dir=destination.parent
@@ -82,25 +82,22 @@ def execute_receipt_request(
         temporary.unlink()
         sign_portable_receipt(
             temporary,
-            PortableReceiptInput(trust, nonce, batch_id, artifacts),
+            PortableReceiptInput(trust, batch_id, artifacts, destination),
             private_key,
         )
         verified = verify_portable_receipt(
             temporary,
-            PortableReceiptVerification(
-                trust,
-                claim_replay=True,
-                bound_receipt_path=destination,
-            ),
+            PortableReceiptVerification(trust, bound_receipt_path=destination),
         )
-        _require_requested_identity(verified, nonce, batch_id, artifacts)
+        _require_requested_identity(verified, batch_id, artifacts)
         try:
             os.link(temporary, destination)
         except FileExistsError:
             existing = verify_portable_receipt(
-                destination, PortableReceiptVerification(trust)
+                destination,
+                PortableReceiptVerification(trust),
             )
-            _require_requested_identity(existing, nonce, batch_id, artifacts)
+            _require_requested_identity(existing, batch_id, artifacts)
         return destination
     except PortableReceiptExecutorError:
         raise
@@ -121,10 +118,10 @@ def _load_request(path: Path) -> dict[str, JsonValue]:
     request = parse_strict_object_bytes(resolved.read_bytes())
     require_exact_keys(
         request,
-        {"schema_version", "scope_sha256", "nonce", "batch_id", "artifacts"},
+        {"schema_version", "scope_sha256", "batch_id", "artifacts"},
         "request",
     )
-    if integer_value(request, "schema_version") != 1:
+    if integer_value(request, "schema_version") != 2:
         raise PortableReceiptExecutorError("receipt request schema differs")
     return request
 
@@ -179,16 +176,14 @@ def _evidence_path(root: Path, supplied: Path) -> Path:
 
 def _require_requested_identity(
     identity: object,
-    nonce: str,
     batch_id: str,
     artifacts: list[dict[str, JsonValue]],
 ) -> None:
     from evaluate.multiformat_portable_receipt import PortableReceiptIdentity
-    from evaluate.multiformat_portable_receipt_replay import artifact_root_sha256
+    from evaluate.multiformat_portable_receipt_nonce import artifact_root_sha256
 
     if (
         not isinstance(identity, PortableReceiptIdentity)
-        or identity.nonce != nonce
         or identity.batch_id != batch_id
         or identity.artifact_root_sha256 != artifact_root_sha256(artifacts)
     ):
@@ -209,19 +204,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    try:
-        execute_receipt_request(
-            args.request,
-            args.output,
-            args.portable_lock,
-            args.evidence_root,
-            args.private_key,
-        )
-    except (OSError, TypeError, ValueError):
-        sys.stderr.write("portable receipt executor rejected the request\n")
-        return 1
-    return 0
+    _parser().parse_args(argv)
+    sys.stderr.write("portable receipt executor requires a frozen wrapper\n")
+    return 1
 
 
 if __name__ == "__main__":

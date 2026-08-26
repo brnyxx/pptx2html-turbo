@@ -438,8 +438,15 @@ CANDIDATE_PUBLIC="$WAVE/keys/candidate-public.pem"
 
 Materialize each future-lock-bound receipt wrapper, the fields-only browser
 lock, the schema-1 candidate runtime lock, and the final schema-2 outer lock.
-The candidate runtime lock intentionally does not contain the post-lock
-candidate attestation.
+Receipt request schema 2 has no caller nonce. The frozen signer derives the
+receipt-schema-2 nonce from the domain, complete lock scope, batch identity,
+artifact root, and canonical receipt destination. Exact requests are
+byte-identical and idempotent; changing any claim axis changes the nonce. The
+receipt JSON fields are unchanged, but the semantic break is explicit:
+request, lock-declared receipt, and receipt schema versions are all 2, and v1
+inputs are rejected without a compatibility shim. No mutable replay ledger or
+external signer account is required. The candidate
+runtime lock intentionally does not contain the post-lock candidate attestation.
 
 ```bash
 package_soffice="$SOFFICE"
@@ -549,7 +556,6 @@ for format in $FORMATS; do
   bound_openssl="$outer/artifacts/openssl"
   bound_receipt_signer="$outer/artifacts/receipt-signer"
   candidate_nonce="$("$OPENSSL" rand -hex 32)"
-  reference_nonce="$("$OPENSSL" rand -hex 32)"
   attestation="$WAVE/attestations/$format.json"
   oracle_root="$WAVE/reference"
   oracle_sentinel="$oracle_root/.candidate-denial-$format"
@@ -577,8 +583,7 @@ for format in $FORMATS; do
     --portable-lock "$lock" \
     --evidence-root "$EVIDENCE_ROOT" \
     --output-dir "$WAVE/reference/$format" \
-    --private-key "$REFERENCE_PRIVATE" \
-    --run-nonce "$reference_nonce" \
+    --receipt-executor "$bound_receipt_signer" \
     --batch-id "portable-$format-$REVISION"
 
   "$PYTHON" -m evaluate.capture_multiformat_candidates \

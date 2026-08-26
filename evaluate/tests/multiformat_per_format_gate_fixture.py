@@ -114,7 +114,7 @@ class PerFormatGateFixture(MultiFormatGateFixture):
                         "algorithm": "ed25519",
                         "signer_id": "multiformat-portable-reference-v1",
                         "public_key": binding["public-key"],
-                        "receipt_schema_version": 1,
+                        "receipt_schema_version": 2,
                         "executor": binding["executor"],
                     },
                     "scope": {

@@ -115,7 +115,7 @@ def validate_reference_lock(
             raise PortableLockError("portable signer algorithm is unsupported")
         if string_value(signer, "signer_id") != _SIGNER_ID:
             raise PortableLockError("portable signer identity is unsupported")
-        if integer_value(signer, "receipt_schema_version") != 1:
+        if integer_value(signer, "receipt_schema_version") != 2:
             raise PortableLockError("portable receipt schema is unsupported")
         _artifact_path(object_value(signer, "public_key"), evidence_root)
         _artifact_path(object_value(signer, "executor"), evidence_root)
@@ -200,7 +200,7 @@ def portable_lock_template() -> JsonObject:
             "algorithm": "ed25519",
             "signer_id": _SIGNER_ID,
             "public_key": {**binding},
-            "receipt_schema_version": 1,
+            "receipt_schema_version": 2,
             "executor": {**binding},
         },
         "scope": {

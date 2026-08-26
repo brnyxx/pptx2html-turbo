@@ -5,11 +5,11 @@ import platform
 from pathlib import Path
 from typing import cast
 
+from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_metric_types import (
     ConformanceUnitSpec,
     CorpusMetricSpec,
 )
-from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptInput,
     sign_portable_receipt,
@@ -286,7 +286,6 @@ class PortableCaptureFixture:
             path,
             PortableReceiptInput(
                 trust=self.trust,
-                nonce=("a" if self.role == "oracle" else "b") * 64,
                 batch_id=f"{self.role}-batch",
                 artifacts=records,
             ),

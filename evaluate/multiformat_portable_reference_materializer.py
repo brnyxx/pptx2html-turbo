@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate.multiformat_candidate_process import run_bounded_process
 from evaluate.multiformat_portable_receipt_trust import (
     load_portable_receipt_trust,
     verify_trusted_files,
 )
-from evaluate.multiformat_portable_reference_artifacts import load_raw_private_key
 from evaluate.multiformat_portable_reference_manifest import (
     write_portable_reference_manifests,
 )
@@ -26,6 +26,7 @@ from evaluate.multiformat_reference_routing import (
 )
 from evaluate.multiformat_schema import object_value, string_value
 from evaluate.multiformat_strict_json import read_strict_object
+from evaluate.multiformat_subprocess import clean_subprocess_environment
 
 ROUTING = Path(__file__).parent / "multiformat/reference-routing.v1.json"
 
@@ -40,9 +41,8 @@ def materialize_portable_references(
     portable_lock: Path,
     evidence_root: Path,
     output_dir: Path,
-    private_key: Path,
+    receipt_executor: Path,
     *,
-    nonce: str,
     batch_id: str,
 ) -> Path:
     try:
@@ -89,9 +89,9 @@ def materialize_portable_references(
             sources,
             batches,
             trust,
-            load_raw_private_key(private_key),
-            nonce=nonce,
+            receipt_executor,
             batch_id=batch_id,
+            execute=_execute_receipt,
         )
     except PortableReferenceMaterializeError:
         raise
@@ -99,3 +99,25 @@ def materialize_portable_references(
         raise PortableReferenceMaterializeError(
             "portable reference materialization failed"
         ) from error
+
+
+def _execute_receipt(executor: Path, request: Path, output: Path) -> None:
+    exit_code = run_bounded_process(
+        (
+            executor.resolve(strict=True).as_posix(),
+            "--request",
+            request.as_posix(),
+            "--output",
+            output.as_posix(),
+        ),
+        output.parent,
+        clean_subprocess_environment(),
+        output.parent / "receipt-executor.stdout.log",
+        output.parent / "receipt-executor.stderr.log",
+        timeout_seconds=30,
+        max_log_bytes=1024 * 1024,
+    )
+    if exit_code != 0:
+        raise PortableReferenceMaterializeError(
+            "portable receipt executor rejected request"
+        )

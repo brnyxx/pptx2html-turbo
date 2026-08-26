@@ -314,7 +314,7 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                 "algorithm": "ed25519",
                 "signer_id": "multiformat-portable-reference-v1",
                 "public_key": bindings["public-key"],
-                "receipt_schema_version": 1,
+                "receipt_schema_version": 2,
                 "executor": bindings["executor"],
             },
             "scope": {

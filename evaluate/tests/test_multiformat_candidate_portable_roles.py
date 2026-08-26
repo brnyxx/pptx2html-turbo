@@ -41,7 +41,6 @@ class CandidatePortableRoleTests(unittest.TestCase):
                     receipt,
                     PortableReceiptInput(
                         trust=fixture.trust,
-                        nonce=value["nonce"],
                         batch_id=value["batch_id"],
                         artifacts=value["artifacts"],
                     ),

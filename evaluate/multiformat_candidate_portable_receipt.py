@@ -7,8 +7,8 @@ from evaluate.multiformat_candidate_artifacts import write_canonical_json
 from evaluate.multiformat_candidate_process import run_bounded_process
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_portable_receipt import (
-    PortableReceiptVerification,
     PortableReceiptIdentity,
+    PortableReceiptVerification,
     verify_portable_receipt,
 )
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
@@ -45,7 +45,6 @@ def write_portable_candidate_receipt(
     lock_path: Path,
     executor: Path,
     *,
-    nonce: str,
     batch_id: str,
     artifacts: dict[Path, str],
     execute: ReceiptExecutor | None = None,
@@ -61,9 +60,8 @@ def write_portable_candidate_receipt(
         request = output_dir / "portable-receipt-request.json"
         receipt = output_dir / "portable-execution-receipt.json"
         request_value: dict[str, JsonValue] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "scope_sha256": trust.scope_sha256,
-            "nonce": nonce,
             "batch_id": batch_id,
             "artifacts": list(records),
         }
@@ -73,7 +71,7 @@ def write_portable_candidate_receipt(
             receipt,
             PortableReceiptVerification(trust=trust),
         )
-        if verified.nonce != nonce or verified.scope_sha256 != trust.scope_sha256:
+        if verified.scope_sha256 != trust.scope_sha256:
             raise CandidatePortableReceiptError("portable receipt identity differs")
         if require_capture_roles:
             validate_candidate_capture_roles(verified)
@@ -101,13 +99,13 @@ def validate_candidate_capture_roles(identity: PortableReceiptIdentity) -> None:
     missing = _REQUIRED_CAPTURE_ROLES - roles
     if missing:
         raise CandidatePortableReceiptError(
-            f"portable candidate capture roles differ: {sorted(missing)[0]}"
+            f"portable candidate capture roles differ: {min(missing)}"
         )
 
     unexpected = roles - _REQUIRED_CAPTURE_ROLES - _OPTIONAL_CAPTURE_ROLES
     if unexpected:
         raise CandidatePortableReceiptError(
-            f"portable candidate capture role is unsupported: {sorted(unexpected)[0]}"
+            f"portable candidate capture role is unsupported: {min(unexpected)}"
         )
 
 

@@ -9,11 +9,16 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_portable_receipt import (
-    PortableReceiptIdentity,
     PortableReceiptInput,
     PortableReceiptVerification,
     sign_portable_receipt,
     verify_portable_receipt,
+)
+from evaluate.multiformat_portable_receipt_nonce import (
+    PortableReceiptClaim,
+    artifact_root_sha256,
+    canonical_receipt_path,
+    portable_receipt_nonce,
 )
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
 from evaluate.multiformat_reference_routing import load_reference_routing
@@ -34,24 +39,27 @@ class ReceiptFixture:
         self,
         root: Path,
         *,
-        nonce: str = "a" * 64,
         candidate_runtime_lock: Path | None = None,
     ) -> None:
         self.root = root
         self.private_key = Ed25519PrivateKey.generate()
-        self.nonce = nonce
         self.candidate_runtime_lock = candidate_runtime_lock
         self.receipt = root / "receipt.json"
         self.artifact = self._artifact("outputs/reference.pdf", b"portable reference")
         self.artifacts: list[dict[str, JsonValue]] = [self._artifact_record()]
         self.lock = self._write_lock()
         self.trust = load_portable_receipt_trust(self.lock, root)
+        self.nonce = self.expected_nonce()
 
     def verification(
         self,
-        prior: tuple[PortableReceiptIdentity, ...] = (),
+        *,
+        bound_receipt_path: Path | None = None,
     ) -> PortableReceiptVerification:
-        return PortableReceiptVerification(trust=self.trust, prior_receipts=prior)
+        return PortableReceiptVerification(
+            trust=self.trust,
+            bound_receipt_path=bound_receipt_path,
+        )
 
     def sign(
         self,
@@ -59,11 +67,12 @@ class ReceiptFixture:
         *,
         batch_id: str = "portable-batch-1",
     ) -> Path:
+        destination = output or self.receipt
+        self.nonce = self.expected_nonce(batch_id=batch_id, output=destination)
         return sign_portable_receipt(
-            output or self.receipt,
+            destination,
             PortableReceiptInput(
                 trust=self.trust,
-                nonce=self.nonce,
                 batch_id=batch_id,
                 artifacts=self.artifacts,
             ),
@@ -76,6 +85,24 @@ class ReceiptFixture:
             verification or self.verification(),
         )
 
+    def expected_nonce(
+        self,
+        *,
+        batch_id: str = "portable-batch-1",
+        output: Path | None = None,
+    ) -> str:
+        return portable_receipt_nonce(
+            PortableReceiptClaim(
+                scope_sha256=self.trust.scope_sha256,
+                batch_id=batch_id,
+                artifact_root_sha256=artifact_root_sha256(self.artifacts),
+                receipt_path=canonical_receipt_path(
+                    self.root,
+                    output or self.receipt,
+                ),
+            )
+        )
+
     def read_receipt(self) -> dict[str, JsonValue]:
         value = json.loads(self.receipt.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
@@ -85,6 +112,17 @@ class ReceiptFixture:
     def resign(self, value: dict[str, JsonValue]) -> None:
         runtime = _mapping(value, "runtime")
         artifacts = _objects(value, "artifacts")
+        batch_id = runtime.get("batch_id")
+        if not isinstance(batch_id, str):
+            raise ReceiptFixtureError("runtime.batch_id")
+        runtime["nonce"] = portable_receipt_nonce(
+            PortableReceiptClaim(
+                scope_sha256=self.trust.scope_sha256,
+                batch_id=batch_id,
+                artifact_root_sha256=artifact_root_sha256(artifacts),
+                receipt_path=canonical_receipt_path(self.root, self.receipt),
+            )
+        )
         payload: JsonValue = {
             "runtime": runtime,
             "artifacts": cast(JsonValue, artifacts),
@@ -194,7 +232,7 @@ class ReceiptFixture:
                 "algorithm": "ed25519",
                 "signer_id": "multiformat-portable-reference-v1",
                 "public_key": binding["public-key"],
-                "receipt_schema_version": 1,
+                "receipt_schema_version": 2,
                 "executor": binding["executor"],
             },
             "scope": {

@@ -24,6 +24,7 @@ from evaluate.multiformat_portable_receipt import (
     PortableReceiptVerification,
     verify_portable_receipt,
 )
+from evaluate.multiformat_portable_receipt_executor import execute_receipt_request
 from evaluate.multiformat_portable_reference_manifest import (
     write_portable_reference_manifests,
 )
@@ -98,7 +99,10 @@ class SandboxReceiptFixture(ReceiptFixture):
 class PortableReferenceManifestTests(unittest.TestCase):
     def test_signs_verifies_and_rejects_wrong_private_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            fixture = SandboxReceiptFixture(Path(temp_dir))
+            base = Path(temp_dir)
+            evidence = base / "evidence"
+            evidence.mkdir()
+            fixture = SandboxReceiptFixture(evidence)
             source_path = fixture.root / "corpus/source.docx"
             source = CandidateSource(
                 "conformance",
@@ -133,14 +137,27 @@ class PortableReferenceManifestTests(unittest.TestCase):
             )
             published = fixture.root / "published"
             published.mkdir()
+            private_key = base / "private.raw"
+            private_key.write_bytes(fixture.private_key.private_bytes_raw())
+            private_key.chmod(0o600)
+
+            def execute(_executor: Path, request: Path, output: Path) -> None:
+                execute_receipt_request(
+                    request,
+                    output,
+                    fixture.lock,
+                    fixture.root,
+                    private_key,
+                )
+
             capture = write_portable_reference_manifests(
                 published,
                 sources,
                 [batch],
                 fixture.trust,
-                fixture.private_key,
-                nonce="b" * 64,
+                Path("unused-injected-executor"),
                 batch_id="batch-1",
+                execute=execute,
             )
             identity = verify_portable_receipt(
                 published / "portable-receipt.json",
@@ -171,15 +188,29 @@ class PortableReferenceManifestTests(unittest.TestCase):
 
             other = fixture.root / "other"
             other.mkdir()
+
+            wrong_key = base / "wrong-private.raw"
+            wrong_key.write_bytes(Ed25519PrivateKey.generate().private_bytes_raw())
+            wrong_key.chmod(0o600)
+
+            def reject(_executor: Path, request: Path, output: Path) -> None:
+                execute_receipt_request(
+                    request,
+                    output,
+                    fixture.lock,
+                    fixture.root,
+                    wrong_key,
+                )
+
             with self.assertRaises(ValueError):
                 write_portable_reference_manifests(
                     other,
                     sources,
                     [batch],
                     fixture.trust,
-                    Ed25519PrivateKey.generate(),
-                    nonce="c" * 64,
+                    Path("/missing-receipt-executor"),
                     batch_id="batch-2",
+                    execute=reject,
                 )
 
 

@@ -224,7 +224,7 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
                 "algorithm": "ed25519",
                 "signer_id": "multiformat-portable-reference-v1",
                 "public_key": lock_io.binding(root, public_key),
-                "receipt_schema_version": 1,
+                "receipt_schema_version": 2,
                 "executor": lock_io.binding(root, paths["executor"]),
             },
             "scope": {

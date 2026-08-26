@@ -14,8 +14,8 @@ from evaluate.multiformat_candidate_attestation import (
     verify_signed_payload,
 )
 from evaluate.multiformat_candidate_portable_receipt import (
-    write_portable_candidate_receipt,
     ReceiptExecutor,
+    write_portable_candidate_receipt,
 )
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_types import (
@@ -85,7 +85,6 @@ def write_execution_receipt(
             output_dir,
             oracle_lock,
             receipt_signer,
-            nonce=run_nonce,
             execute=portable_execute,
             require_capture_roles=True,
             batch_id=f"candidate-{corpus_sha256[:16]}",
