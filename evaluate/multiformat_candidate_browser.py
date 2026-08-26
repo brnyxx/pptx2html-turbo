@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import cast
 
@@ -54,9 +56,11 @@ def capture_html_units(
     browser_failures: list[str] = []
     captured: list[CapturedUnit] = []
     browser_home = output_dir / ".browser-home"
-    browser_temp = output_dir / ".browser-tmp"
     browser_home.mkdir(exist_ok=True)
-    browser_temp.mkdir(exist_ok=True)
+    # Chromium binds its singleton socket under TMPDIR and AF_UNIX socket
+    # paths are limited to roughly 100 bytes, so the browser temp directory
+    # must stay short even when output_dir is deeply nested.
+    browser_temp = Path(tempfile.mkdtemp(prefix=".browser-tmp-"))
     browser_environment = {
         "HOME": browser_home.as_posix(),
         "TMPDIR": browser_temp.as_posix(),
@@ -213,6 +217,8 @@ def capture_html_units(
         raise
     except (OSError, PlaywrightError, TypeError, ValueError) as error:
         raise CandidateCaptureError(str(error)) from error
+    finally:
+        shutil.rmtree(browser_temp, ignore_errors=True)
 
 
 def _write_json(path: Path, value: JsonValue) -> None:
