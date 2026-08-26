@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import importlib.metadata
-from dataclasses import dataclass
 from pathlib import Path
 
 from evaluate.multiformat_candidate_attestation import (
     attestation_scope_sha256,
     verify_candidate_attestation,
 )
+from evaluate.multiformat_candidate_preflight_runtime import (
+    resolve_candidate_input_paths,
+)
+from evaluate.multiformat_candidate_preflight_types import CandidatePreflight
 from evaluate.multiformat_candidate_runtime_profile import (
-    CandidateRuntimeProfile,
-    require_profile_path,
     resolve_candidate_runtime_profile,
 )
 from evaluate.multiformat_candidate_sources import (
-    CandidateSourceSet,
     load_candidate_sources,
 )
 from evaluate.multiformat_candidate_types import (
@@ -42,17 +42,6 @@ from evaluate.multiformat_strict_json import read_strict_object
 
 class CandidatePreflightError(CandidateCaptureError):
     pass
-
-
-@dataclass(frozen=True, slots=True)
-class CandidatePreflight:
-    source_set: CandidateSourceSet
-    runtime: CandidateRuntimePaths
-    project_revision: str
-    runtime_tools: dict[str, str]
-    runtime_artifacts: dict[str, Path]
-    font_bundle_sha256: str
-    runtime_profile: CandidateRuntimeProfile
 
 
 def preflight_candidate_capture(
@@ -119,19 +108,21 @@ def preflight_candidate_capture(
         lock = read_strict_object(oracle_lock_path)
         browser = profile.browser_lock
         browser_version = profile.browser_version
-        executable = require_profile_path(chromium, profile.chromium, "Chromium")
-        font_bundle = require_profile_path(
-            font_bundle, profile.font_bundle, "font bundle"
+        inputs = resolve_candidate_input_paths(
+            profile,
+            chromium=chromium,
+            font_bundle=font_bundle,
+            receipt_executor=receipt_signer,
+            sandbox_attestation=sandbox_attestation,
+            sandbox_public_key=sandbox_public_key,
+            openssl=openssl,
         )
-        receipt_signer = require_profile_path(
-            receipt_signer, profile.receipt_executor, "receipt executor"
-        )
-        sandbox_public_key = require_profile_path(
-            sandbox_public_key, profile.public_key, "public key"
-        )
-        sandbox_attestation = require_profile_path(
-            sandbox_attestation, profile.attestation, "attestation"
-        )
+        executable = inputs.chromium
+        font_bundle = inputs.font_bundle
+        receipt_signer = inputs.receipt_executor
+        sandbox_public_key = inputs.sandbox_public_key
+        sandbox_attestation = inputs.sandbox_attestation
+        openssl = inputs.openssl
         if sha256_file(executable) != sha256_value(browser, "executable_sha256"):
             raise CandidatePreflightError("Chromium executable hash mismatch")
         playwright_version = importlib.metadata.version("playwright")

@@ -48,7 +48,8 @@ class CandidateRuntimeProfileTests(unittest.TestCase):
                 profile.receipt_executor, (fixture.root / "locked/executor").resolve()
             )
             self.assertEqual(
-                profile.public_key, (fixture.root / "locked/public-key").resolve()
+                profile.receipt_public_key,
+                (fixture.root / "locked/public-key").resolve(),
             )
             self.assertEqual(
                 profile.attestation,
@@ -174,7 +175,20 @@ class CandidateRuntimeProfileTests(unittest.TestCase):
         )
         runtime_path = fixture.root / lock["candidate_runtime_lock"]["path"]
         runtime_path.write_text(
-            json.dumps({"schema_version": 1, "build_revision": "6" * 40}),
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "build_revision": "6" * 40,
+                    "sandbox_verifier": {
+                        "algorithm": "ed25519",
+                        "verifier_id": "candidate-sandbox",
+                        "public_key_sha256": sha256_file(
+                            fixture.root / "locked/public-key"
+                        ),
+                        "openssl_sha256": sha256_file(fixture.root / "locked/soffice"),
+                    },
+                }
+            ),
             encoding="utf-8",
         )
         font_path = fixture.root / lock["font_bundle"]["path"]

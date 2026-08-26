@@ -4,8 +4,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from evaluate.multiformat_candidate_portable_receipt import (
+    _execute,
     write_portable_candidate_receipt,
 )
 from evaluate.multiformat_portable_receipt import (
@@ -48,6 +50,21 @@ class CandidatePortableReceiptTests(unittest.TestCase):
             )
 
             self.assertTrue(receipt.is_file())
+
+    def test_executor_uses_bounded_process_group_logs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            executor = root / "executor"
+            executor.write_text("#!/bin/sh\n", encoding="utf-8")
+            executor.chmod(0o700)
+            request = root / "request.json"
+            request.write_text("{}", encoding="utf-8")
+            with mock.patch(
+                "evaluate.multiformat_candidate_portable_receipt.run_bounded_process",
+                return_value=0,
+            ) as bounded:
+                _execute(executor, request, root / "receipt.json")
+            self.assertEqual(bounded.call_args.kwargs["max_log_bytes"], 1024 * 1024)
 
 
 if __name__ == "__main__":

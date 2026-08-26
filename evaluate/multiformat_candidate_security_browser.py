@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Request, Route, sync_playwright
 
 from evaluate.multiformat_candidate_browser_network import route_request
 from evaluate.multiformat_candidate_types import CandidateCaptureError
@@ -61,7 +61,7 @@ def inspect_security_html(
             )
             context.route(
                 "**/*",
-                lambda route, request: route_request(
+                lambda route, request: _route_security(
                     route, request, url, html, external
                 ),
             )
@@ -75,7 +75,7 @@ def inspect_security_html(
                     bool,
                     page.evaluate(
                         """() => Boolean(document.querySelector(
-                        'object,embed,iframe,applet,script[src]'))"""
+                        'object,embed,iframe,applet,script'))"""
                     ),
                 )
                 or signals
@@ -87,6 +87,19 @@ def inspect_security_html(
     except (OSError, PlaywrightError, TypeError, ValueError) as error:
         raise CandidateCaptureError("security browser inspection failed") from error
     return SecurityBrowserFacts(tuple(external), active)
+
+
+def _route_security(
+    route: Route,
+    request: Request,
+    document_url: str,
+    html: str,
+    external: list[str],
+) -> None:
+    if request.url == document_url and request.resource_type == "document":
+        route.fulfill(status=200, content_type="text/html; charset=utf-8", body=html)
+        return
+    route_request(route, request, document_url, html, external)
 
 
 __all__ = ["SecurityBrowserFacts", "inspect_security_html"]

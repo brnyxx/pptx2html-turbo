@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
+from evaluate.multiformat_candidate_process import run_bounded_process
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptVerification,
@@ -77,24 +77,23 @@ def _record(root: Path, path: Path, role: str) -> dict[str, JsonValue]:
 
 
 def _execute(executor: Path, request: Path, output: Path) -> None:
-    result = subprocess.run(
-        [
-            executor.resolve(strict=True).as_posix(),
-            "--request",
-            request.as_posix(),
-            "--output",
-            output.as_posix(),
-        ],
-        check=False,
-        capture_output=True,
-        env=clean_subprocess_environment(),
-        timeout=30,
+    command = (
+        executor.resolve(strict=True).as_posix(),
+        "--request",
+        request.as_posix(),
+        "--output",
+        output.as_posix(),
     )
-    if (
-        result.returncode != 0
-        or len(result.stdout) > 1024 * 1024
-        or len(result.stderr) > 1024 * 1024
-    ):
+    exit_code = run_bounded_process(
+        command,
+        output.parent,
+        clean_subprocess_environment(),
+        output.parent / "receipt-executor.stdout.log",
+        output.parent / "receipt-executor.stderr.log",
+        timeout_seconds=30,
+        max_log_bytes=1024 * 1024,
+    )
+    if exit_code != 0:
         raise CandidatePortableReceiptError(
             "portable receipt executor rejected request"
         )

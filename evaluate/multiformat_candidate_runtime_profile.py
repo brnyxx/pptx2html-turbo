@@ -27,10 +27,11 @@ class CandidateRuntimeProfile:
     profile: ReferenceProfile
     browser_lock: dict[str, JsonValue]
     candidate_runtime_lock: dict[str, JsonValue]
+    sandbox_verifier: dict[str, JsonValue]
     font_bundle: Path | None
     chromium: Path | None
     receipt_executor: Path | None
-    public_key: Path | None
+    receipt_public_key: Path | None
     attestation: Path | None
     browser_version: str
     routing_sha256: str | None
@@ -63,6 +64,7 @@ def resolve_candidate_runtime_profile(
                 ReferenceProfile.MICROSOFT_OFFICE,
                 browser,
                 runtime,
+                object_value(lock, "sandbox_verifier"),
                 None,
                 None,
                 None,
@@ -106,6 +108,7 @@ def resolve_candidate_runtime_profile(
             raise CandidateRuntimeProfileError("candidate browser lock schema differs")
         if integer_value(runtime_lock, "schema_version") != 1:
             raise CandidateRuntimeProfileError("candidate runtime lock schema differs")
+        sandbox_verifier = object_value(runtime_lock, "sandbox_verifier")
         chromium_binding = object_value(browser, "chromium")
         browser_version = string_value(chromium_binding, "version")
         if string_value(browser_lock, "chromium") != browser_version:
@@ -116,6 +119,7 @@ def resolve_candidate_runtime_profile(
             identity.profile,
             browser_lock,
             runtime_lock,
+            sandbox_verifier,
             _bound_path(object_value(lock, "font_bundle"), evidence_root),
             _bound_path(chromium_binding, evidence_root),
             _bound_path(object_value(signer, "executor"), evidence_root),
@@ -146,6 +150,7 @@ def legacy_candidate_runtime_profile(lock_path: Path) -> CandidateRuntimeProfile
         1,
         ReferenceProfile.MICROSOFT_OFFICE,
         browser,
+        object_value(lock, "sandbox_verifier"),
         runtime,
         None,
         None,

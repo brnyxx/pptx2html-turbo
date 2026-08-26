@@ -144,6 +144,10 @@ def _execute_case(
             browser_version=runtime.browser_version,
             font_config=runtime.font_config,
         )
+    if sha256_file(source.path) != source.sha256:
+        raise CandidateSecurityError(
+            f"security source changed during execution: {source.source_id}"
+        )
     passed = (
         observed is source.expected_outcome
         and not facts.external_requests

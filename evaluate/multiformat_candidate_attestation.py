@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
-import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluate.multiformat_candidate_signature import verify_ed25519_json
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_schema import (
@@ -20,7 +18,6 @@ from evaluate.multiformat_schema import (
     string_value,
 )
 from evaluate.multiformat_strict_json import read_strict_object
-from evaluate.multiformat_subprocess import clean_subprocess_environment
 
 
 class CandidateAttestationError(CandidateCaptureError):
@@ -117,12 +114,15 @@ def verify_candidate_attestation(
             scope_sha256=scope_sha256,
         )
     values = read_strict_object(attestation_path.resolve(strict=True))
+    signature = values.pop("signature", None)
+    if not isinstance(signature, str) or not signature:
+        raise CandidateAttestationError("portable sandbox signature is missing")
     expected_strings: dict[str, str] = {
         "status": "PASS",
         "golden_access": "denied",
         "project_revision": project_revision,
         "font_isolation": "locked-bundle-only",
-        "signer_id": profile.signer_id,
+        "verifier_id": string_value(profile.sandbox_verifier, "verifier_id"),
     }
     if integer_value(values, "schema_version") != 1 or any(
         string_value(values, field) != expected
@@ -137,7 +137,17 @@ def verify_candidate_attestation(
         profile.browser_lock, "font_environment_sha256"
     ):
         raise CandidateAttestationError("portable sandbox font environment differs")
-    return VerifiedAttestation(profile.signer_id, font_environment, nonce)
+    verify_ed25519_json(
+        canonical_payload(values),
+        signature,
+        public_key_path,
+        openssl_path,
+        profile.sandbox_verifier,
+        "candidate sandbox verifier",
+    )
+    return VerifiedAttestation(
+        string_value(profile.sandbox_verifier, "verifier_id"), font_environment, nonce
+    )
 
 
 def verify_signed_attestation(
@@ -202,42 +212,11 @@ def _verify_signature(
 ) -> None:
     lock = read_strict_object(oracle_lock_path)
     verifier = object_value(lock, verifier_field)
-    public_key = public_key_path.resolve(strict=True)
-    openssl = openssl_path.resolve(strict=True)
-    if (
-        string_value(verifier, "algorithm") != "ed25519"
-        or sha256_file(public_key) != sha256_value(verifier, "public_key_sha256")
-        or sha256_file(openssl) != sha256_value(verifier, "openssl_sha256")
-    ):
-        raise CandidateAttestationError(f"{verifier_field} lock mismatch")
-    try:
-        signature = base64.b64decode(signature_value, validate=True)
-    except ValueError as error:
-        raise CandidateAttestationError("sandbox signature is invalid") from error
-    with tempfile.TemporaryDirectory(prefix="candidate-attestation-") as temp_dir:
-        root = Path(temp_dir)
-        payload_path = root / "payload.json"
-        signature_path = root / "signature.bin"
-        payload_path.write_bytes(canonical_payload(values))
-        signature_path.write_bytes(signature)
-        result = subprocess.run(
-            [
-                openssl.as_posix(),
-                "pkeyutl",
-                "-verify",
-                "-pubin",
-                "-inkey",
-                public_key.as_posix(),
-                "-rawin",
-                "-in",
-                payload_path.as_posix(),
-                "-sigfile",
-                signature_path.as_posix(),
-            ],
-            check=False,
-            capture_output=True,
-            env=clean_subprocess_environment(),
-            timeout=15,
-        )
-    if result.returncode != 0:
-        raise CandidateAttestationError("sandbox signature verification failed")
+    verify_ed25519_json(
+        canonical_payload(values),
+        signature_value,
+        public_key_path,
+        openssl_path,
+        verifier,
+        verifier_field,
+    )
