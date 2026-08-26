@@ -155,13 +155,17 @@ def load_review_decision(
         },
         "review.decision",
     )
+    reviewer_id = canonical_identity(string_value(values, "reviewer_id"), "reviewer_id")
+    reviewer_role = canonical_identity(
+        string_value(values, "reviewer_role"), "reviewer_role"
+    )
     try:
         if (
             integer_value(values, "schema_version") != 2
             or string_value(values, "checklist_version") != "multiformat-review-v2"
             or sha256_value(values, "packet_sha256") != packet_sha256
-            or string_value(values, "reviewer_id") != trust.reviewer_id
-            or string_value(values, "reviewer_role") != trust.reviewer_role
+            or reviewer_id != trust.reviewer_id
+            or reviewer_role != trust.reviewer_role
             or sha256_value(values, "public_key_sha256") != trust.public_key_sha256
         ):
             raise ReviewMaterializeError("signed reviewer identity or packet differs")
@@ -209,7 +213,9 @@ def materialize_review_attestations(
     paths: set[Path] = set()
     for path in decision_paths:
         raw = read_strict_object(path)
-        reviewer_id = string_value(raw, "reviewer_id")
+        reviewer_id = canonical_identity(
+            string_value(raw, "reviewer_id"), "reviewer_id"
+        )
         trust = trusts.get(reviewer_id)
         if trust is None or path.resolve(strict=True) in paths:
             raise ReviewMaterializeError(

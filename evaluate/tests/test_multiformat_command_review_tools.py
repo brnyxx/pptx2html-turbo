@@ -283,6 +283,25 @@ class ReviewAuthenticationTests(unittest.TestCase):
             self.assertEqual(summary["reviewer_role"], "visual")
             self.assertEqual(summary["pair_count"], 1)
 
+    def test_validate_cli_canonicalizes_signed_reviewer_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packet, templates, keys, _trusts, _hash = self._packet(root)
+            value = read_object(templates[0])
+            value["reviewer_id"] = "Alice"
+            value["reviewer_role"] = "Visual"
+            _objects(value, "pairs")[0].update(
+                {"decision": "PASS", "critical_defect": False}
+            )
+            templates[0].write_text(json.dumps(value), encoding="utf-8")
+            signed = root / "canonicalized.json"
+            sign_review_decision(templates[0], keys[0], signed)
+
+            summary = validate_completed_review(packet, signed)
+
+            self.assertEqual(summary["reviewer_id"], "alice")
+            self.assertEqual(summary["reviewer_role"], "visual")
+
     def test_validate_cli_rejects_foreign_key_and_unbound_signer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
