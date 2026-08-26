@@ -15,7 +15,10 @@ from evaluate.materialize_multiformat_candidate_runtime_locks import (
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Write exact schema-2 candidate browser and runtime locks."
+        description=(
+            "Write candidate browser and schema-1 runtime locks "
+            "for schema-2 outer locks."
+        )
     )
     for name in (
         "project-root",
