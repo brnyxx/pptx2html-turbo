@@ -3,11 +3,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
@@ -82,6 +85,139 @@ class PortableReceiptExecutorTests(unittest.TestCase):
             )
             self.assertEqual(identity.nonce, fixture.nonce)
             self.assertNotIn(private.as_posix(), result.stdout + result.stderr)
+            self.assertEqual(stat.S_IMODE(wrapper.stat().st_mode), 0o700)
+            frozen = wrapper.read_bytes()
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                materialize_portable_receipt_wrapper(
+                    wrapper,
+                    fixture.lock,
+                    evidence,
+                    private,
+                    Path(sys.executable),
+                    Path(__file__).resolve().parents[2],
+                    "evaluate.multiformat_portable_receipt_executor",
+                )
+            self.assertEqual(wrapper.read_bytes(), frozen)
+
+    def test_frozen_executor_ignores_later_project_source_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            evidence = base / "evidence"
+            project = base / "project"
+            evidence.mkdir()
+            shutil.copytree(
+                Path(__file__).resolve().parents[1],
+                project / "evaluate",
+                ignore=shutil.ignore_patterns("tests", "__pycache__"),
+            )
+            fixture = ReceiptFixture(evidence)
+            private = base / "private.raw"
+            private.write_bytes(fixture.private_key.private_bytes_raw())
+            private.chmod(0o600)
+            request = evidence / "request.json"
+            request.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "scope_sha256": fixture.trust.scope_sha256,
+                        "nonce": fixture.nonce,
+                        "batch_id": "frozen",
+                        "artifacts": fixture.artifacts,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            wrapper = base / "bin/executor"
+            materialize_portable_receipt_wrapper(
+                wrapper,
+                fixture.lock,
+                evidence,
+                private,
+                Path(sys.executable),
+                project,
+                "evaluate.multiformat_portable_receipt_executor",
+            )
+            (project / "evaluate/multiformat_portable_receipt_executor.py").write_text(
+                "raise RuntimeError('mutated live source')\n", encoding="utf-8"
+            )
+
+            result = subprocess.run(
+                [wrapper, "--request", request, "--output", evidence / "receipt.json"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_private_key_must_remain_outside_project_and_evidence(self) -> None:
+        for location in ("project", "evidence"):
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as temp:
+                base = Path(temp)
+                project = base / "project"
+                evidence = base / "evidence"
+                project.mkdir()
+                evidence.mkdir()
+                shutil.copytree(
+                    Path(__file__).resolve().parents[1],
+                    project / "evaluate",
+                    ignore=shutil.ignore_patterns("tests", "__pycache__"),
+                )
+                private = (project if location == "project" else evidence) / "key.raw"
+                private.write_bytes(b"x" * 32)
+                private.chmod(0o600)
+
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    materialize_portable_receipt_wrapper(
+                        base / "executor",
+                        evidence / "future-lock.json",
+                        evidence,
+                        private,
+                        Path(sys.executable),
+                        project,
+                        "evaluate.multiformat_portable_receipt_executor",
+                    )
+
+    def test_concurrent_cross_path_replay_publishes_exactly_one_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            evidence = base / "evidence"
+            evidence.mkdir()
+            fixture = ReceiptFixture(evidence)
+            private = base / "private.raw"
+            private.write_bytes(fixture.private_key.private_bytes_raw())
+            private.chmod(0o600)
+            request = evidence / "request.json"
+            request.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "scope_sha256": fixture.trust.scope_sha256,
+                        "nonce": fixture.nonce,
+                        "batch_id": "concurrent",
+                        "artifacts": fixture.artifacts,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            outputs = (evidence / "first.json", evidence / "second.json")
+            barrier = threading.Barrier(2)
+
+            def execute(output: Path) -> bool:
+                barrier.wait(timeout=5)
+                try:
+                    execute_receipt_request(
+                        request, output, fixture.lock, evidence, private
+                    )
+                except ValueError:
+                    return False
+                return True
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(execute, outputs))
+
+            self.assertEqual(results.count(True), 1)
+            self.assertEqual(sum(path.exists() for path in outputs), 1)
 
     def test_wrong_key_tamper_extra_key_escape_overwrite_and_permissions_fail(
         self,

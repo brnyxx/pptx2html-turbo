@@ -30,6 +30,33 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, EVALUATOR_FILES)
 
+    def test_manifest_binds_exact_portable_receipt_boundary(self) -> None:
+        expected = {
+            "evaluate/multiformat_portable_receipt.py",
+            "evaluate/multiformat_portable_receipt_identity.py",
+            "evaluate/multiformat_portable_receipt_replay.py",
+            "evaluate/multiformat_portable_receipt_context.py",
+            "evaluate/multiformat_portable_receipt_trust.py",
+            "evaluate/multiformat_portable_receipt_validation.py",
+            "evaluate/multiformat_portable_receipt_sources.py",
+            "evaluate/multiformat_candidate_portable_receipt.py",
+            "evaluate/materialize_multiformat_portable_receipt_wrapper.py",
+            "evaluate/multiformat_portable_receipt_executor.py",
+            "evaluate/tests/multiformat_portable_receipt_fixture.py",
+            "evaluate/tests/test_multiformat_candidate_portable_receipt.py",
+            "evaluate/tests/test_multiformat_portable_wave_signers.py",
+            "evaluate/tests/test_multiformat_portable_receipt.py",
+            "evaluate/tests/test_multiformat_portable_receipt_trust_flow.py",
+        }
+        actual = {
+            path
+            for path in EVALUATOR_FILES
+            if "portable_receipt" in path
+            or path.endswith("test_multiformat_portable_wave_signers.py")
+        }
+
+        self.assertEqual(actual, expected)
+
     def test_manifest_boundary_includes_portable_lock_validation(self) -> None:
         self.assertIn("evaluate/multiformat_reference_profile.py", EVALUATOR_FILES)
         self.assertIn("evaluate/multiformat_portable_lock.py", EVALUATOR_FILES)
@@ -91,6 +118,8 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "evaluate/multiformat_capture_upstream.py",
             "evaluate/multiformat_portable_capture.py",
             "evaluate/multiformat_portable_receipt.py",
+            "evaluate/multiformat_portable_receipt_identity.py",
+            "evaluate/multiformat_portable_receipt_replay.py",
             "evaluate/multiformat_portable_receipt_context.py",
             "evaluate/multiformat_portable_receipt_trust.py",
             "evaluate/multiformat_portable_receipt_validation.py",

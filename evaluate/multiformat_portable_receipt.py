@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, TypeAlias
+from typing import Final, TypeAlias, cast
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -15,6 +15,14 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 
 from evaluate.jcs import JcsError, canonicalize
 from evaluate.multiformat_evidence import EvidencePathError
+from evaluate.multiformat_portable_receipt_identity import (
+    PortableReceiptIdentity,
+    PortableReceiptIdentityError,
+    PortableReceiptVerification,
+    finalize_receipt_identity,
+    reject_prior_replay,
+)
+from evaluate.multiformat_portable_receipt_replay import PortableReceiptReplayError
 from evaluate.multiformat_portable_receipt_trust import (
     PortableReceiptTrustContext,
     PortableReceiptTrustError,
@@ -23,7 +31,6 @@ from evaluate.multiformat_portable_receipt_trust import (
 )
 from evaluate.multiformat_portable_receipt_validation import (
     ReceiptValidationError,
-    StableFileIdentity,
     hex_bytes,
     object_array,
     reject_identity_aliases,
@@ -46,11 +53,7 @@ _ALGORITHM_VERSION: Final = 1
 _SCHEMA_VERSION: Final = 1
 
 
-class _ReceiptIdentitySeal:
-    __slots__ = ()
-
-
-_IDENTITY_SEAL: Final = _ReceiptIdentitySeal()
+VerifiedPortableReceipt = PortableReceiptIdentity
 
 
 class PortableReceiptError(ValueError):
@@ -69,29 +72,6 @@ class PortableReceiptInput:
     nonce: str
     batch_id: str
     artifacts: list[JsonObject]
-
-
-@dataclass(frozen=True, slots=True)
-class PortableReceiptVerification:
-    trust: PortableReceiptTrustContext
-    prior_receipts: tuple[PortableReceiptIdentity, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class PortableReceiptIdentity:
-    payload_sha256: str
-    public_key_sha256: str
-    nonce: str
-    signer_identity: str
-    scope_sha256: str
-    artifacts: tuple[StableFileIdentity, ...]
-    _seal: _ReceiptIdentitySeal
-
-    def is_verified(self) -> bool:
-        return self._seal is _IDENTITY_SEAL
-
-
-VerifiedPortableReceipt = PortableReceiptIdentity
 
 
 def sign_portable_receipt(
@@ -165,22 +145,30 @@ def verify_portable_receipt(
         verify_trusted_files(trust)
         signature = hex_bytes(receipt, "signature", 64)
         Ed25519PublicKey.from_public_bytes(trust.public_key).verify(signature, digest)
-        _reject_replay(nonce, trust.scope_sha256, verification.prior_receipts)
+        reject_prior_replay(nonce, trust.scope_sha256, verification.prior_receipts)
         stable_artifacts = verify_artifacts(artifacts, trust.evidence_root)
         final_lock, final_sources = verify_trusted_files(trust)
         reject_identity_aliases((final_lock, final_sources, stable_artifacts))
-        return PortableReceiptIdentity(
+        return finalize_receipt_identity(
+            trust=trust,
+            receipt_path=receipt_path,
+            bound_receipt_path=verification.bound_receipt_path,
+            receipt_bytes=receipt_bytes,
             payload_sha256=digest.hex(),
-            public_key_sha256=trust.public_key_sha256,
             nonce=nonce,
-            signer_identity=trust.signer_identity,
-            scope_sha256=trust.scope_sha256,
-            artifacts=stable_artifacts,
-            _seal=_IDENTITY_SEAL,
+            batch_id=batch_id,
+            artifacts=artifacts,
+            stable_artifacts=stable_artifacts,
+            claim_replay=verification.claim_replay,
         )
     except PortableReceiptError:
         raise
-    except (ReceiptValidationError, PortableReceiptTrustError) as error:
+    except (
+        PortableReceiptIdentityError,
+        PortableReceiptReplayError,
+        ReceiptValidationError,
+        PortableReceiptTrustError,
+    ) as error:
         raise PortableReceiptError(str(error)) from error
     except (
         EvidencePathError,
@@ -226,23 +214,6 @@ def _validate_envelope(
         raise PortableReceiptError("portable receipt trusted envelope differs")
 
 
-def _reject_replay(
-    nonce: str,
-    scope_sha256: str,
-    prior_receipts: tuple[PortableReceiptIdentity, ...],
-) -> None:
-    for identity in prior_receipts:
-        if (
-            not isinstance(identity, PortableReceiptIdentity)
-            or not identity.is_verified()
-        ):
-            raise PortableReceiptError(
-                "portable replay input is not a verified identity"
-            )
-        if identity.scope_sha256 == scope_sha256 and identity.nonce == nonce:
-            raise PortableReceiptError("portable receipt nonce was replayed")
-
-
 def _require_trust(trust: PortableReceiptTrustContext) -> None:
     if not isinstance(trust, PortableReceiptTrustContext) or not trust.is_valid():
         raise PortableReceiptError("portable receipt trust identity is invalid")
@@ -256,4 +227,4 @@ def _validate_nonce(nonce: str) -> None:
 
 
 def _payload(runtime: JsonObject, artifacts: list[JsonObject]) -> JsonObject:
-    return {"runtime": runtime, "artifacts": artifacts}
+    return {"runtime": runtime, "artifacts": cast(JsonValue, artifacts)}

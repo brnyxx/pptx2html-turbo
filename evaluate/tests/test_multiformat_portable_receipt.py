@@ -15,6 +15,7 @@ from evaluate.jcs import canonicalize
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptError,
     PortableReceiptVerification,
+    verify_portable_receipt,
 )
 from evaluate.multiformat_schema import JsonValue
 from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
@@ -127,6 +128,35 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                 self.assertRaisesRegex(PortableReceiptError, "changed"),
             ):
                 fixture.verify()
+
+    def test_persistent_replay_claim_allows_same_path_and_rejects_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = ReceiptFixture(Path(temp_dir))
+            fixture.sign()
+
+            first = fixture.verify()
+            second = fixture.verify()
+            copied = fixture.root / "copied-receipt.json"
+            copied.write_bytes(fixture.receipt.read_bytes())
+
+            self.assertEqual(first, second)
+            with self.assertRaisesRegex(PortableReceiptError, "replayed"):
+                verify_portable_receipt(copied, fixture.verification())
+
+    def test_tampered_or_overpermissive_replay_claim_fails_closed(self) -> None:
+        for attack in ("tamper", "permissions"):
+            with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp_dir:
+                fixture = ReceiptFixture(Path(temp_dir))
+                fixture.sign()
+                fixture.verify()
+                claim = next((fixture.root / ".portable-receipt-claims").glob("*.json"))
+                if attack == "tamper":
+                    claim.write_bytes(b"{}")
+                else:
+                    claim.chmod(0o644)
+
+                with self.assertRaises(PortableReceiptError):
+                    fixture.verify()
 
     def test_unsigned_prior_receipt_cannot_influence_replay(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

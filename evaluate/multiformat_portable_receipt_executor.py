@@ -56,7 +56,7 @@ def execute_receipt_request(
     try:
         root = evidence_root.resolve(strict=True)
         request = _load_request(request_path)
-        destination = _new_evidence_path(root, output_path)
+        destination = _evidence_path(root, output_path)
         trust = load_portable_receipt_trust(lock_path.resolve(strict=True), root)
         scope = sha256_value(request, "scope_sha256")
         if scope != trust.scope_sha256:
@@ -67,7 +67,13 @@ def execute_receipt_request(
             raise PortableReceiptExecutorError("receipt batch identity is too large")
         artifacts = object_array(request, "artifacts")
         _validate_caps(artifacts)
-        private_key = _load_raw_private_key(private_key_path)
+        private_key = _load_raw_private_key(private_key_path, root)
+        if destination.exists():
+            verified = verify_portable_receipt(
+                destination, PortableReceiptVerification(trust)
+            )
+            _require_requested_identity(verified, nonce, batch_id, artifacts)
+            return destination
         descriptor, name = tempfile.mkstemp(
             prefix=f".{destination.name}.", dir=destination.parent
         )
@@ -80,11 +86,21 @@ def execute_receipt_request(
             private_key,
         )
         verified = verify_portable_receipt(
-            temporary, PortableReceiptVerification(trust)
+            temporary,
+            PortableReceiptVerification(
+                trust,
+                claim_replay=True,
+                bound_receipt_path=destination,
+            ),
         )
-        if verified.nonce != nonce or verified.scope_sha256 != scope:
-            raise PortableReceiptExecutorError("signed receipt identity differs")
-        os.link(temporary, destination)
+        _require_requested_identity(verified, nonce, batch_id, artifacts)
+        try:
+            os.link(temporary, destination)
+        except FileExistsError:
+            existing = verify_portable_receipt(
+                destination, PortableReceiptVerification(trust)
+            )
+            _require_requested_identity(existing, nonce, batch_id, artifacts)
         return destination
     except PortableReceiptExecutorError:
         raise
@@ -134,10 +150,12 @@ def _validate_caps(artifacts: list[dict[str, JsonValue]]) -> None:
             raise PortableReceiptExecutorError("receipt artifact text exceeds its cap")
 
 
-def _load_raw_private_key(path: Path) -> Ed25519PrivateKey:
+def _load_raw_private_key(path: Path, evidence_root: Path) -> Ed25519PrivateKey:
     if path.is_symlink():
         raise PortableReceiptExecutorError("receipt private key must not be a symlink")
     resolved = path.resolve(strict=True)
+    if resolved.is_relative_to(evidence_root):
+        raise PortableReceiptExecutorError("receipt private key enters evidence root")
     info = resolved.stat()
     if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:
         raise PortableReceiptExecutorError("receipt private key permissions differ")
@@ -147,14 +165,34 @@ def _load_raw_private_key(path: Path) -> Ed25519PrivateKey:
     return Ed25519PrivateKey.from_private_bytes(value)
 
 
-def _new_evidence_path(root: Path, supplied: Path) -> Path:
-    if supplied.exists() or supplied.is_symlink():
-        raise PortableReceiptExecutorError("receipt output already exists")
+def _evidence_path(root: Path, supplied: Path) -> Path:
+    if supplied.is_symlink():
+        raise PortableReceiptExecutorError("receipt output is symlinked")
     parent = supplied.parent.resolve(strict=True)
     destination = parent / supplied.name
     if not destination.is_relative_to(root) or destination == root:
         raise PortableReceiptExecutorError("receipt output escapes evidence root")
+    if destination.exists() and not destination.is_file():
+        raise PortableReceiptExecutorError("receipt output is not a file")
     return destination
+
+
+def _require_requested_identity(
+    identity: object,
+    nonce: str,
+    batch_id: str,
+    artifacts: list[dict[str, JsonValue]],
+) -> None:
+    from evaluate.multiformat_portable_receipt import PortableReceiptIdentity
+    from evaluate.multiformat_portable_receipt_replay import artifact_root_sha256
+
+    if (
+        not isinstance(identity, PortableReceiptIdentity)
+        or identity.nonce != nonce
+        or identity.batch_id != batch_id
+        or identity.artifact_root_sha256 != artifact_root_sha256(artifacts)
+    ):
+        raise PortableReceiptExecutorError("signed receipt identity differs")
 
 
 def _parser() -> argparse.ArgumentParser:

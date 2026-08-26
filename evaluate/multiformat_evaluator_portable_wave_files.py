@@ -8,6 +8,8 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/multiformat_portable_lock_io.py",
     "evaluate/multiformat_portable_lock_keys.py",
     "evaluate/multiformat_portable_receipt_sources.py",
+    "evaluate/multiformat_portable_receipt_identity.py",
+    "evaluate/multiformat_portable_receipt_replay.py",
     "evaluate/multiformat_portable_reference_artifacts.py",
     "evaluate/multiformat_portable_reference_manifest.py",
     "evaluate/multiformat_portable_reference_materializer.py",
