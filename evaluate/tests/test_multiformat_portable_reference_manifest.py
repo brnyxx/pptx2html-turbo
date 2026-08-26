@@ -1,0 +1,125 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from evaluate.multiformat_candidate_sources import (
+    CandidateSource,
+    CandidateSourceSet,
+    CandidateUnitSpec,
+)
+from evaluate.multiformat_corpus_types import DocumentFormat
+from evaluate.multiformat_office_oracle_batch import (
+    OfficeOracleBatchFile,
+    OfficeOracleBatchUnit,
+)
+from evaluate.multiformat_portable_receipt import (
+    PortableReceiptVerification,
+    verify_portable_receipt,
+)
+from evaluate.multiformat_portable_reference_manifest import (
+    write_portable_reference_manifests,
+)
+from evaluate.multiformat_schema import sha256_file
+from evaluate.tests.multiformat_metric_artifact_fixture import write_png
+from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
+
+
+class SandboxReceiptFixture(ReceiptFixture):
+    def _write_lock(self) -> Path:
+        path = super()._write_lock()
+        sandbox = self._artifact("locked/sandbox-exec", b"sandbox")
+        profile = self._artifact(
+            "locked/profile.sb", b"(version 1)\n(allow default)\n(deny network*)\n"
+        )
+        lock = json.loads(path.read_text(encoding="utf-8"))
+        attestation_path = self.root / lock["runtime"]["attestation"]["path"]
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+        attestation["sandbox_executable"] = self._binding(sandbox)
+        attestation["sandbox_profile"] = self._binding(profile)
+        attestation_path.write_text(
+            json.dumps(attestation, sort_keys=True), encoding="utf-8"
+        )
+        lock["runtime"]["attestation"] = self._binding(attestation_path)
+        lock["sandbox"] = {
+            "executable": self._binding(sandbox),
+            "profile": self._binding(profile),
+        }
+        path.write_text(json.dumps(lock, sort_keys=True), encoding="utf-8")
+        return path
+
+
+class PortableReferenceManifestTests(unittest.TestCase):
+    def test_signs_verifies_and_rejects_wrong_private_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = SandboxReceiptFixture(Path(temp_dir))
+            source_path = fixture.root / "corpus/source.docx"
+            source = CandidateSource(
+                "conformance",
+                "source",
+                sha256_file(source_path),
+                source_path,
+                (CandidateUnitSpec("unit-1", 1),),
+            )
+            sources = CandidateSourceSet(DocumentFormat.DOCX, (source,))
+            raw = fixture.root / "raw"
+            raw.mkdir()
+            png = raw / "page-1.png"
+            write_png(png, 200, 200, (1, 2, 3))
+            pdf, semantic, layout = (
+                raw / "reference.pdf",
+                raw / "semantic.json",
+                raw / "layout.xml",
+            )
+            pdf.write_bytes(b"pdf")
+            semantic.write_text("{}")
+            layout.write_text(
+                '<doc><page width="200" height="200"><line><word xMin="1" yMin="1" xMax="2" yMax="2">x</word></line></page></doc>'
+            )
+            batch = OfficeOracleBatchFile(
+                "source",
+                "docx",
+                source.source_sha256,
+                pdf,
+                semantic,
+                layout,
+                (OfficeOracleBatchUnit(png, 200, 200),),
+            )
+            published = fixture.root / "published"
+            published.mkdir()
+            capture = write_portable_reference_manifests(
+                published,
+                sources,
+                [batch],
+                fixture.trust,
+                fixture.private_key,
+                nonce="b" * 64,
+                batch_id="batch-1",
+            )
+            identity = verify_portable_receipt(
+                published / "portable-receipt.json",
+                PortableReceiptVerification(fixture.trust),
+            )
+            self.assertTrue(identity.is_verified())
+            self.assertTrue(capture.is_file())
+
+            other = fixture.root / "other"
+            other.mkdir()
+            with self.assertRaises(ValueError):
+                write_portable_reference_manifests(
+                    other,
+                    sources,
+                    [batch],
+                    fixture.trust,
+                    Ed25519PrivateKey.generate(),
+                    nonce="c" * 64,
+                    batch_id="batch-2",
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()

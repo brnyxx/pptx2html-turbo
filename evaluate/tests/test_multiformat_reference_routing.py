@@ -97,10 +97,20 @@ class MultiFormatReferenceRoutingTests(unittest.TestCase):
                 pdf_input = "{reference_pdf}" if office else "{source}"
                 self.assertEqual(route.normative_input, "source")
                 self.assertEqual(route.commands[-3].arguments, (pdf_input,))
-                self.assertEqual(
-                    route.commands[-2].arguments,
-                    ("-png", "-r", "144", pdf_input, "{render_prefix}"),
+                render_arguments = (
+                    (
+                        "-png",
+                        "-scale-to-x",
+                        "960",
+                        "-scale-to-y",
+                        "540",
+                        pdf_input,
+                        "{render_prefix}",
+                    )
+                    if route.format in {DocumentFormat.PPT, DocumentFormat.PPTX}
+                    else ("-png", "-r", "144", pdf_input, "{render_prefix}")
                 )
+                self.assertEqual(route.commands[-2].arguments, render_arguments)
                 self.assertEqual(
                     route.commands[-1].arguments,
                     ("-bbox-layout", "-enc", "UTF-8", pdf_input, "{text_output}"),

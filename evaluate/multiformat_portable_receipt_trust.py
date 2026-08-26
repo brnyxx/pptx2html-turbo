@@ -209,6 +209,15 @@ def _tools(lock: JsonObject) -> tuple[ToolIdentity, ...]:
 def _load_sources(corpus_path: Path, root: Path) -> tuple[StableFileIdentity, ...]:
     manifest = read_strict_object(corpus_path)
     raw = manifest.get("sources")
+    if raw is None:
+        tracks = object_value(manifest, "tracks")
+        raw = []
+        for track_name in ("conformance", "blind", "security"):
+            track = object_value(tracks, track_name)
+            items = track.get("items")
+            if not isinstance(items, list):
+                raise PortableReceiptTrustError("portable receipt corpus track is invalid")
+            raw.extend(items)
     if not isinstance(raw, list) or not raw:
         raise PortableReceiptTrustError("portable receipt corpus sources are missing")
     sources: list[StableFileIdentity] = []

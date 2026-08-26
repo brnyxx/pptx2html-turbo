@@ -196,13 +196,22 @@ def _parse_route(value: JsonValue, expected_format: DocumentFormat) -> FormatRou
             conversion = ()
         case unreachable:
             assert_never(unreachable)
+    render_arguments = (
+        (
+            "-png",
+            "-scale-to-x",
+            "960",
+            "-scale-to-y",
+            "540",
+            pdf_input,
+            "{render_prefix}",
+        )
+        if expected_format in {DocumentFormat.PPT, DocumentFormat.PPTX}
+        else ("-png", "-r", "144", pdf_input, "{render_prefix}")
+    )
     expected_commands = conversion + (
         (ToolRole.POPPLER_METADATA, (pdf_input,), "pdfinfo.txt"),
-        (
-            ToolRole.POPPLER_RENDER,
-            ("-png", "-r", "144", pdf_input, "{render_prefix}"),
-            "page",
-        ),
+        (ToolRole.POPPLER_RENDER, render_arguments, "page"),
         (
             ToolRole.POPPLER_TEXT,
             ("-bbox-layout", "-enc", "UTF-8", pdf_input, "{text_output}"),

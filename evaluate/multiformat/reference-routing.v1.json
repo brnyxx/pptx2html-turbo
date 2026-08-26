@@ -148,7 +148,7 @@
         },
         {
           "tool_role": "poppler_render",
-          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "arguments": ["-png", "-scale-to-x", "960", "-scale-to-y", "540", "{reference_pdf}", "{render_prefix}"],
           "timeout_seconds": 120,
           "output_name": "page"
         },
@@ -178,7 +178,7 @@
         },
         {
           "tool_role": "poppler_render",
-          "arguments": ["-png", "-r", "144", "{reference_pdf}", "{render_prefix}"],
+          "arguments": ["-png", "-scale-to-x", "960", "-scale-to-y", "540", "{reference_pdf}", "{render_prefix}"],
           "timeout_seconds": 120,
           "output_name": "page"
         },
