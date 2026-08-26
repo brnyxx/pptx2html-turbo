@@ -5,11 +5,9 @@ import stat
 from pathlib import Path
 from typing import Final, assert_never
 
-from evaluate.multiformat_cfb import cfb_root_streams
+from evaluate.multiformat_cfb import cfb_root_streams_bytes
 from evaluate.multiformat_corpus_source_fs import (
     FileIdentity,
-    descriptor_path,
-    rewind_descriptor,
     stable_source_descriptor,
 )
 from evaluate.multiformat_corpus_types import (
@@ -17,8 +15,8 @@ from evaluate.multiformat_corpus_types import (
     DocumentFormat,
     SourceRecord,
 )
-from evaluate.multiformat_package_validation import valid_ooxml
-from evaluate.multiformat_pdf import valid_pdf
+from evaluate.multiformat_package_validation import valid_ooxml_bytes
+from evaluate.multiformat_pdf import valid_pdf_bytes
 from evaluate.multiformat_schema import JsonValue, sha256_value, string_value
 
 IDENTIFIER: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
@@ -60,10 +58,8 @@ def _validate_source_with_binding(
     with stable_source_descriptor(source_path, relative_path) as opened:
         if opened.digest != expected_digest:
             raise CorpusError("source.sha256", relative_path)
-        if require_valid_format:
-            rewind_descriptor(opened.descriptor, relative_path)
         if require_valid_format and not _matches_format(
-            descriptor_path(opened.descriptor),
+            opened.value,
             document_format,
         ):
             raise CorpusError("source.format", relative_path)
@@ -116,43 +112,43 @@ def resolve_source_path(root: Path, relative_path: str) -> Path:
     return candidate
 
 
-def _matches_format(path: Path, document_format: DocumentFormat) -> bool:
+def _matches_format(value: bytes, document_format: DocumentFormat) -> bool:
     match document_format:
         case DocumentFormat.DOCX:
-            return valid_ooxml(
-                path,
+            return valid_ooxml_bytes(
+                value,
                 "word/document.xml",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
                 "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}document",
             )
         case DocumentFormat.XLSX:
-            return valid_ooxml(
-                path,
+            return valid_ooxml_bytes(
+                value,
                 "xl/workbook.xml",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
                 "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}workbook",
             )
         case DocumentFormat.PPTX:
-            return valid_ooxml(
-                path,
+            return valid_ooxml_bytes(
+                value,
                 "ppt/presentation.xml",
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
                 "{http://schemas.openxmlformats.org/presentationml/2006/main}presentation",
             )
         case DocumentFormat.DOC:
-            return _has_cfb_stream(path, "WordDocument")
+            return _has_cfb_stream(value, "WordDocument")
         case DocumentFormat.XLS:
-            return _has_cfb_stream(path, "Workbook", "Book")
+            return _has_cfb_stream(value, "Workbook", "Book")
         case DocumentFormat.PPT:
-            return _has_cfb_stream(path, "PowerPoint Document")
+            return _has_cfb_stream(value, "PowerPoint Document")
         case DocumentFormat.PDF:
-            return valid_pdf(path)
+            return valid_pdf_bytes(value)
         case _ as unreachable:
             assert_never(unreachable)
 
 
-def _has_cfb_stream(path: Path, *expected: str) -> bool:
-    streams = cfb_root_streams(path)
+def _has_cfb_stream(value: bytes, *expected: str) -> bool:
+    streams = cfb_root_streams_bytes(value)
     if streams is None:
         return False
     markers = set(streams) & LEGACY_STREAMS

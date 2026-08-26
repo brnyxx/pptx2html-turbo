@@ -24,6 +24,10 @@ from evaluate.multiformat_reference_routing import (
 )
 from evaluate.multiformat_schema import JsonValue, sha256_file
 from evaluate.multiformat_source_fixture import write_positive_source
+from evaluate.tests.multiformat_native_tool_fixture import (
+    write_executable_native_tools,
+    write_recording_native_tools,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 ROUTING_TABLE = ROOT / "evaluate/multiformat/reference-routing.v1.json"
@@ -128,12 +132,7 @@ class RecordingNativeRunner:
 def make_native_unit_fixture(root: Path) -> NativeUnitFixture:
     source = root / "source.docx"
     _ = source.write_bytes(b"fixture-source-bytes")
-    soffice = root / "soffice"
-    pdfinfo = root / "pdfinfo"
-    _ = soffice.write_bytes(b"fixture-soffice")
-    _ = pdfinfo.write_bytes(b"fixture-pdfinfo")
-    _ = soffice.chmod(0o755)
-    _ = pdfinfo.chmod(0o755)
+    soffice, pdfinfo = write_recording_native_tools(root)
     font = root / "fixture.ttf"
     _ = font.write_bytes(b"fixture-font")
     font_bundle = root / "font-bundle.json"
@@ -237,23 +236,18 @@ def make_native_inventory_fixture(root: Path) -> NativeInventoryFixture:
     _ = (font_source / "fixture.ttf").write_bytes(b"fixture-font")
     font_snapshot = root / "font-snapshot"
     _ = generate_font_snapshot((font_source,), font_snapshot)
-    soffice = root / "soffice"
-    pdfinfo = root / "pdfinfo"
-    _ = soffice.write_text(
-        '#!/bin/sh\nif [ "${1-}" = "--version" ]; then\n  printf \'LibreOffice 26.2.2.2\\n\'\n  exit 0\nfi\noutdir=\'\'\nsource=\'\'\nprevious=\'\'\nfor argument in "$@"; do\n  if [ "$previous" = "--outdir" ]; then outdir="$argument"; fi\n  previous="$argument"\n  source="$argument"\ndone\nbase="${source##*/}"\nstem="${base%.*}"\nprintf \'%%PDF-1.4\\nfixture\\n\' > "$outdir/$stem.pdf"\n',
-        encoding="utf-8",
+    soffice, pdfinfo = write_executable_native_tools(root)
+    contract = root / "contract.v1.json"
+    routing = root / "reference-routing.v1.json"
+    _ = contract.write_bytes(
+        (ROOT / "evaluate/multiformat/contract.v1.json").read_bytes()
     )
-    _ = pdfinfo.write_text(
-        "#!/bin/sh\nif [ \"${1-}\" = \"-v\" ]; then\n  printf 'pdfinfo version 26.03.0\\n' >&2\nelse\n  printf 'Pages:           1\\n'\nfi\n",
-        encoding="utf-8",
-    )
-    _ = soffice.chmod(0o755)
-    _ = pdfinfo.chmod(0o755)
+    _ = routing.write_bytes(ROUTING_TABLE.read_bytes())
     return NativeInventoryFixture(
-        ROOT / "evaluate/multiformat/contract.v1.json",
+        contract,
         config,
         manifest,
-        ROUTING_TABLE,
+        routing,
         font_snapshot / "font-bundle.json",
         soffice,
         pdfinfo,

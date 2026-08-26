@@ -16,6 +16,7 @@ from evaluate.multiformat_candidate_process import (
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_native_unit_files import stable_file
 from evaluate.multiformat_native_unit_process import run_native_process
+from evaluate.multiformat_native_unit_trusted import open_trusted_executable
 from evaluate.multiformat_native_unit_types import (
     NativeProcessRequest,
     NativeUnitFailure,
@@ -24,6 +25,43 @@ from evaluate.tests.multiformat_native_unit_fixture import make_native_unit_fixt
 
 
 class MultiFormatNativeUnitFinal2BlockerTests(unittest.TestCase):
+    def test_binary_success_closes_trusted_source_descriptor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = make_native_unit_fixture(root)
+            executable = Path("/bin/echo")
+            expected = stable_file(
+                executable,
+                fixture.request(root, DocumentFormat.PDF),
+                NativeUnitFailure.TOOL_MISSING,
+            )
+            request = NativeProcessRequest(
+                (executable.as_posix(), "descriptor-closed"),
+                root,
+                (("PATH", os.defpath),),
+                root / "stdout",
+                root / "stderr",
+                5,
+                1024,
+                expected,
+            )
+            descriptors: list[int] = []
+
+            def remember_descriptor(path: Path, identity):
+                trusted = open_trusted_executable(path, identity)
+                descriptors.append(trusted.descriptor)
+                return trusted
+
+            with patch(
+                "evaluate.multiformat_native_unit_process.open_trusted_executable",
+                side_effect=remember_descriptor,
+            ):
+                self.assertEqual(run_native_process(request), 0)
+
+            self.assertEqual(len(descriptors), 1)
+            with self.assertRaises(OSError):
+                _ = os.fstat(descriptors[0])
+
     def test_real_root_owned_echo_uses_private_snapshot_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

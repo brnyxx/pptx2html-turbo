@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_catalog_sha256": "615f29c8983dfbe4ee30d2a8b80293906ca52e29c5d5f013111d77c4451447de",
+  "source_catalog_sha256": "99258fe5bae488604b05e3018eed81aa68b7596d423a9fb7b3afc86694cf7c2f",
   "formats": {
     "doc": {
       "expected_count": 40,
@@ -24,9 +24,9 @@
     "ppt": {
       "expected_count": 40,
       "groups": [
-        {"producer": "apache-poi", "quota": 26},
-        {"producer": "aspose-slides", "quota": 2},
-        {"producer": "npoi", "quota": 12}
+        {"producer": "apache-poi", "quota": 28},
+        {"producer": "aspose-slides", "quota": 1},
+        {"producer": "npoi", "quota": 11}
       ]
     }
   }

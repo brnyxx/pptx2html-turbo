@@ -4,6 +4,7 @@ import re
 import stat
 from pathlib import Path
 
+from evaluate.multiformat_native_unit_borrowed_process import run_borrowed_snapshot
 from evaluate.multiformat_candidate_fonts import CandidateFontEnvironment
 from evaluate.multiformat_candidate_process import (
     CandidateProcessError,
@@ -35,6 +36,8 @@ _PAGE_PATTERN = re.compile(r"^Pages:\s+([0-9]+)\s*$", re.MULTILINE)
 
 
 def run_native_process(request: NativeProcessRequest) -> int:
+    if request.executable_snapshot is not None:
+        return run_borrowed_snapshot(request)
     if request.executable_identity is None:
         return run_bounded_process(
             request.command,
@@ -71,9 +74,10 @@ def run_native_process(request: NativeProcessRequest) -> int:
             stdin_fd=stdin_fd,
         )
     finally:
-        if snapshot is not None:
-            release_binary(snapshot)
-        else:
+        try:
+            if snapshot is not None:
+                release_binary(snapshot)
+        finally:
             close_trusted_executable(trusted.descriptor)
 
 

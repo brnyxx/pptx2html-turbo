@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from evaluate.jcs import canonicalize
@@ -10,7 +12,11 @@ from evaluate.multiformat_native_unit_execution_validation import (
     NativeExecutionBindings,
     validate_execution_record,
 )
-from evaluate.multiformat_native_unit_stable_validation import stable_bytes
+from evaluate.multiformat_native_unit_stable_validation import (
+    StableFile,
+    stable_bytes_at,
+    stable_file_at,
+)
 from evaluate.multiformat_native_unit_tool_validation import LockedTool
 from evaluate.multiformat_native_unit_types import NativeUnitError, NativeUnitFailure
 from evaluate.multiformat_public_pool_types import ValidatedPublicPoolSource
@@ -28,8 +34,14 @@ _MAX_PDF_BYTES = 64 * 1024 * 1024
 _MAX_PDFINFO_BYTES = 1024 * 1024
 
 
+@dataclass(frozen=True, slots=True)
+class ValidatedNativeSource:
+    unit_count: int
+    files: tuple[tuple[str, StableFile], ...]
+
+
 def validate_scoped_source(
-    root: Path,
+    root_descriptor: int,
     pdfinfo: Path,
     pdfinfo_tool: LockedTool,
     expected: ValidatedPublicPoolSource,
@@ -37,10 +49,10 @@ def validate_scoped_source(
     nonces: set[str],
     execution_bindings: NativeExecutionBindings,
     pdf_count_validator: PdfCountValidator,
-) -> tuple[int, set[str]]:
+) -> ValidatedNativeSource:
     try:
         return validate_source_record(
-            root,
+            root_descriptor,
             pdfinfo,
             pdfinfo_tool,
             expected,
@@ -81,7 +93,7 @@ def source_failure(
 
 
 def validate_source_record(
-    root: Path,
+    root_descriptor: int,
     pdfinfo: Path,
     pdfinfo_tool: LockedTool,
     expected: ValidatedPublicPoolSource,
@@ -89,7 +101,7 @@ def validate_source_record(
     nonces: set[str],
     execution_bindings: NativeExecutionBindings,
     pdf_count_validator: PdfCountValidator,
-) -> tuple[int, set[str]]:
+) -> ValidatedNativeSource:
     require_keys(
         source,
         {"id", "format", "path", "sha256", "unit_count", "observations"},
@@ -113,10 +125,10 @@ def validate_source_record(
     observations = object_list(source, "observations", "native.inventory.observations")
     if len(observations) != 2:
         raise _failure("inventory observation count differs")
-    bindings: set[str] = set()
+    bindings: dict[str, StableFile] = {}
     for run, observation in enumerate(observations, start=1):
         current = _validate_observation(
-            root,
+            root_descriptor,
             pdfinfo,
             pdfinfo_tool,
             values,
@@ -127,14 +139,18 @@ def validate_source_record(
             execution_bindings,
             pdf_count_validator,
         )
-        if bindings & current:
+        current_files = dict(current)
+        if bindings.keys() & current_files.keys():
             raise _failure("inventory evidence path is duplicated")
-        bindings.update(current)
-    return count, bindings
+        bindings.update(current_files)
+    return ValidatedNativeSource(
+        count,
+        tuple(sorted(bindings.items())),
+    )
 
 
 def _validate_observation(
-    root: Path,
+    root_descriptor: int,
     pdfinfo: Path,
     pdfinfo_tool: LockedTool,
     source_values: tuple[str, str, str, str],
@@ -144,7 +160,7 @@ def _validate_observation(
     nonces: set[str],
     execution_bindings: NativeExecutionBindings,
     pdf_count_validator: PdfCountValidator,
-) -> set[str]:
+) -> tuple[tuple[str, StableFile], ...]:
     require_keys(
         observation,
         {"run", "workspace_nonce", "path", "execution", "reference_pdf", "pdfinfo"},
@@ -164,6 +180,13 @@ def _validate_observation(
     result: set[str] = set()
     parent_bindings: dict[str, dict[str, JsonValue]] = {}
     contents: dict[str, bytes] = {}
+    file_states: dict[str, StableFile] = {}
+    relative_paths: dict[str, str] = {}
+    maximums = {
+        "execution": MAX_JSON_BYTES,
+        "reference_pdf": _MAX_PDF_BYTES,
+        "pdfinfo": _MAX_PDFINFO_BYTES,
+    }
     for field, name in (
         ("execution", "execution.json"),
         ("reference_pdf", "reference.pdf"),
@@ -174,21 +197,18 @@ def _validate_observation(
         relative = string_value(binding, "path")
         if relative != f"{base}/{name}" or relative in result:
             raise _failure("inventory evidence path differs")
-        path = root / relative
-        maximum = {
-            "execution": MAX_JSON_BYTES,
-            "reference_pdf": _MAX_PDF_BYTES,
-            "pdfinfo": _MAX_PDFINFO_BYTES,
-        }[field]
-        file_state, content = stable_bytes(
-            path,
+        file_state, content = stable_bytes_at(
+            root_descriptor,
+            relative,
             executable=False,
-            maximum=maximum,
+            maximum=maximums[field],
         )
         if file_state[-1] != sha256_value(binding, "sha256"):
             raise _failure("inventory evidence hash differs")
         parent_bindings[field] = binding
         contents[field] = content
+        file_states[field] = file_state
+        relative_paths[field] = relative
         result.add(relative)
     execution_bytes = contents["execution"]
     execution = parse_strict_object_bytes(execution_bytes)
@@ -206,13 +226,27 @@ def _validate_observation(
         parent_bindings,
         execution_bindings,
     )
-    pdf_count_validator(
-        pdfinfo,
-        pdfinfo_tool,
-        root / f"{base}/reference.pdf",
-        count,
+    with tempfile.TemporaryDirectory(prefix=".native-unit-validation-") as temp_dir:
+        reference_snapshot = Path(temp_dir) / "reference.pdf"
+        _ = reference_snapshot.write_bytes(contents["reference_pdf"])
+        pdf_count_validator(
+            pdfinfo,
+            pdfinfo_tool,
+            reference_snapshot,
+            count,
+        )
+    for field, expected_state in file_states.items():
+        current_state = stable_file_at(
+            root_descriptor,
+            relative_paths[field],
+            executable=False,
+            maximum=maximums[field],
+        )
+        if current_state != expected_state:
+            raise _failure("inventory evidence changed after validation")
+    return tuple(
+        sorted((relative_paths[field], file_states[field]) for field in file_states)
     )
-    return result
 
 
 def _valid_nonce(value: str) -> bool:

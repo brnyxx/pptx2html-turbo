@@ -79,6 +79,19 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertIn(path, EVALUATOR_FILES)
+        for path in (
+            "evaluate/assemble_multiformat_ready_corpora.py",
+            "evaluate/validate_multiformat_ready_corpora.py",
+            "evaluate/multiformat_ready_assembly.py",
+            "evaluate/multiformat_ready_validation.py",
+            "evaluate/capture_multiformat_native_units.py",
+            "evaluate/multiformat_native_unit_capture.py",
+            "evaluate/tests/test_multiformat_ready_cli.py",
+            "evaluate/tests/test_multiformat_ready_assembly.py",
+            "evaluate/tests/test_capture_multiformat_native_units.py",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, EVALUATOR_FILES)
 
     def test_manifest_binds_exact_code_parameters_and_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

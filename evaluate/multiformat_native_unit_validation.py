@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,17 +15,27 @@ from evaluate.multiformat_font_snapshot import (
 from evaluate.multiformat_native_unit_execution_validation import (
     NativeExecutionBindings,
 )
+from evaluate.multiformat_native_unit_gate_validation import (
+    validate_convertibility_preflight,
+    validate_two_worker_gate,
+)
 from evaluate.multiformat_native_unit_record_validation import (
     source_failure,
     validate_scoped_source,
 )
-from evaluate.multiformat_native_unit_stable_validation import stable_bytes
+from evaluate.multiformat_native_unit_stable_validation import (
+    open_stable_directory,
+    stable_bytes_at,
+)
 from evaluate.multiformat_native_unit_tool_validation import (
     validate_pdf_count as _validate_pdf_count,
 )
 from evaluate.multiformat_native_unit_tool_validation import (
     validate_platform,
     validate_runtime_bindings,
+)
+from evaluate.multiformat_native_unit_tree_validation import (
+    validate_inventory_tree,
 )
 from evaluate.multiformat_native_unit_types import NativeUnitError, NativeUnitFailure
 from evaluate.multiformat_public_pool import load_validated_public_pool_sources
@@ -96,85 +105,93 @@ def load_native_unit_inventory(
         )
         routing = load_reference_routing(inputs.routing)
         font = validate_font_snapshot(inputs.font_manifest, inputs.font_manifest.parent)
-        root_information = inputs.inventory_root.lstat()
-        if not stat.S_ISDIR(root_information.st_mode):
-            raise _failure("inventory root is not a directory")
-        root = inputs.inventory_root.resolve(strict=True)
-        manifest = root / "native-unit-inventory.json"
-        _manifest_file, manifest_bytes = stable_bytes(
-            manifest,
-            executable=False,
-            maximum=MAX_JSON_BYTES,
-        )
-        values = parse_strict_object_bytes(manifest_bytes)
-        if manifest_bytes != canonicalize(values) + b"\n":
-            raise _failure("inventory manifest is not canonical JCS")
-        require_keys(
-            values,
-            {
-                "schema_version",
-                "status",
-                "contract_sha256",
-                "public_pool",
-                "routing",
-                "tools",
-                "font",
-                "runtime",
-                "sources",
-            },
-            "native.inventory",
-        )
-        _validate_root(inputs, values, routing.sha256, font)
-        pdfinfo_tool = validate_runtime_bindings(
-            values,
-            inputs.libreoffice,
-            inputs.pdfinfo,
-            operating_system,
-            architecture,
-        )
-        execution_bindings = NativeExecutionBindings(
-            routing,
-            object_value(values, "tools"),
-            sha256_value(object_value(values, "font"), "environment_sha256"),
-        )
-        source_values = object_list(values, "sources", "native.inventory.sources")
-        if len(source_values) != 525 or len(expected_sources) != 525:
-            raise _failure("inventory source count differs")
-        expected_files = {"native-unit-inventory.json"}
-        counts: list[NativeUnitCount] = []
-        nonces: set[str] = set()
-        for expected, source in zip(expected_sources, source_values, strict=True):
-            count, bindings = validate_scoped_source(
-                root,
+        with open_stable_directory(inputs.inventory_root) as root_descriptor:
+            manifest_file, manifest_bytes = stable_bytes_at(
+                root_descriptor,
+                "native-unit-inventory.json",
+                executable=False,
+                maximum=MAX_JSON_BYTES,
+            )
+            values = parse_strict_object_bytes(manifest_bytes)
+            if manifest_bytes != canonicalize(values) + b"\n":
+                raise _failure("inventory manifest is not canonical JCS")
+            require_keys(
+                values,
+                {
+                    "schema_version",
+                    "status",
+                    "contract_sha256",
+                    "public_pool",
+                    "routing",
+                    "tools",
+                    "font",
+                    "runtime",
+                    "convertibility_preflight",
+                    "two_worker_gate",
+                    "sources",
+                },
+                "native.inventory",
+            )
+            _validate_root(inputs, values, routing.sha256, font)
+            pdfinfo_tool = validate_runtime_bindings(
+                values,
+                inputs.libreoffice,
                 inputs.pdfinfo,
-                pdfinfo_tool,
-                expected,
-                source,
-                nonces,
-                execution_bindings,
-                _validate_pdf_count,
+                operating_system,
+                architecture,
             )
-            if expected_files & bindings:
-                raise source_failure(expected, "inventory evidence path is duplicated")
-            expected_files.update(bindings)
-            counts.append(
-                NativeUnitCount(
-                    expected.document_format,
-                    expected.source_id,
-                    expected.relative_path,
-                    expected.source_sha256,
-                    count,
+            execution_bindings = NativeExecutionBindings(
+                routing,
+                object_value(values, "tools"),
+                sha256_value(object_value(values, "font"), "environment_sha256"),
+            )
+            source_values = object_list(values, "sources", "native.inventory.sources")
+            if len(source_values) != 525 or len(expected_sources) != 525:
+                raise _failure("inventory source count differs")
+            validate_convertibility_preflight(values, source_values)
+            validate_two_worker_gate(values, source_values)
+            expected_files = {"native-unit-inventory.json": manifest_file}
+            counts: list[NativeUnitCount] = []
+            nonces: set[str] = set()
+            for expected, source in zip(expected_sources, source_values, strict=True):
+                validated = validate_scoped_source(
+                    root_descriptor,
+                    inputs.pdfinfo,
+                    pdfinfo_tool,
+                    expected,
+                    source,
+                    nonces,
+                    execution_bindings,
+                    _validate_pdf_count,
                 )
+                bindings = dict(validated.files)
+                if expected_files.keys() & bindings.keys():
+                    raise source_failure(
+                        expected,
+                        "inventory evidence path is duplicated",
+                    )
+                expected_files.update(bindings)
+                counts.append(
+                    NativeUnitCount(
+                        expected.document_format,
+                        expected.source_id,
+                        expected.relative_path,
+                        expected.source_sha256,
+                        validated.unit_count,
+                    )
+                )
+            validate_inventory_tree(
+                root_descriptor,
+                tuple(sorted(expected_files.items())),
             )
-        _validate_tree(root, expected_files)
-        summary = NativeUnitInventorySummary(
-            files=len(expected_files),
-            sources=len(counts),
-            observations=2 * len(counts),
-            total_units=sum(item.unit_count for item in counts),
-            manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
-        )
-        return NativeUnitInventory(summary, tuple(counts))
+            summary = NativeUnitInventorySummary(
+                files=len(expected_files),
+                sources=len(counts),
+                observations=2 * len(counts),
+                total_units=sum(item.unit_count for item in counts),
+                manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+            )
+            return NativeUnitInventory(summary, tuple(counts))
     except NativeUnitError:
         raise
     except (
@@ -196,7 +213,7 @@ def _validate_root(
     font: FontSnapshotSummary,
 ) -> None:
     if (
-        integer_value(values, "schema_version") != 1
+        integer_value(values, "schema_version") != 2
         or string_value(values, "status") != "CAPTURED"
         or sha256_value(values, "contract_sha256") != sha256_file(inputs.contract)
     ):
@@ -220,24 +237,6 @@ def _validate_root(
         or sha256_value(font_value, "environment_sha256") != font.environment_sha256
     ):
         raise _failure("font binding differs")
-
-
-def _validate_tree(root: Path, expected: set[str]) -> None:
-    actual: set[str] = set()
-    identities: set[tuple[int, int]] = set()
-    for path in root.rglob("*"):
-        value = path.lstat()
-        if stat.S_ISDIR(value.st_mode):
-            continue
-        if not stat.S_ISREG(value.st_mode) or value.st_nlink != 1:
-            raise _failure("inventory tree contains an invalid file")
-        identity = (value.st_dev, value.st_ino)
-        if identity in identities:
-            raise _failure("inventory tree reuses a file inode")
-        identities.add(identity)
-        actual.add(path.relative_to(root).as_posix())
-    if actual != expected:
-        raise _failure("inventory file set differs")
 
 
 def _failure(detail: str) -> NativeUnitError:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -131,6 +132,17 @@ class _LegacyMaterializer:
             UnicodeError,
         ) as error:
             raise LegacyConformanceError("legacy conversion failed") from error
+        finally:
+            if job.workspace.exists():
+                active = sys.exception()
+                try:
+                    shutil.rmtree(job.workspace)
+                except OSError as error:
+                    failure = LegacyConformanceError("legacy workspace cleanup failed")
+                    if active is None:
+                        raise failure from error
+                    active.add_note(str(failure))
+                    active.add_note(str(error))
 
 
 def build_legacy_runtime(

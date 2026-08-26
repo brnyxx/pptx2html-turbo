@@ -66,6 +66,11 @@ def close_trusted_executable(descriptor: int) -> None:
             raise failure from error
 
 
+def verify_trusted_executable(path: Path, expected: NativeStableFile) -> None:
+    trusted = open_trusted_executable(path, expected)
+    close_trusted_executable(trusted.descriptor)
+
+
 def _close_descriptor(descriptor: int) -> None:
     if descriptor >= 0:
         try:

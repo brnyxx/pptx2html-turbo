@@ -65,7 +65,7 @@ def validate_execution_record(
     source = object_value(execution, "source")
     require_keys(source, {"id", "format", "path", "sha256"}, "source")
     if (
-        integer_value(execution, "schema_version") != 1
+        integer_value(execution, "schema_version") != 2
         or string_value(source, "format") != document_format.value
         or string_value(source, "id") != source_id
         or string_value(source, "path") != relative_path
@@ -101,7 +101,9 @@ def _validate_tools(
     for name in expected_keys:
         value = object_value(tools, name)
         require_keys(value, {"name", "sha256", "version"}, "native.execution.tool")
-        if value != object_value(bindings.tools, name):
+        parent = object_value(bindings.tools, name)
+        expected = {field: parent[field] for field in ("name", "sha256", "version")}
+        if value != expected:
             raise _failure("execution tool binding differs")
 
 
@@ -115,7 +117,6 @@ def _validate_processes(
     )
     if document_format is DocumentFormat.PDF:
         expected = (
-            ("pdfinfo_version", ["-v"], 120),
             (
                 "poppler_metadata",
                 list(route.commands[0].arguments),
@@ -124,8 +125,6 @@ def _validate_processes(
         )
     else:
         expected = (
-            ("libreoffice_version", ["--version"], 120),
-            ("pdfinfo_version", ["-v"], 120),
             (
                 "libreoffice",
                 list(route.commands[0].arguments),

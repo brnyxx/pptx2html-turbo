@@ -217,6 +217,66 @@ validation alone does not prove that native Office inventories and metric
 records are complete; those artifacts remain separately required and
 fail-closed.
 
+### Immutable READY corpus assembly
+
+Capture and independently validate native unit counts before assembly:
+
+```bash
+uv run --python 3.11 python -m evaluate.capture_multiformat_native_units capture \
+  --contract evaluate/multiformat/contract.v1.json \
+  --public-config evaluate/multiformat/public-pool-sources.v1.json \
+  --blind-manifest artifacts/multiformat-public-pool/public-pool.json \
+  --routing evaluate/multiformat/reference-routing.v1.json \
+  --font-bundle artifacts/multiformat-font-bundle/font-bundle.json \
+  --soffice /locked/bin/soffice \
+  --pdfinfo /locked/bin/pdfinfo \
+  --output-dir artifacts/multiformat-native-units \
+  --cache-dir artifacts/multiformat-native-unit-cache \
+  --workers 2
+```
+
+The assembler consumes only the frozen plan, upstream source manifests,
+validated native inventory, and locked tool identities. It copies every
+primary and support file into one staged tree, writes seven canonical
+schema-v2 `READY` corpus manifests, independently validates the candidate, and
+publishes it with one rename:
+
+```bash
+uv run --python 3.11 python -m evaluate.assemble_multiformat_ready_corpora \
+  --contract evaluate/multiformat/contract.v1.json \
+  --plan artifacts/multiformat-conformance-plan/conformance-plan.json \
+  --pptx-manifest artifacts/multiformat-pptx-conformance/generation-manifest.json \
+  --docx-manifest artifacts/multiformat-docx-conformance/generation-manifest.json \
+  --xlsx-manifest artifacts/multiformat-xlsx-conformance/generation-manifest.json \
+  --pdf-manifest artifacts/multiformat-pdf-conformance/generation-manifest.json \
+  --legacy-manifest artifacts/multiformat-legacy-pairs/generation-manifest.json \
+  --public-config evaluate/multiformat/public-pool-sources.v1.json \
+  --public-pool-manifest artifacts/multiformat-public-pool/public-pool.json \
+  --legacy-binary-config evaluate/multiformat/legacy-binary-sources.v1.json \
+  --legacy-binary-manifest artifacts/multiformat-legacy-binary-pool/legacy-binary-pool.json \
+  --security-manifest artifacts/multiformat-security-sources/security-sources.json \
+  --routing evaluate/multiformat/reference-routing.v1.json \
+  --font-bundle artifacts/multiformat-font-bundle/font-bundle.json \
+  --soffice /locked/bin/soffice \
+  --pdfinfo /locked/bin/pdfinfo \
+  --native-inventory-root artifacts/multiformat-native-units \
+  --output-dir artifacts/multiformat-ready-corpora
+```
+
+Run the standalone validator with the same source arguments and replace only
+`--output-dir` with
+`--corpus-root artifacts/multiformat-ready-corpora`. Then run
+`evaluate.multiformat_corpus` against every
+`corpora/<format>/manifest.json`. The published root contains exactly 1,485
+physical files: 1,295 primaries, 180 support files, seven corpus manifests,
+the copied plan, the copied native inventory, and `assembly-manifest.json`.
+Its root status is `VALIDATED`; no root `READY` marker is permitted.
+
+`VALIDATED` closes only the immutable corpus boundary. Aggregate product
+readiness remains fail-closed until candidate and native-reference captures,
+metric evidence, seven reports, and `evaluate.multiformat_gate` all pass
+against those exact source bytes.
+
 Capture candidate artifacts only in a clean, externally sandboxed checkout.
 The sandbox attestation must prove disabled network access and that oracle
 directories are absent from the candidate namespace. The runner performs two

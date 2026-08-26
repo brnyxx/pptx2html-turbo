@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from evaluate.multiformat_candidate_process import (
     CandidateProcessError,
@@ -43,37 +45,68 @@ class MultiFormatNativeUnitDescendantTimeoutTests(unittest.TestCase):
             listener.bind(ready_socket.as_posix())
             listener.listen(1)
             listener.settimeout(5.0)
-            finished = threading.Event()
-            result: list[CandidateProcessError] = []
+            ready = threading.Event()
+            received: list[bytes] = []
+            listener_errors: list[OSError] = []
 
-            def invoke() -> None:
+            def accept_ready() -> None:
                 try:
+                    connection = listener.accept()[0]
+                    with connection:
+                        received.append(connection.recv(64))
+                except OSError as error:
+                    listener_errors.append(error)
+                finally:
+                    ready.set()
+
+            wait_calls = 0
+            patch_active = True
+
+            def timeout_after_ready(
+                process: subprocess.Popen[bytes],
+                timeout: float | None = None,
+            ) -> int:
+                nonlocal patch_active, wait_calls
+                wait_calls += 1
+                if wait_calls == 1:
+                    _ = ready.wait(timeout=5.0)
+                    wait_patcher.stop()
+                    patch_active = False
+                    raise subprocess.TimeoutExpired(
+                        process.args,
+                        timeout if timeout is not None else 0.0,
+                    )
+                raise AssertionError("wait interceptor ran after restoration")
+
+            listener_worker = threading.Thread(target=accept_ready, daemon=True)
+            listener_worker.start()
+            wait_patcher = patch.object(
+                subprocess.Popen,
+                "wait",
+                timeout_after_ready,
+            )
+            _ = wait_patcher.start()
+            try:
+                with self.assertRaises(CandidateProcessError) as raised:
                     _ = run_bounded_process(
                         (sys.executable, parent_script.as_posix()),
                         root,
                         {"PATH": os.defpath},
                         root / "stdout",
                         root / "stderr",
-                        timeout_seconds=0.1,
+                        timeout_seconds=0.0,
                         max_log_bytes=1024,
                     )
-                except CandidateProcessError as error:
-                    result.append(error)
-                finally:
-                    finished.set()
-
-            worker = threading.Thread(target=invoke, daemon=True)
-            worker.start()
-            try:
-                connection = listener.accept()[0]
-                with connection:
-                    self.assertEqual(connection.recv(64), b"ready")
-                self.assertTrue(finished.wait(timeout=5.0))
             finally:
+                if patch_active:
+                    wait_patcher.stop()
                 listener.close()
+                listener_worker.join(timeout=5.0)
 
-            self.assertEqual(len(result), 1)
-            self.assertIs(result[0].failure, CandidateProcessFailure.TIMEOUT)
+            self.assertFalse(listener_worker.is_alive())
+            self.assertEqual(listener_errors, [])
+            self.assertEqual(received, [b"ready"])
+            self.assertIs(raised.exception.failure, CandidateProcessFailure.TIMEOUT)
             child = int(child_pid.read_text(encoding="utf-8"))
             with self.assertRaises(ProcessLookupError):
                 os.kill(child, 0)

@@ -4,7 +4,6 @@ import platform
 import secrets
 from collections import Counter
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,20 +13,25 @@ from evaluate.multiformat_font_snapshot import (
     FontSnapshotError,
     validate_font_snapshot,
 )
+from evaluate.multiformat_native_unit_capture_validation import (
+    NativeTrustedInputs,
+    revalidate_trusted_inputs,
+    snapshot_trusted_inputs,
+)
+from evaluate.multiformat_native_unit_capture_worker import capture_all as _capture_all
 from evaluate.multiformat_native_unit_manifest import (
     NativeManifestInputs,
     build_native_unit_manifest,
 )
 from evaluate.multiformat_native_unit_process import run_native_process
-from evaluate.multiformat_native_unit_runtime import capture_native_observation
+from evaluate.multiformat_native_unit_snapshot_pool import NativeProcessSnapshotPool
+from evaluate.multiformat_native_unit_capture_gates import NativeTwoWorkerGate
 from evaluate.multiformat_native_unit_types import (
-    NativeObservation,
     NativeProcessRunner,
+    NativeObservation,
+    NativeCaptureTools,
     NativeUnitError,
     NativeUnitFailure,
-    NativeUnitRequest,
-    NativeUnitRuntime,
-    NativeUnitSource,
 )
 from evaluate.multiformat_native_unit_validation import (
     NativeUnitInventorySummary,
@@ -35,15 +39,8 @@ from evaluate.multiformat_native_unit_validation import (
     validate_native_unit_inventory,
 )
 from evaluate.multiformat_public_pool import load_validated_public_pool_sources
-from evaluate.multiformat_public_pool_types import (
-    PublicPoolError,
-    ValidatedPublicPoolSource,
-)
-from evaluate.multiformat_reference_routing import (
-    RoutingError,
-    RoutingIdentity,
-    load_reference_routing,
-)
+from evaluate.multiformat_public_pool_types import PublicPoolError
+from evaluate.multiformat_reference_routing import RoutingError, load_reference_routing
 from evaluate.multiformat_snapshot_publish import SnapshotPublishError, publish_snapshot
 from evaluate.multiformat_strict_json import read_strict_object
 
@@ -61,6 +58,7 @@ class NativeUnitCaptureInputs:
     pdfinfo: Path
     output_dir: Path
     workers: int
+    cache_dir: Path | None = None
 
 
 def generate_native_nonce() -> str:
@@ -76,8 +74,22 @@ def capture_native_unit_inventory(
     operating_system, architecture = _platform()
     if type(inputs.workers) is not int or not 1 <= inputs.workers <= 8:
         raise _failure("worker count is invalid")
+    if inputs.cache_dir is not None and _overlap(
+        inputs.cache_dir,
+        inputs.output_dir,
+    ):
+        raise _failure("cache and output paths overlap")
     try:
         _ = read_strict_object(inputs.contract)
+        trusted_state = snapshot_trusted_inputs(
+            NativeTrustedInputs(
+                inputs.contract,
+                inputs.public_config,
+                inputs.public_pool_manifest,
+                inputs.routing,
+                inputs.font_manifest,
+            )
+        )
         sources = load_validated_public_pool_sources(
             inputs.public_config,
             inputs.public_pool_manifest,
@@ -100,14 +112,26 @@ def capture_native_unit_inventory(
         summaries: list[NativeUnitInventorySummary] = []
 
         def writer(staging: Path) -> None:
-            observations = _capture_all(
-                inputs,
-                staging,
-                sources,
-                routing,
-                nonces,
-                runner,
-            )
+            observations: tuple[NativeObservation, ...] = ()
+            tools: NativeCaptureTools | None = None
+            gate: NativeTwoWorkerGate | None = None
+            with NativeProcessSnapshotPool(staging, runner) as pooled_runner:
+                result = _capture_all(
+                    inputs,
+                    staging,
+                    sources,
+                    routing,
+                    nonces,
+                    pooled_runner,
+                    font.manifest_sha256,
+                    font.environment_sha256,
+                )
+                observations = result.observations
+                tools = result.tools
+                gate = result.two_worker_gate
+            if not observations or tools is None or gate is None:
+                raise _failure("capture observations are missing")
+            revalidate_trusted_inputs(trusted_state)
             values = build_native_unit_manifest(
                 NativeManifestInputs(
                     inputs.contract,
@@ -120,7 +144,10 @@ def capture_native_unit_inventory(
                     font.environment_sha256,
                 ),
                 observations,
+                tools,
+                gate,
             )
+            revalidate_trusted_inputs(trusted_state)
             _ = (staging / "native-unit-inventory.json").write_bytes(
                 canonicalize(values) + b"\n"
             )
@@ -128,7 +155,28 @@ def capture_native_unit_inventory(
                 validate_native_unit_inventory(_validation_inputs(inputs, staging))
             )
 
-        publish_snapshot(inputs.output_dir, writer, lock_namespace="snapshot")
+        def validate_before_publication() -> None:
+            revalidate_trusted_inputs(trusted_state)
+            if (
+                load_validated_public_pool_sources(
+                    inputs.public_config,
+                    inputs.public_pool_manifest,
+                )
+                != sources
+                or validate_font_snapshot(
+                    inputs.font_manifest,
+                    inputs.font_manifest.parent,
+                )
+                != font
+            ):
+                raise _failure("capture inputs changed before publication")
+
+        publish_snapshot(
+            inputs.output_dir,
+            writer,
+            lock_namespace="snapshot",
+            before_publish=validate_before_publication,
+        )
         if len(summaries) != 1:
             raise _failure("capture summary is missing")
         return summaries[0]
@@ -139,69 +187,11 @@ def capture_native_unit_inventory(
         RoutingError,
         SnapshotPublishError,
         OSError,
+        RuntimeError,
         TypeError,
         ValueError,
     ) as error:
         raise _failure("native inventory capture failed") from error
-
-
-def _capture_all(
-    inputs: NativeUnitCaptureInputs,
-    staging: Path,
-    sources: tuple[ValidatedPublicPoolSource, ...],
-    routing: RoutingIdentity,
-    nonces: tuple[str, ...],
-    runner: NativeProcessRunner,
-) -> tuple[NativeObservation, ...]:
-    runtime = NativeUnitRuntime(
-        inputs.libreoffice,
-        inputs.pdfinfo,
-        inputs.font_manifest,
-        routing,
-    )
-    requests: list[NativeUnitRequest] = []
-    nonce_index = 0
-    root = inputs.public_pool_manifest.parent
-    for source in sources:
-        for run in (1, 2):
-            document_format = source.document_format
-            source_id = source.source_id
-            relative_path = source.relative_path
-            requests.append(
-                NativeUnitRequest(
-                    NativeUnitSource(
-                        source_id,
-                        document_format,
-                        root / relative_path,
-                        relative_path,
-                    ),
-                    runtime,
-                    staging
-                    / "observations"
-                    / document_format.value
-                    / source_id
-                    / f"run-{run}",
-                    run,
-                    nonces[nonce_index],
-                )
-            )
-            nonce_index += 1
-    with ThreadPoolExecutor(max_workers=inputs.workers) as executor:
-        futures = [
-            executor.submit(capture_native_observation, request, runner)
-            for request in requests
-        ]
-        observations = [future.result() for future in as_completed(futures)]
-    return tuple(
-        sorted(
-            observations,
-            key=lambda item: (
-                item.source.document_format.value,
-                item.source.source_id,
-                item.run,
-            ),
-        )
-    )
 
 
 def _validation_inputs(
@@ -244,6 +234,12 @@ def _valid_nonce(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
     )
+
+
+def _overlap(first: Path, second: Path) -> bool:
+    left = first.absolute()
+    right = second.absolute()
+    return left == right or left.is_relative_to(right) or right.is_relative_to(left)
 
 
 def _failure(detail: str) -> NativeUnitError:

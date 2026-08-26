@@ -74,11 +74,17 @@ def validate_runtime_bindings(
 ) -> LockedTool:
     tools = object_value(values, "tools")
     require_keys(tools, {"libreoffice", "pdfinfo"}, "native.inventory.tools")
-    _ = _validate_tool(libreoffice, object_value(tools, "libreoffice"), ("--version",))
+    _ = _validate_tool(
+        libreoffice,
+        object_value(tools, "libreoffice"),
+        ("--version",),
+        "libreoffice_version",
+    )
     locked_pdfinfo = _validate_tool(
         pdfinfo,
         object_value(tools, "pdfinfo"),
         ("-v",),
+        "pdfinfo_version",
     )
     runtime = object_value(values, "runtime")
     require_keys(
@@ -161,8 +167,13 @@ def _validate_tool(
     path: Path,
     record: dict[str, JsonValue],
     arguments: tuple[str, ...],
+    role: str,
 ) -> LockedTool:
-    require_keys(record, {"name", "sha256", "version"}, "native.inventory.tool")
+    require_keys(
+        record,
+        {"name", "sha256", "version", "version_probe"},
+        "native.inventory.tool",
+    )
     before = stable_file(path, executable=True, maximum=_MAX_TOOL_BYTES)
     stdout, stderr = _execute(path, arguments)
     version = _version(stdout + stderr)
@@ -175,6 +186,19 @@ def _validate_tool(
         or string_value(record, "version") != version
     ):
         raise _failure("tool binding differs")
+    probe = object_value(record, "version_probe")
+    require_keys(
+        probe,
+        {"role", "arguments", "timeout_seconds", "exit_code"},
+        "native.inventory.tool.version_probe",
+    )
+    if (
+        string_value(probe, "role") != role
+        or string_list(probe, "arguments") != list(arguments)
+        or integer_value(probe, "timeout_seconds") != 120
+        or integer_value(probe, "exit_code") != 0
+    ):
+        raise _failure("tool version probe differs")
     return LockedTool(*before, version)
 
 

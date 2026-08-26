@@ -9,6 +9,7 @@ from evaluate.multiformat_corpus_types import CorpusError, DocumentFormat
 from evaluate.multiformat_public_pool_config import validate_repository_path
 from evaluate.multiformat_public_pool_types import (
     EXCLUDED_PATH_TOKENS,
+    EXCLUDED_REPOSITORY_PATHS,
     MAX_SOURCE_BYTES,
     BlobFetcher,
     PublicPoolError,
@@ -79,11 +80,14 @@ def _candidate_paths(
         raise PublicPoolError("public pool tree metadata is invalid")
     if truncated and not group.static_paths:
         raise PublicPoolError("public pool tree is truncated")
-    entries = tree.get("tree")
-    if not isinstance(entries, list) or any(
-        not isinstance(item, dict) for item in entries
-    ):
+    raw_entries = tree.get("tree")
+    if not isinstance(raw_entries, list):
         raise PublicPoolError("public pool tree is invalid")
+    entries: list[dict[str, JsonValue]] = []
+    for item in raw_entries:
+        if not isinstance(item, dict):
+            raise PublicPoolError("public pool tree is invalid")
+        entries.append(item)
     available: dict[str, int] = {}
     for item in entries:
         path = item.get("path")
@@ -98,6 +102,7 @@ def _candidate_paths(
         lower = path.lower()
         if (
             path not in available
+            or path in EXCLUDED_REPOSITORY_PATHS
             or not 0 < available[path] <= MAX_SOURCE_BYTES
             or not lower.endswith(suffix)
             or any(token in lower for token in EXCLUDED_PATH_TOKENS)

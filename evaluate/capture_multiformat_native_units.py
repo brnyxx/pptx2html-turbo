@@ -38,6 +38,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     trusted.pdfinfo,
                     cast(Path, arguments.output_dir),
                     cast(int, arguments.workers),
+                    cast(Path | None, arguments.cache_dir),
                 )
             )
         else:
@@ -70,6 +71,7 @@ def _parser() -> argparse.ArgumentParser:
     _add_trusted_arguments(capture)
     _ = capture.add_argument("--output-dir", type=Path, required=True)
     _ = capture.add_argument("--workers", type=int, required=True)
+    _ = capture.add_argument("--cache-dir", type=Path)
     validate = commands.add_parser("validate")
     _add_trusted_arguments(validate)
     _ = validate.add_argument("--inventory-root", type=Path, required=True)

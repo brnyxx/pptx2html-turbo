@@ -61,6 +61,35 @@ class NativeUnitRuntime:
     pdfinfo: Path
     font_bundle: Path
     routing: RoutingIdentity
+    tools: NativeCaptureTools | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NativeVersionProbe:
+    role: str
+    arguments: tuple[str, ...]
+    timeout_seconds: int
+    exit_code: int
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCaptureTool:
+    identity: NativeStableFile
+    version: str
+    probe: NativeVersionProbe
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCaptureTools:
+    libreoffice: NativeCaptureTool
+    pdfinfo: NativeCaptureTool
+
+
+@dataclass(frozen=True, slots=True)
+class NativeExecutableBinding:
+    path: Path
+    identity: NativeStableFile
+    shell_script: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +102,7 @@ class NativeProcessRequest:
     timeout_seconds: int
     max_log_bytes: int
     executable_identity: NativeStableFile | None = None
+    executable_snapshot: NativeExecutableBinding | None = None
 
 
 class NativeProcessRunner(Protocol):
@@ -196,7 +226,7 @@ def execution_record(data: NativeExecutionData) -> dict[str, JsonValue]:
         "profile_isolated": data.route_kind is NativeRouteKind.OFFICE,
     }
     record: dict[str, JsonValue] = {
-        "schema_version": 1,
+        "schema_version": 2 if request.runtime.tools is not None else 1,
         "source": {
             "id": request.source.source_id,
             "format": request.source.document_format.value,

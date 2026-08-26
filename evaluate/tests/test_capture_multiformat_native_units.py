@@ -35,6 +35,8 @@ class CaptureMultiFormatNativeUnitsCliTests(unittest.TestCase):
                     "inventory",
                     "--workers",
                     "4",
+                    "--cache-dir",
+                    "cache",
                 ]
             )
 
@@ -42,6 +44,7 @@ class CaptureMultiFormatNativeUnitsCliTests(unittest.TestCase):
         inputs = cast(NativeUnitCaptureInputs, capture.call_args.args[0])
         self.assertEqual(inputs.output_dir, Path("inventory"))
         self.assertEqual(inputs.workers, 4)
+        self.assertEqual(inputs.cache_dir, Path("cache"))
         self.assertEqual(
             cast(dict[str, object], json.loads(output.getvalue())),
             self._summary_value(),

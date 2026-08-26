@@ -5,6 +5,10 @@ from evaluate.multiformat_evaluator_security_files import (
     SECURITY_TEST_FILES,
     SECURITY_WRITER_FILES,
 )
+from evaluate.multiformat_evaluator_native_ready_files import (
+    NATIVE_READY_ENGINE_FILES,
+    NATIVE_READY_TEST_FILES,
+)
 
 EVALUATOR_FILES = (
     ".github/workflows/capture-office-oracles.yml",
@@ -96,8 +100,7 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_corpus_source_fs.py",
     "evaluate/multiformat_corpus_types.py",
     "evaluate/multiformat_package_validation.py",
-    "evaluate/multiformat_ready_tree_io.py",
-    "evaluate/multiformat_ready_tree_types.py",
+    *NATIVE_READY_ENGINE_FILES,
     "evaluate/multiformat_cfb.py",
     "evaluate/multiformat_pdf.py",
     *SECURITY_ENGINE_FILES,
@@ -183,6 +186,7 @@ EVALUATOR_FILES = (
     "evaluate/tests/test_multiformat_public_pool_entries.py",
     "evaluate/tests/test_multiformat_public_pool_final_binding.py",
     "evaluate/tests/test_multiformat_public_pool_filesystem.py",
+    *NATIVE_READY_TEST_FILES,
     *SECURITY_WRITER_FILES,
     "evaluate/tests/test_assemble_multiformat_report.py",
     "evaluate/tests/test_capture_multiformat_office_oracles.py",

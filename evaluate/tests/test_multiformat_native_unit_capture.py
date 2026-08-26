@@ -15,13 +15,14 @@ from evaluate.multiformat_native_unit_capture import (
     NativeUnitCaptureInputs,
     capture_native_unit_inventory,
 )
+from evaluate.multiformat_native_unit_snapshot import materialize_binary
 from evaluate.multiformat_native_unit_tool_validation import validate_pdf_count
 from evaluate.multiformat_native_unit_types import (
     NativeObservation,
     NativeUnitError,
     NativeUnitFailure,
 )
-from evaluate.multiformat_schema import string_value
+from evaluate.multiformat_schema import integer_value, object_value, string_value
 from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.tests.multiformat_native_unit_fixture import (
     NativeInventoryFixture,
@@ -42,10 +43,16 @@ class MultiFormatNativeUnitCaptureTests(unittest.TestCase):
                 nonce_index += 1
                 return f"{nonce_index:064x}"
 
-            with patch(
-                "evaluate.multiformat_native_unit_validation._validate_pdf_count",
-                wraps=validate_pdf_count,
-            ) as pdf_checks:
+            with (
+                patch(
+                    "evaluate.multiformat_native_unit_validation._validate_pdf_count",
+                    wraps=validate_pdf_count,
+                ) as pdf_checks,
+                patch(
+                    "evaluate.multiformat_native_unit_snapshot_pool.materialize_binary",
+                    wraps=materialize_binary,
+                ) as materialize,
+            ):
                 summary = capture_native_unit_inventory(
                     self._inputs(fixture),
                     runner=runner,
@@ -54,6 +61,9 @@ class MultiFormatNativeUnitCaptureTests(unittest.TestCase):
 
             values = read_strict_object(fixture.output / "native-unit-inventory.json")
             sources = object_list(values, "sources", "native.inventory.sources")
+            tools = object_value(values, "tools")
+            gate = object_value(values, "two_worker_gate")
+            preflight = object_value(values, "convertibility_preflight")
             ordering = [
                 (string_value(source, "format"), string_value(source, "id"))
                 for source in sources
@@ -62,6 +72,55 @@ class MultiFormatNativeUnitCaptureTests(unittest.TestCase):
             self.assertEqual(summary.sources, 525)
             self.assertEqual(summary.observations, 1_050)
             self.assertEqual(pdf_checks.call_count, 1_050)
+            self.assertEqual(materialize.call_count, 2)
+            self.assertEqual(integer_value(values, "schema_version"), 2)
+            self.assertEqual(integer_value(preflight, "worker_count"), 1)
+            self.assertEqual(integer_value(preflight, "source_count"), 525)
+            self.assertEqual(integer_value(gate, "worker_count"), 2)
+            self.assertEqual(
+                len(
+                    object_list(
+                        gate,
+                        "observations",
+                        "native.inventory.two_worker_gate.observations",
+                    )
+                ),
+                2,
+            )
+            self.assertEqual(
+                object_value(object_value(tools, "libreoffice"), "version_probe"),
+                {
+                    "arguments": ["--version"],
+                    "exit_code": 0,
+                    "role": "libreoffice_version",
+                    "timeout_seconds": 120,
+                },
+            )
+            self.assertEqual(
+                object_value(object_value(tools, "pdfinfo"), "version_probe"),
+                {
+                    "arguments": ["-v"],
+                    "exit_code": 0,
+                    "role": "pdfinfo_version",
+                    "timeout_seconds": 120,
+                },
+            )
+            commands = [request.command for request in runner.requests]
+            self.assertEqual(
+                sum(command[-1:] == ("--version",) for command in commands), 1
+            )
+            self.assertEqual(sum(command[-1:] == ("-v",) for command in commands), 1)
+            first_conversion = next(
+                index
+                for index, command in enumerate(commands)
+                if "--convert-to" in command
+            )
+            self.assertTrue(
+                all(
+                    command[-1:] in {("--version",), ("-v",)}
+                    for command in commands[:first_conversion]
+                )
+            )
             self.assertEqual(len(sources), 525)
             self.assertEqual(nonce_index, 1_050)
             self.assertEqual(ordering, sorted(ordering))
@@ -150,7 +209,7 @@ class MultiFormatNativeUnitCaptureTests(unittest.TestCase):
                     nonce_factory=self._nonce_factory(),
                 )
                 with patch(
-                    "evaluate.multiformat_native_unit_capture.as_completed",
+                    "evaluate.multiformat_native_unit_capture_phase.as_completed",
                     side_effect=_reverse_futures,
                 ):
                     _ = capture_native_unit_inventory(

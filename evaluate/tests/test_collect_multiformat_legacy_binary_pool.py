@@ -44,9 +44,9 @@ class CollectMultiFormatLegacyBinaryPoolTests(unittest.TestCase):
         self.assertEqual(
             {group.producer: group.quota for group in ppt.groups},
             {
-                "apache-poi": 26,
-                "aspose-slides": 2,
-                "npoi": 12,
+                "apache-poi": 28,
+                "aspose-slides": 1,
+                "npoi": 11,
             },
         )
 

@@ -23,6 +23,7 @@ class SourceDescriptor:
     descriptor: int
     digest: str
     identity: FileIdentity
+    value: bytes
 
 
 @contextmanager
@@ -46,10 +47,10 @@ def stable_source_descriptor(
             opened = _stat_descriptor(descriptor, relative_path)
             if not _same_identity(path_before, opened):
                 raise CorpusError("source.changed", relative_path)
-            digest, before, after = _hash_descriptor(descriptor, relative_path)
+            digest, value, before, after = _hash_descriptor(descriptor, relative_path)
             if not all(_same_identity(path_before, value) for value in (before, after)):
                 raise CorpusError("source.changed", relative_path)
-            yield SourceDescriptor(descriptor, digest, initial_identity)
+            yield SourceDescriptor(descriptor, digest, initial_identity, value)
             final_descriptor = _stat_descriptor(descriptor, relative_path)
             final_path = _stat_path(path, relative_path)
             if not _same_identity(
@@ -59,11 +60,6 @@ def stable_source_descriptor(
                 raise CorpusError("source.changed", relative_path)
     except TreeIdentityError as error:
         raise CorpusError("source.path", relative_path) from error
-
-
-def descriptor_path(descriptor: int) -> Path:
-    """Return a path that reopens the already-owned descriptor, not its name."""
-    return Path(f"/dev/fd/{descriptor}")
 
 
 def rewind_descriptor(descriptor: int, relative_path: str) -> None:
@@ -76,17 +72,19 @@ def rewind_descriptor(descriptor: int, relative_path: str) -> None:
 def _hash_descriptor(
     descriptor: int,
     relative_path: str,
-) -> tuple[str, os.stat_result, os.stat_result]:
+) -> tuple[str, bytes, os.stat_result, os.stat_result]:
     try:
         _ = os.lseek(descriptor, 0, os.SEEK_SET)
         before = os.fstat(descriptor)
         digest = hashlib.sha256()
+        chunks: list[bytes] = []
         while chunk := os.read(descriptor, 1024 * 1024):
             digest.update(chunk)
+            chunks.append(chunk)
         after = os.fstat(descriptor)
     except OSError as error:
         raise CorpusError("source.read", relative_path) from error
-    return digest.hexdigest(), before, after
+    return digest.hexdigest(), b"".join(chunks), before, after
 
 
 def _stat_descriptor(descriptor: int, relative_path: str) -> os.stat_result:

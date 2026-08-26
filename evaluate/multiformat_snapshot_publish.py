@@ -76,6 +76,7 @@ def publish_snapshot(
     writer: Callable[[Path], None],
     *,
     lock_namespace: str = "snapshot",
+    before_publish: Callable[[], None] | None = None,
 ) -> None:
     """Publish a complete directory tree without a readiness marker."""
     if not valid_lock_namespace(lock_namespace):
@@ -134,6 +135,8 @@ def publish_snapshot(
             raise SnapshotPublishError(
                 staging, SnapshotPublishFailure.PUBLICATION_FAILED
             )
+        if before_publish is not None:
+            before_publish()
         try:
             _atomic_rename_noreplace(staging, target, parent_descriptor)
             renamed = True
@@ -189,10 +192,6 @@ def _acquire_lock(path: Path, parent_descriptor: int) -> tuple[int, _Identity]:
     except OSError as error:
         raise SnapshotPublishError(path, SnapshotPublishFailure.LOCKED) from error
     return descriptor, _Identity(*identity)
-
-
-def _identity(value: os.stat_result) -> _Identity:
-    return _Identity(value.st_dev, value.st_ino)
 
 
 def _atomic_rename_noreplace(
@@ -261,7 +260,8 @@ def _matches(
         value = path.lstat()
     except FileNotFoundError:
         return False
-    return expected_mode(value.st_mode) and _identity(value) == identity
+    current = _Identity(value.st_dev, value.st_ino)
+    return expected_mode(value.st_mode) and current == identity
 
 
 def _unlink_owned_file(

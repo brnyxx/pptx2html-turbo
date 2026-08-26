@@ -55,6 +55,7 @@ class MultiFormatLegacyRuntimeTests(unittest.TestCase):
                 )
                 self.assertEqual(count, 1)
                 self.assertTrue(destination.is_file())
+                self.assertFalse((root / f"work-{document_format.value}").exists())
 
             # Then
             self.assertEqual(
@@ -134,6 +135,7 @@ class MultiFormatLegacyRuntimeTests(unittest.TestCase):
                 )
 
             self.assertFalse(destination.exists())
+            self.assertFalse((root / "work").exists())
 
     def _tools(self, root: Path) -> LegacyExternalTools:
         soffice = root / "soffice"

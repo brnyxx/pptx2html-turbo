@@ -14,11 +14,12 @@ from evaluate.multiformat_native_unit_files import (
     identity,
     output_file,
     stable_bytes,
-    tool_identity,
-    tool_path,
     verify_file,
     verify_tool,
     write_snapshot,
+)
+from evaluate.multiformat_native_unit_observation_tools import (
+    resolve_observation_tools,
 )
 from evaluate.multiformat_native_unit_process import (
     environment,
@@ -26,7 +27,6 @@ from evaluate.multiformat_native_unit_process import (
     make_request,
     pages,
     render,
-    version,
 )
 from evaluate.multiformat_native_unit_types import (
     NativeExecutionData,
@@ -42,8 +42,6 @@ from evaluate.multiformat_native_unit_types import (
     NativeUnitRequest,
     execution_record,
 )
-
-VERSION_TIMEOUT_SECONDS = 120
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,10 +87,6 @@ def _workspace(
         folder.mkdir()
     staged = folders[0] / f"source.{request.source.document_format.value}"
     _ = copy_stable(source, staged, source_file, request)
-    pdfinfo = tool_path(request.runtime.pdfinfo, request)
-    pdfinfo_file = tool_identity(pdfinfo, request)
-    office = tool_path(request.runtime.soffice, request) if route.office else None
-    office_file = tool_identity(office, request) if office else None
     font = (
         font_environment(request, workspace)
         if route.kind is NativeRouteKind.OFFICE
@@ -101,52 +95,21 @@ def _workspace(
     env = environment(folders[3], folders[4], font)
     env_values = dict(env)
     processes: list[NativeProcessRecord] = []
-    office_version: str | None = None
-    if office is not None:
-        office_log = invoke(
-            NativeProcessContext(
-                runner,
-                request,
-                make_request(
-                    NativeProcessSpec(
-                        office,
-                        ("--version",),
-                        workspace,
-                        env,
-                        folders[2] / "soffice-version",
-                        timeout=VERSION_TIMEOUT_SECONDS,
-                        executable_identity=office_file,
-                    )
-                ),
-                "soffice-version",
-            ),
-            "libreoffice_version",
-            ("--version",),
-            processes,
-        )
-        office_version = version(office_log, request)
-    version_log = invoke(
-        NativeProcessContext(
-            runner,
-            request,
-            make_request(
-                NativeProcessSpec(
-                    pdfinfo,
-                    ("-v",),
-                    workspace,
-                    env,
-                    folders[2] / "pdfinfo-version",
-                    timeout=VERSION_TIMEOUT_SECONDS,
-                    executable_identity=pdfinfo_file,
-                )
-            ),
-            "pdfinfo-version",
-        ),
-        "pdfinfo_version",
-        ("-v",),
+    tools = resolve_observation_tools(
+        workspace,
+        folders[2],
+        env,
+        route,
+        request,
+        runner,
         processes,
     )
-    pdfinfo_version = version(version_log, request)
+    pdfinfo = tools.pdfinfo
+    pdfinfo_file = tools.pdfinfo_identity
+    pdfinfo_version = tools.pdfinfo_version
+    office = tools.office
+    office_file = tools.office_identity
+    office_version = tools.office_version
     if route.office is None:
         pdf = folders[1] / "source.pdf"
         _ = copy_stable(source, pdf, source_file, request)

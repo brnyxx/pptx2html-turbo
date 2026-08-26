@@ -56,6 +56,11 @@ class CollectMultiFormatPublicPoolTests(unittest.TestCase):
         self.assertTrue(
             all(len(group.commit) == 40 for plan in plans for group in plan.groups)
         )
+        xlsx = next(plan for plan in plans if plan.document_format.value == "xlsx")
+        quotas = {group.producer: group.quota for group in xlsx.groups}
+        self.assertEqual(quotas["apache-tika"], 14)
+        self.assertEqual(quotas["openxml-sdk"], 16)
+        self.assertEqual(sum(quotas.values()), xlsx.expected_count)
 
     def test_collects_exact_independent_valid_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

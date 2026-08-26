@@ -14,7 +14,14 @@ from evaluate.multiformat_candidate_process import (
     CandidateProcessFailure,
 )
 from evaluate.multiformat_native_unit_io import no_follow, read_descriptor
+from evaluate.multiformat_native_unit_snapshot_validation import (
+    stable_snapshot_file,
+    verify_executable_binding,
+)
 from evaluate.multiformat_native_unit_trusted import NativeTrustedExecutable
+from evaluate.multiformat_native_unit_types import (
+    NativeExecutableBinding,
+)
 
 _EXECUTION_DIRECTORY_MODE = stat.S_IRUSR | stat.S_IXUSR
 
@@ -28,7 +35,8 @@ class NativeExecutableSnapshot:
     binary_descriptor: int
     parent_descriptor: int
     root_identity: tuple[int, int]
-    library_linked: bool
+    linked_directories: tuple[str, ...]
+    binding: NativeExecutableBinding
 
 
 def materialize_binary(
@@ -40,6 +48,7 @@ def materialize_binary(
     binary_directory = -1
     binary_descriptor = -1
     root: Path | None = None
+    linked_directories: list[str] = []
     try:
         _verify_trusted_source(trusted)
         parent_descriptor = os.open(
@@ -59,10 +68,9 @@ def materialize_binary(
             os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow(),
             dir_fd=root_descriptor,
         )
-        library = trusted.path.parent.parent / "lib"
-        library_linked = library.is_dir()
-        if library_linked:
-            os.symlink(library.as_posix(), "lib", dir_fd=root_descriptor)
+        for name, directory in _dependency_directories(trusted.path):
+            os.symlink(directory.as_posix(), name, dir_fd=root_descriptor)
+            linked_directories.append(name)
         snapshot_name = f".trusted-executable-{_token()}"
         binary_descriptor = os.open(
             snapshot_name,
@@ -74,17 +82,31 @@ def materialize_binary(
         _verify_snapshot(binary_descriptor, content)
         if _requires_platform_signing(trusted.path):
             _ad_hoc_sign(root / "bin" / snapshot_name)
+        os.fchmod(binary_descriptor, stat.S_IRUSR | stat.S_IXUSR)
+        os.close(binary_descriptor)
+        binary_descriptor = os.open(
+            snapshot_name,
+            os.O_RDONLY | no_follow(),
+            dir_fd=binary_directory,
+        )
+        snapshot_path = root / "bin" / snapshot_name
+        binding = NativeExecutableBinding(
+            snapshot_path,
+            stable_snapshot_file(binary_descriptor),
+            trusted.shell_script,
+        )
         os.fchmod(binary_directory, _EXECUTION_DIRECTORY_MODE)
         os.fchmod(root_descriptor, _EXECUTION_DIRECTORY_MODE)
         return NativeExecutableSnapshot(
-            root / "bin" / snapshot_name,
+            snapshot_path,
             root_name,
             root_descriptor,
             binary_directory,
             binary_descriptor,
             parent_descriptor,
             root_identity,
-            library_linked,
+            tuple(linked_directories),
+            binding,
         )
     except OSError as error:
         _close(binary_descriptor)
@@ -92,7 +114,7 @@ def materialize_binary(
         _close(root_descriptor)
         _close(parent_descriptor)
         if root is not None:
-            _remove_partial(root)
+            _remove_partial(root, tuple(linked_directories))
         raise CandidateProcessError(
             CandidateProcessFailure.EXECUTABLE_UNTRUSTED
         ) from error
@@ -104,8 +126,8 @@ def release_binary(snapshot: NativeExecutableSnapshot) -> None:
         os.fchmod(snapshot.root_descriptor, stat.S_IRWXU)
         os.fchmod(snapshot.binary_directory_descriptor, stat.S_IRWXU)
         os.unlink(snapshot.path.name, dir_fd=snapshot.binary_directory_descriptor)
-        if snapshot.library_linked:
-            os.unlink("lib", dir_fd=snapshot.root_descriptor)
+        for name in snapshot.linked_directories:
+            os.unlink(name, dir_fd=snapshot.root_descriptor)
         os.rmdir("bin", dir_fd=snapshot.root_descriptor)
         if not _entry_matches(
             snapshot.parent_descriptor, snapshot.root_name, snapshot.root_identity
@@ -124,6 +146,20 @@ def release_binary(snapshot: NativeExecutableSnapshot) -> None:
         _close(snapshot.binary_directory_descriptor)
         _close(snapshot.root_descriptor)
         _close(snapshot.parent_descriptor)
+
+
+def verify_binary(snapshot: NativeExecutableSnapshot, *, full_content: bool) -> None:
+    verify_executable_binding(snapshot.binding, full_content=full_content)
+    try:
+        if (
+            stable_snapshot_file(snapshot.binary_descriptor)
+            != snapshot.binding.identity
+        ):
+            raise OSError("execution snapshot descriptor changed")
+    except OSError as error:
+        raise CandidateProcessError(
+            CandidateProcessFailure.EXECUTABLE_UNTRUSTED
+        ) from error
 
 
 def _verify_trusted_source(trusted: NativeTrustedExecutable) -> None:
@@ -146,8 +182,9 @@ def _verify_snapshot(descriptor: int, content: bytes) -> None:
 
 
 def _requires_platform_signing(source: Path) -> bool:
-    return sys.platform == "darwin" and source.as_posix().startswith(
-        ("/bin/", "/usr/bin/")
+    return sys.platform == "darwin" and (
+        source.as_posix().startswith(("/bin/", "/usr/bin/"))
+        or _app_bundle_contents(source) is not None
     )
 
 
@@ -167,7 +204,7 @@ def _ad_hoc_sign(path: Path) -> None:
         raise OSError("platform binary signing failed") from error
 
 
-def _remove_partial(root: Path) -> None:
+def _remove_partial(root: Path, linked_directories: tuple[str, ...]) -> None:
     try:
         os.chmod(root, stat.S_IRWXU)
         binary_directory = root / "bin"
@@ -175,9 +212,10 @@ def _remove_partial(root: Path) -> None:
         for child in binary_directory.iterdir():
             child.unlink()
         binary_directory.rmdir()
-        library = root / "lib"
-        if library.is_symlink():
-            library.unlink()
+        for name in linked_directories:
+            dependency = root / name
+            if dependency.is_symlink():
+                dependency.unlink()
         root.rmdir()
     except OSError:
         return
@@ -191,6 +229,27 @@ def _entry_matches(
     except FileNotFoundError:
         return False
     return _identity(value) == expected
+
+
+def _dependency_directories(path: Path) -> tuple[tuple[str, Path], ...]:
+    parent = path.parent.parent
+    result: list[tuple[str, Path]] = []
+    library = parent / "lib"
+    if library.is_dir():
+        result.append(("lib", library))
+    if _app_bundle_contents(path) is not None:
+        for name in ("Frameworks", "Resources"):
+            directory = parent / name
+            if directory.is_dir():
+                result.append((name, directory))
+    return tuple(result)
+
+
+def _app_bundle_contents(path: Path) -> Path | None:
+    contents = path.parent.parent
+    if path.parent.name == "MacOS" and contents.name == "Contents":
+        return contents
+    return None
 
 
 def _token() -> str:
