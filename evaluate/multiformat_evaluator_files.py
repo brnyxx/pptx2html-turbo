@@ -9,6 +9,10 @@ from evaluate.multiformat_evaluator_native_ready_files import (
     NATIVE_READY_ENGINE_FILES,
     NATIVE_READY_TEST_FILES,
 )
+from evaluate.multiformat_evaluator_portable_wave_files import (
+    PORTABLE_WAVE_ENGINE_FILES,
+    PORTABLE_WAVE_TEST_FILES,
+)
 
 EVALUATOR_FILES = (
     ".github/workflows/capture-office-oracles.yml",
@@ -191,6 +195,8 @@ EVALUATOR_FILES = (
     "evaluate/tests/test_multiformat_public_pool_final_binding.py",
     "evaluate/tests/test_multiformat_public_pool_filesystem.py",
     *NATIVE_READY_TEST_FILES,
+    *PORTABLE_WAVE_ENGINE_FILES,
+    *PORTABLE_WAVE_TEST_FILES,
     *SECURITY_WRITER_FILES,
     "evaluate/tests/test_assemble_multiformat_report.py",
     "evaluate/tests/test_capture_multiformat_office_oracles.py",

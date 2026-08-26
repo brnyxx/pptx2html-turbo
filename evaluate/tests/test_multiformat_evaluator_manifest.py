@@ -5,6 +5,10 @@ from pathlib import Path
 from unittest import mock
 
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
+from evaluate.multiformat_evaluator_portable_wave_files import (
+    PORTABLE_WAVE_ENGINE_FILES,
+    PORTABLE_WAVE_TEST_FILES,
+)
 from evaluate.multiformat_evaluator_manifest import validate_evaluator_manifest
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.scaffold_multiformat_evidence import scaffold_evidence
@@ -12,6 +16,11 @@ from evaluate.tests.multiformat_gate_fixture import CONTRACT_PATH, PROJECT_ROOT
 
 
 class MultiFormatEvaluatorManifestTests(unittest.TestCase):
+    def test_manifest_binds_portable_wave_producers_and_tests(self) -> None:
+        for path in (*PORTABLE_WAVE_ENGINE_FILES, *PORTABLE_WAVE_TEST_FILES):
+            with self.subTest(path=path):
+                self.assertIn(path, EVALUATOR_FILES)
+
     def test_manifest_boundary_includes_portable_lock_validation(self) -> None:
         self.assertIn("evaluate/multiformat_reference_profile.py", EVALUATOR_FILES)
         self.assertIn("evaluate/multiformat_portable_lock.py", EVALUATOR_FILES)
