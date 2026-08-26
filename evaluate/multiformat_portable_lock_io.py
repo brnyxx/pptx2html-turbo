@@ -1,17 +1,98 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
-import subprocess
+import shlex
+import tempfile
 from pathlib import Path
 
+from evaluate.multiformat_candidate_process import (
+    CandidateProcessError,
+    run_bounded_process,
+)
 from evaluate.multiformat_schema import JsonValue, sha256_file, string_value
 from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.multiformat_subprocess import clean_subprocess_environment
 
+MAX_VERSION_BYTES = 1024 * 1024
+
 
 class PortableLockIoError(ValueError):
     pass
+
+
+def validate_candidate_locks(browser_path: Path, runtime_path: Path) -> None:
+    browser = read_strict_object(browser_path)
+    expected = {
+        "chromium",
+        "executable_sha256",
+        "playwright",
+        "os",
+        "architecture",
+        "font_environment_sha256",
+        "viewport_width",
+        "viewport_height",
+        "device_scale_factor",
+        "locale",
+        "timezone",
+        "color_profile",
+        "reduced_motion",
+        "animations",
+    }
+    runtime = read_strict_object(runtime_path)
+    if set(browser) != expected:
+        raise PortableLockIoError("portable browser lock is incomplete")
+    if runtime.get("schema_version") != 1 or runtime.get("status") != "locked":
+        raise PortableLockIoError("portable candidate runtime lock is incomplete")
+    for field in (
+        "browser",
+        "candidate_runtime",
+        "sandbox_verifier",
+        "font_bundle_sha256",
+    ):
+        if field not in runtime:
+            raise PortableLockIoError("portable candidate runtime lock is incomplete")
+
+
+def validate_candidate_artifacts(
+    runtime_path: Path, paths: dict[str, Path], versions: dict[str, str], revision: str
+) -> None:
+    candidate = read_strict_object(runtime_path)
+    runtime = candidate.get("candidate_runtime")
+    verifier = candidate.get("sandbox_verifier")
+    browser = read_strict_object(paths["browser-lock"])
+    if (
+        candidate.get("browser") != browser
+        or browser.get("chromium") != versions["chromium"]
+        or browser.get("executable_sha256") != sha256_file(paths["chromium"])
+    ):
+        raise PortableLockIoError("portable browser runtime lock differs")
+    if (
+        not isinstance(runtime, dict)
+        or not isinstance(verifier, dict)
+        or runtime.get("build_revision") != revision
+    ):
+        raise PortableLockIoError("portable candidate runtime lock is incomplete")
+    tools = {
+        "converter": "converter",
+        "soffice": "libreoffice",
+        "pdftohtml": "pdftohtml",
+        "pdfinfo": "poppler-metadata",
+        "receipt_signer": "receipt-signer",
+    }
+    for name, key in tools.items():
+        if (
+            runtime.get(f"{name}_sha256") != sha256_file(paths[key])
+            or runtime.get(f"{name}_version") != versions[key]
+        ):
+            raise PortableLockIoError("portable candidate tool lock differs")
+    if candidate.get("font_bundle_sha256") != sha256_file(paths["font-bundle"]):
+        raise PortableLockIoError("portable candidate font lock differs")
+    if verifier.get("public_key_sha256") != sha256_file(
+        paths["candidate-sandbox-public-key"]
+    ) or verifier.get("openssl_sha256") != sha256_file(paths["openssl"]):
+        raise PortableLockIoError("portable candidate sandbox lock differs")
 
 
 def bind_corpus(source: Path, root: Path, destination_root: Path) -> Path:
@@ -24,6 +105,42 @@ def bind_corpus(source: Path, root: Path, destination_root: Path) -> Path:
     return destination / resolved.name
 
 
+def bind_package_executable(source: Path, root: Path, destination: Path) -> Path:
+    resolved = source.resolve(strict=True)
+    if resolved.is_relative_to(root):
+        return resolved
+    package = next(
+        (item for item in (resolved, *resolved.parents) if item.suffix == ".app"), None
+    )
+    if package is None:
+        return bind_file(resolved, root, destination)
+    copied = destination / package.name
+    shutil.copytree(package, copied, symlinks=True)
+    return copied / resolved.relative_to(package)
+
+
+def bind_font_bundle(source: Path, root: Path, destination: Path) -> Path:
+    resolved = source.resolve(strict=True)
+    if resolved.is_file():
+        return bind_file(resolved, root, destination)
+    if not resolved.is_dir():
+        raise PortableLockIoError("portable font bundle is unavailable")
+    copied = destination / "sources"
+    shutil.copytree(resolved, copied, symlinks=False)
+    manifest = destination / "manifest.json"
+    entries = [
+        {"path": item.relative_to(copied).as_posix(), "sha256": sha256_file(item)}
+        for item in sorted(copied.rglob("*"))
+        if item.is_file()
+    ]
+    if not entries:
+        raise PortableLockIoError("portable font bundle is empty")
+    manifest.write_text(
+        json.dumps({"entries": entries}, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return manifest
+
+
 def bind_file(source: Path, root: Path, destination: Path) -> Path:
     resolved = source.resolve(strict=True)
     if resolved.is_relative_to(root):
@@ -33,17 +150,26 @@ def bind_file(source: Path, root: Path, destination: Path) -> Path:
     return destination
 
 
-def tool_version(path: Path) -> str:
-    result = subprocess.run(
-        [path.as_posix(), "--version"],
-        check=False,
-        capture_output=True,
-        env=clean_subprocess_environment(),
-        timeout=15,
-    )
-    if result.returncode != 0 or len(result.stdout) > 1024 * 1024:
+def tool_version(path: Path, arguments: tuple[str, ...]) -> str:
+    try:
+        with tempfile.TemporaryDirectory(prefix="portable-version-") as temporary:
+            root = Path(temporary)
+            stdout, stderr = root / "stdout", root / "stderr"
+            code = run_bounded_process(
+                (path.as_posix(), *arguments),
+                root,
+                clean_subprocess_environment(),
+                stdout,
+                stderr,
+                timeout_seconds=15,
+                max_log_bytes=MAX_VERSION_BYTES,
+            )
+            output = stdout.read_bytes() + stderr.read_bytes()
+    except (CandidateProcessError, OSError) as error:
+        raise PortableLockIoError("portable tool version probe failed") from error
+    if code != 0 or len(output) > MAX_VERSION_BYTES:
         raise PortableLockIoError("portable tool version probe failed")
-    value = result.stdout.decode("utf-8", errors="strict").strip()
+    value = output.decode("utf-8", errors="strict").strip()
     if not value:
         raise PortableLockIoError("portable tool version is empty")
     return value
@@ -61,6 +187,20 @@ def binding(root: Path, path: Path) -> dict[str, JsonValue]:
 
 def versioned(root: Path, path: Path, version: str) -> dict[str, JsonValue]:
     return {"version": version, **binding(root, path)}
+
+
+def write_sandbox_profile(path: Path) -> None:
+    path.write_text(
+        "(version 1)\n(allow default)\n(deny network*)\n"
+        "(allow network* (local unix-socket))\n"
+        "(allow network* (remote unix-socket))\n",
+        encoding="utf-8",
+    )
+
+
+def write_sandbox_wrapper(path: Path, executable: Path) -> None:
+    value = f'#!/bin/sh\nexec {shlex.quote(executable.resolve(strict=True).as_posix())} "$@"\n'
+    exclusive_write(path, value.encode(), 0o755)
 
 
 def exclusive_write(path: Path, value: bytes, mode: int) -> None:

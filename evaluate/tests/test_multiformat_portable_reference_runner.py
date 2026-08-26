@@ -100,7 +100,9 @@ class PortableReferenceRunnerTests(unittest.TestCase):
 
     def _tools(self, root: Path, width: int, height: int) -> PortableReferenceTools:
         profile = root / "sandbox.sb"
-        profile.write_text("(version 1)\n(allow default)\n(deny network*)\n")
+        profile.write_text(
+            "(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n"
+        )
         soffice = self._script(
             root,
             "soffice",

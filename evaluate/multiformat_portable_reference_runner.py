@@ -203,7 +203,7 @@ def _sandbox(
     profile = tools.sandbox_profile.resolve(strict=True)
     if (
         profile.read_text(encoding="utf-8")
-        != "(version 1)\n(allow default)\n(deny network*)\n"
+        != "(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n"
     ):
         raise PortableReferenceRunError("portable sandbox profile differs")
     return executable, "-f", profile.as_posix(), *command

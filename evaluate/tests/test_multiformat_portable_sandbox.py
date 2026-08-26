@@ -10,7 +10,9 @@ class PortableSandboxTests(unittest.TestCase):
     def test_real_profile_allows_local_execution_and_denies_socket(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             profile = Path(temp_dir) / "profile.sb"
-            profile.write_text("(version 1)\n(allow default)\n(deny network*)\n")
+            profile.write_text(
+                "(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n"
+            )
             local = subprocess.run(
                 ["/usr/bin/sandbox-exec", "-f", str(profile), "/bin/echo", "ok"],
                 capture_output=True,

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import platform
-import shlex
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
@@ -10,16 +9,18 @@ from evaluate.multiformat_portable_lock import validate_reference_lock
 from evaluate.multiformat_portable_lock_io import (
     bind_corpus as _bind_corpus,
     bind_file as _bind_file,
+    bind_font_bundle as _bind_font_bundle,
+    bind_package_executable as _bind_package_executable,
     binding as _binding,
-    exclusive_write as _exclusive_write,
     tool_version as _version,
+    validate_candidate_artifacts as _validate_candidate_artifacts,
+    validate_candidate_locks as _validate_candidate_locks,
     versioned as _versioned,
+    write_sandbox_profile as _write_sandbox_profile,
+    write_sandbox_wrapper as _write_sandbox_wrapper,
 )
+from evaluate.multiformat_portable_lock_keys import prepare_key_material
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
-from evaluate.multiformat_portable_reference_artifacts import (
-    load_raw_private_key,
-    write_raw_keypair,
-)
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import JsonValue, sha256_file, string_value
@@ -29,6 +30,10 @@ ROUTING = Path(__file__).parent / "multiformat/reference-routing.v1.json"
 
 
 class PortableLockMaterializeError(ValueError):
+    pass
+
+
+class PortableLockIncompleteError(PortableLockMaterializeError):
     pass
 
 
@@ -50,47 +55,53 @@ class PortableLockInputs:
     chromium: Path
     executor: Path
     sandbox_exec: Path
+    browser_lock: Path
+    candidate_runtime_lock: Path
+    converter: Path
+    pdftohtml: Path
+    openssl: Path
+    receipt_signer: Path
+    candidate_sandbox_public_key: Path
     private_key: Path
     generate_keys: bool = False
 
 
 def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
-    """Create and immediately validate corpus-scoped schema-2 portable locks."""
-    root = inputs.evidence_root.resolve(strict=True)
-    output = inputs.output_dir.parent.resolve(strict=True) / inputs.output_dir.name
-    if not output.is_relative_to(root):
-        raise PortableLockMaterializeError(
-            "portable lock output must be inside evidence root"
-        )
-    if output.exists():
-        raise PortableLockMaterializeError("portable lock output already exists")
-    private_destination = inputs.private_key.resolve(strict=False)
-    if private_destination.is_relative_to(
-        inputs.project_root.resolve(strict=True)
-    ) or private_destination.is_relative_to(root):
-        raise PortableLockMaterializeError(
-            "portable private key must remain outside the project and evidence root"
-        )
-    if inputs.generate_keys:
-        public_source = output / "keys/public.raw"
-        write_raw_keypair(inputs.private_key, public_source)
-        private = load_raw_private_key(inputs.private_key)
-    else:
-        private = load_raw_private_key(inputs.private_key)
-        public_source = output / "keys/public.raw"
-        public_source.parent.mkdir(parents=True)
-        _exclusive_write(public_source, private.public_key().public_bytes_raw(), 0o644)
+    skip = {"project_root", "evidence_root", "output_dir", "private_key"}
+    try:
+        for field in fields(inputs):
+            value = getattr(inputs, field.name)
+            artifacts = value if isinstance(value, tuple) else (value,)
+            if field.name not in skip:
+                for artifact in artifacts:
+                    if isinstance(artifact, Path):
+                        artifact.resolve(strict=True)
+    except OSError as error:
+        raise PortableLockIncompleteError(
+            "portable runtime artifact is unavailable"
+        ) from error
+    root, output, public_key = prepare_key_material(
+        inputs.project_root,
+        inputs.evidence_root,
+        inputs.output_dir,
+        inputs.private_key,
+        inputs.generate_keys,
+    )
     artifacts_dir = output / "artifacts"
     artifacts_dir.mkdir(parents=True)
     artifact_inputs = {
-        "libreoffice": inputs.libreoffice,
         "poppler-render": inputs.pdftoppm,
         "poppler-text": inputs.pdftotext,
         "poppler-metadata": inputs.pdfinfo,
         "canonicalizer": inputs.canonicalizer,
-        "font-bundle": inputs.font_bundle,
         "configuration": inputs.configuration,
-        "chromium": inputs.chromium,
+        "browser-lock": inputs.browser_lock,
+        "candidate-runtime-lock": inputs.candidate_runtime_lock,
+        "converter": inputs.converter,
+        "pdftohtml": inputs.pdftohtml,
+        "openssl": inputs.openssl,
+        "receipt-signer": inputs.receipt_signer,
+        "candidate-sandbox-public-key": inputs.candidate_sandbox_public_key,
         "executor": inputs.executor,
         "sandbox-exec": inputs.sandbox_exec,
         "contract": inputs.contract,
@@ -100,49 +111,41 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
         name: _bind_file(path, root, artifacts_dir / name)
         for name, path in artifact_inputs.items()
     }
-    public_key = public_source.resolve(strict=True)
+    paths["libreoffice"] = _bind_package_executable(
+        inputs.libreoffice, root, artifacts_dir / "libreoffice-package"
+    )
+    paths["chromium"] = _bind_package_executable(
+        inputs.chromium, root, artifacts_dir / "chromium-package"
+    )
+    paths["font-bundle"] = _bind_font_bundle(
+        inputs.font_bundle, root, artifacts_dir / "font-bundle"
+    )
+    if sha256_file(paths["candidate-sandbox-public-key"]) == sha256_file(public_key):
+        raise PortableLockMaterializeError(
+            "portable candidate verifier key must be distinct"
+        )
     versions = {
-        "libreoffice": _version(paths["libreoffice"]),
-        "poppler-render": _version(paths["poppler-render"]),
-        "poppler-text": _version(paths["poppler-text"]),
-        "poppler-metadata": _version(paths["poppler-metadata"]),
-        "chromium": _version(paths["chromium"]),
+        "libreoffice": _version(paths["libreoffice"], ("--version",)),
+        "poppler-render": _version(paths["poppler-render"], ("-v",)),
+        "poppler-text": _version(paths["poppler-text"], ("-v",)),
+        "poppler-metadata": _version(paths["poppler-metadata"], ("-v",)),
+        "chromium": _version(paths["chromium"], ("--version",)),
+        "converter": _version(paths["converter"], ("--version",)),
+        "pdftohtml": _version(paths["pdftohtml"], ("-v",)),
+        "openssl": _version(paths["openssl"], ("version",)),
+        "receipt-signer": _version(paths["receipt-signer"], ("--version",)),
     }
+    revision = current_project_revision(inputs.project_root)
     generated = output / "generated"
     generated.mkdir()
-    browser_lock = generated / "browser.json"
-    write_canonical_json(
-        browser_lock,
-        {
-            "schema_version": 1,
-            "version": versions["chromium"],
-            "sha256": sha256_file(paths["chromium"]),
-        },
-    )
-    candidate_runtime = generated / "candidate-runtime.json"
-    write_canonical_json(
-        candidate_runtime,
-        {
-            "schema_version": 1,
-            "libreoffice_sha256": sha256_file(paths["libreoffice"]),
-            "poppler": {
-                "render": sha256_file(paths["poppler-render"]),
-                "text": sha256_file(paths["poppler-text"]),
-                "metadata": sha256_file(paths["poppler-metadata"]),
-            },
-        },
-    )
+    browser_lock = paths["browser-lock"]
+    candidate_runtime = paths["candidate-runtime-lock"]
+    _validate_candidate_locks(browser_lock, candidate_runtime)
+    _validate_candidate_artifacts(candidate_runtime, paths, versions, revision)
     sandbox_profile = generated / "portable-reference.sb"
-    sandbox_profile.write_text(
-        "(version 1)\n(allow default)\n(deny network*)\n", encoding="utf-8"
-    )
+    _write_sandbox_profile(sandbox_profile)
     sandbox_wrapper = generated / "sandbox-exec"
-    wrapper = (
-        "#!/bin/sh\nexec "
-        + shlex.quote(inputs.sandbox_exec.resolve(strict=True).as_posix())
-        + ' "$@"\n'
-    ).encode()
-    _exclusive_write(sandbox_wrapper, wrapper, 0o755)
+    _write_sandbox_wrapper(sandbox_wrapper, inputs.sandbox_exec)
     attestation = generated / "attestation.json"
     write_canonical_json(
         attestation,
@@ -159,7 +162,6 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
             "sandbox_profile": _binding(root, sandbox_profile),
         },
     )
-    revision = current_project_revision(inputs.project_root)
     routing = load_reference_routing(ROUTING)
     lock_dir = output / "locks"
     lock_dir.mkdir()
@@ -206,6 +208,11 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
                 "lock": _binding(root, browser_lock),
             },
             "candidate_runtime_lock": _binding(root, candidate_runtime),
+            "candidate_sandbox": {
+                "public_key": _binding(root, paths["candidate-sandbox-public-key"]),
+                "openssl": _binding(root, paths["openssl"]),
+                "receipt_signer": _binding(root, paths["receipt-signer"]),
+            },
             "sandbox": {
                 "executable": _binding(root, sandbox_wrapper),
                 "profile": _binding(root, sandbox_profile),

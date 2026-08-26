@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from evaluate.materialize_multiformat_portable_locks import (
+    PortableLockIncompleteError,
     PortableLockInputs,
     materialize_portable_locks,
 )
@@ -32,6 +33,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "chromium",
         "executor",
         "sandbox-exec",
+        "browser-lock",
+        "candidate-runtime-lock",
+        "converter",
+        "pdftohtml",
+        "openssl",
+        "receipt-signer",
+        "candidate-sandbox-public-key",
         "private-key",
     ):
         parser.add_argument(f"--{name}", type=Path, required=True)
@@ -49,6 +57,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         locks = materialize_portable_locks(
             PortableLockInputs(corpora=corpora, generate_keys=generate, **values)
         )
+    except PortableLockIncompleteError as error:
+        sys.stdout.write(
+            json.dumps({"status": "INCOMPLETE", "reason": str(error)}, sort_keys=True)
+            + "\n"
+        )
+        return 2
     except (OSError, TypeError, ValueError) as error:
         sys.stdout.write(
             json.dumps({"status": "FAIL", "reason": str(error)}, sort_keys=True) + "\n"

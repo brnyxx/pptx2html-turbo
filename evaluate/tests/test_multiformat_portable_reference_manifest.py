@@ -12,7 +12,10 @@ from evaluate.multiformat_candidate_sources import (
     CandidateSourceSet,
     CandidateUnitSpec,
 )
+from evaluate.multiformat_capture_manifest import validate_capture_manifest
 from evaluate.multiformat_corpus_types import DocumentFormat
+from evaluate.multiformat_metric_links import load_metric_spec
+from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_office_oracle_batch import (
     OfficeOracleBatchFile,
     OfficeOracleBatchUnit,
@@ -34,9 +37,48 @@ class SandboxReceiptFixture(ReceiptFixture):
         path = super()._write_lock()
         sandbox = self._artifact("locked/sandbox-exec", b"sandbox")
         profile = self._artifact(
-            "locked/profile.sb", b"(version 1)\n(allow default)\n(deny network*)\n"
+            "locked/profile.sb",
+            b"(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n",
         )
         lock = json.loads(path.read_text(encoding="utf-8"))
+        corpus_path = self.root / lock["scope"]["corpus"]["path"]
+        source = self.root / "corpus/source.docx"
+        corpus_path.write_text(
+            json.dumps(
+                {
+                    "format": "docx",
+                    "tracks": {
+                        "conformance": {
+                            "items": [
+                                {
+                                    "id": "source",
+                                    "path": "source.docx",
+                                    "sha256": sha256_file(source),
+                                    "units": [
+                                        {
+                                            "id": "unit-1",
+                                            "ordinal": 1,
+                                            "primary_stratum": "text",
+                                            "applicable_metrics": [
+                                                "visual",
+                                                "content",
+                                                "layout",
+                                            ],
+                                            "background": "#ffffff",
+                                        }
+                                    ],
+                                }
+                            ]
+                        },
+                        "blind": {"items": []},
+                        "security": {"items": []},
+                    },
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        lock["scope"]["corpus"] = self._binding(corpus_path)
         attestation_path = self.root / lock["runtime"]["attestation"]["path"]
         attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
         attestation["sandbox_executable"] = self._binding(sandbox)
@@ -106,6 +148,26 @@ class PortableReferenceManifestTests(unittest.TestCase):
             )
             self.assertTrue(identity.is_verified())
             self.assertTrue(capture.is_file())
+            tampered = json.loads(capture.read_text(encoding="utf-8"))
+            tampered["units"][0]["png"]["sha256"] = "0" * 64
+            capture.write_text(json.dumps(tampered, sort_keys=True), encoding="utf-8")
+            by_role = {
+                item.role: fixture.root / item.path
+                for item in fixture.trust.lock_artifacts
+            }
+            with self.assertRaises(MetricError):
+                validate_capture_manifest(
+                    capture,
+                    "oracle",
+                    load_metric_spec(by_role["corpus-manifest"]),
+                    fixture.trust.contract_sha256,
+                    fixture.trust.corpus_sha256,
+                    fixture.trust.evaluator_sha256,
+                    fixture.trust.lock_sha256,
+                    fixture.trust.project_revision,
+                    fixture.root,
+                    by_role["portable-lock"],
+                )
 
             other = fixture.root / "other"
             other.mkdir()

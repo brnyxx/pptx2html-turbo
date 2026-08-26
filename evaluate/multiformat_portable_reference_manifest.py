@@ -11,6 +11,8 @@ from evaluate.multiformat_candidate_artifacts import (
     write_canonical_json,
 )
 from evaluate.multiformat_candidate_sources import CandidateSourceSet
+from evaluate.multiformat_capture_manifest import validate_capture_manifest
+from evaluate.multiformat_metric_links import load_metric_spec
 from evaluate.multiformat_inventory import parse_inventory
 from evaluate.multiformat_office_oracle_batch import OfficeOracleBatchFile
 from evaluate.multiformat_office_oracle_inventory import write_office_oracle_inventories
@@ -22,7 +24,7 @@ from evaluate.multiformat_portable_receipt import (
 )
 from evaluate.multiformat_portable_receipt_trust import PortableReceiptTrustContext
 from evaluate.multiformat_portable_reference_artifacts import artifact_records
-from evaluate.multiformat_schema import JsonValue, object_value, sha256_file
+from evaluate.multiformat_schema import JsonValue, sha256_file
 from evaluate.multiformat_strict_json import read_strict_object
 
 
@@ -52,8 +54,8 @@ def write_portable_reference_manifests(
             [unit.unit_id for unit in source.units],
             root / "inventories" / source.source_id,
         )
-        signed.extend((path, "inventory") for path in inventories)
-        signed.extend((unit.png, "page-png") for unit in batch.units)
+        signed.extend((path, "capture-unit-inventory") for path in inventories)
+        signed.extend((unit.png, "capture-unit-png") for unit in batch.units)
         signed.extend(
             [
                 (batch.pdf, "reference-pdf"),
@@ -76,10 +78,6 @@ def write_portable_reference_manifests(
                 }
             )
     units.sort(key=lambda item: str(item["unit_id"]))
-    attestation_identity = next(
-        item for item in trust.lock_artifacts if item.role == "attestation"
-    )
-    attestation = read_strict_object(trust.evidence_root / attestation_identity.path)
     runtime = root / "runtime.json"
     write_canonical_json(
         runtime,
@@ -91,16 +89,11 @@ def write_portable_reference_manifests(
             "os": platform.system(),
             "architecture": platform.machine(),
             "python": platform.python_version(),
-            "tools": [
-                {"role": tool.role, "version": tool.version, "sha256": tool.sha256}
+            "tools": {
+                tool.role: {"version": tool.version, "sha256": tool.sha256}
                 for tool in trust.tools
-            ],
-            "routing_sha256": trust.routing_sha256,
-            "scope_sha256": trust.scope_sha256,
-            "sandbox": {
-                "executable": object_value(attestation, "sandbox_executable"),
-                "profile": object_value(attestation, "sandbox_profile"),
             },
+            "artifacts": {},
         },
     )
     execution = root / "execution.json"
@@ -111,14 +104,21 @@ def write_portable_reference_manifests(
             "status": "PASS",
             "role": "oracle",
             "project_revision": trust.project_revision,
-            "network_isolation": "enabled",
+            "evaluator_manifest_sha256": trust.evaluator_sha256,
+            "corpus_manifest_sha256": trust.corpus_sha256,
+            "network_isolation": "disabled",
             "source_count": len(source_set.sources),
             "unit_count": len(units),
             "external_requests": [],
             "determinism_runs": 1,
         },
     )
-    signed.extend([(runtime, "runtime"), (execution, "execution")])
+    signed.extend(
+        [
+            (runtime, "capture-runtime-identity"),
+            (execution, "capture-execution-log"),
+        ]
+    )
     receipt = root / "portable-receipt.json"
     records = artifact_records(trust.evidence_root, signed)
     sign_portable_receipt(
@@ -161,13 +161,28 @@ def write_portable_reference_manifests(
             JsonValue,
             {
                 **outer,
-                "network_isolation": "enabled",
+                "network_isolation": "disabled",
                 "rendering": rendering,
                 "upstream_manifest": evidence_binding(trust.evidence_root, upstream),
             },
         ),
     )
     validate_portable_publication(capture, source_set, trust.evidence_root)
+    by_role = {
+        item.role: trust.evidence_root / item.path for item in trust.lock_artifacts
+    }
+    validate_capture_manifest(
+        capture,
+        "oracle",
+        load_metric_spec(by_role["corpus-manifest"]),
+        trust.contract_sha256,
+        trust.corpus_sha256,
+        trust.evaluator_sha256,
+        trust.lock_sha256,
+        trust.project_revision,
+        trust.evidence_root,
+        by_role["portable-lock"],
+    )
     return capture
 
 
