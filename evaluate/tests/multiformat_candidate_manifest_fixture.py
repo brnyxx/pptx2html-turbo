@@ -38,6 +38,7 @@ def prepare_manifest_runtime(
     evaluator: Path,
 ) -> ManifestRuntime:
     verifier = create_test_verifier(root)
+    office_verifier = create_test_verifier(root, name="office-oracle")
     receipt_signer = write_receipt_signer(root, verifier)
     binaries: dict[str, Path] = {}
     for name in [
@@ -87,16 +88,42 @@ def prepare_manifest_runtime(
     lock.write_text(
         json.dumps(
             {
+                "schema_version": 1,
+                "status": "locked",
+                "office": {
+                    "os": "Windows 11",
+                    "channel": "test",
+                    "word": "test",
+                    "excel": "test",
+                    "powerpoint": "test",
+                },
+                "pdf": {
+                    "primary": "test",
+                    "secondary": "test",
+                    "text": "test",
+                },
                 "browser": {
                     "chromium": "test-chromium",
                     "executable_sha256": sha256_file(binaries["chromium_binary"]),
                     "playwright": "1.62.0",
+                    "viewport_width": 1920,
+                    "viewport_height": 2400,
+                    "device_scale_factor": 1,
+                    "locale": "en-US",
+                    "timezone": "UTC",
+                    "color_profile": "srgb",
+                    "reduced_motion": "reduce",
+                    "animations": "disabled",
                     "os": platform.system(),
                     "architecture": platform.machine(),
                     "font_environment_sha256": font_environment,
                 },
                 "candidate_runtime": _candidate_runtime_lock(binaries),
                 "sandbox_verifier": verifier_lock(verifier),
+                "office_oracle_verifier": verifier_lock(
+                    office_verifier,
+                    verifier_id="test-office-oracle",
+                ),
                 "font_bundle_sha256": sha256_file(font_bundle),
             },
             sort_keys=True,

@@ -8,6 +8,7 @@ from evaluate.multiformat_candidate_attestation import (
     attestation_scope_from_hashes,
     verify_signed_attestation,
 )
+from evaluate.multiformat_capture_profile import CaptureProfileContext
 from evaluate.multiformat_capture_runtime_artifacts import (
     validate_runtime_artifacts,
 )
@@ -16,6 +17,7 @@ from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_office_oracle_runtime import (
     validate_office_oracle_runtime,
 )
+from evaluate.multiformat_portable_capture import validate_portable_runtime
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
@@ -37,6 +39,7 @@ def validate_capture_runtime(
     corpus_hash: str,
     evaluator_hash: str,
     oracle_hash: str,
+    profile: CaptureProfileContext,
 ) -> None:
     runtime = read_strict_object(runtime_path)
     require_keys(
@@ -67,7 +70,11 @@ def validate_capture_runtime(
     if role == "candidate" and not python_version.startswith("3.11."):
         raise MetricError("metrics.binding.capture", "candidate Python")
     tools = object_value(runtime, "tools")
+    if profile.portable_trust is not None:
+        validate_portable_runtime(runtime, role, profile.portable_trust)
     if role != "candidate":
+        if profile.is_portable:
+            return
         if oracle_lock_path is not None:
             validate_office_oracle_runtime(
                 runtime_path,
@@ -79,11 +86,12 @@ def validate_capture_runtime(
     _validate_candidate_tools(tools)
     if oracle_lock_path is None:
         return
+    effective_lock = profile.candidate_lock_path or oracle_lock_path
     _validate_runtime_against_lock(
         runtime,
         tools,
         evidence_root,
-        oracle_lock_path,
+        effective_lock,
         contract_hash,
         corpus_hash,
         evaluator_hash,

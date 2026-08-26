@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate.multiformat_capture_profile import load_capture_profile
 from evaluate.multiformat_capture_provenance import validate_capture_provenance
 from evaluate.multiformat_capture_types import (
     ArtifactIdentity,
@@ -41,6 +42,12 @@ def validate_capture_manifest(
 ) -> CaptureManifest:
     try:
         values = read_strict_object(path)
+        profile = load_capture_profile(
+            oracle_lock_path,
+            oracle_lock_sha256,
+            evidence_root,
+            role,
+        )
         required_fields = {
             "schema_version",
             "status",
@@ -61,11 +68,10 @@ def validate_capture_manifest(
         }
         if role == "candidate":
             required_fields |= {"determinism_manifest", "execution_receipt"}
+        elif profile.is_portable:
+            required_fields.add("execution_receipt")
         elif oracle_lock_path is not None:
-            required_fields |= {
-                "office_batch_manifest",
-                "execution_receipt",
-            }
+            required_fields |= {"office_batch_manifest", "execution_receipt"}
         require_keys(values, required_fields, "capture.schema")
         if (
             integer_value(values, "schema_version") != 1
@@ -89,7 +95,7 @@ def validate_capture_manifest(
             oracle_lock_sha256,
             project_revision,
             evidence_root,
-            oracle_lock_path,
+            profile,
         )
         units: dict[str, CaptureUnit] = {}
         artifact_paths: set[str] = set()

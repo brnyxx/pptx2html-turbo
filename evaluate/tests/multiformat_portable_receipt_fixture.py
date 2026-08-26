@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import cast
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_portable_receipt import (
+    PortableReceiptIdentity,
     PortableReceiptInput,
     PortableReceiptVerification,
     sign_portable_receipt,
@@ -25,17 +27,27 @@ class ReceiptFixtureError(TypeError):
 
 
 class ReceiptFixture:
-    def __init__(self, root: Path, *, nonce: str = "a" * 64) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        nonce: str = "a" * 64,
+        candidate_runtime_lock: Path | None = None,
+    ) -> None:
         self.root = root
         self.private_key = Ed25519PrivateKey.generate()
         self.nonce = nonce
+        self.candidate_runtime_lock = candidate_runtime_lock
         self.receipt = root / "receipt.json"
         self.artifact = self._artifact("outputs/reference.pdf", b"portable reference")
         self.artifacts: list[dict[str, JsonValue]] = [self._artifact_record()]
         self.lock = self._write_lock()
         self.trust = load_portable_receipt_trust(self.lock, root)
 
-    def verification(self, prior: tuple = ()) -> PortableReceiptVerification:
+    def verification(
+        self,
+        prior: tuple[PortableReceiptIdentity, ...] = (),
+    ) -> PortableReceiptVerification:
         return PortableReceiptVerification(trust=self.trust, prior_receipts=prior)
 
     def sign(self, output: Path | None = None) -> Path:
@@ -65,7 +77,10 @@ class ReceiptFixture:
     def resign(self, value: dict[str, JsonValue]) -> None:
         runtime = _mapping(value, "runtime")
         artifacts = _objects(value, "artifacts")
-        payload = {"runtime": runtime, "artifacts": artifacts}
+        payload: JsonValue = {
+            "runtime": runtime,
+            "artifacts": cast(JsonValue, artifacts),
+        }
         digest = hashlib.sha256(canonicalize(payload)).digest()
         value["payload_sha256"] = digest.hex()
         value["signature"] = self.private_key.sign(digest).hex()
@@ -125,6 +140,9 @@ class ReceiptFixture:
             encoding="utf-8",
         )
         binding = {name: self._binding(path) for name, path in artifacts.items()}
+        candidate_runtime = self.candidate_runtime_lock
+        if candidate_runtime is not None:
+            binding["candidate-runtime-lock"] = self._binding(candidate_runtime)
         lock: dict[str, JsonValue] = {
             "schema_version": 2,
             "status": "locked",
@@ -203,8 +221,11 @@ def _mapping(value: dict[str, JsonValue], field: str) -> dict[str, JsonValue]:
 
 def _objects(value: dict[str, JsonValue], field: str) -> list[dict[str, JsonValue]]:
     result = value[field]
-    if not isinstance(result, list) or not all(
-        isinstance(item, dict) for item in result
-    ):
+    if not isinstance(result, list):
         raise ReceiptFixtureError(field)
-    return result
+    objects: list[dict[str, JsonValue]] = []
+    for item in result:
+        if not isinstance(item, dict):
+            raise ReceiptFixtureError(field)
+        objects.append(item)
+    return objects
