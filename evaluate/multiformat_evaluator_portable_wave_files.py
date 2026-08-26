@@ -35,6 +35,7 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/multiformat_candidate_runtime_profile.py",
     "evaluate/multiformat_candidate_attestation_signing_io.py",
     "evaluate/multiformat_candidate_sandbox.py",
+    "evaluate/multiformat_candidate_sandbox_probe.py",
     "evaluate/multiformat_candidate_security.py",
     "evaluate/multiformat_candidate_security_browser.py",
     "evaluate/multiformat_candidate_signature.py",

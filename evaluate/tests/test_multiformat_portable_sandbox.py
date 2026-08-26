@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,10 +54,25 @@ class PortableSandboxTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            direct = subprocess.run(
+                [
+                    *prefix,
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path; "
+                    "from evaluate.multiformat_candidate_sandbox_probe import "
+                    "require_current_process_isolation; "
+                    f"require_current_process_isolation(Path({str(oracle_root)!r}), "
+                    f"Path({str(sentinel)!r}), '1.1.1.1:443')",
+                ],
+                capture_output=True,
+                check=False,
+            )
             self.assertEqual(local.returncode, 0)
             self.assertNotEqual(denied.returncode, 0)
             self.assertNotEqual(golden.returncode, 0)
             self.assertNotEqual(reference_read.returncode, 0)
+            self.assertEqual(direct.returncode, 0, direct.stderr.decode())
 
 
 if __name__ == "__main__":

@@ -8,6 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from evaluate.multiformat_candidate_sandbox_probe import (
+    ActiveSandboxProbeError,
+    NETWORK_ENDPOINT,
+    NETWORK_SCRIPT,
+    ORACLE_SCRIPT,
+    require_current_process_isolation,
+)
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_evidence import resolve_evidence_path
 from evaluate.multiformat_portable_lock import validate_reference_lock
@@ -20,13 +27,9 @@ from evaluate.multiformat_schema import (
 )
 from evaluate.multiformat_strict_json import read_strict_object
 
-_NETWORK_ENDPOINT: Final = "1.1.1.1:443"
 _PROBE_TIMEOUT_SECONDS: Final = 5
 _ACTIVE_ENV: Final = "PPTX2HTML_CANDIDATE_SANDBOX"
 _PROBE_ENV: Final = "PPTX2HTML_SANDBOX_PROBE"
-_NETWORK_SCRIPT: Final = (
-    "import socket; s=socket.create_connection(('1.1.1.1',443),2); s.close()"
-)
 
 
 class CandidateSandboxError(CandidateCaptureError, ValueError):
@@ -70,9 +73,8 @@ def resolve_attested_sandbox(
 ) -> CandidateSandbox:
     attested_executable = _bound_path(root, object_value(values, "sandbox_executable"))
     attested_profile = _bound_path(root, object_value(values, "sandbox_profile"))
-    if attested_executable != executable.resolve(
-        strict=True
-    ) or attested_profile != profile.resolve(strict=True):
+    locked_paths = (executable.resolve(strict=True), profile.resolve(strict=True))
+    if (attested_executable, attested_profile) != locked_paths:
         raise CandidateSandboxError("candidate sandbox path differs from lock")
     network = object_value(values, "network_probe")
     if network != network_probe_value():
@@ -81,15 +83,17 @@ def resolve_attested_sandbox(
     if string_value(oracle, "result") != "denied":
         raise CandidateSandboxError("candidate oracle probe attestation differs")
     oracle_root = _bound_directory(root, object_value(oracle, "root"))
-    sentinel = _bound_path(root, object_value(oracle, "sentinel"))
+    verify_sentinel = os.environ.get(_ACTIVE_ENV) != sha256_file(profile)
+    sentinel = _bound_path(
+        root, object_value(oracle, "sentinel"), verify_digest=verify_sentinel
+    )
     if not sentinel.is_relative_to(oracle_root) or sentinel == oracle_root:
         raise CandidateSandboxError("candidate oracle sentinel escapes oracle root")
     return CandidateSandbox(executable, profile, oracle_root, sentinel)
 
 
 def observe_network_control() -> None:
-    """Require the external endpoint to be reachable before sandboxing."""
-    result = _run_probe([sys.executable, "-I", "-c", _NETWORK_SCRIPT], os.environ)
+    result = _run_probe([sys.executable, "-I", "-c", NETWORK_SCRIPT], os.environ)
     if result != 0:
         raise CandidateSandboxError("candidate positive network control failed")
 
@@ -97,7 +101,6 @@ def observe_network_control() -> None:
 def observe_sandbox(
     sandbox: CandidateSandbox, *, require_readable_sentinel: bool = True
 ) -> None:
-    """Run bounded positive and negative controls through the exact sandbox."""
     if require_readable_sentinel:
         try:
             sandbox.sentinel.read_bytes()
@@ -106,18 +109,8 @@ def observe_sandbox(
                 "candidate oracle sentinel is not readable before sandboxing"
             ) from error
     _probe(sandbox, "control", "raise SystemExit(0)", expect_denied=False)
-    _probe(
-        sandbox,
-        "network",
-        _NETWORK_SCRIPT,
-        expect_denied=True,
-    )
-    _probe(
-        sandbox,
-        "oracle",
-        "import os,pathlib; pathlib.Path(os.environ['ORACLE_SENTINEL']).read_bytes()",
-        expect_denied=True,
-    )
+    _probe(sandbox, "network", NETWORK_SCRIPT, expect_denied=True)
+    _probe(sandbox, "oracle", ORACLE_SCRIPT, expect_denied=True)
 
 
 def enter_locked_sandbox(
@@ -127,7 +120,6 @@ def enter_locked_sandbox(
     module: str,
     argv: list[str],
 ) -> None:
-    """Re-exec a schema-2 candidate entry point under the outer-lock sandbox."""
     lock = read_strict_object(lock_path.resolve(strict=True))
     if lock.get("schema_version") != 2:
         return
@@ -137,6 +129,7 @@ def enter_locked_sandbox(
     values = read_strict_object(attestation_path.resolve(strict=True))
     sandbox = resolve_attested_sandbox(values, root, executable, profile)
     if os.environ.get(_ACTIVE_ENV) == sha256_file(profile):
+        _require_current_process_isolation(sandbox)
         return
     command, environment = sandbox_command(
         sandbox, [sys.executable, "-m", module, *argv]
@@ -147,7 +140,16 @@ def enter_locked_sandbox(
 def require_active_sandbox(sandbox: CandidateSandbox) -> None:
     if os.environ.get(_ACTIVE_ENV) != sha256_file(sandbox.profile):
         raise CandidateSandboxError("candidate process is not under the locked sandbox")
-    observe_sandbox(sandbox, require_readable_sentinel=False)
+    _require_current_process_isolation(sandbox)
+
+
+def _require_current_process_isolation(sandbox: CandidateSandbox) -> None:
+    try:
+        require_current_process_isolation(
+            sandbox.oracle_root, sandbox.sentinel, NETWORK_ENDPOINT
+        )
+    except ActiveSandboxProbeError as error:
+        raise CandidateSandboxError(str(error)) from error
 
 
 def sandbox_command(
@@ -170,7 +172,7 @@ def sandbox_command(
 
 def network_probe_value() -> dict[str, JsonValue]:
     return {
-        "endpoint": _NETWORK_ENDPOINT,
+        "endpoint": NETWORK_ENDPOINT,
         "control": "reachable",
         "sandbox": "denied",
     }
@@ -239,8 +241,10 @@ def _bound_directory(root: Path, binding: dict[str, JsonValue]) -> Path:
     return path
 
 
-def _bound_path(root: Path, binding: dict[str, JsonValue]) -> Path:
+def _bound_path(
+    root: Path, binding: dict[str, JsonValue], *, verify_digest: bool = True
+) -> Path:
     path = resolve_evidence_path(root, string_value(binding, "path"))
-    if sha256_file(path) != sha256_value(binding, "sha256"):
+    if verify_digest and sha256_file(path) != sha256_value(binding, "sha256"):
         raise CandidateSandboxError("candidate sandbox artifact differs")
     return path

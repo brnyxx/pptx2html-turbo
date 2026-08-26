@@ -17,11 +17,18 @@ from evaluate.create_multiformat_oracle_sentinel import (
 from evaluate.multiformat_candidate_sandbox import (
     CandidateSandbox,
     CandidateSandboxError,
+    enter_locked_sandbox,
     observe_network_control,
     observe_sandbox,
     require_active_sandbox,
     resolve_attested_sandbox,
     sandbox_command,
+)
+from evaluate.multiformat_candidate_sandbox_probe import (
+    ActiveSandboxProbeError,
+    require_current_process_isolation,
+    require_network_denied,
+    require_oracle_denied,
 )
 from evaluate.multiformat_schema import JsonValue, object_value, sha256_file
 
@@ -43,11 +50,21 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             root = Path(temp)
             sandbox = self._fixture(root, denied={"network", "oracle"})
             observe_sandbox(sandbox)
-            with mock.patch.dict(
-                os.environ,
-                {"PPTX2HTML_CANDIDATE_SANDBOX": sha256_file(sandbox.profile)},
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"PPTX2HTML_CANDIDATE_SANDBOX": sha256_file(sandbox.profile)},
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.require_current_process_isolation"
+                ) as direct_probe,
             ):
                 require_active_sandbox(sandbox)
+            direct_probe.assert_called_once_with(
+                sandbox.oracle_root,
+                sandbox.sentinel,
+                "1.1.1.1:443",
+            )
             command, environment = sandbox_command(sandbox, ["converter", "input"])
             self.assertEqual(command[-2:], ["converter", "input"])
             self.assertEqual(
@@ -74,17 +91,134 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 with self.assertRaisesRegex(CandidateSandboxError, "probe failed"):
                     observe_sandbox(sandbox)
 
-    def test_readable_sentinel_fails_even_with_forged_active_marker(self) -> None:
+    def test_forged_marker_cannot_hide_readable_non_sentinel_oracle_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            sandbox = self._fixture(Path(temp), denied={"network"})
+            root = Path(temp)
+            sandbox = self._fixture(root, denied={"network", "oracle"})
+            reference = sandbox.oracle_root / "rendered-reference.png"
+            reference.write_bytes(b"oracle bytes")
             with (
                 mock.patch.dict(
                     os.environ,
                     {"PPTX2HTML_CANDIDATE_SANDBOX": sha256_file(sandbox.profile)},
                 ),
-                self.assertRaisesRegex(CandidateSandboxError, "oracle"),
+                self.assertRaisesRegex(CandidateSandboxError, "oracle root"),
             ):
                 require_active_sandbox(sandbox)
+            self.assertEqual(reference.read_bytes(), b"oracle bytes")
+
+    def test_forged_marker_fails_during_reexec_gate_without_partial_output(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sandbox = self._fixture(root, denied={"network", "oracle"})
+            lock = root / "lock.json"
+            attestation = root / "attestation.json"
+            lock.write_text("{}", encoding="utf-8")
+            attestation.write_text("{}", encoding="utf-8")
+            output = root / "output"
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"PPTX2HTML_CANDIDATE_SANDBOX": sha256_file(sandbox.profile)},
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.read_strict_object",
+                    side_effect=({"schema_version": 2}, {}),
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.validate_reference_lock"
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.resolve_locked_sandbox",
+                    return_value=(sandbox.executable, sandbox.profile),
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.resolve_attested_sandbox",
+                    return_value=sandbox,
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.require_current_process_isolation",
+                    side_effect=ActiveSandboxProbeError("oracle root is readable"),
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.os.execve"
+                ) as execve,
+                self.assertRaisesRegex(CandidateSandboxError, "oracle root"),
+            ):
+                enter_locked_sandbox(root, lock, attestation, "module", [str(output)])
+            execve.assert_not_called()
+            self.assertFalse(output.exists())
+
+    def test_direct_denial_probe_has_deterministic_fake_positive_fixture(self) -> None:
+        denied_socket = mock.Mock()
+        denied_socket.connect.side_effect = PermissionError(1, "denied")
+        with (
+            mock.patch(
+                "evaluate.multiformat_candidate_sandbox_probe.os.scandir",
+                side_effect=PermissionError(1, "denied"),
+            ),
+            mock.patch(
+                "evaluate.multiformat_candidate_sandbox_probe.Path.open",
+                side_effect=PermissionError(1, "denied"),
+            ),
+            mock.patch(
+                "evaluate.multiformat_candidate_sandbox_probe.socket.socket",
+                return_value=denied_socket,
+            ),
+        ):
+            require_current_process_isolation(
+                Path("/oracle"), Path("/oracle/sentinel"), "1.1.1.1:443"
+            )
+        denied_socket.settimeout.assert_called_once()
+        denied_socket.close.assert_called_once()
+
+    def test_offline_host_failure_is_not_accepted_as_network_denial(self) -> None:
+        offline_socket = mock.Mock()
+        offline_socket.connect.side_effect = TimeoutError("offline")
+        with (
+            mock.patch(
+                "evaluate.multiformat_candidate_sandbox_probe.socket.socket",
+                return_value=offline_socket,
+            ),
+            self.assertRaisesRegex(ActiveSandboxProbeError, "not sandbox-denied"),
+        ):
+            require_network_denied("1.1.1.1:443")
+
+    def test_direct_oracle_probe_checks_root_before_sentinel(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sentinel = root / ".sentinel"
+            sentinel.write_text("sentinel", encoding="utf-8")
+            (root / "not-the-sentinel.png").write_bytes(b"oracle")
+            with self.assertRaisesRegex(ActiveSandboxProbeError, "oracle root"):
+                require_oracle_denied(root, sentinel)
+
+    def test_active_resolution_preserves_executable_and_profile_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sandbox = self._fixture(root, denied={"network", "oracle"})
+            values = self._attestation(root, sandbox)
+            marker = sha256_file(sandbox.profile)
+            with (
+                mock.patch.dict(os.environ, {"PPTX2HTML_CANDIDATE_SANDBOX": marker}),
+                mock.patch(
+                    "evaluate.multiformat_candidate_sandbox.sha256_file",
+                    wraps=sha256_file,
+                ) as digest,
+            ):
+                resolved = resolve_attested_sandbox(
+                    values, root, sandbox.executable, sandbox.profile
+                )
+            hashed_paths = {call.args[0] for call in digest.call_args_list}
+            self.assertEqual(resolved.executable, sandbox.executable)
+            self.assertEqual(resolved.profile, sandbox.profile)
+            self.assertEqual(resolved.oracle_root, sandbox.oracle_root.resolve())
+            self.assertEqual(resolved.sentinel, sandbox.sentinel.resolve())
+            self.assertIn(sandbox.executable.resolve(), hashed_paths)
+            self.assertIn(sandbox.profile.resolve(), hashed_paths)
+            self.assertNotIn(sandbox.sentinel.resolve(), hashed_paths)
 
     def test_path_substitution_and_post_sign_mutation_fail(self) -> None:
         for attack in ("path", "executable-mutation", "profile-mutation"):
