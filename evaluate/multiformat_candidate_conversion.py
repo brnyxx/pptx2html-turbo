@@ -174,13 +174,15 @@ def _validate_diagnostics(
     value: JsonValue,
     document_format: DocumentFormat,
 ) -> None:
-    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+    if not isinstance(value, list):
         raise CandidateConversionError("diagnostics output has an invalid shape")
-    codes = {
-        item.get("code")
-        for item in value
-        if isinstance(item.get("code"), str) and item.get("code")
-    }
+    codes: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise CandidateConversionError("diagnostics output has an invalid shape")
+        code = item.get("code")
+        if isinstance(code, str) and code:
+            codes.add(code)
     if (
         document_format is not DocumentFormat.PPTX
         and "NATIVE_BACKEND_OPAQUE" not in codes

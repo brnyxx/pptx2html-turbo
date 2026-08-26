@@ -10,12 +10,23 @@ from pathlib import Path
 
 from evaluate.multiformat_candidate_conversion import (
     CandidateConversionError,
+    _validate_diagnostics,
     run_conversion,
 )
 from evaluate.multiformat_corpus_types import DocumentFormat
 
 
 class MultiFormatCandidateConversionTests(unittest.TestCase):
+    def test_truncated_spreadsheet_scan_cannot_back_candidate_evidence(self) -> None:
+        with self.assertRaisesRegex(CandidateConversionError, "scan truncated"):
+            _validate_diagnostics(
+                [
+                    {"code": "NATIVE_BACKEND_OPAQUE"},
+                    {"code": "SPREADSHEET_CELL_SCAN_TRUNCATED"},
+                ],
+                DocumentFormat.XLSX,
+            )
+
     def test_invokes_exact_converter_with_isolated_explicit_backends(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
