@@ -127,14 +127,13 @@ def write_candidate_manifests(
         "execution_log": execution_binding,
     }
     determinism = output_dir / "determinism.json"
+    determinism_runs: list[JsonValue] = [
+        determinism_run_value(evidence_root, run1),
+        determinism_run_value(evidence_root, run2),
+    ]
     write_canonical_json(
         determinism,
-        {
-            "runs": [
-                determinism_run_value(evidence_root, run1),
-                determinism_run_value(evidence_root, run2),
-            ]
-        },
+        {"runs": determinism_runs},
     )
     receipt = write_execution_receipt(
         evidence_root,
@@ -218,9 +217,9 @@ def _capture_records(
     root: Path,
     source_set: CandidateSourceSet,
     run: CandidateRun,
-) -> tuple[list[dict[str, JsonValue]], list[dict[str, JsonValue]]]:
-    units: list[dict[str, JsonValue]] = []
-    files: list[dict[str, JsonValue]] = []
+) -> tuple[list[JsonValue], list[JsonValue]]:
+    units: list[JsonValue] = []
+    files: list[JsonValue] = []
     for source_spec, source in zip(source_set.sources, run.sources, strict=True):
         files.append(
             {
