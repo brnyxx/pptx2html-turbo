@@ -112,15 +112,11 @@ def bind_portable_runtime(
     versions = {
         "poppler-render": lock_io.tool_version(paths["poppler-render"], ("-v",)),
         "poppler-text": lock_io.tool_version(paths["poppler-text"], ("-v",)),
-        "poppler-metadata": lock_io.tool_version(
-            paths["poppler-metadata"], ("-v",)
-        ),
+        "poppler-metadata": lock_io.tool_version(paths["poppler-metadata"], ("-v",)),
         "converter": lock_io.tool_version(paths["converter"], ("--version",)),
         "pdftohtml": lock_io.tool_version(paths["pdftohtml"], ("-v",)),
         "openssl": lock_io.tool_version(paths["openssl"], ("version",)),
-        "receipt-signer": lock_io.tool_version(
-            paths["receipt-signer"], ("--version",)
-        ),
+        "receipt-signer": lock_io.tool_version(paths["receipt-signer"], ("--version",)),
     }
     inventories = {}
     if poppler.inventory is not None:
@@ -144,14 +140,10 @@ def bind_portable_runtime(
     candidate = object_value(value, "candidate_runtime")
     candidate["pdftohtml_sha256"] = sha256_file(paths["pdftohtml"])
     candidate["pdfinfo_sha256"] = sha256_file(paths["poppler-metadata"])
-    candidate["poppler_package_inventory_sha256"] = sha256_file(
-        inventories["poppler"]
-    )
+    candidate["poppler_package_inventory_sha256"] = sha256_file(inventories["poppler"])
     verifier = object_value(value, "sandbox_verifier")
     verifier["openssl_sha256"] = sha256_file(paths["openssl"])
-    verifier["openssl_package_inventory_sha256"] = sha256_file(
-        inventories["openssl"]
-    )
+    verifier["openssl_package_inventory_sha256"] = sha256_file(inventories["openssl"])
     write_canonical_json(candidate_destination, value)
     paths["candidate-runtime-lock"] = candidate_destination
     return BoundPortableRuntime(paths, versions, inventories)
@@ -170,7 +162,9 @@ def _bind_native_or_flat(
     if closure is not None:
         return _OptionalClosure(closure.executables, closure.inventory)
     paths = tuple(
-        lock_io.bind_file(source, root, destination.with_name(f"{destination.name}-{i}"))
+        lock_io.bind_file(
+            source, root, destination.with_name(f"{destination.name}-{i}")
+        )
         for i, source in enumerate(sources)
     )
     return _OptionalClosure(paths, None)

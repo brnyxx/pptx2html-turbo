@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
-from evaluate.multiformat_candidate_types import CandidateCaptureError, CandidateRuntimePaths
+from evaluate.multiformat_candidate_types import (
+    CandidateCaptureError,
+    CandidateRuntimePaths,
+)
 from evaluate.multiformat_portable_package_inventory import (
     package_inventory_for_executable,
 )
@@ -27,9 +30,7 @@ def validate_candidate_native_packages(packages: CandidateNativePackages) -> Non
     poppler_info = package_inventory_for_executable(
         packages.runtime.pdfinfo, packages.evidence_root
     )
-    openssl = package_inventory_for_executable(
-        packages.openssl, packages.evidence_root
-    )
+    openssl = package_inventory_for_executable(packages.openssl, packages.evidence_root)
     if poppler_html is None or poppler_info is None or openssl is None:
         raise CandidateCaptureError("candidate native package inventory is missing")
     if poppler_html != poppler_info:

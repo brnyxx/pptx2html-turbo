@@ -6,6 +6,7 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/capture_multiformat_portable_references.py",
     "evaluate/materialize_multiformat_portable_locks.py",
     "evaluate/materialize_multiformat_portable_locks_cli.py",
+    "evaluate/multiformat_evidence_path.py",
     "evaluate/multiformat_portable_lock.py",
     "evaluate/multiformat_portable_lock_io.py",
     "evaluate/multiformat_portable_outer_sandbox.py",

@@ -14,7 +14,7 @@ from evaluate.multiformat_east_asian_fonts import (
 from evaluate.multiformat_east_asian_fonts import (
     validate_lock_binding as validate_east_asian_binding,
 )
-from evaluate.multiformat_evidence import EvidencePathError, resolve_evidence_path
+from evaluate.multiformat_evidence_path import EvidencePathError, resolve_evidence_path
 from evaluate.multiformat_portable_outer_sandbox import (
     RuntimeIdentity,
     validate_outer_sandbox,
