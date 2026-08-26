@@ -145,8 +145,59 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             with self.assertRaisesRegex(PortableReceiptError, "replayed"):
                 verify_portable_receipt(copied, fixture.verification())
 
-    def test_tampered_or_overpermissive_replay_claim_fails_closed(self) -> None:
-        for attack in ("tamper", "permissions"):
+    def test_persistent_replay_rejects_same_scope_nonce_variant(self) -> None:
+        for variant in ("batch", "artifacts"):
+            with (
+                self.subTest(variant=variant),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                fixture = ReceiptFixture(Path(temp_dir))
+                fixture.sign()
+                fixture.verify()
+                if variant == "batch":
+                    fixture.sign(batch_id="portable-batch-2")
+                else:
+                    artifact = fixture._artifact("outputs/semantic.json", b"{}")
+                    fixture.artifacts.append(
+                        fixture._artifact_record(path=artifact, role="semantic")
+                    )
+                    fixture.artifacts.sort(key=lambda item: str(item["path"]))
+                    fixture.sign()
+
+                with self.assertRaisesRegex(PortableReceiptError, "replayed"):
+                    fixture.verify()
+
+    def test_persistent_replay_allows_different_scope_or_nonce(self) -> None:
+        for variant in ("scope", "nonce"):
+            with (
+                self.subTest(variant=variant),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                root = Path(temp_dir)
+                fixture = ReceiptFixture(root)
+                fixture.sign()
+                first = fixture.verify()
+                if variant == "scope":
+                    fixture = ReceiptFixture(root, nonce=first.nonce)
+                else:
+                    fixture.nonce = "b" * 64
+                fixture.sign()
+
+                second = fixture.verify()
+
+                self.assertNotEqual(
+                    (first.scope_sha256, first.nonce),
+                    (second.scope_sha256, second.nonce),
+                )
+                self.assertEqual(
+                    len(list((root / ".portable-receipt-claims").glob("*.json"))),
+                    2,
+                )
+
+    def test_tampered_overpermissive_or_linked_replay_claim_fails_closed(
+        self,
+    ) -> None:
+        for attack in ("tamper", "permissions", "hardlink"):
             with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp_dir:
                 fixture = ReceiptFixture(Path(temp_dir))
                 fixture.sign()
@@ -154,8 +205,10 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                 claim = next((fixture.root / ".portable-receipt-claims").glob("*.json"))
                 if attack == "tamper":
                     claim.write_bytes(b"{}")
-                else:
+                elif attack == "permissions":
                     claim.chmod(0o644)
+                else:
+                    os.link(claim, fixture.root / "claim-alias.json")
 
                 with self.assertRaises(PortableReceiptError):
                     fixture.verify()

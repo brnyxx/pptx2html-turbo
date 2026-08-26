@@ -50,13 +50,18 @@ class ReceiptFixture:
     ) -> PortableReceiptVerification:
         return PortableReceiptVerification(trust=self.trust, prior_receipts=prior)
 
-    def sign(self, output: Path | None = None) -> Path:
+    def sign(
+        self,
+        output: Path | None = None,
+        *,
+        batch_id: str = "portable-batch-1",
+    ) -> Path:
         return sign_portable_receipt(
             output or self.receipt,
             PortableReceiptInput(
                 trust=self.trust,
                 nonce=self.nonce,
-                batch_id="portable-batch-1",
+                batch_id=batch_id,
                 artifacts=self.artifacts,
             ),
             self.private_key,

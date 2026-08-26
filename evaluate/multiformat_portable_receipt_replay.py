@@ -38,17 +38,17 @@ def claim_portable_receipt(
     """Atomically bind one replay identity to one receipt path."""
     root = evidence_root.resolve(strict=True)
     receipt = _bound_receipt_path(root, receipt_path)
-    identity: dict[str, JsonValue] = {
+    replay_identity: dict[str, JsonValue] = {
         "scope_sha256": scope_sha256,
         "nonce": nonce,
-        "batch_id": batch_id,
-        "artifact_root_sha256": artifact_root,
     }
-    claim_id = hashlib.sha256(canonicalize(identity)).hexdigest()
+    claim_id = hashlib.sha256(canonicalize(replay_identity)).hexdigest()
     expected = canonicalize(
         {
             "schema_version": 1,
-            **identity,
+            **replay_identity,
+            "batch_id": batch_id,
+            "artifact_root_sha256": artifact_root,
             "receipt_path": receipt.relative_to(root).as_posix(),
             "receipt_sha256": receipt_sha256,
         }
@@ -109,6 +109,7 @@ def _validate_existing_claim(claim: Path, expected: bytes) -> None:
     info = claim.lstat()
     if (
         not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
         or stat.S_IMODE(info.st_mode) & 0o077
         or claim.is_symlink()
     ):
