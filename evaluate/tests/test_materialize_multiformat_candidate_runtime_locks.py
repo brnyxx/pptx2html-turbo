@@ -70,6 +70,31 @@ class CandidateRuntimeLockMaterializerTests(unittest.TestCase):
             self.assertNotIn("attestation", json.dumps(runtime))
             validate_candidate_locks(*first)
 
+    def test_multiline_tool_banners_bind_the_first_version_line(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            inputs = self._fixture(Path(temporary))
+            inputs.pdftohtml.write_text(
+                "#!/bin/sh\n"
+                "printf 'pdftohtml version 26.03.0\\nCopyright Poppler\\n' >&2\n"
+            )
+            inputs.pdfinfo.write_text(
+                "#!/bin/sh\n"
+                "printf 'pdfinfo version 26.03.0\\nCopyright Poppler\\n' >&2\n"
+            )
+            with patch("importlib.metadata.version", return_value="1.62.0"):
+                _, runtime_path = materialize_candidate_runtime_locks(inputs)
+
+            runtime = json.loads(runtime_path.read_text())
+            candidate = runtime["candidate_runtime"]
+            self.assertEqual(
+                candidate["pdftohtml_version"],
+                "pdftohtml version 26.03.0",
+            )
+            self.assertEqual(
+                candidate["pdfinfo_version"],
+                "pdfinfo version 26.03.0",
+            )
+
     def test_refuses_dirty_debug_escape_overwrite_and_wrong_key(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             inputs = self._fixture(Path(temporary))

@@ -187,10 +187,14 @@ def tool_version(path: Path, arguments: tuple[str, ...]) -> str:
         raise PortableLockIoError("portable tool version probe failed") from error
     if code != 0 or len(output) > MAX_VERSION_BYTES:
         raise PortableLockIoError("portable tool version probe failed")
-    value = output.decode("utf-8", errors="strict").strip()
-    if not value:
+    lines = [
+        line.strip()
+        for line in output.decode("utf-8", errors="strict").splitlines()
+        if line.strip()
+    ]
+    if not lines:
         raise PortableLockIoError("portable tool version is empty")
-    return value
+    return lines[0]
 
 
 def binding(root: Path, path: Path) -> dict[str, JsonValue]:
