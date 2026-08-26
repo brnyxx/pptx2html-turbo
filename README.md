@@ -44,12 +44,14 @@ The original `pptx2html` binary and all existing Rust, Python, and npm/WASM
 PPTX APIs remain unchanged.
 
 The seven-format acceptance gate is intentionally fail-closed. Its default
-required reference profile is `libreoffice-poppler`: on supported macOS or
-Linux hosts, LibreOffice and Poppler produce the bound reference evidence for
-the six Office formats, while PDF uses Poppler directly. The profile runs over
-seven frozen format corpora and requires a signed, hash-bound portable lock,
-reports, and receipts; a missing, stale, substituted, or tampered input stays
-`INCOMPLETE` or `FAIL`.
+required reference profile is `libreoffice-poppler`: on a supported macOS
+host, LibreOffice and Poppler produce the bound reference evidence for the six
+Office formats, while PDF uses Poppler directly. Linux document conversion is
+supported, but signed portable reference capture remains `INCOMPLETE` there
+until a Linux process-sandbox backend is implemented. The profile runs over
+seven frozen format corpora and requires per-format signed, hash-bound portable
+locks, reports, and receipts; a missing, stale, substituted, or tampered input
+stays `INCOMPLETE` or `FAIL`.
 
 The approved general claim wording is
 `96% under the documented general conversion evaluation contract`. Use it only
@@ -61,8 +63,12 @@ stricter.
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/reports \
-  --oracle-lock evaluate/multiformat/oracle-lock.json
+  --oracle-lock-dir evaluate/multiformat/oracle-locks
 ```
+
+The lock directory contains exactly one schema-2 lock named for each required
+format: `pptx.json`, `docx.json`, `doc.json`, `xlsx.json`, `xls.json`,
+`ppt.json`, and `pdf.json`. A shared lock cannot substitute for this set.
 
 Corpus manifests are validated independently before candidate execution:
 

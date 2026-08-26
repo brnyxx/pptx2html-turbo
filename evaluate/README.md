@@ -148,6 +148,24 @@ uv run python -m evaluate.generate_multiformat_font_bundle validate \
   --snapshot-root artifacts/multiformat-font-bundle
 ```
 
+Materialize the three modern generated snapshots consumed by the legacy-pair
+and final READY assemblers:
+
+```bash
+uv run --python 3.11 python -m evaluate.generate_multiformat_docx_conformance \
+  --contract evaluate/multiformat/contract.v1.json \
+  --plan artifacts/multiformat-conformance-plan-v1/conformance-plan.json \
+  --output-dir artifacts/multiformat-conformance-docx-v1
+uv run --python 3.11 python -m evaluate.generate_multiformat_xlsx_conformance \
+  --contract evaluate/multiformat/contract.v1.json \
+  --plan artifacts/multiformat-conformance-plan-v1/conformance-plan.json \
+  --output-dir artifacts/multiformat-conformance-xlsx-v1
+uv run --python 3.11 python -m evaluate.generate_multiformat_pptx_conformance \
+  --contract evaluate/multiformat/contract.v1.json \
+  --plan artifacts/multiformat-conformance-plan-v1/conformance-plan.json \
+  --output-dir artifacts/multiformat-conformance-pptx-v1
+```
+
 Materialize the 60 plan-bound modern/legacy pairs for each binary Office
 format with locked LibreOffice, Poppler, and font artifacts:
 
