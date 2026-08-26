@@ -25,6 +25,7 @@ from evaluate.multiformat_metric_manifest import (
 
 VICTIM_BYTES = b'{"victim": true}\n'
 PAYLOAD = b'{"schema_version": 2}\n'
+DECOY_BYTES = b'{"decoy": "what a path validator would inspect"}\n'
 METRICS_VALUE = {"schema_version": 2, "status": "READY"}
 
 
@@ -39,9 +40,7 @@ class MetricFilePublishTests(unittest.TestCase):
             destination = Path(temporary) / "metrics.json"
             seen: list[bytes] = []
 
-            publish_created_file(
-                destination, PAYLOAD, lambda p: seen.append(p.read_bytes())
-            )
+            publish_created_file(destination, PAYLOAD, seen.append)
 
             value = destination.lstat()
             self.assertEqual(seen, [PAYLOAD])
@@ -127,18 +126,79 @@ class MetricFilePublishTests(unittest.TestCase):
             pending = root / ".metrics.json.pending"
             victim_identity = _identity(victim)
 
-            def substitute(path: Path) -> None:
+            def substitute(_: bytes) -> None:
                 # Deterministic race: the validated pending inode is unlinked and
                 # its name is re-pointed at the victim before publication.
-                self.assertEqual(path, pending)
-                path.unlink()
-                path.symlink_to(victim.name)
+                pending.unlink()
+                pending.symlink_to(victim.name)
 
             with self.assertRaises(MetricFilePublishError):
                 publish_created_file(destination, PAYLOAD, substitute)
 
             self.assertEqual(victim.read_bytes(), VICTIM_BYTES)
             self.assertEqual(_identity(victim), victim_identity)
+            self.assertFalse(os.path.lexists(destination))
+
+    def test_swap_for_validation_then_restore_cannot_smuggle_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "metrics.json"
+            pending = root / ".metrics.json.pending"
+            aside = root / ".aside"
+            observed: list[bytes] = []
+
+            def swap_then_restore(source: bytes) -> None:
+                # The attack an inode post-check alone cannot see: move the
+                # pinned inode aside, expose a decoy at the pending name for the
+                # validator, then restore the pinned inode so every identity
+                # check still matches. A path-based validator would inspect the
+                # decoy while the original, unvalidated bytes get published.
+                observed.append(source)
+                os.rename(pending, aside)
+                pending.write_bytes(DECOY_BYTES)
+                pending.unlink()
+                os.rename(aside, pending)
+
+            publish_created_file(destination, PAYLOAD, swap_then_restore)
+
+            self.assertEqual(observed, [PAYLOAD])
+            self.assertEqual(destination.read_bytes(), PAYLOAD)
+            self.assertEqual(destination.lstat().st_nlink, 1)
+
+    def test_decoy_left_at_the_pending_name_is_never_published(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "metrics.json"
+            pending = root / ".metrics.json.pending"
+            aside = root / ".aside"
+
+            def swap_without_restore(_: bytes) -> None:
+                # Same swap, but the decoy is left in place. The pinned identity
+                # no longer matches the pending name, so nothing is published.
+                os.rename(pending, aside)
+                pending.write_bytes(DECOY_BYTES)
+
+            with self.assertRaises(MetricFilePublishError):
+                publish_created_file(destination, PAYLOAD, swap_without_restore)
+
+            self.assertEqual(pending.read_bytes(), DECOY_BYTES)
+            self.assertFalse(os.path.lexists(destination))
+
+    def test_payload_rewritten_through_the_pinned_inode_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "metrics.json"
+            pending = root / ".metrics.json.pending"
+
+            def rewrite_in_place(_: bytes) -> None:
+                # The inode identity is untouched, only its bytes change, so the
+                # descriptor read-back is the only thing that can catch this.
+                with pending.open("wb") as stream:
+                    stream.write(DECOY_BYTES)
+
+            with self.assertRaises(MetricFilePublishError):
+                publish_created_file(destination, PAYLOAD, rewrite_in_place)
+
             self.assertFalse(os.path.lexists(destination))
 
     def test_pending_hardlink_substitution_is_refused(self) -> None:
@@ -148,10 +208,10 @@ class MetricFilePublishTests(unittest.TestCase):
             victim.write_bytes(VICTIM_BYTES)
             destination = root / "metrics.json"
 
-            def link(path: Path) -> None:
+            def link(_: bytes) -> None:
                 # A second link to the pending inode means the published evidence
                 # would stay writable through the attacker's name.
-                os.link(path, root / "attacker-alias.json")
+                os.link(root / ".metrics.json.pending", root / "alias.json")
 
             with self.assertRaises(MetricFilePublishError):
                 publish_created_file(destination, PAYLOAD, link)
@@ -166,7 +226,7 @@ class MetricFilePublishTests(unittest.TestCase):
             keeper = root / "keep.json"
             keeper.write_bytes(VICTIM_BYTES)
 
-            def reject(_: Path) -> None:
+            def reject(_: bytes) -> None:
                 raise ValueError("invalid evidence")
 
             with self.assertRaises(ValueError):
@@ -185,7 +245,15 @@ class MetricFilePublishBindingTests(unittest.TestCase):
         regression = "evaluate/tests/test_multiformat_metric_file_publish.py"
         self.assertIn(producer, PORTABLE_WAVE_ENGINE_FILES)
         self.assertIn(regression, PORTABLE_WAVE_TEST_FILES)
-        for path in (producer, regression, "evaluate/multiformat_metric_manifest.py"):
+        self.assertIn(
+            "evaluate/multiformat_metrics_bindings.py", PORTABLE_WAVE_ENGINE_FILES
+        )
+        for path in (
+            producer,
+            regression,
+            "evaluate/multiformat_metric_manifest.py",
+            "evaluate/multiformat_metrics_bindings.py",
+        ):
             with self.subTest(path=path):
                 self.assertIn(path, EVALUATOR_FILES)
 
@@ -211,18 +279,15 @@ class PublishValidatedMetricsRaceTests(unittest.TestCase):
             pending = root / ".metrics.json.pending"
             victim_identity = _identity(victim)
 
-            def substitute(*args: object, **_: object) -> None:
-                # Deterministic race injected at the validation seam both the
-                # pre-fix and the descriptor-pinned publisher pass through: the
-                # validated pending name is re-pointed at the victim.
-                validated = Path(str(args[2]))
-                self.assertEqual(validated, pending)
-                validated.unlink()
-                validated.symlink_to(victim.name)
+            def substitute(*_: object, **__: object) -> None:
+                # Deterministic race at the validation seam: the pending name is
+                # re-pointed at the victim while the validator runs.
+                pending.unlink()
+                pending.symlink_to(victim.name)
 
             with (
                 mock.patch.object(
-                    metric_manifest, "validate_metrics_evidence", substitute
+                    metric_manifest, "validate_metrics_bytes", substitute
                 ),
                 self.assertRaises(MetricsAssemblyError),
             ):
@@ -236,19 +301,17 @@ class PublishValidatedMetricsRaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "metrics.json"
-            validated: list[Path] = []
+            validated: list[bytes] = []
 
-            def record(*args: object, **_: object) -> None:
-                validated.append(Path(str(args[2])))
+            def record(source: bytes, *_: object, **__: object) -> None:
+                validated.append(source)
 
-            with mock.patch.object(
-                metric_manifest, "validate_metrics_evidence", record
-            ):
+            with mock.patch.object(metric_manifest, "validate_metrics_bytes", record):
                 self._publish(output)
 
             value = output.lstat()
             self.assertEqual(json.loads(output.read_bytes()), METRICS_VALUE)
-            self.assertEqual(validated, [root / ".metrics.json.pending"])
+            self.assertEqual(validated, [output.read_bytes()])
             self.assertEqual(value.st_nlink, 1)
             self.assertTrue(stat.S_ISREG(value.st_mode))
             self.assertFalse(output.is_symlink())
@@ -264,6 +327,32 @@ class PublishValidatedMetricsRaceTests(unittest.TestCase):
 
             self.assertEqual(output.read_bytes(), VICTIM_BYTES)
             self.assertFalse(os.path.lexists(root / ".metrics.json.pending"))
+
+    def test_validator_receives_the_exact_published_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / "metrics.json"
+            pending = root / ".metrics.json.pending"
+            aside = root / ".aside"
+            validated: list[bytes] = []
+
+            def swap_then_restore(source: bytes, *_: object, **__: object) -> None:
+                # Swap-for-validation-then-restore through the real assembly
+                # entry point: the validator must still see published bytes.
+                validated.append(source)
+                os.rename(pending, aside)
+                pending.write_bytes(DECOY_BYTES)
+                pending.unlink()
+                os.rename(aside, pending)
+
+            with mock.patch.object(
+                metric_manifest, "validate_metrics_bytes", swap_then_restore
+            ):
+                self._publish(output)
+
+            self.assertEqual(validated, [output.read_bytes()])
+            self.assertEqual(json.loads(output.read_bytes()), METRICS_VALUE)
+            self.assertNotIn(b"decoy", output.read_bytes())
 
 
 if __name__ == "__main__":

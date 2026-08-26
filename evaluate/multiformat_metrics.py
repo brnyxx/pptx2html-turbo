@@ -14,6 +14,7 @@ from evaluate.multiformat_metric_hard_gates import compute_hard_gates
 from evaluate.multiformat_metric_links import load_metric_spec
 from evaluate.multiformat_metric_types import (
     MetricError,
+    MetricsEvidenceBindings,
     MetricsSummary,
     MetricStatus,
 )
@@ -21,9 +22,12 @@ from evaluate.multiformat_metric_units import (
     compute_blind,
     compute_conformance,
 )
+from evaluate.multiformat_metrics_bindings import (
+    reject_reused_artifacts,
+    validate_bindings,
+)
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import (
-    JsonValue,
     integer_value,
     number_value,
     object_value,
@@ -31,7 +35,11 @@ from evaluate.multiformat_schema import (
     sha256_value,
     string_value,
 )
-from evaluate.multiformat_strict_json import StrictJsonError, read_strict_object
+from evaluate.multiformat_strict_json import (
+    StrictJsonError,
+    parse_strict_object_bytes,
+    read_strict_object,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,12 +53,42 @@ def validate_metrics_evidence(
     evidence_root: Path | None = None,
     oracle_lock_path: Path | None = None,
 ) -> MetricsSummary:
+    """Validate metrics evidence read from `metrics_path`.
+
+    Only safe when the path cannot be substituted under the caller. A publisher
+    holding the evidence descriptor must call `validate_metrics_bytes` instead,
+    so that the decision is taken on the bytes it is about to publish.
+    """
+    return validate_metrics_bytes(
+        _read_evidence_bytes(metrics_path),
+        MetricsEvidenceBindings(
+            contract_path,
+            corpus_path,
+            evaluator_manifest_sha256,
+            oracle_lock_sha256,
+            evidence_root or metrics_path.parent,
+            oracle_lock_path,
+        ),
+    )
+
+
+def validate_metrics_bytes(
+    source: bytes,
+    bindings_context: MetricsEvidenceBindings,
+) -> MetricsSummary:
+    """Validate the exact metrics bytes the caller holds."""
+    contract_path = bindings_context.contract_path
+    corpus_path = bindings_context.corpus_path
+    evaluator_manifest_sha256 = bindings_context.evaluator_manifest_sha256
+    oracle_lock_sha256 = bindings_context.oracle_lock_sha256
+    oracle_lock_path = bindings_context.oracle_lock_path
+    root = bindings_context.evidence_root
     try:
         corpus_validation = validate_corpus_manifest(contract_path, corpus_path)
         if corpus_validation.status is not CorpusStatus.READY:
             raise MetricError("metrics.corpus", "corpus is not READY")
         spec = load_metric_spec(corpus_path)
-        metrics = read_strict_object(metrics_path)
+        metrics = parse_strict_object_bytes(source)
         require_keys(
             metrics,
             {
@@ -78,7 +116,6 @@ def validate_metrics_evidence(
             raise MetricError("metrics.status", status.value)
         if string_value(metrics, "format") != spec.document_format.value:
             raise MetricError("metrics.format", spec.document_format.value)
-        root = evidence_root or metrics_path.parent
         bindings = object_value(metrics, "bindings")
         require_keys(
             bindings,
@@ -98,12 +135,14 @@ def validate_metrics_evidence(
         contract_hash = sha256_file(contract_path)
         corpus_hash = sha256_file(corpus_path)
         project_revision = current_project_revision(PROJECT_ROOT)
-        _validate_bindings(
+        validate_bindings(
             bindings,
-            contract_hash,
-            corpus_hash,
-            evaluator_manifest_sha256,
-            oracle_lock_sha256,
+            {
+                "contract_sha256": contract_hash,
+                "corpus_manifest_sha256": corpus_hash,
+                "evaluator_manifest_sha256": evaluator_manifest_sha256,
+                "oracle_lock_sha256": oracle_lock_sha256,
+            },
             project_revision,
         )
         oracle_capture = resolve_artifact_binding(
@@ -179,7 +218,7 @@ def validate_metrics_evidence(
             project_revision,
             command_plan,
         )
-        _reject_reused_artifacts(
+        reject_reused_artifacts(
             conformance.artifact_paths,
             blind.artifact_paths,
             hard_gates.artifact_paths,
@@ -212,36 +251,11 @@ def validate_metrics_evidence(
         TypeError,
         ValueError,
     ) as error:
+        raise MetricError("metrics.schema", root.as_posix()) from error
+
+
+def _read_evidence_bytes(metrics_path: Path) -> bytes:
+    try:
+        return metrics_path.read_bytes()
+    except OSError as error:
         raise MetricError("metrics.schema", metrics_path.as_posix()) from error
-
-
-def _validate_bindings(
-    bindings: dict[str, JsonValue],
-    contract_hash: str,
-    corpus_hash: str,
-    evaluator_hash: str,
-    oracle_hash: str,
-    project_revision: str,
-) -> None:
-    expected = {
-        "contract_sha256": contract_hash,
-        "corpus_manifest_sha256": corpus_hash,
-        "evaluator_manifest_sha256": evaluator_hash,
-        "oracle_lock_sha256": oracle_hash,
-    }
-    for field, value in expected.items():
-        if sha256_value(bindings, field) != value:
-            raise MetricError(f"metrics.{field}", value)
-    if string_value(bindings, "project_revision") != project_revision:
-        raise MetricError("metrics.project_revision", project_revision)
-
-
-def _reject_reused_artifacts(*groups: frozenset[str] | str) -> None:
-    values: list[str] = []
-    for group in groups:
-        if isinstance(group, str):
-            values.append(group)
-        else:
-            values.extend(group)
-    if len(values) != len(set(values)):
-        raise MetricError("artifact.path", "artifact reused across evidence roles")

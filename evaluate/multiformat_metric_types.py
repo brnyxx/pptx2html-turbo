@@ -3,11 +3,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Decimal
 from enum import StrEnum
+from pathlib import Path
 from typing import TypedDict
 
 from evaluate.multiformat_corpus_types import DocumentFormat, SecurityOutcome
 
 SIX_PLACES = Decimal("0.000001")
+
+
+@dataclass(frozen=True, slots=True)
+class MetricsEvidenceBindings:
+    """Everything a metrics validation decision binds to besides the bytes."""
+
+    contract_path: Path
+    corpus_path: Path
+    evaluator_manifest_sha256: str
+    oracle_lock_sha256: str
+    evidence_root: Path
+    oracle_lock_path: Path | None
 
 
 class MetricStatus(StrEnum):

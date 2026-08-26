@@ -7,6 +7,12 @@ published with the platform no-replace rename from
 `multiformat_snapshot_filesystem`. Every trust decision is taken on the retained
 descriptor, never on the pending path, so a substituted name can neither be
 followed nor published.
+
+The validator is handed the bytes read back from that descriptor rather than the
+pending pathname. Validating by name is exploitable even with an inode
+post-check: an attacker can rename the pinned inode aside, expose a decoy for
+the validator, then restore the pinned inode before the post-check runs, so the
+post-check passes and the publisher ships bytes no validator ever saw.
 """
 
 from __future__ import annotations
@@ -27,13 +33,15 @@ _CLOEXEC_FLAGS = getattr(os, "O_CLOEXEC", 0)
 _CREATE_FLAGS = os.O_RDWR | os.O_CREAT | os.O_EXCL | _NOFOLLOW_FLAGS | _CLOEXEC_FLAGS
 _FILE_MODE = 0o644
 
-FileValidator = Callable[[Path], None]
+PayloadValidator = Callable[[bytes], None]
+_READ_CHUNK = 1024 * 1024
 
 
 class MetricFilePublishFailure(StrEnum):
     DESTINATION_EXISTS = "destination-exists"
     PENDING_EXISTS = "pending-exists"
     PENDING_CHANGED = "pending-changed"
+    PAYLOAD_CHANGED = "payload-changed"
     PUBLICATION_FAILED = "publication-failed"
 
 
@@ -49,9 +57,13 @@ class MetricFilePublishError(Exception):
 def publish_created_file(
     destination: Path,
     payload: bytes,
-    validate: FileValidator,
+    validate: PayloadValidator,
 ) -> None:
-    """Publish `payload` as a newly created `destination` that never existed."""
+    """Publish `payload` as a newly created `destination` that never existed.
+
+    `validate` receives the bytes read back from the retained pending
+    descriptor, which are proven equal to `payload` before it is called.
+    """
     parent = destination.parent
     parent.mkdir(parents=True, exist_ok=True)
     parent_descriptor = os.open(
@@ -66,7 +78,7 @@ def publish_created_file(
 def _publish(
     destination: Path,
     payload: bytes,
-    validate: FileValidator,
+    validate: PayloadValidator,
     parent_descriptor: int,
 ) -> None:
     if os.path.lexists(destination):
@@ -80,11 +92,14 @@ def _publish(
         _write_payload(descriptor, payload, pending)
         identity = _pinned_identity(descriptor, pending)
         _require_same_inode(pending, identity, parent_descriptor)
-        validate(pending)
+        validate(_pinned_payload(descriptor, payload, pending))
         if _pinned_identity(descriptor, pending) != identity:
             raise MetricFilePublishError(
                 pending, MetricFilePublishFailure.PENDING_CHANGED
             )
+        # Re-read after validation: an in-place rewrite leaves the inode
+        # identity untouched, so only the descriptor bytes can catch it.
+        _ = _pinned_payload(descriptor, payload, pending)
         _require_same_inode(pending, identity, parent_descriptor)
         _publish_pending(pending, destination, parent_descriptor)
         published = True
@@ -131,6 +146,24 @@ def _write_payload(descriptor: int, payload: bytes, pending: Path) -> None:
         raise MetricFilePublishError(
             pending, MetricFilePublishFailure.PUBLICATION_FAILED
         ) from error
+
+
+def _pinned_payload(descriptor: int, payload: bytes, pending: Path) -> bytes:
+    """Read the pending inode back through the descriptor and pin it to bytes."""
+    try:
+        chunks: list[bytes] = []
+        offset = 0
+        while chunk := os.pread(descriptor, _READ_CHUNK, offset):
+            chunks.append(chunk)
+            offset += len(chunk)
+    except OSError as error:
+        raise MetricFilePublishError(
+            pending, MetricFilePublishFailure.PUBLICATION_FAILED
+        ) from error
+    source = b"".join(chunks)
+    if source != payload:
+        raise MetricFilePublishError(pending, MetricFilePublishFailure.PAYLOAD_CHANGED)
+    return source
 
 
 def _pinned_identity(descriptor: int, pending: Path) -> tuple[int, int]:

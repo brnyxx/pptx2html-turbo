@@ -15,8 +15,12 @@ from evaluate.multiformat_metric_file_publish import (
     publish_created_file,
 )
 from evaluate.multiformat_metric_links import load_metric_spec
-from evaluate.multiformat_metric_types import CorpusMetricSpec, MetricError
-from evaluate.multiformat_metrics import validate_metrics_evidence
+from evaluate.multiformat_metric_types import (
+    CorpusMetricSpec,
+    MetricError,
+    MetricsEvidenceBindings,
+)
+from evaluate.multiformat_metrics import validate_metrics_bytes
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import JsonValue, sha256_file
 from evaluate.multiformat_strict_json import read_strict_object
@@ -196,16 +200,19 @@ def publish_validated_metrics(
     evidence_root: Path,
     oracle_lock_path: Path,
 ) -> None:
-    def validate(pending: Path) -> None:
-        _ = validate_metrics_evidence(
-            contract_path,
-            corpus_path,
-            pending,
-            context.evaluator_hash,
-            context.oracle_hash,
-            evidence_root,
-            oracle_lock_path,
-        )
+    bindings_context = MetricsEvidenceBindings(
+        contract_path,
+        corpus_path,
+        context.evaluator_hash,
+        context.oracle_hash,
+        evidence_root,
+        oracle_lock_path,
+    )
+
+    def validate(source: bytes) -> None:
+        # The publisher proves `source` is the retained pending descriptor's
+        # content, so the decision cannot be aimed at a substituted pathname.
+        _ = validate_metrics_bytes(source, bindings_context)
 
     try:
         publish_created_file(output_path, canonical_json_bytes(value), validate)

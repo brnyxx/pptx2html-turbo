@@ -53,6 +53,7 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/multiformat_rust_toolchain.py",
     "evaluate/multiformat_metric_file_publish.py",
     "evaluate/multiformat_metric_manifest.py",
+    "evaluate/multiformat_metrics_bindings.py",
     "evaluate/multiformat_review_materialize.py",
     "evaluate/materialize_multiformat_command_plan.py",
     "evaluate/materialize_multiformat_review_packet.py",
