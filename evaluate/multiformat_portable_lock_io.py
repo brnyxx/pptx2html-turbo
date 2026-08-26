@@ -43,16 +43,43 @@ def validate_candidate_locks(browser_path: Path, runtime_path: Path) -> None:
     runtime = read_strict_object(runtime_path)
     if set(browser) != expected:
         raise PortableLockIoError("portable browser lock is incomplete")
-    if runtime.get("schema_version") != 1 or runtime.get("status") != "locked":
-        raise PortableLockIoError("portable candidate runtime lock is incomplete")
-    for field in (
-        "browser",
-        "candidate_runtime",
-        "sandbox_verifier",
-        "font_bundle_sha256",
+    if (
+        set(runtime)
+        != {
+            "schema_version",
+            "status",
+            "browser",
+            "candidate_runtime",
+            "sandbox_verifier",
+            "font_bundle_sha256",
+        }
+        or runtime.get("schema_version") != 1
+        or runtime.get("status") != "locked"
     ):
-        if field not in runtime:
-            raise PortableLockIoError("portable candidate runtime lock is incomplete")
+        raise PortableLockIoError("portable candidate runtime lock is incomplete")
+    candidate = runtime.get("candidate_runtime")
+    verifier = runtime.get("sandbox_verifier")
+    if not isinstance(candidate, dict) or set(candidate) != {
+        "build_revision",
+        "converter_sha256",
+        "converter_version",
+        "soffice_sha256",
+        "soffice_version",
+        "pdftohtml_sha256",
+        "pdftohtml_version",
+        "pdfinfo_sha256",
+        "pdfinfo_version",
+        "receipt_signer_sha256",
+        "receipt_signer_version",
+    }:
+        raise PortableLockIoError("portable candidate runtime lock is incomplete")
+    if not isinstance(verifier, dict) or set(verifier) != {
+        "algorithm",
+        "verifier_id",
+        "public_key_sha256",
+        "openssl_sha256",
+    }:
+        raise PortableLockIoError("portable candidate runtime lock is incomplete")
 
 
 def validate_candidate_artifacts(

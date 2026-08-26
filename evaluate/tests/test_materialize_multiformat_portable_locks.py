@@ -193,6 +193,7 @@ class PortableLockMaterializerTests(unittest.TestCase):
                         "receipt_signer_version": "receipt-signer 1.0",
                     },
                     "sandbox_verifier": {
+                        "algorithm": "ed25519",
                         "verifier_id": "candidate-sandbox-v1",
                         "public_key_sha256": sha256_file(plain["candidate-public-key"]),
                         "openssl_sha256": sha256_file(paths["openssl"]),
