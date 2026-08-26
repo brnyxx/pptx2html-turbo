@@ -12,7 +12,11 @@ from typing import cast
 
 from evaluate.assemble_multiformat_metrics import assemble_metrics
 from evaluate.assemble_multiformat_report import assemble_report
-from evaluate.multiformat_command_evidence import CommandEvidenceError
+from evaluate.multiformat_command_evidence import (
+    CommandEvidenceError,
+    CommandPlan,
+    run_performance_command,
+)
 from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_metric_manifest import MetricsAssemblyError
@@ -183,6 +187,38 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
                     os.environ["ASSEMBLER_SECRET"] = previous
             self.assertTrue(summary.quality.tests_passed)
 
+    def test_each_command_gets_a_fresh_home_and_temporary_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = self._fixture(Path(temporary), quality_isolation=True)
+            summary = self._validate(fixture, self._assemble(fixture))
+            self.assertTrue(summary.quality.builds_passed)
+            self.assertTrue(summary.quality.contract_checks_passed)
+
+    def test_temporary_environment_is_removed_on_timeout_but_logs_remain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = self._write_command_script(root)
+            output = root / "runtime"
+            plan = CommandPlan((), {}, (sys.executable, script.as_posix(), "block"))
+            with self.assertRaises(CommandEvidenceError):
+                run_performance_command(
+                    plan,
+                    root,
+                    output,
+                    bindings={
+                        "project_revision": "revision",
+                        "evaluator_hash": "e" * 64,
+                        "corpus_hash": "c" * 64,
+                    },
+                    working_directory=PROJECT_ROOT,
+                    timeout_seconds=1,
+                )
+            self.assertTrue((output / "performance.stdout").is_file())
+            self.assertTrue((output / "performance.stderr").is_file())
+            self.assertFalse(
+                any(path.name.startswith(".") for path in output.iterdir())
+            )
+
     def test_reviewer_missing_and_extra_pair_fail(self) -> None:
         for mode in ["missing", "extra"]:
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
@@ -337,6 +373,7 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
         *,
         security_mode: str = "security",
         quality_failure: str | None = None,
+        quality_isolation: bool = False,
         performance_mode: str = "pass",
     ) -> Fixture:
         contract, corpus = ready_fixture(root)
@@ -384,7 +421,11 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
                             sys.executable,
                             script.as_posix(),
                             (
-                                "env-check"
+                                "leave-marker"
+                                if quality_isolation and name == "builds"
+                                else "detect-marker"
+                                if quality_isolation and name == "contract_checks"
+                                else "env-check"
                                 if quality_failure == "env-check" and name == "tests"
                                 else "fail"
                                 if quality_failure == name
@@ -503,6 +544,8 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             "if mode=='invalid': print('not-json')\n"
             "if mode=='flood': print('x'*(9*1024*1024))\n"
             "if mode=='env-check': sys.exit(8 if 'ASSEMBLER_SECRET' in os.environ else 0)\n"
+            "if mode=='leave-marker': open(os.path.join(os.environ['HOME'],'marker'),'w').write('x')\n"
+            "if mode=='detect-marker': sys.exit(9 if os.path.exists(os.path.join(os.environ['HOME'],'marker')) else 0)\n"
             "if mode=='security': print(json.dumps({'observed_outcome':sys.argv[2],"
             "'typed_error':'ExpectedReject' if sys.argv[2]=='reject' else None,"
             "'network_isolation':'disabled','external_fetches':[],"

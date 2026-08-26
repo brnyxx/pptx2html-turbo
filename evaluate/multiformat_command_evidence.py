@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from tempfile import TemporaryDirectory
+from typing import NamedTuple, cast
 
 from evaluate import multiformat_candidate_artifacts as artifacts
 from evaluate import multiformat_candidate_process as process
@@ -23,8 +23,7 @@ class CommandEvidenceError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True, slots=True)
-class CommandPlan:
+class CommandPlan(NamedTuple):
     security: tuple[str, ...]
     quality: dict[str, tuple[str, ...]]
     performance: tuple[str, ...]
@@ -221,30 +220,30 @@ def _run_command(
     if not argv:
         raise CommandEvidenceError("command cannot be empty")
     stdout.parent.mkdir(parents=True, exist_ok=True)
-    environment_root = stdout.parent / ".command-environment"
-    environment_root.mkdir(parents=True, exist_ok=True)
-    environment = clean_subprocess_environment()
-    environment.update(
-        {
-            "HOME": environment_root.as_posix(),
-            "TMPDIR": environment_root.as_posix(),
-            "TEMP": environment_root.as_posix(),
-            "TMP": environment_root.as_posix(),
-            "TZ": "UTC",
-            "LANG": "C.UTF-8",
-            "LC_ALL": "C.UTF-8",
-        }
-    )
-    command = tuple(argument.format_map(substitutions) for argument in argv)
-    try:
-        return process.run_bounded_process(
-            command,
-            working_directory,
-            environment,
-            stdout,
-            stderr,
-            timeout_seconds=timeout_seconds,
-            max_log_bytes=8 * 1024 * 1024,
+    with TemporaryDirectory(dir=stdout.parent) as environment_name:
+        environment_root = Path(environment_name)
+        environment = clean_subprocess_environment()
+        environment.update(
+            {
+                "HOME": environment_root.as_posix(),
+                "TMPDIR": environment_root.as_posix(),
+                "TEMP": environment_root.as_posix(),
+                "TMP": environment_root.as_posix(),
+                "TZ": "UTC",
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+            }
         )
-    except (process.CandidateProcessError, OSError, KeyError, ValueError) as error:
-        raise CommandEvidenceError(f"command failed: {command[0]}") from error
+        command = tuple(argument.format_map(substitutions) for argument in argv)
+        try:
+            return process.run_bounded_process(
+                command,
+                working_directory,
+                environment,
+                stdout,
+                stderr,
+                timeout_seconds=timeout_seconds,
+                max_log_bytes=8 * 1024 * 1024,
+            )
+        except (process.CandidateProcessError, OSError, KeyError, ValueError) as error:
+            raise CommandEvidenceError(f"command failed: {command[0]}") from error
