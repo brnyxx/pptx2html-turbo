@@ -18,13 +18,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from evaluate.assemble_multiformat_metrics import assemble_metrics
 from evaluate.assemble_multiformat_report import assemble_report
 from evaluate.materialize_multiformat_command_plan import materialize_command_plan
-from evaluate.multiformat_command_evidence import (
-    CommandEvidenceError,
-    CommandIdentity,
-    CommandPlan,
-    command_identity,
-    run_performance_command,
-)
+from evaluate.multiformat_command_evidence import CommandEvidenceError
+from evaluate.multiformat_command_runtime import _run_command
 from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_metric_manifest import (
@@ -135,6 +130,22 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             self.assertEqual(string_value(report, "status"), "READY")
             self.assertEqual(object_value(report, "security")["passed"], 2)
             self.assertTrue(object_value(report, "performance")["within_limits"])
+
+    def test_command_plan_cannot_substitute_a_different_outer_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = self._fixture(Path(temporary))
+            foreign_lock = fixture.root / "foreign-lock.json"
+            foreign = read_object(fixture.lock)
+            foreign["foreign"] = True
+            foreign_lock.write_text(json.dumps(foreign), encoding="utf-8")
+            commands = read_object(fixture.commands)
+            outer_lock = object_value(commands, "outer_lock")
+            outer_lock["path"] = foreign_lock.name
+            outer_lock["sha256"] = sha256_file(foreign_lock)
+            fixture.commands.write_text(json.dumps(commands), encoding="utf-8")
+
+            with self.assertRaises(MetricsAssemblyError):
+                self._assemble(fixture)
 
     def test_tampered_capture_artifact_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -252,38 +263,14 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             script = self._write_command_script(root)
             output = root / "runtime"
             python = Path(sys.executable).resolve()
-            performance = CommandIdentity(
-                "performance",
-                (python.as_posix(), script.as_posix(), "block"),
-                ((0, python.as_posix(), sha256_file(python)),),
-                "0" * 64,
-            )
-            plan = CommandPlan(
-                root / "plan.json",
-                "0" * 64,
-                command_identity(
-                    "security",
-                    (
-                        Path(sys.executable).resolve().as_posix(),
-                        "-m",
-                        "evaluate.run_multiformat_security_case",
-                    ),
-                ),
-                {},
-                performance,
-            )
             with self.assertRaises(CommandEvidenceError):
-                run_performance_command(
-                    plan,
-                    root,
-                    output,
-                    bindings={
-                        "project_revision": "revision",
-                        "evaluator_hash": "e" * 64,
-                        "corpus_hash": "c" * 64,
-                    },
-                    working_directory=PROJECT_ROOT,
-                    timeout_seconds=1,
+                _run_command(
+                    (python.as_posix(), script.as_posix(), "block"),
+                    {},
+                    output / "performance.stdout",
+                    output / "performance.stderr",
+                    PROJECT_ROOT,
+                    1,
                 )
             self.assertTrue((output / "performance.stdout").is_file())
             self.assertTrue((output / "performance.stderr").is_file())
@@ -523,6 +510,7 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             sha256_file(evaluator),
             sha256_file(lock),
             root,
+            lock,
         )
         baseline_value = read_object(baseline)
         bindings = object_value(baseline_value, "bindings")
@@ -551,8 +539,14 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             capture_output=True,
             text=True,
         ).stdout.strip()
+        rustc = subprocess.run(
+            ["rustup", "which", "rustc"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
         env = Path("/usr/bin/env").resolve().as_posix()
-        path_arg = "PATH=/usr/bin:/bin"
+        path_arg = f"PATH={Path(rustc).parent}:/usr/bin:/bin"
         quality = {
             "tests": (
                 env,
@@ -602,6 +596,7 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             (python, "-m", "evaluate.run_multiformat_security_case"),
             quality,
             (env, path_arg, cargo, "test", "--release", "-p", "document2html-native"),
+            outer_lock=lock,
         )
         return Fixture(
             root,

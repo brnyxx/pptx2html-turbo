@@ -26,6 +26,16 @@ from evaluate.multiformat_schema import sha256_file
 from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 PROJECT = Path(__file__).resolve().parents[2]
+CARGO = Path(
+    subprocess.run(
+        ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+)
+RUSTC = Path(
+    subprocess.run(
+        ["rustup", "which", "rustc"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+)
 
 
 class PortableLockMaterializerTests(unittest.TestCase):
@@ -336,6 +346,8 @@ class PortableLockMaterializerTests(unittest.TestCase):
             contract,
             evaluator,
             (corpus,),
+            CARGO,
+            RUSTC,
             paths["soffice"],
             paths["pdftoppm"],
             paths["pdftotext"],

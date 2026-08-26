@@ -11,7 +11,12 @@ from unittest import mock
 
 from evaluate.materialize_multiformat_command_plan import (
     CommandPlanMaterializeError,
-    materialize_command_plan,
+)
+from evaluate.materialize_multiformat_command_plan import (
+    main as materialize_main,
+)
+from evaluate.materialize_multiformat_command_plan import (
+    materialize_command_plan as _materialize_command_plan,
 )
 from evaluate.multiformat_capture_types import (
     ArtifactIdentity,
@@ -87,10 +92,44 @@ def _text(value: JsonValue) -> str:
 CARGO = subprocess.run(
     ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
 ).stdout.strip()
+RUSTC = subprocess.run(
+    ["rustup", "which", "rustc"], check=True, capture_output=True, text=True
+).stdout.strip()
 ENV = Path("/usr/bin/env").resolve().as_posix()
 ROOT = Path(__file__).resolve().parents[2].as_posix()
-PATH_ARG = "PATH=/usr/bin:/bin"
+PATH_ARG = f"PATH={Path(RUSTC).parent}:/usr/bin:/bin"
 PERFORMANCE = (ENV, PATH_ARG, CARGO, "test", "--release", "-p", "document2html-native")
+
+
+def _outer_lock(root: Path) -> Path:
+    path = root / "outer-lock.json"
+    path.write_text(
+        json.dumps(
+            {
+                "rust_toolchain": {
+                    "cargo": {"path": CARGO, "sha256": sha256_file(Path(CARGO))},
+                    "rustc": {"path": RUSTC, "sha256": sha256_file(Path(RUSTC))},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def materialize_command_plan(
+    output: Path,
+    security: tuple[str, ...],
+    quality: dict[str, tuple[str, ...]],
+    performance: tuple[str, ...],
+) -> dict[str, JsonValue]:
+    return _materialize_command_plan(
+        output,
+        security,
+        quality,
+        performance,
+        outer_lock=_outer_lock(output.parent),
+    )
 
 
 def _quality(python: str) -> dict[str, tuple[str, ...]]:
@@ -141,6 +180,28 @@ def _quality(python: str) -> dict[str, tuple[str, ...]]:
 
 
 class CommandPlanMaterializerTests(unittest.TestCase):
+    def test_cli_materializes_locked_command_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            python = Path(sys.executable).resolve().as_posix()
+            quality = _quality(python)
+            arguments = [
+                "--output",
+                (root / "commands.json").as_posix(),
+                "--outer-lock",
+                _outer_lock(root).as_posix(),
+                "--security-argv",
+                json.dumps([python, "-m", "evaluate.run_multiformat_security_case"]),
+            ]
+            for role, command in quality.items():
+                arguments.extend(
+                    (f"--{role.replace('_', '-')}-argv", json.dumps(command))
+                )
+            arguments.extend(("--performance-argv", json.dumps(PERFORMANCE)))
+
+            self.assertEqual(materialize_main(arguments), 0)
+            self.assertTrue((root / "commands.json").is_file())
+
     def test_binds_canonical_argv_executable_hashes_and_plan_hash(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "commands.json"
@@ -196,6 +257,32 @@ class CommandPlanMaterializerTests(unittest.TestCase):
             path.write_text(json.dumps(value), encoding="utf-8")
             with self.assertRaises(CommandEvidenceError):
                 load_command_plan(path)
+
+    def test_rejects_producer_cargo_that_differs_from_evaluator_lock(self) -> None:
+        python = Path(sys.executable).resolve().as_posix()
+        security = (python, "-m", "evaluate.run_multiformat_security_case")
+        with tempfile.TemporaryDirectory() as temporary:
+            fake_cargo = Path(temporary) / "cargo"
+            fake_cargo.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            fake_cargo.chmod(0o755)
+            quality = _quality(python)
+            quality["tests"] = (
+                ENV,
+                PATH_ARG,
+                fake_cargo.as_posix(),
+                "test",
+                "-p",
+                "document2html-core",
+                "-p",
+                "document2html-native",
+            )
+            with self.assertRaises(CommandPlanMaterializeError):
+                materialize_command_plan(
+                    Path(temporary) / "commands.json",
+                    security,
+                    quality,
+                    PERFORMANCE,
+                )
 
     def test_rejects_shells_and_fake_quality_or_performance_roles(self) -> None:
         python = Path(sys.executable).resolve().as_posix()

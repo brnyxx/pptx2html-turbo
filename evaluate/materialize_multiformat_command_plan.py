@@ -15,6 +15,10 @@ from evaluate.multiformat_command_evidence import (
     load_command_plan,
 )
 from evaluate.multiformat_corpus_items import require_keys
+from evaluate.multiformat_rust_toolchain import (
+    load_locked_rust_toolchain,
+    rust_toolchain_value,
+)
 from evaluate.multiformat_schema import JsonValue, sha256_file, string_list
 from evaluate.multiformat_strict_json import parse_strict_object_bytes
 
@@ -31,18 +35,33 @@ def materialize_command_plan(
     security: tuple[str, ...],
     quality: dict[str, tuple[str, ...]],
     performance: tuple[str, ...],
+    *,
+    outer_lock: Path | None = None,
 ) -> dict[str, JsonValue]:
     if set(quality) != set(_QUALITY_FIELDS):
         raise CommandPlanMaterializeError("quality command set is incomplete")
+    if outer_lock is None:
+        raise CommandPlanMaterializeError("evaluator outer lock is required")
     try:
-        security_identity = command_identity("security", security)
+        outer_lock_path = outer_lock.resolve(strict=True)
+        rust_toolchain = load_locked_rust_toolchain(outer_lock_path)
+        security_identity = command_identity("security", security, rust_toolchain)
         quality_identities = {
-            role: command_identity(role, quality[role])
+            role: command_identity(role, quality[role], rust_toolchain)
             for role in sorted(_QUALITY_FIELDS)
         }
-        performance_identity = command_identity("performance", performance)
+        performance_identity = command_identity(
+            "performance", performance, rust_toolchain
+        )
         value: dict[str, JsonValue] = {
-            "schema_version": 2,
+            "schema_version": 3,
+            "outer_lock": {
+                "path": os.path.relpath(
+                    outer_lock_path, output.parent.resolve(strict=True)
+                ),
+                "sha256": sha256_file(outer_lock_path),
+            },
+            "rust_toolchain": rust_toolchain_value(rust_toolchain),
             "security": command_value(security_identity),
             "quality": {
                 role: command_value(identity)
@@ -85,6 +104,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Materialize a strict multiformat production command plan."
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--outer-lock", type=Path, required=True)
     parser.add_argument("--security-argv", required=True)
     parser.add_argument("--tests-argv", required=True)
     parser.add_argument("--builds-argv", required=True)
@@ -98,13 +118,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         quality = {
-            role: _argv_argument(getattr(args, role)) for role in _QUALITY_FIELDS
+            role: _argv_argument(getattr(args, f"{role}_argv"))
+            for role in _QUALITY_FIELDS
         }
         summary = materialize_command_plan(
             args.output,
             _argv_argument(args.security_argv),
             quality,
             _argv_argument(args.performance_argv),
+            outer_lock=args.outer_lock,
         )
     except (CommandPlanMaterializeError, OSError, TypeError, ValueError) as error:
         sys.stdout.write(

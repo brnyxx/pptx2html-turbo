@@ -16,6 +16,10 @@ from evaluate.multiformat_portable_lock_keys import prepare_key_material
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_revision import current_project_revision
+from evaluate.multiformat_rust_toolchain import (
+    rust_toolchain_identity,
+    rust_toolchain_value,
+)
 from evaluate.multiformat_schema import JsonValue, sha256_file, string_value
 from evaluate.multiformat_strict_json import read_strict_object
 
@@ -28,6 +32,8 @@ class PortableLockInputs:
     contract: Path
     evaluator: Path
     corpora: tuple[Path, ...]
+    cargo: Path
+    rustc: Path
     libreoffice: Path
     pdftoppm: Path
     pdftotext: Path
@@ -63,6 +69,7 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
         raise PortableLockIncompleteError(
             "portable runtime artifact is unavailable"
         ) from error
+    rust_toolchain = rust_toolchain_identity(inputs.cargo, inputs.rustc)
     root, output, public_key = prepare_key_material(
         inputs.project_root,
         inputs.evidence_root,
@@ -174,6 +181,7 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
             "status": "locked",
             "reference_profile": "libreoffice-poppler",
             "platform": {"os": platform.system(), "architecture": platform.machine()},
+            "rust_toolchain": rust_toolchain_value(rust_toolchain),
             "tools": {
                 "libreoffice": libreoffice_binding,
                 "poppler_render": lock_io.versioned(

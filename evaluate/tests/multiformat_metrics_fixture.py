@@ -117,6 +117,7 @@ def write_metrics(
     evaluator_hash: str,
     oracle_hash: str,
     evidence_root: Path | None = None,
+    outer_lock: Path | None = None,
 ) -> Path:
     root = evidence_root or corpus.parent
     corpus_value = json.loads(corpus.read_text(encoding="utf-8"))
@@ -198,8 +199,24 @@ def write_metrics(
     cargo = subprocess.run(
         ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
     ).stdout.strip()
+    rustc = subprocess.run(
+        ["rustup", "which", "rustc"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    authority = outer_lock or root / f"{document_format}-toolchain-lock.json"
+    if outer_lock is None:
+        authority.write_text(
+            json.dumps(
+                {
+                    "rust_toolchain": {
+                        "cargo": {"path": cargo, "sha256": sha256(Path(cargo))},
+                        "rustc": {"path": rustc, "sha256": sha256(Path(rustc))},
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
     env = Path("/usr/bin/env").resolve().as_posix()
-    path_arg = "PATH=/usr/bin:/bin"
+    path_arg = f"PATH={Path(rustc).parent}:/usr/bin:/bin"
     materialize_command_plan(
         commands_path,
         (python, "-m", "evaluate.run_multiformat_security_case"),
@@ -248,6 +265,7 @@ def write_metrics(
             ),
         },
         (env, path_arg, cargo, "test", "--release", "-p", "document2html-native"),
+        outer_lock=authority,
     )
     command_plan = load_command_plan(commands_path)
     security = security_records(

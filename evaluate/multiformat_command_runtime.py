@@ -8,8 +8,10 @@ from evaluate import multiformat_candidate_artifacts as artifacts
 from evaluate import multiformat_candidate_process as process
 from evaluate.multiformat_command_plan import (
     CommandEvidenceError,
+    CommandIdentity,
     CommandPlan,
     command_value,
+    revalidate_command_identity,
 )
 from evaluate.multiformat_corpus_items import object_list, require_keys
 from evaluate.multiformat_evidence import resolve_evidence_path
@@ -131,6 +133,8 @@ def run_quality_commands(
             path.with_suffix(".stderr"),
             working_directory,
             timeout_seconds,
+            identity=command,
+            plan=plan,
         )
         value: dict[str, JsonValue] = {
             "schema_version": 2,
@@ -166,6 +170,8 @@ def run_performance_command(
         path.with_suffix(".stderr"),
         working_directory,
         timeout_seconds,
+        identity=plan.performance,
+        plan=plan,
     )
     passed = exit_code == 0
     value: dict[str, JsonValue] = {
@@ -209,6 +215,9 @@ def _run_command(
     stderr: Path,
     working_directory: Path,
     timeout_seconds: int,
+    *,
+    identity: CommandIdentity | None = None,
+    plan: CommandPlan | None = None,
 ) -> int:
     if not argv:
         raise CommandEvidenceError("command cannot be empty")
@@ -228,8 +237,10 @@ def _run_command(
             }
         )
         command = tuple(argument.format_map(substitutions) for argument in argv)
+        if identity is not None and plan is not None:
+            revalidate_command_identity(identity, plan)
         try:
-            return process.run_bounded_process(
+            exit_code = process.run_bounded_process(
                 command,
                 working_directory,
                 environment,
@@ -240,3 +251,7 @@ def _run_command(
             )
         except (process.CandidateProcessError, OSError, KeyError, ValueError) as error:
             raise CommandEvidenceError(f"command failed: {command[0]}") from error
+        finally:
+            if identity is not None and plan is not None:
+                revalidate_command_identity(identity, plan)
+        return exit_code

@@ -6,6 +6,9 @@ from typing import cast
 
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, read_object, string_list
+from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
+    rust_toolchain_lock_value,
+)
 from evaluate.tests.multiformat_gate_fixture import (
     CONTRACT_PATH,
     PROJECT_ROOT,
@@ -82,6 +85,7 @@ class PerFormatGateFixture(MultiFormatGateFixture):
                     "status": "locked",
                     "reference_profile": "libreoffice-poppler",
                     "platform": {"os": "Darwin", "architecture": "arm64"},
+                    "rust_toolchain": rust_toolchain_lock_value(),
                     "tools": {
                         "libreoffice": {"version": "test", **binding["soffice"]},
                         "poppler_render": {"version": "test", **binding["pdftoppm"]},

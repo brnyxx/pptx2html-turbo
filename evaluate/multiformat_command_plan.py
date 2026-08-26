@@ -8,6 +8,13 @@ from typing import NamedTuple
 
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_corpus_items import object_list, require_keys
+from evaluate.multiformat_rust_toolchain import (
+    RustToolchainError,
+    RustToolchainIdentity,
+    load_locked_rust_toolchain,
+    resolve_rustc,
+    rust_toolchain_value,
+)
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
@@ -56,17 +63,24 @@ class CommandIdentity(NamedTuple):
 class CommandPlan(NamedTuple):
     path: Path
     sha256: str
+    outer_lock_path: Path
+    outer_lock_sha256: str
+    rust_toolchain: RustToolchainIdentity
     security: CommandIdentity
     quality: dict[str, CommandIdentity]
     performance: CommandIdentity
 
 
-def command_identity(role: str, argv: tuple[str, ...]) -> CommandIdentity:
+def command_identity(
+    role: str,
+    argv: tuple[str, ...],
+    rust_toolchain: RustToolchainIdentity | None = None,
+) -> CommandIdentity:
     if not argv or any(not value for value in argv):
         raise CommandEvidenceError(f"{role} argv is empty")
     executable = _executable(Path(argv[0]), role)
     canonical = (executable.as_posix(), *argv[1:])
-    invoked_index = _validate_role(role, canonical, executable)
+    invoked_index = _validate_role(role, canonical, executable, rust_toolchain)
     executables = [(0, executable.as_posix(), sha256_file(executable))]
     if invoked_index is not None:
         invoked = _executable(Path(canonical[invoked_index]), f"{role} invoked")
@@ -100,7 +114,12 @@ def _executable(path: Path, label: str) -> Path:
     return resolved
 
 
-def _validate_role(role: str, argv: tuple[str, ...], executable: Path) -> int | None:
+def _validate_role(
+    role: str,
+    argv: tuple[str, ...],
+    executable: Path,
+    rust_toolchain: RustToolchainIdentity | None,
+) -> int | None:
     python = Path(sys.executable).resolve(strict=True)
     if role == "security":
         if executable != python or argv[1:3] != ("-m", _SECURITY_MODULE):
@@ -123,15 +142,19 @@ def _validate_role(role: str, argv: tuple[str, ...], executable: Path) -> int | 
     if executable != Path("/usr/bin/env").resolve(strict=True):
         raise CommandEvidenceError(f"{role} command must use the allowed env launcher")
     if (
-        len(argv) != len(expected) + 3
-        or not argv[1].startswith("PATH=")
-        or not argv[1].removeprefix("PATH=")
+        rust_toolchain is None
+        or len(argv) != len(expected) + 3
         or "=" in argv[2]
-        or not Path(argv[2]).is_absolute()
-        or Path(argv[2]).name != "cargo"
+        or Path(argv[2]) != rust_toolchain.cargo
         or argv[3:] != expected
     ):
         raise CommandEvidenceError(f"{role} cargo command is not allowed")
+    try:
+        rustc = resolve_rustc(argv[1])
+    except RustToolchainError as error:
+        raise CommandEvidenceError(f"{role} Rust toolchain is not allowed") from error
+    if rustc != rust_toolchain.rustc:
+        raise CommandEvidenceError(f"{role} rustc command is not locked")
     return 2
 
 
@@ -150,30 +173,86 @@ def command_value(command: CommandIdentity) -> dict[str, JsonValue]:
 def load_command_plan(path: Path) -> CommandPlan:
     values = read_strict_object(path)
     require_keys(
-        values, {"schema_version", "security", "quality", "performance"}, "commands"
+        values,
+        {
+            "schema_version",
+            "outer_lock",
+            "rust_toolchain",
+            "security",
+            "quality",
+            "performance",
+        },
+        "commands",
     )
-    if integer_value(values, "schema_version") != 2:
+    if integer_value(values, "schema_version") != 3:
         raise CommandEvidenceError("unsupported command plan schema")
-    security = _load_identity(object_value(values, "security"), "security")
+    outer_lock = object_value(values, "outer_lock")
+    require_keys(outer_lock, {"path", "sha256"}, "commands.outer_lock")
+    outer_lock_path = (path.parent / string_value(outer_lock, "path")).resolve(
+        strict=True
+    )
+    outer_lock_sha256 = sha256_file(outer_lock_path)
+    if sha256_value(outer_lock, "sha256") != outer_lock_sha256:
+        raise CommandEvidenceError("command plan outer lock differs")
+    try:
+        rust_toolchain = load_locked_rust_toolchain(outer_lock_path)
+    except (OSError, TypeError, ValueError) as error:
+        raise CommandEvidenceError("command plan Rust toolchain is invalid") from error
+    if object_value(values, "rust_toolchain") != rust_toolchain_value(rust_toolchain):
+        raise CommandEvidenceError("command plan Rust toolchain differs")
+    security = _load_identity(
+        object_value(values, "security"), "security", rust_toolchain
+    )
     quality_value = object_value(values, "quality")
     require_keys(quality_value, set(_QUALITY_ROLES), "commands.quality")
     quality = {
-        role: _load_identity(object_value(quality_value, role), role)
+        role: _load_identity(object_value(quality_value, role), role, rust_toolchain)
         for role in sorted(_QUALITY_ROLES)
     }
-    performance = _load_identity(object_value(values, "performance"), "performance")
+    performance = _load_identity(
+        object_value(values, "performance"), "performance", rust_toolchain
+    )
     return CommandPlan(
-        path.resolve(strict=True), sha256_file(path), security, quality, performance
+        path.resolve(strict=True),
+        sha256_file(path),
+        outer_lock_path,
+        outer_lock_sha256,
+        rust_toolchain,
+        security,
+        quality,
+        performance,
     )
 
 
-def _load_identity(values: dict[str, JsonValue], role: str) -> CommandIdentity:
+def revalidate_command_identity(
+    command: CommandIdentity,
+    plan: CommandPlan,
+) -> None:
+    try:
+        rust_toolchain = load_locked_rust_toolchain(plan.outer_lock_path)
+    except (OSError, TypeError, ValueError) as error:
+        raise CommandEvidenceError("locked Rust toolchain changed") from error
+    if (
+        sha256_file(plan.outer_lock_path) != plan.outer_lock_sha256
+        or rust_toolchain != plan.rust_toolchain
+        or command_identity(command.role, command.argv, rust_toolchain) != command
+    ):
+        raise CommandEvidenceError(f"command identity changed: {command.role}")
+
+
+def _load_identity(
+    values: dict[str, JsonValue],
+    role: str,
+    rust_toolchain: RustToolchainIdentity,
+) -> CommandIdentity:
     require_keys(
         values, {"role", "argv", "argv_sha256", "executables"}, f"commands.{role}"
     )
     if string_value(values, "role") != role:
         raise CommandEvidenceError(f"command role differs: {role}")
-    identity = command_identity(role, tuple(string_list(values, "argv")))
+    identity = command_identity(
+        role, tuple(string_list(values, "argv")), rust_toolchain
+    )
     if (
         sha256_value(values, "argv_sha256") != identity.argv_sha256
         or object_list(values, "executables", f"commands.{role}.executables")

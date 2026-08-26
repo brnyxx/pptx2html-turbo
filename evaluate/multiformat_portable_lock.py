@@ -19,6 +19,7 @@ from evaluate.multiformat_reference_routing import (
     RoutingIdentity,
     load_reference_routing,
 )
+from evaluate.multiformat_rust_toolchain import load_locked_rust_toolchain
 from evaluate.multiformat_schema import (
     JsonValue,
     boolean_value,
@@ -71,6 +72,7 @@ def validate_reference_lock(
         if architecture not in _SUPPORTED_ARCHITECTURES:
             raise PortableLockError("portable reference architecture is unsupported")
 
+        load_locked_rust_toolchain(path)
         tools = object_value(lock, "tools")
         for name in (
             "libreoffice",
@@ -172,6 +174,10 @@ def portable_lock_template() -> JsonObject:
         "status": "INCOMPLETE",
         "reference_profile": ReferenceProfile.LIBREOFFICE_POPPLER.value,
         "platform": {"os": "", "architecture": ""},
+        "rust_toolchain": {
+            "cargo": {"path": "", "sha256": ""},
+            "rustc": {"path": "", "sha256": ""},
+        },
         "tools": {
             "libreoffice": {**versioned},
             "poppler_render": {**versioned},

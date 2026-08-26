@@ -122,7 +122,10 @@ def validate_metrics_evidence(
             "metrics.binding.command_plan",
         )
         command_plan = load_command_plan(command_plan_path)
-        if sha256_value(bindings, "command_plan_sha256") != command_plan.sha256:
+        if sha256_value(bindings, "command_plan_sha256") != command_plan.sha256 or (
+            oracle_lock_path is not None
+            and command_plan.outer_lock_sha256 != oracle_lock_sha256
+        ):
             raise MetricError("metrics.binding.command_plan", "digest")
         oracle_units = validate_capture_manifest(
             oracle_capture,

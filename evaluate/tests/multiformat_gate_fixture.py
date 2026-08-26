@@ -13,12 +13,12 @@ from evaluate.multiformat_schema import (
     read_object,
     string_list,
 )
+from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
+    write_gate_oracle_lock,
+)
 from evaluate.tests.multiformat_corpus_fixture import (
     PAIRED_FORMATS,
     write_corpus,
-)
-from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
-    write_gate_oracle_lock,
 )
 from evaluate.tests.multiformat_metrics_fixture import (
     patched_reviewer_registry,
@@ -74,6 +74,7 @@ class MultiFormatGateFixture(unittest.TestCase):
                 evaluator_hash,
                 lock_hash,
                 evidence_root,
+                lock,
             )
             strata: dict[str, JsonValue] = {
                 name: 100.0 for name in string_list(strata_by_format, document_format)

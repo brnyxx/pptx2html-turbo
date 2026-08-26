@@ -42,6 +42,24 @@ class MultiFormatMetricsTests(unittest.TestCase):
             self.assertTrue(result.determinism.html_hashes_equal)
             self.assertEqual(result.reviewer_count, 2)
 
+    def test_command_plan_must_match_authoritative_outer_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            contract, corpus = ready_fixture(root)
+            metrics = write_metrics(contract, corpus, "e" * 64, "a" * 64)
+            authoritative_lock = root / "authoritative-lock.json"
+            authoritative_lock.write_text("{}", encoding="utf-8")
+
+            with self.assertRaises(MetricError):
+                validate_metrics_evidence(
+                    contract,
+                    corpus,
+                    metrics,
+                    "e" * 64,
+                    "a" * 64,
+                    oracle_lock_path=authoritative_lock,
+                )
+
     def test_unattributable_number_format_cannot_reach_ready(self) -> None:
         """An unsupported numFmt must block READY, not lower the score.
 
@@ -80,61 +98,65 @@ class MultiFormatMetricsTests(unittest.TestCase):
 
     def test_missing_or_orphaned_conformance_unit_is_rejected(self) -> None:
         for mutation in ["missing", "orphan"]:
-            with self.subTest(mutation=mutation):
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    root = Path(temp_dir)
-                    contract, corpus = ready_fixture(root)
-                    metrics = write_metrics(contract, corpus, "e" * 64, "a" * 64)
-                    value = json.loads(metrics.read_text(encoding="utf-8"))
-                    if mutation == "missing":
-                        value["conformance"]["units"].pop()
-                    else:
-                        value["conformance"]["units"][0]["unit_id"] = "orphan"
-                    metrics.write_text(
-                        json.dumps(value, sort_keys=True),
-                        encoding="utf-8",
-                    )
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                root = Path(temp_dir)
+                contract, corpus = ready_fixture(root)
+                metrics = write_metrics(contract, corpus, "e" * 64, "a" * 64)
+                value = json.loads(metrics.read_text(encoding="utf-8"))
+                if mutation == "missing":
+                    value["conformance"]["units"].pop()
+                else:
+                    value["conformance"]["units"][0]["unit_id"] = "orphan"
+                metrics.write_text(
+                    json.dumps(value, sort_keys=True),
+                    encoding="utf-8",
+                )
 
-                    with self.assertRaisesRegex(
-                        MetricError,
-                        "conformance|metrics.binding.capture",
-                    ):
-                        validate_metrics_evidence(
-                            contract,
-                            corpus,
-                            metrics,
-                            "e" * 64,
-                            "a" * 64,
-                        )
+                with self.assertRaisesRegex(
+                    MetricError,
+                    "conformance|metrics.binding.capture",
+                ):
+                    validate_metrics_evidence(
+                        contract,
+                        corpus,
+                        metrics,
+                        "e" * 64,
+                        "a" * 64,
+                    )
 
     def test_blind_unit_count_and_source_digest_are_corpus_bound(self) -> None:
         for mutation in ["unit_count", "source_sha256"]:
-            with self.subTest(mutation=mutation):
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    root = Path(temp_dir)
-                    contract, corpus = ready_fixture(root)
-                    metrics = write_metrics(contract, corpus, "e" * 64, "a" * 64)
-                    value = json.loads(metrics.read_text(encoding="utf-8"))
-                    first = value["blind"]["files"][0]
-                    if mutation == "unit_count":
-                        first["units"].append(dict(first["units"][0]))
-                        first["units"][1]["unit_id"] = "blind-0-unit-2"
-                        first["units"][1]["ordinal"] = 2
-                    else:
-                        first["source_sha256"] = "0" * 64
-                    metrics.write_text(
-                        json.dumps(value, sort_keys=True),
-                        encoding="utf-8",
-                    )
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                root = Path(temp_dir)
+                contract, corpus = ready_fixture(root)
+                metrics = write_metrics(contract, corpus, "e" * 64, "a" * 64)
+                value = json.loads(metrics.read_text(encoding="utf-8"))
+                first = value["blind"]["files"][0]
+                if mutation == "unit_count":
+                    first["units"].append(dict(first["units"][0]))
+                    first["units"][1]["unit_id"] = "blind-0-unit-2"
+                    first["units"][1]["ordinal"] = 2
+                else:
+                    first["source_sha256"] = "0" * 64
+                metrics.write_text(
+                    json.dumps(value, sort_keys=True),
+                    encoding="utf-8",
+                )
 
-                    with self.assertRaisesRegex(MetricError, "blind"):
-                        validate_metrics_evidence(
-                            contract,
-                            corpus,
-                            metrics,
-                            "e" * 64,
-                            "a" * 64,
-                        )
+                with self.assertRaisesRegex(MetricError, "blind"):
+                    validate_metrics_evidence(
+                        contract,
+                        corpus,
+                        metrics,
+                        "e" * 64,
+                        "a" * 64,
+                    )
 
     def test_metrics_bind_contract_corpus_evaluator_and_oracle(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

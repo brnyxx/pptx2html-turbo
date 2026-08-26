@@ -18,6 +18,9 @@ from evaluate.multiformat_portable_receipt import (
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, sha256_file
+from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
+    rust_toolchain_lock_value,
+)
 
 _ROUTING = Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
 
@@ -162,6 +165,7 @@ class ReceiptFixture:
             "status": "locked",
             "reference_profile": "libreoffice-poppler",
             "platform": {"os": "Darwin", "architecture": "arm64"},
+            "rust_toolchain": rust_toolchain_lock_value(),
             "tools": {
                 "libreoffice": {"version": "test", **binding["soffice"]},
                 "poppler_render": {"version": "test", **binding["pdftoppm"]},

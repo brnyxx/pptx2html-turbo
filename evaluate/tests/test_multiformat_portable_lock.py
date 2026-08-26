@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,6 +24,16 @@ from evaluate.multiformat_schema import JsonValue, sha256_file
 ROUTING_TABLE = (
     Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
 )
+CARGO = Path(
+    subprocess.run(
+        ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+).resolve(strict=True)
+RUSTC = Path(
+    subprocess.run(
+        ["rustup", "which", "rustc"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+).resolve(strict=True)
 
 
 class MultiFormatPortableLockTests(unittest.TestCase):
@@ -265,6 +276,16 @@ class MultiFormatPortableLockTests(unittest.TestCase):
             "status": "locked",
             "reference_profile": "libreoffice-poppler",
             "platform": {"os": "Darwin", "architecture": "arm64"},
+            "rust_toolchain": {
+                "cargo": {
+                    "path": CARGO.as_posix(),
+                    "sha256": sha256_file(CARGO),
+                },
+                "rustc": {
+                    "path": RUSTC.as_posix(),
+                    "sha256": sha256_file(RUSTC),
+                },
+            },
             "tools": {
                 "libreoffice": {"version": "test", **bindings["soffice"]},
                 "poppler_render": {"version": "test", **bindings["pdftoppm"]},

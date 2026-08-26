@@ -64,6 +64,8 @@ def assemble_metrics(
             evidence_root,
         )
         plan = load_command_plan(commands_path)
+        if plan.outer_lock_sha256 != context.oracle_hash:
+            raise MetricsAssemblyError("command plan outer lock differs")
         try:
             reviews, critical_defects = materialize_review_attestations(
                 review_paths,

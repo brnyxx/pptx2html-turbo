@@ -23,6 +23,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "output-dir",
         "contract",
         "evaluator",
+        "cargo",
+        "rustc",
         "libreoffice",
         "pdftoppm",
         "pdftotext",

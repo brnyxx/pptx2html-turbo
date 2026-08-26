@@ -444,6 +444,10 @@ candidate attestation.
 ```bash
 package_soffice="$SOFFICE"
 package_chromium="$CHROMIUM"
+# Resolve the evaluator-selected rustup toolchain before accepting any producer
+# command plan. These exact paths and bytes become part of every outer lock.
+CARGO="$(rustup which cargo)"
+RUSTC="$(rustup which rustc)"
 
 for format in $FORMATS; do
   wrapper="$KEY_ROOT/portable-receipt-$format"
@@ -482,6 +486,8 @@ for format in $FORMATS; do
     --output-dir "$outer" \
     --contract "$CONTRACT" \
     --evaluator "$WAVE/evidence/evaluator-manifest.json" \
+    --cargo "$CARGO" \
+    --rustc "$RUSTC" \
     --libreoffice "$package_soffice" \
     --pdftoppm "$PDFTOPPM" \
     --pdftotext "$PDFTOTEXT" \
@@ -619,16 +625,22 @@ the hash-locked font bundle. Cell identities come from independently derived
 worksheet and coordinate metadata, never visual position.
 
 Create one production command plan and blank two-reviewer packet per format.
-The schema-v2 plan records each typed role, canonical argv SHA-256, and resolved
-executable SHA-256. The security role accepts only the current Python runtime's
-exact `-m evaluate.run_multiformat_security_case` entry point; shells and
-substitute security executables fail closed. Metrics bind and revalidate the
-complete command-plan hash and every executed command identity. Security
+The schema-v3 plan records each typed role, canonical argv SHA-256, resolved
+executable SHA-256, and the exact evaluator outer lock that authorized its Rust
+toolchain. The outer-lock materializer resolves and hashes evaluator-selected
+`cargo` and `rustc` executables; command-plan materialization cannot replace
+those identities with producer-selected paths or hashes. Legitimate rustup
+toolchains remain supported because their resolved toolchain `bin` directory is
+locked rather than a workstation-specific path being hardcoded. The security
+role accepts only the current Python runtime's exact
+`-m evaluate.run_multiformat_security_case` entry point; shells and substitute
+security executables fail closed. Metrics match the plan to the authoritative
+outer-lock digest and revalidate that lock plus executable identities
+immediately before and after every quality/performance execution. Security
 placeholders are expanded separately for all ten locked cases.
 
 ```bash
-CARGO="$(rustup which cargo)"
-RUST_BIN="$(dirname "$(rustup which rustc)")"
+RUST_BIN="$(dirname "$RUSTC")"
 TOOL_PATH="$RUST_BIN:/opt/homebrew/bin:/usr/bin:/bin"
 
 # Reviewer trust is not producer-supplied. The tracked registry at
@@ -664,6 +676,7 @@ for format in $FORMATS; do
 
   "$PYTHON" -m evaluate.materialize_multiformat_command_plan \
     --output "$WAVE/commands/$format.json" \
+    --outer-lock "$lock" \
     --security-argv "[\"$PYTHON\",\"-m\",\"evaluate.run_multiformat_security_case\",\"--project-root\",\"$PROJECT_ROOT\",\"--contract\",\"$bound_contract\",\"--corpus-manifest\",\"$corpus\",\"--evaluator-manifest\",\"$bound_evaluator\",\"--oracle-lock\",\"$lock\",\"--evidence-root\",\"$EVIDENCE_ROOT\",\"--output-dir\",\"$WAVE/security-cases/$format/{source_id}\",\"--source-id\",\"{source_id}\",\"--source\",\"{source}\",\"--converter\",\"$bound_converter\",\"--soffice\",\"$bound_soffice\",\"--pdftohtml\",\"$bound_pdftohtml\",\"--pdfinfo\",\"$bound_pdfinfo\",\"--chromium\",\"$bound_chromium\",\"--font-bundle\",\"$FONT_BUNDLE\",\"--sandbox-attestation\",\"$attestation\",\"--sandbox-public-key\",\"$CANDIDATE_PUBLIC\",\"--openssl\",\"$bound_openssl\",\"--receipt-signer\",\"$bound_receipt_signer\",\"--timeout-seconds\",\"120\"]" \
     --tests-argv "[\"/usr/bin/env\",\"PATH=$TOOL_PATH\",\"$CARGO\",\"test\",\"-p\",\"document2html-core\",\"-p\",\"document2html-native\"]" \
     --builds-argv "[\"/usr/bin/env\",\"PATH=$TOOL_PATH\",\"$CARGO\",\"build\",\"--release\",\"-p\",\"pptx2html-cli\",\"--bin\",\"document2html\"]" \
