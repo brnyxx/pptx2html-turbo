@@ -75,14 +75,14 @@ class MultiFormatGateFixture(unittest.TestCase):
                 lock_hash,
                 evidence_root,
             )
+            strata: dict[str, JsonValue] = {
+                name: 100.0 for name in string_list(strata_by_format, document_format)
+            }
             report = self._passing_report(
                 document_format,
                 contract_hash,
                 lock_hash,
-                {
-                    name: 100.0
-                    for name in string_list(strata_by_format, document_format)
-                },
+                strata,
                 evaluator_binding,
                 self._binding(evidence_root, corpus_path),
                 self._binding(evidence_root, metrics_path),
@@ -133,10 +133,10 @@ class MultiFormatGateFixture(unittest.TestCase):
         document_format: str,
         contract_hash: str,
         lock_hash: str,
-        strata: dict[str, float],
-        evaluator: dict[str, str],
-        corpus_manifest: dict[str, str],
-        metrics_evidence: dict[str, str],
+        strata: dict[str, JsonValue],
+        evaluator: dict[str, JsonValue],
+        corpus_manifest: dict[str, JsonValue],
+        metrics_evidence: dict[str, JsonValue],
     ) -> dict[str, JsonValue]:
         return {
             "schema_version": 2,
@@ -185,7 +185,7 @@ class MultiFormatGateFixture(unittest.TestCase):
         }
 
     @classmethod
-    def _binding(cls, root: Path, path: Path) -> dict[str, str]:
+    def _binding(cls, root: Path, path: Path) -> dict[str, JsonValue]:
         return {
             "path": path.relative_to(root).as_posix(),
             "sha256": cls._sha256(path),
