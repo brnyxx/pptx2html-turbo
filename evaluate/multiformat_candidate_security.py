@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from evaluate.multiformat_candidate_artifacts import write_canonical_json
 from evaluate.multiformat_candidate_conversion import (
@@ -26,6 +27,7 @@ from evaluate.multiformat_corpus_types import (
 )
 from evaluate.multiformat_evidence import resolve_evidence_path
 from evaluate.multiformat_schema import (
+    JsonValue,
     sha256_file,
     sha256_value,
     string_value,
@@ -45,6 +47,24 @@ class CandidateSecuritySource:
     sha256: str
     case_family: str
     expected_outcome: SecurityOutcome
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateSecurityResult:
+    observed_outcome: SecurityOutcome
+    typed_error: str | None
+    external_fetches: tuple[str, ...]
+    active_content_executed: bool
+
+    def command_evidence(self) -> dict[str, JsonValue]:
+        return {
+            "observed_outcome": self.observed_outcome.value,
+            "typed_error": self.typed_error,
+            "network_isolation": "disabled",
+            "external_fetches": cast(list[JsonValue], list(self.external_fetches)),
+            "active_content_executed": self.active_content_executed,
+            "within_limits": True,
+        }
 
 
 def load_candidate_security_sources(
@@ -88,7 +108,7 @@ def capture_candidate_security(
     )
     output_dir.mkdir(parents=True, exist_ok=False)
     results = tuple(
-        _execute_case(
+        _capture_case(
             source,
             document_format,
             output_dir,
@@ -102,20 +122,16 @@ def capture_candidate_security(
     return results
 
 
-def _execute_case(
+def execute_candidate_security_case(
     source: CandidateSecuritySource,
     document_format: DocumentFormat,
-    output_dir: Path,
+    case_root: Path,
     runtime: CandidateRuntimePaths,
-    project_revision: str,
-    evaluator_hash: str,
-    corpus_hash: str,
-) -> Path:
+) -> CandidateSecurityResult:
     if sha256_file(source.path) != source.sha256:
         raise CandidateSecurityError(f"security source changed: {source.source_id}")
     typed_error: str | None = None
     conversion: ConversionResult | None = None
-    case_root = output_dir / source.source_id
     case_root.mkdir(parents=True, exist_ok=False)
     try:
         conversion = run_conversion(
@@ -148,40 +164,57 @@ def _execute_case(
         raise CandidateSecurityError(
             f"security source changed during execution: {source.source_id}"
         )
-    passed = (
-        observed is source.expected_outcome
-        and not facts.external_requests
-        and not facts.active_content_executed
+    if (
+        observed is not source.expected_outcome
+        or facts.external_requests
+        or facts.active_content_executed
+    ):
+        raise CandidateSecurityError(f"security outcome failed: {source.source_id}")
+    return CandidateSecurityResult(
+        observed,
+        typed_error,
+        facts.external_requests,
+        facts.active_content_executed,
+    )
+
+
+def _capture_case(
+    source: CandidateSecuritySource,
+    document_format: DocumentFormat,
+    output_dir: Path,
+    runtime: CandidateRuntimePaths,
+    project_revision: str,
+    evaluator_hash: str,
+    corpus_hash: str,
+) -> Path:
+    case_root = output_dir / source.source_id
+    execution = execute_candidate_security_case(
+        source, document_format, case_root, runtime
     )
     result = case_root / "execution.json"
     write_canonical_json(
         result,
         {
             "schema_version": 1,
-            "status": "PASS" if passed else "FAIL",
+            "status": "PASS",
             "source_id": source.source_id,
             "source_sha256": source.sha256,
             "case_family": source.case_family,
             "expected_outcome": source.expected_outcome.value,
-            "observed_outcome": observed.value,
-            "typed_error": typed_error,
-            "network_isolation": "disabled",
-            "external_fetches": list(facts.external_requests),
-            "active_content_executed": facts.active_content_executed,
-            "within_limits": True,
+            **execution.command_evidence(),
             "project_revision": project_revision,
             "evaluator_manifest_sha256": evaluator_hash,
             "corpus_manifest_sha256": corpus_hash,
         },
     )
-    if not passed:
-        raise CandidateSecurityError(f"security outcome failed: {source.source_id}")
     return result
 
 
 __all__ = [
     "CandidateSecurityError",
     "CandidateSecuritySource",
+    "CandidateSecurityResult",
     "capture_candidate_security",
+    "execute_candidate_security_case",
     "load_candidate_security_sources",
 ]

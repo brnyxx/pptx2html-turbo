@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import io
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 from types import SimpleNamespace
@@ -12,7 +15,9 @@ from playwright.sync_api import sync_playwright
 from evaluate.multiformat_candidate_security import (
     CandidateSecurityError,
     CandidateSecuritySource,
+    CandidateSecurityResult,
     capture_candidate_security,
+    execute_candidate_security_case,
 )
 from evaluate.multiformat_candidate_security_browser import (
     SecurityBrowserFacts,
@@ -21,9 +26,154 @@ from evaluate.multiformat_candidate_security_browser import (
 from evaluate.multiformat_candidate_types import CandidateRuntimePaths
 from evaluate.multiformat_corpus_types import DocumentFormat, SecurityOutcome
 from evaluate.multiformat_schema import sha256_file
+from evaluate.run_multiformat_security_case import (
+    load_exact_security_source,
+    main as security_case_main,
+)
 
 
 class CandidateSecurityTests(unittest.TestCase):
+    def test_public_single_case_seam_handles_reject_and_safe_convert(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _contract, _corpus, _evaluator, runtime, sources = self._fixture(root)
+            reject = sources[0]
+            safe = CandidateSecuritySource(
+                sources[1].source_id,
+                sources[1].path,
+                sources[1].sha256,
+                sources[1].case_family,
+                SecurityOutcome.SAFE_CONVERT,
+            )
+            with mock.patch(
+                "evaluate.multiformat_candidate_security.run_conversion",
+                side_effect=CandidateConversionError("converter exit code 1"),
+            ):
+                rejected = execute_candidate_security_case(
+                    reject, DocumentFormat.DOCX, root / "reject", runtime
+                )
+            with (
+                mock.patch(
+                    "evaluate.multiformat_candidate_security.run_conversion",
+                    return_value=SimpleNamespace(html="<html></html>"),
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_security.inspect_security_html",
+                    return_value=SecurityBrowserFacts((), False),
+                ),
+            ):
+                converted = execute_candidate_security_case(
+                    safe, DocumentFormat.DOCX, root / "safe", runtime
+                )
+
+            self.assertEqual(rejected.observed_outcome, SecurityOutcome.REJECT)
+            self.assertEqual(rejected.typed_error, "document2html.conversion-rejected")
+            self.assertEqual(converted.observed_outcome, SecurityOutcome.SAFE_CONVERT)
+            self.assertIsNone(converted.typed_error)
+
+    def test_single_case_cli_emits_only_command_evidence_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            locked = root / "locked.json"
+            locked.write_text("{}", encoding="utf-8")
+            output = root / "output"
+            tool = Path(sys.executable).resolve()
+            runtime = CandidateRuntimePaths(
+                tool, tool, tool, tool, tool, tool, tool, "test", 30
+            )
+            result = CandidateSecurityResult(
+                SecurityOutcome.REJECT,
+                "document2html.conversion-rejected",
+                (),
+                False,
+            )
+            argv = [
+                "--project-root",
+                root.as_posix(),
+                "--contract",
+                locked.as_posix(),
+                "--corpus-manifest",
+                locked.as_posix(),
+                "--evaluator-manifest",
+                locked.as_posix(),
+                "--oracle-lock",
+                locked.as_posix(),
+                "--evidence-root",
+                root.as_posix(),
+                "--output-dir",
+                output.as_posix(),
+                "--source-id",
+                "security-1",
+                "--source",
+                locked.as_posix(),
+            ]
+            for name in (
+                "converter",
+                "soffice",
+                "pdftohtml",
+                "pdfinfo",
+                "chromium",
+                "font-bundle",
+                "sandbox-attestation",
+                "sandbox-public-key",
+                "openssl",
+                "receipt-signer",
+            ):
+                argv.extend((f"--{name}", tool.as_posix()))
+            with (
+                mock.patch(
+                    "evaluate.run_multiformat_security_case.preflight_candidate_capture",
+                    return_value=SimpleNamespace(
+                        runtime_profile=SimpleNamespace(portable=True)
+                    ),
+                ),
+                mock.patch(
+                    "evaluate.run_multiformat_security_case.load_exact_security_source",
+                    return_value=(DocumentFormat.DOCX, object()),
+                ),
+                mock.patch(
+                    "evaluate.run_multiformat_security_case.materialize_candidate_runtime",
+                    return_value=(runtime, {}),
+                ),
+                mock.patch(
+                    "evaluate.run_multiformat_security_case.execute_candidate_security_case",
+                    return_value=result,
+                ),
+                redirect_stdout(io.StringIO()) as stdout,
+            ):
+                self.assertEqual(security_case_main(argv), 0)
+            self.assertEqual(
+                set(json.loads(stdout.getvalue())),
+                {
+                    "observed_outcome",
+                    "typed_error",
+                    "network_isolation",
+                    "external_fetches",
+                    "active_content_executed",
+                    "within_limits",
+                },
+            )
+
+    def test_single_case_loader_rejects_wrong_source_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            _contract, _corpus, _evaluator, _runtime, sources = self._fixture(root)
+            with (
+                mock.patch(
+                    "evaluate.run_multiformat_security_case.load_candidate_security_sources",
+                    return_value=(DocumentFormat.DOCX, sources),
+                ),
+                self.assertRaisesRegex(
+                    CandidateSecurityError, "unknown security source ID"
+                ),
+            ):
+                load_exact_security_source(
+                    root / "contract.json",
+                    root / "corpus.json",
+                    "wrong-id",
+                    sources[0].path,
+                )
+
     def test_exact_ten_execution_derived_rejections_are_published(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

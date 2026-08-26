@@ -12,12 +12,42 @@ from evaluate.multiformat_candidate_sources import (
 )
 from evaluate.multiformat_candidate_security import capture_candidate_security
 from evaluate.multiformat_candidate_types import CandidateManifestPaths
+from evaluate.multiformat_candidate_preflight_types import CandidatePreflight
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_candidate_types import CandidateRuntimePaths
 from evaluate.multiformat_candidate_runtime_lock import (
     validate_candidate_runtime,
 )
 from evaluate.multiformat_schema import sha256_file
+
+
+def materialize_candidate_runtime(
+    preflight: CandidatePreflight,
+    evidence_root: Path,
+    output_dir: Path,
+) -> tuple[CandidateRuntimePaths, dict[str, Path]]:
+    runtime_artifacts = materialize_runtime_artifacts(
+        preflight.runtime_artifacts,
+        evidence_root,
+        output_dir / "runtime-inputs",
+    )
+    runtime = CandidateRuntimePaths(
+        runtime_artifacts["converter_binary"],
+        runtime_artifacts["soffice_binary"],
+        runtime_artifacts["pdftohtml_binary"],
+        runtime_artifacts["pdfinfo_binary"],
+        runtime_artifacts["chromium_binary"],
+        runtime_artifacts["receipt_signer_binary"],
+        runtime_artifacts["font_config"],
+        preflight.runtime.browser_version,
+        preflight.runtime.timeout_seconds,
+    )
+    validate_candidate_runtime(
+        preflight.runtime_profile.candidate_runtime_lock,
+        runtime,
+        preflight.project_revision,
+    )
+    return runtime, runtime_artifacts
 
 
 def capture_candidate_evidence(
@@ -68,26 +98,8 @@ def capture_candidate_evidence(
         require_release_binary=require_release_binary,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
-    runtime_artifacts = materialize_runtime_artifacts(
-        preflight.runtime_artifacts,
-        evidence_root,
-        output_dir / "runtime-inputs",
-    )
-    runtime = CandidateRuntimePaths(
-        runtime_artifacts["converter_binary"],
-        runtime_artifacts["soffice_binary"],
-        runtime_artifacts["pdftohtml_binary"],
-        runtime_artifacts["pdfinfo_binary"],
-        runtime_artifacts["chromium_binary"],
-        runtime_artifacts["receipt_signer_binary"],
-        runtime_artifacts["font_config"],
-        preflight.runtime.browser_version,
-        preflight.runtime.timeout_seconds,
-    )
-    validate_candidate_runtime(
-        preflight.runtime_profile.candidate_runtime_lock,
-        runtime,
-        preflight.project_revision,
+    runtime, runtime_artifacts = materialize_candidate_runtime(
+        preflight, evidence_root, output_dir
     )
     runtime_tools = {
         **preflight.runtime_tools,
