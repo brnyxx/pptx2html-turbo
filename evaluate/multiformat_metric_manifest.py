@@ -4,12 +4,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import (
+    canonical_json_bytes,
     evidence_binding,
-    write_canonical_json,
 )
 from evaluate.multiformat_capture_manifest import validate_capture_manifest
 from evaluate.multiformat_capture_types import ArtifactIdentity, CaptureManifest
 from evaluate.multiformat_evaluator_manifest import validate_evaluator_manifest
+from evaluate.multiformat_metric_file_publish import (
+    MetricFilePublishError,
+    publish_created_file,
+)
 from evaluate.multiformat_metric_links import load_metric_spec
 from evaluate.multiformat_metric_types import CorpusMetricSpec, MetricError
 from evaluate.multiformat_metrics import validate_metrics_evidence
@@ -192,15 +196,8 @@ def publish_validated_metrics(
     evidence_root: Path,
     oracle_lock_path: Path,
 ) -> None:
-    if output_path.exists():
-        raise MetricsAssemblyError("refusing to replace metrics evidence")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    pending = output_path.with_name(f".{output_path.name}.pending")
-    if pending.exists():
-        raise MetricsAssemblyError("pending metrics evidence already exists")
-    try:
-        write_canonical_json(pending, value)
-        validate_metrics_evidence(
+    def validate(pending: Path) -> None:
+        _ = validate_metrics_evidence(
             contract_path,
             corpus_path,
             pending,
@@ -209,10 +206,11 @@ def publish_validated_metrics(
             evidence_root,
             oracle_lock_path,
         )
-        pending.replace(output_path)
-    except Exception:
-        pending.unlink(missing_ok=True)
-        raise
+
+    try:
+        publish_created_file(output_path, canonical_json_bytes(value), validate)
+    except MetricFilePublishError as error:
+        raise MetricsAssemblyError(str(error)) from error
 
 
 def _artifacts(unit_id: str, context: MetricContext) -> dict[str, JsonValue]:

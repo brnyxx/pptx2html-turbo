@@ -27,11 +27,16 @@ def evidence_binding(root: Path, path: Path) -> dict[str, JsonValue]:
     }
 
 
+def canonical_json_bytes(value: JsonValue) -> bytes:
+    return canonical_json_text(value).encode("utf-8")
+
+
+def canonical_json_text(value: JsonValue) -> str:
+    return json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
+
+
 def write_canonical_json(path: Path, value: JsonValue) -> None:
-    path.write_text(
-        json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    path.write_text(canonical_json_text(value), encoding="utf-8")
 
 
 def materialize_runtime_artifacts(
