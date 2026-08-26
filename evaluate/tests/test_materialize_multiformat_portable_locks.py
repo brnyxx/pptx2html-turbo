@@ -17,6 +17,7 @@ from evaluate.multiformat_portable_lock_io import bind_font_bundle
 from evaluate.multiformat_portable_package_inventory import (
     PortableLockIoError,
     bind_package_executable,
+    bind_package_executable_with_inventory,
     validate_package_inventory,
 )
 from evaluate.multiformat_portable_reference_artifacts import load_raw_private_key
@@ -119,6 +120,94 @@ class PortableLockMaterializerTests(unittest.TestCase):
             (fonts / "font.ttf").write_bytes(b"font")
             manifest = bind_font_bundle(fonts, evidence, evidence / "fonts")
             self.assertIn("font.ttf", manifest.read_text())
+
+    def test_in_root_app_reuse_requires_untampered_adjacent_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "Source.app/Contents/MacOS/tool"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"tool")
+            evidence = root / "evidence"
+            evidence.mkdir()
+            first_destination = evidence / "first-package"
+            bound, inventory = bind_package_executable_with_inventory(
+                source, evidence, first_destination
+            )
+            if inventory is None:
+                self.fail("copied app package must have an inventory")
+            unused_destination = evidence / "second-package"
+
+            reused, reused_inventory = bind_package_executable_with_inventory(
+                bound, evidence, unused_destination
+            )
+
+            self.assertEqual(reused, bound)
+            self.assertEqual(reused_inventory, inventory)
+            self.assertFalse(unused_destination.exists())
+            inventory_bytes = inventory.read_bytes()
+            inventory_value = json.loads(inventory_bytes)
+            inventory_value["entries"][0]["sha256"] = "0" * 64
+            inventory.write_text(json.dumps(inventory_value), encoding="utf-8")
+            with self.assertRaises(PortableLockIoError):
+                bind_package_executable_with_inventory(
+                    bound, evidence, unused_destination
+                )
+            inventory.write_bytes(inventory_bytes)
+            inventory.unlink()
+            with self.assertRaisesRegex(PortableLockIoError, "inventory is missing"):
+                bind_package_executable_with_inventory(
+                    bound, evidence, unused_destination
+                )
+
+    def test_second_outer_lock_reuses_first_locked_app_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            inputs = self._fixture(base / "evidence")
+
+            def app_executable(name: str, original: Path) -> Path:
+                executable = base / f"{name}.app/Contents/MacOS/tool"
+                resource = executable.parents[1] / "Resources/data"
+                executable.parent.mkdir(parents=True)
+                resource.parent.mkdir(parents=True)
+                executable.write_bytes(original.read_bytes())
+                executable.chmod(original.stat().st_mode & 0o777)
+                resource.write_bytes(name.encode())
+                return executable
+
+            inputs = replace(
+                inputs,
+                libreoffice=app_executable("LibreOffice", inputs.libreoffice),
+                chromium=app_executable("Chromium", inputs.chromium),
+            )
+            first_lock = materialize_portable_locks(inputs)[0]
+            first = json.loads(first_lock.read_text(encoding="utf-8"))
+            first_libreoffice = (
+                inputs.evidence_root / first["tools"]["libreoffice"]["path"]
+            )
+            first_chromium = inputs.evidence_root / first["browser"]["chromium"]["path"]
+            second_inputs = replace(
+                inputs,
+                output_dir=inputs.evidence_root / "out-second",
+                libreoffice=first_libreoffice,
+                chromium=first_chromium,
+            )
+
+            second_lock = materialize_portable_locks(second_inputs)[0]
+            second = json.loads(second_lock.read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                second["tools"]["libreoffice"], first["tools"]["libreoffice"]
+            )
+            self.assertEqual(
+                second["browser"]["chromium"], first["browser"]["chromium"]
+            )
+            self.assertEqual(second["scope"]["evaluator"], first["scope"]["evaluator"])
+            self.assertFalse(
+                (second_inputs.output_dir / "artifacts/libreoffice-package").exists()
+            )
+            self.assertFalse(
+                (second_inputs.output_dir / "artifacts/chromium-package").exists()
+            )
 
     def test_app_package_rejects_escaping_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -43,12 +43,20 @@ def bind_package_executable(source: Path, root: Path, destination: Path) -> Path
 def bind_package_executable_with_inventory(
     source: Path, root: Path, destination: Path
 ) -> tuple[Path, Path | None]:
+    root = root.resolve(strict=True)
+    destination = destination.resolve(strict=False)
     resolved = source.resolve(strict=True)
-    if resolved.is_relative_to(root):
-        return resolved, None
     package = next(
         (item for item in (resolved, *resolved.parents) if item.suffix == ".app"), None
     )
+    if resolved.is_relative_to(root):
+        if package is None:
+            return resolved, None
+        inventory = package.parent / "inventory.json"
+        if not inventory.is_file():
+            raise PortableLockIoError("portable app package inventory is missing")
+        _validate_package_executable(package, resolved, inventory, root)
+        return resolved, inventory
     if package is None:
         shutil.copyfile(resolved, destination)
         destination.chmod(resolved.stat().st_mode & 0o777)
@@ -145,12 +153,20 @@ def validate_package_binding(
     if not isinstance(inventory_value, dict):
         raise PortableLockIoError("portable app package inventory is missing")
     inventory = resolve_binding(inventory_value, evidence_root)
+    _validate_package_executable(package, executable, inventory, evidence_root)
+
+
+def _validate_package_executable(
+    package: Path, executable: Path, inventory: Path, evidence_root: Path
+) -> None:
+    if inventory != package.parent / "inventory.json":
+        raise PortableLockIoError("portable app package inventory is not adjacent")
     entries = validate_package_inventory(inventory, evidence_root)
     values = read_strict_object(inventory)
-    if string_value(values, "package_root") != package.relative_to(
-        evidence_root.resolve(strict=True)
-    ).as_posix() or not any(
-        entry.path == executable.relative_to(package).as_posix() for entry in entries
+    package_path = package.relative_to(evidence_root.resolve(strict=True)).as_posix()
+    executable_path = executable.relative_to(package).as_posix()
+    if string_value(values, "package_root") != package_path or not any(
+        entry.kind == "file" and entry.path == executable_path for entry in entries
     ):
         raise PortableLockIoError("portable app executable is outside its inventory")
 
