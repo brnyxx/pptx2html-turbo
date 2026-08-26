@@ -3,25 +3,36 @@ from __future__ import annotations
 import ast
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
+from unittest import mock
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.assemble_multiformat_metrics import assemble_metrics
 from evaluate.assemble_multiformat_report import assemble_report
+from evaluate.materialize_multiformat_command_plan import materialize_command_plan
 from evaluate.multiformat_command_evidence import (
     CommandEvidenceError,
+    CommandIdentity,
     CommandPlan,
+    command_identity,
     run_performance_command,
 )
 from evaluate.multiformat_corpus_items import object_list
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
-from evaluate.multiformat_metric_manifest import MetricsAssemblyError
+from evaluate.multiformat_metric_manifest import (
+    MetricsAssemblyError,
+    prepare_metric_context,
+)
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_metrics import validate_metrics_evidence
+from evaluate.multiformat_review_packet import materialize_review_packet
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -31,6 +42,7 @@ from evaluate.multiformat_schema import (
     sha256_value,
     string_value,
 )
+from evaluate.sign_multiformat_review_decision import sign_review_decision
 from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
     write_gate_oracle_lock,
 )
@@ -50,8 +62,13 @@ class Fixture:
     lock: Path
     oracle_capture: Path
     candidate_capture: Path
+    review_packet: Path
     reviews: tuple[Path, Path]
+    review_keys: tuple[Path, Path]
     commands: Path
+    security_mode: str
+    quality_failure: str | None
+    performance_mode: str
 
 
 class AssembleMultiformatMetricsTests(unittest.TestCase):
@@ -95,7 +112,7 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
 
             with self.assertRaises(MetricsAssemblyError):
                 self._assemble(fixture, output=fixture.root / "second.json")
-            with self.assertRaises(Exception):
+            with self.assertRaises((MetricError, OSError, TypeError, ValueError)):
                 validate_metrics_evidence(
                     fixture.contract,
                     fixture.corpus,
@@ -199,7 +216,27 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             root = Path(temporary)
             script = self._write_command_script(root)
             output = root / "runtime"
-            plan = CommandPlan((), {}, (sys.executable, script.as_posix(), "block"))
+            python = Path(sys.executable).resolve()
+            performance = CommandIdentity(
+                "performance",
+                (python.as_posix(), script.as_posix(), "block"),
+                ((0, python.as_posix(), sha256_file(python)),),
+                "0" * 64,
+            )
+            plan = CommandPlan(
+                root / "plan.json",
+                "0" * 64,
+                command_identity(
+                    "security",
+                    (
+                        Path(sys.executable).resolve().as_posix(),
+                        "-m",
+                        "evaluate.run_multiformat_security_case",
+                    ),
+                ),
+                {},
+                performance,
+            )
             with self.assertRaises(CommandEvidenceError):
                 run_performance_command(
                     plan,
@@ -265,12 +302,7 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
     def test_review_hashes_are_derived_from_captures(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = self._fixture(Path(temporary))
-            metrics = read_object(self._assemble(fixture))
-            reviewer = object_list(
-                object_value(metrics, "review"), "reviewers", "review.reviewers"
-            )[0]
-            attestation = object_value(reviewer, "attestation")
-            review = read_object(fixture.root / string_value(attestation, "path"))
+            review = read_object(fixture.review_packet)
             pair = object_list(review, "pairs", "review.pairs")[0]
             candidate = read_object(fixture.candidate_capture)
             units = {
@@ -290,11 +322,19 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             pairs = object_list(review, "pairs", "review.pairs")
             target_id = string_value(pairs[0], "pair_id")
             pairs[0]["critical_defect"] = True
-            fixture.reviews[0].write_text(json.dumps(review), encoding="utf-8")
+            unsigned = fixture.root / "critical-unsigned.json"
+            review.pop("signature")
+            unsigned.write_text(json.dumps(review), encoding="utf-8")
+            fixture.reviews[0].unlink()
+            sign_review_decision(unsigned, fixture.review_keys[0], fixture.reviews[0])
             metrics = read_object(self._assemble(fixture))
             records = object_list(
                 object_value(metrics, "conformance"), "units", "conformance.units"
             )
+            for file in object_list(
+                object_value(metrics, "blind"), "files", "blind.files"
+            ):
+                records.extend(object_list(file, "units", "blind.units"))
             target = next(
                 record
                 for record in records
@@ -360,23 +400,57 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
         execution_dir: Path | None = None,
     ) -> Path:
         target = output or fixture.root / "metrics-produced.json"
-        assemble_metrics(
-            project_root=PROJECT_ROOT,
-            contract_path=fixture.contract,
-            corpus_path=fixture.corpus,
-            evaluator_path=fixture.evaluator,
-            oracle_lock_path=fixture.lock,
-            oracle_capture_path=fixture.oracle_capture,
-            candidate_capture_path=fixture.candidate_capture,
-            evidence_root=fixture.root,
-            commands_path=fixture.commands,
-            review_paths=fixture.reviews,
-            execution_output_dir=(
-                execution_dir or fixture.root / f"executions-{target.stem}"
+
+        def security_result(*args, **kwargs):
+            if fixture.security_mode != "security":
+                raise CommandEvidenceError("security command returned invalid evidence")
+            substitutions = args[1]
+            expected = substitutions["expected_outcome"]
+            return {
+                "observed_outcome": expected,
+                "typed_error": "ExpectedReject" if expected == "reject" else None,
+                "network_isolation": "disabled",
+                "external_fetches": [],
+                "active_content_executed": False,
+                "within_limits": True,
+            }
+
+        def command_result(argv, *args, **kwargs):
+            if "--release" in argv:
+                if fixture.performance_mode == "block":
+                    raise CommandEvidenceError("command timed out")
+                return 7 if fixture.performance_mode == "fail" else 0
+            role = argv[-1]
+            return 7 if fixture.quality_failure == role else 0
+
+        with (
+            mock.patch(
+                "evaluate.multiformat_command_evidence._run_json_command",
+                side_effect=security_result,
             ),
-            output_path=target,
-            timeout_seconds=timeout,
-        )
+            mock.patch(
+                "evaluate.multiformat_command_evidence._run_command",
+                side_effect=command_result,
+            ),
+        ):
+            assemble_metrics(
+                project_root=PROJECT_ROOT,
+                contract_path=fixture.contract,
+                corpus_path=fixture.corpus,
+                evaluator_path=fixture.evaluator,
+                oracle_lock_path=fixture.lock,
+                oracle_capture_path=fixture.oracle_capture,
+                candidate_capture_path=fixture.candidate_capture,
+                evidence_root=fixture.root,
+                commands_path=fixture.commands,
+                review_packet_path=fixture.review_packet,
+                review_paths=fixture.reviews,
+                execution_output_dir=(
+                    execution_dir or fixture.root / f"executions-{target.stem}"
+                ),
+                output_path=target,
+                timeout_seconds=timeout,
+            )
         return target
 
     def _fixture(
@@ -416,49 +490,42 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
         candidate_capture = root / string_value(
             object_value(bindings, "candidate_capture"), "path"
         )
-        reviews = self._write_reviews(root, baseline_value)
-        script = self._write_command_script(root)
+        context = prepare_metric_context(
+            PROJECT_ROOT,
+            contract,
+            corpus,
+            evaluator,
+            lock,
+            oracle_capture,
+            candidate_capture,
+            root.resolve(strict=True),
+        )
+        review_packet, reviews, review_keys = self._write_reviews(root, context)
         commands = root / "commands.json"
-        commands.write_text(
-            json.dumps(
-                {
-                    "security": [
-                        sys.executable,
-                        script.as_posix(),
-                        security_mode,
-                        "{expected_outcome}",
-                    ],
-                    "quality": {
-                        name: [
-                            sys.executable,
-                            script.as_posix(),
-                            (
-                                "leave-marker"
-                                if quality_isolation and name == "builds"
-                                else "detect-marker"
-                                if quality_isolation and name == "contract_checks"
-                                else "env-check"
-                                if quality_failure == "env-check" and name == "tests"
-                                else "fail"
-                                if quality_failure == name
-                                else "pass"
-                            ),
-                        ]
-                        for name in [
-                            "tests",
-                            "builds",
-                            "diagnostics",
-                            "contract_checks",
-                        ]
-                    },
-                    "performance": [
-                        sys.executable,
-                        script.as_posix(),
-                        performance_mode,
-                    ],
-                }
+        python = Path(sys.executable).resolve().as_posix()
+        cargo = subprocess.run(
+            ["rustup", "which", "cargo"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        env = Path("/usr/bin/env").resolve().as_posix()
+        quality = {
+            "tests": (env, cargo, "test", "tests"),
+            "builds": (env, cargo, "build", "builds"),
+            "diagnostics": (env, cargo, "clippy", "diagnostics"),
+            "contract_checks": (
+                python,
+                "-m",
+                "evaluate.check_exactness_contract",
+                "contract_checks",
             ),
-            encoding="utf-8",
+        }
+        materialize_command_plan(
+            commands,
+            (python, "-m", "evaluate.run_multiformat_security_case"),
+            quality,
+            (env, cargo, "test", "--release", "performance"),
         )
         return Fixture(
             root,
@@ -468,8 +535,13 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
             lock,
             oracle_capture,
             candidate_capture,
+            review_packet,
             reviews,
+            review_keys,
             commands,
+            security_mode,
+            quality_failure,
+            performance_mode,
         )
 
     def _validate(self, fixture: Fixture, metrics: Path):
@@ -505,45 +577,55 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
         return path
 
     def _write_reviews(
-        self,
-        root: Path,
-        metrics: dict[str, JsonValue],
-    ) -> tuple[Path, Path]:
-        conformance = object_list(
-            object_value(metrics, "conformance"), "units", "conformance.units"
+        self, root: Path, context
+    ) -> tuple[Path, tuple[Path, Path], tuple[Path, Path]]:
+        private_paths: list[Path] = []
+        public_paths: list[Path] = []
+        for index in range(2):
+            key = Ed25519PrivateKey.generate()
+            private = root / f"review-private-{index}.key"
+            public = root / f"review-public-{index}.key"
+            private.write_bytes(key.private_bytes_raw())
+            os.chmod(private, 0o600)
+            public.write_bytes(key.public_key().public_bytes_raw())
+            private_paths.append(private)
+            public_paths.append(public)
+        review_root = root / "review"
+        summary = materialize_review_packet(
+            review_root,
+            context.oracle,
+            context.candidate,
+            context.spec.pair_ids(),
+            reviewers=(
+                ("reviewer-1", "visual", public_paths[0]),
+                ("reviewer-2", "semantic-security", public_paths[1]),
+            ),
+            bindings={
+                "project_revision": context.project_revision,
+                "contract_sha256": context.contract_hash,
+                "corpus_manifest_sha256": context.corpus_hash,
+                "evaluator_manifest_sha256": context.evaluator_hash,
+                "oracle_lock_sha256": context.oracle_hash,
+                "oracle_capture": context.oracle_binding,
+                "candidate_capture": context.candidate_binding,
+            },
         )
-        blind = object_list(object_value(metrics, "blind"), "files", "blind.files")
-        pair_ids = [string_value(unit, "unit_id") for unit in conformance]
-        pair_ids.extend(
-            string_value(unit, "unit_id")
-            for file in blind
-            for unit in object_list(file, "units", "blind.units")
+        signed: list[Path] = []
+        for index, template_value in enumerate(summary["decision_templates"]):
+            template = Path(str(template_value))
+            value = read_object(template)
+            for pair in object_list(value, "pairs", "review.pairs"):
+                pair["decision"] = "PASS"
+                pair["critical_defect"] = False
+            template.write_text(json.dumps(value), encoding="utf-8")
+            output = root / f"decision-{index + 1}.json"
+            sign_review_decision(template, private_paths[index], output)
+            signed.append(output)
+        return (
+            Path(str(summary["review_packet"])),
+            (signed[0], signed[1]),
+            (private_paths[0], private_paths[1]),
         )
-        paths: list[Path] = []
-        for index, role in enumerate(["visual", "semantic-security"], start=1):
-            path = root / f"decision-{index}.json"
-            path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "reviewer_id": f"reviewer-{index}",
-                        "reviewer_role": role,
-                        "independent": True,
-                        "checklist_version": "multiformat-review-v1",
-                        "pairs": [
-                            {
-                                "pair_id": pair_id,
-                                "decision": "PASS",
-                                "critical_defect": False,
-                            }
-                            for pair_id in pair_ids
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            paths.append(path)
-        return paths[0], paths[1]
 
     @staticmethod
     def _write_command_script(root: Path) -> Path:

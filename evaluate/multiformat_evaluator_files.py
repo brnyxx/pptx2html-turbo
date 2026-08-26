@@ -140,6 +140,7 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_candidate_scripts.py",
     "evaluate/multiformat_candidate_sources.py",
     "evaluate/multiformat_candidate_types.py",
+    "evaluate/sign_multiformat_review_decision.py",
     "evaluate/multiformat_metric_capture_links.py",
     "evaluate/multiformat_inventory.py",
     "evaluate/multiformat_inventory_types.py",

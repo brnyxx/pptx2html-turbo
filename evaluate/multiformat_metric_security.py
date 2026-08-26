@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate.multiformat_command_evidence import CommandPlan, command_value
 from evaluate.multiformat_corpus_items import object_list, require_keys
 from evaluate.multiformat_corpus_types import SecurityOutcome
 from evaluate.multiformat_metric_compute import resolve_artifact_binding
@@ -28,6 +29,7 @@ def compute_security(
     evaluator_hash: str,
     corpus_hash: str,
     project_revision: str,
+    command_plan: CommandPlan,
 ) -> tuple[int, int, set[Path]]:
     require_keys(values, {"cases"}, "security")
     records = object_list(values, "cases", "security.cases")
@@ -59,6 +61,8 @@ def compute_security(
             {
                 "schema_version",
                 "status",
+                "command_plan_sha256",
+                "command",
                 "source_id",
                 "source_sha256",
                 "case_family",
@@ -78,8 +82,10 @@ def compute_security(
         expected_outcome = SecurityOutcome(string_value(result, "expected_outcome"))
         observed_outcome = SecurityOutcome(string_value(result, "observed_outcome"))
         if (
-            integer_value(result, "schema_version") != 1
+            integer_value(result, "schema_version") != 2
             or string_value(result, "status") != "PASS"
+            or sha256_value(result, "command_plan_sha256") != command_plan.sha256
+            or object_value(result, "command") != command_value(command_plan.security)
             or string_value(result, "source_id") != source_id
             or sha256_value(result, "source_sha256") != expected.source_sha256
             or string_value(result, "case_family") != expected.case_family

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import shutil
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -39,6 +39,7 @@ def assemble_metrics(
     candidate_capture_path: Path,
     evidence_root: Path,
     commands_path: Path,
+    review_packet_path: Path,
     review_paths: tuple[Path, ...],
     execution_output_dir: Path,
     output_path: Path,
@@ -63,6 +64,26 @@ def assemble_metrics(
             evidence_root,
         )
         plan = load_command_plan(commands_path)
+        try:
+            reviews, critical_defects = materialize_review_attestations(
+                review_paths,
+                review_packet_path,
+                context.spec.pair_ids(),
+                context.oracle,
+                context.candidate,
+                {
+                    "project_revision": context.project_revision,
+                    "contract_sha256": context.contract_hash,
+                    "corpus_manifest_sha256": context.corpus_hash,
+                    "evaluator_manifest_sha256": context.evaluator_hash,
+                    "oracle_lock_sha256": context.oracle_hash,
+                    "oracle_capture": context.oracle_binding,
+                    "candidate_capture": context.candidate_binding,
+                },
+                evidence_root,
+            )
+        except ReviewMaterializeError as error:
+            raise MetricsAssemblyError(str(error)) from error
         substitutions = {
             "project_revision": context.project_revision,
             "evaluator_hash": context.evaluator_hash,
@@ -96,20 +117,6 @@ def assemble_metrics(
             working_directory=project_root,
             timeout_seconds=timeout_seconds,
         )
-        try:
-            reviews, critical_defects = materialize_review_attestations(
-                review_paths,
-                context.spec.pair_ids(),
-                context.oracle,
-                context.candidate,
-                context.evaluator_hash,
-                context.corpus_hash,
-                context.project_revision,
-                evidence_root,
-                execution_output_dir / "reviews",
-            )
-        except ReviewMaterializeError as error:
-            raise MetricsAssemblyError(str(error)) from error
         conformance, blind = derive_metric_tracks(context, critical_defects)
         value = build_metrics_manifest(
             context,
@@ -119,6 +126,9 @@ def assemble_metrics(
             reviews,
             quality,
             performance,
+            commands_path,
+            plan.sha256,
+            evidence_root,
         )
         publish_validated_metrics(
             value,
@@ -147,6 +157,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--candidate-capture", type=Path, required=True)
     parser.add_argument("--evidence-root", type=Path, required=True)
     parser.add_argument("--commands", type=Path, required=True)
+    parser.add_argument("--review-packet", type=Path, required=True)
     parser.add_argument(
         "--review-decisions",
         type=Path,
@@ -172,6 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             candidate_capture_path=args.candidate_capture,
             evidence_root=args.evidence_root,
             commands_path=args.commands,
+            review_packet_path=args.review_packet,
             review_paths=tuple(args.review_decisions),
             execution_output_dir=args.execution_output_dir,
             output_path=args.output,

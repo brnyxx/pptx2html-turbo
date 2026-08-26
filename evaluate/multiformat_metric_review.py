@@ -2,22 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate.multiformat_corpus_items import (
-    canonical_identity,
-    object_list,
-    require_keys,
-)
-from evaluate.multiformat_metric_compute import resolve_artifact_binding
 from evaluate.multiformat_capture_types import CaptureManifest
+from evaluate.multiformat_corpus_items import object_list, require_keys
+from evaluate.multiformat_metric_compute import resolve_artifact_binding
 from evaluate.multiformat_metric_types import CorpusMetricSpec, MetricError
-from evaluate.multiformat_schema import (
-    JsonValue,
-    boolean_value,
-    integer_value,
-    object_value,
-    sha256_value,
-    string_value,
+from evaluate.multiformat_review_materialize import (
+    ReviewMaterializeError,
+    load_review_decision,
+    load_review_packet,
 )
+from evaluate.multiformat_schema import JsonValue, object_value, string_value
 from evaluate.multiformat_strict_json import read_strict_object
 
 
@@ -27,110 +21,44 @@ def compute_review(
     evidence_root: Path,
     oracle: CaptureManifest,
     candidate: CaptureManifest,
-    evaluator_hash: str,
-    corpus_hash: str,
-    project_revision: str,
+    bindings: dict[str, JsonValue],
 ) -> tuple[int, bool, set[Path]]:
-    require_keys(values, {"reviewers"}, "review")
-    records = object_list(values, "reviewers", "review.reviewers")
-    expected_pairs = spec.pair_ids()
-    identities: set[str] = set()
-    roles: set[str] = set()
-    attestations: set[Path] = set()
-    all_passed = len(records) == 2
-    for record in records:
-        require_keys(record, {"attestation"}, "review.reviewer")
-        path = resolve_artifact_binding(
-            object_value(record, "attestation"),
-            evidence_root,
-            "review.attestation",
-        )
-        if path in attestations:
-            raise MetricError("review.reviewer_set", path.as_posix())
-        attestations.add(path)
-        reviewer = read_strict_object(path)
-        require_keys(
-            reviewer,
-            {
-                "schema_version",
-                "status",
-                "reviewer_id",
-                "reviewer_role",
-                "independent",
-                "checklist_version",
-                "project_revision",
-                "evaluator_manifest_sha256",
-                "corpus_manifest_sha256",
-                "pairs",
-            },
-            "review.attestation",
-        )
-        reviewer_id = canonical_identity(
-            string_value(reviewer, "reviewer_id"),
-            "review.reviewer_id",
-        )
-        role = string_value(reviewer, "reviewer_role")
-        if reviewer_id in identities or role in roles:
-            raise MetricError("review.reviewer_set", reviewer_id)
-        identities.add(reviewer_id)
-        roles.add(role)
-        revision = string_value(reviewer, "project_revision")
-        decisions: dict[str, str] = {}
-        for pair in object_list(reviewer, "pairs", "review.pairs"):
-            require_keys(
-                pair,
-                {
-                    "pair_id",
-                    "reference_png_sha256",
-                    "candidate_png_sha256",
-                    "reference_inventory_sha256",
-                    "candidate_inventory_sha256",
-                    "decision",
-                },
-                "review.pair",
-            )
-            pair_id = string_value(pair, "pair_id")
-            if pair_id in decisions or not _pair_hashes_match(
-                pair,
-                pair_id,
-                oracle,
-                candidate,
-            ):
-                raise MetricError("review.pair_set", pair_id)
-            decisions[pair_id] = string_value(pair, "decision")
-        all_passed &= all(
-            [
-                integer_value(reviewer, "schema_version") == 1,
-                string_value(reviewer, "status") == "PASS",
-                boolean_value(reviewer, "independent"),
-                string_value(reviewer, "checklist_version") == "multiformat-review-v1",
-                revision == project_revision,
-                sha256_value(reviewer, "evaluator_manifest_sha256") == evaluator_hash,
-                sha256_value(reviewer, "corpus_manifest_sha256") == corpus_hash,
-                set(decisions) == set(expected_pairs),
-                all(decision == "PASS" for decision in decisions.values()),
-            ]
-        )
-    return len(records), all_passed, attestations
-
-
-def _pair_hashes_match(
-    pair: dict[str, JsonValue],
-    pair_id: str,
-    oracle: CaptureManifest,
-    candidate: CaptureManifest,
-) -> bool:
-    if pair_id not in oracle.units or pair_id not in candidate.units:
-        return False
-    return all(
-        [
-            sha256_value(pair, "reference_png_sha256")
-            == oracle.units[pair_id].png.sha256,
-            sha256_value(pair, "candidate_png_sha256")
-            == candidate.units[pair_id].png.sha256,
-            sha256_value(pair, "reference_inventory_sha256")
-            == oracle.units[pair_id].inventory.sha256,
-            sha256_value(pair, "candidate_inventory_sha256")
-            == candidate.units[pair_id].inventory.sha256,
-        ]
+    require_keys(values, {"packet", "decisions"}, "review")
+    packet = resolve_artifact_binding(
+        object_value(values, "packet"), evidence_root, "review.packet"
     )
+    decision_records = object_list(values, "decisions", "review.decisions")
+    decision_paths = [
+        resolve_artifact_binding(record, evidence_root, "review.decision")
+        for record in decision_records
+    ]
+    if len(set(decision_paths)) != len(decision_paths):
+        raise MetricError("review.reviewer_set", "duplicated decision")
+    packet_bindings = {
+        key: value
+        for key, value in bindings.items()
+        if key not in {"command_plan", "command_plan_sha256"}
+    }
+    try:
+        trusts, packet_hash = load_review_packet(
+            packet, spec.pair_ids(), oracle, candidate, packet_bindings
+        )
+        reviews = []
+        for path in decision_paths:
+            raw = read_strict_object(path)
+            trust = trusts.get(string_value(raw, "reviewer_id"))
+            if trust is None:
+                raise ReviewMaterializeError("review signer is not packet-bound")
+            reviews.append(
+                load_review_decision(path, spec.pair_ids(), packet_hash, trust)
+            )
+        if {review.reviewer_id for review in reviews} != set(trusts):
+            raise ReviewMaterializeError("review signer set differs")
+    except (ReviewMaterializeError, OSError, TypeError, ValueError) as error:
+        raise MetricError("review.signature", "verification failed") from error
+    all_passed = all(
+        decision == "PASS"
+        for review in reviews
+        for decision, _critical in review.decisions.values()
+    )
+    return len(reviews), all_passed, {packet, *decision_paths}

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate.multiformat_capture_types import CaptureManifest
+from evaluate.multiformat_command_evidence import CommandPlan
 from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_metric_determinism import compute_determinism
-from evaluate.multiformat_metric_review import compute_review
 from evaluate.multiformat_metric_quality import compute_quality
+from evaluate.multiformat_metric_review import compute_review
 from evaluate.multiformat_metric_security import compute_security
-from evaluate.multiformat_capture_types import CaptureManifest
 from evaluate.multiformat_metric_types import (
     CorpusMetricSpec,
     HardGateSummary,
@@ -28,6 +29,7 @@ def compute_hard_gates(
     evaluator_hash: str,
     corpus_hash: str,
     project_revision: str,
+    command_plan: CommandPlan,
 ) -> HardGateSummary:
     try:
         security_count, security_passed, execution_paths = compute_security(
@@ -37,6 +39,7 @@ def compute_hard_gates(
             evaluator_hash,
             corpus_hash,
             project_revision,
+            command_plan,
         )
         determinism, determinism_paths = compute_determinism(
             object_value(metrics, "determinism"),
@@ -50,9 +53,7 @@ def compute_hard_gates(
             evidence_root,
             oracle_capture,
             candidate_capture,
-            evaluator_hash,
-            corpus_hash,
-            project_revision,
+            object_value(metrics, "bindings"),
         )
         quality, performance, quality_paths = compute_quality(
             object_value(metrics, "quality"),
@@ -61,6 +62,7 @@ def compute_hard_gates(
             evaluator_hash,
             corpus_hash,
             project_revision,
+            command_plan,
         )
         return HardGateSummary(
             security_count,

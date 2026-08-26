@@ -31,6 +31,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--reviewer-role-1", required=True)
     parser.add_argument("--reviewer-id-2", required=True)
     parser.add_argument("--reviewer-role-2", required=True)
+    parser.add_argument("--reviewer-public-key-1", type=Path, required=True)
+    parser.add_argument("--reviewer-public-key-2", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -52,10 +54,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             context.oracle,
             context.candidate,
             context.spec.pair_ids(),
-            reviewer_id_1=args.reviewer_id_1,
-            reviewer_role_1=args.reviewer_role_1,
-            reviewer_id_2=args.reviewer_id_2,
-            reviewer_role_2=args.reviewer_role_2,
+            reviewers=(
+                (args.reviewer_id_1, args.reviewer_role_1, args.reviewer_public_key_1),
+                (args.reviewer_id_2, args.reviewer_role_2, args.reviewer_public_key_2),
+            ),
             bindings={
                 "project_revision": context.project_revision,
                 "contract_sha256": context.contract_hash,

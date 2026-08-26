@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from evaluate.multiformat_command_evidence import CommandPlan, command_value
 from evaluate.multiformat_schema import JsonValue
 from evaluate.tests.multiformat_metric_artifact_fixture import binding
 
@@ -17,6 +18,7 @@ def security_records(
     project_revision: str,
     evaluator_hash: str,
     corpus_hash: str,
+    command_plan: CommandPlan,
 ) -> list[dict[str, JsonValue]]:
     result: list[dict[str, JsonValue]] = []
     execution_root = root / "security-executions"
@@ -27,8 +29,10 @@ def security_records(
         execution.write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "status": "PASS",
+                    "command_plan_sha256": command_plan.sha256,
+                    "command": command_value(command_plan.security),
                     "source_id": source["id"],
                     "source_sha256": source["sha256"],
                     "case_family": source["case_family"],
@@ -189,6 +193,7 @@ def quality_evidence(
     evaluator_hash: str,
     corpus_hash: str,
     project_revision: str,
+    command_plan: CommandPlan,
 ) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
     evidence_root = root / "quality" / document_format
     evidence_root.mkdir(parents=True, exist_ok=True)
@@ -198,9 +203,11 @@ def quality_evidence(
         path.write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "status": "PASS",
                     "command_id": field,
+                    "command_plan_sha256": command_plan.sha256,
+                    "command": command_value(command_plan.quality[field]),
                     "exit_code": 0,
                     "project_revision": project_revision,
                     "evaluator_manifest_sha256": evaluator_hash,
@@ -215,9 +222,11 @@ def quality_evidence(
     performance_path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "status": "PASS",
                 "within_limits": True,
+                "command_plan_sha256": command_plan.sha256,
+                "command": command_value(command_plan.performance),
                 "project_revision": project_revision,
                 "evaluator_manifest_sha256": evaluator_hash,
                 "corpus_manifest_sha256": corpus_hash,

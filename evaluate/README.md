@@ -548,14 +548,31 @@ the hash-locked font bundle. Cell identities come from independently derived
 worksheet and coordinate metadata, never visual position.
 
 Create one production command plan and blank two-reviewer packet per format.
-Every command-plan value is a JSON argv array whose first item resolves to a
-real absolute executable. Security placeholders are expanded separately for
-all ten locked cases.
+The schema-v2 plan records each typed role, canonical argv SHA-256, and resolved
+executable SHA-256. The security role accepts only the current Python runtime's
+exact `-m evaluate.run_multiformat_security_case` entry point; shells and
+substitute security executables fail closed. Metrics bind and revalidate the
+complete command-plan hash and every executed command identity. Security
+placeholders are expanded separately for all ten locked cases.
 
 ```bash
 CARGO="$(rustup which cargo)"
 RUST_BIN="$(dirname "$(rustup which rustc)")"
 TOOL_PATH="$RUST_BIN:/opt/homebrew/bin:/usr/bin:/bin"
+
+# Each private/public file is exactly 32 raw Ed25519 bytes. Private files are
+# held by different reviewers and must be mode 0600; public files are mode 0644.
+VISUAL_REVIEWER_PRIVATE="/secure/reviewers/visual.ed25519.private"
+VISUAL_REVIEWER_PUBLIC="/secure/reviewers/visual.ed25519.public"
+SEMANTIC_REVIEWER_PRIVATE="/secure/reviewers/semantic.ed25519.private"
+SEMANTIC_REVIEWER_PUBLIC="/secure/reviewers/semantic.ed25519.public"
+chmod 0600 "$VISUAL_REVIEWER_PRIVATE" "$SEMANTIC_REVIEWER_PRIVATE"
+for key in \
+  "$VISUAL_REVIEWER_PRIVATE" "$VISUAL_REVIEWER_PUBLIC" \
+  "$SEMANTIC_REVIEWER_PRIVATE" "$SEMANTIC_REVIEWER_PUBLIC"; do
+  test "$(wc -c < "$key" | tr -d ' ')" = 32
+done
+cmp -s "$VISUAL_REVIEWER_PUBLIC" "$SEMANTIC_REVIEWER_PUBLIC" && exit 1
 
 for format in $FORMATS; do
   outer="$WAVE/outer/$format"
@@ -594,27 +611,53 @@ for format in $FORMATS; do
     --reviewer-id-1 "visual-reviewer-$format" \
     --reviewer-role-1 visual-fidelity \
     --reviewer-id-2 "semantic-security-reviewer-$format" \
-    --reviewer-role-2 semantic-security
+    --reviewer-role-2 semantic-security \
+    --reviewer-public-key-1 "$VISUAL_REVIEWER_PUBLIC" \
+    --reviewer-public-key-2 "$SEMANTIC_REVIEWER_PUBLIC"
 done
 ```
 
 Give `review-packet.json` and exactly one decision template to each reviewer.
-The reviewers must work independently. Each completed decision preserves the
-exact pair set, changes `independent` to `true`, changes every `decision` to
-`PASS` or `FAIL`, and changes every `critical_defect` to `true` or `false`.
-Do not auto-fill these files from scores. Validate both files before metrics:
+The packet embeds two distinct raw Ed25519 public keys and binds both identities,
+roles, captures, artifact hashes, and the complete pair set before review. Each
+reviewer changes every `decision` to `PASS` or `FAIL` and every
+`critical_defect` to `true` or `false`, then uses their private key to create a
+separate signed file. Do not auto-fill decisions from scores and never exchange
+private keys. Signing is create-only and covers the RFC 8785 canonical complete
+decision, including its packet hash. For each format, send the packet plus only
+the matching generated template to that reviewer. Each reviewer makes a private
+copy, changes every null decision/critical-defect value, signs with their own
+private key, and returns only the signed output:
 
 ```bash
 for format in $FORMATS; do
-  packet="$WAVE/review/$format/review-packet.json"
-  "$PYTHON" -m evaluate.validate_multiformat_review_decision \
-    --review-packet "$packet" \
-    --decision "$WAVE/review/$format/decision-visual-reviewer-$format.json"
-  "$PYTHON" -m evaluate.validate_multiformat_review_decision \
-    --review-packet "$packet" \
-    --decision "$WAVE/review/$format/decision-semantic-security-reviewer-$format.json"
+  review_dir="$WAVE/review/$format"
+  packet="$review_dir/review-packet.json"
+  visual_template="$review_dir/decision-visual-reviewer-$format.json"
+  semantic_template="$review_dir/decision-semantic-security-reviewer-$format.json"
+
+  # Independent handoff: visual receives only packet + visual_template;
+  # semantic-security receives only packet + semantic_template. Each reviewer
+  # completes their exact template in a private workspace and returns it here.
+  visual_completed="$review_dir/completed-visual-reviewer-$format.json"
+  semantic_completed="$review_dir/completed-semantic-security-reviewer-$format.json"
+  test -f "$packet" -a -f "$visual_template" -a -f "$semantic_template"
+  test -f "$visual_completed" -a -f "$semantic_completed"
+
+  "$PYTHON" -m evaluate.sign_multiformat_review_decision \
+    --decision "$visual_completed" \
+    --private-key "$VISUAL_REVIEWER_PRIVATE" \
+    --output "$review_dir/decision-visual-signed.json"
+  "$PYTHON" -m evaluate.sign_multiformat_review_decision \
+    --decision "$semantic_completed" \
+    --private-key "$SEMANTIC_REVIEWER_PRIVATE" \
+    --output "$review_dir/decision-semantic-signed.json"
 done
 ```
+
+The assembler verifies both signatures and packet-bound keys before publishing
+metrics. Unsigned, wrong-key, duplicate-key, edited, or
+self-asserted reviewer JSON is rejected.
 
 Metric evidence contains bound candidate/reference PNG and inventory paths,
 never caller-supplied scores. The assembler re-hashes and parses every artifact,
@@ -642,8 +685,9 @@ for format in $FORMATS; do
     --candidate-capture "$WAVE/candidate/$format/manifest.json" \
     --evidence-root "$EVIDENCE_ROOT" \
     --commands "$WAVE/commands/$format.json" \
-    --review-decisions "$WAVE/review/$format/decision-visual-reviewer-$format.json" \
-    --review-decisions "$WAVE/review/$format/decision-semantic-security-reviewer-$format.json" \
+    --review-packet "$WAVE/review/$format/review-packet.json" \
+    --review-decisions "$WAVE/review/$format/decision-visual-signed.json" \
+    --review-decisions "$WAVE/review/$format/decision-semantic-signed.json" \
     --execution-output-dir "$WAVE/execution/$format" \
     --output "$WAVE/final-metrics/$format.json" \
     --timeout-seconds 1800
