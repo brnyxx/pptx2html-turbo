@@ -123,6 +123,7 @@ def verify_candidate_attestation(
         "project_revision": project_revision,
         "font_isolation": "locked-bundle-only",
         "verifier_id": string_value(profile.sandbox_verifier, "verifier_id"),
+        "scope_sha256": scope_sha256,
     }
     if integer_value(values, "schema_version") != 1 or any(
         string_value(values, field) != expected

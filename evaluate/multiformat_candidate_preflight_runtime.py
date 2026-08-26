@@ -47,10 +47,25 @@ def resolve_candidate_input_paths(
         require_profile_path(
             receipt_executor, profile.receipt_executor, "receipt executor"
         ),
-        require_profile_path(sandbox_attestation, profile.attestation, "attestation"),
+        sandbox_attestation.resolve(strict=True),
         key,
         openssl,
     )
 
 
-__all__ = ["CandidateInputPaths", "resolve_candidate_input_paths"]
+def require_candidate_evidence_root(
+    evidence_root: Path, paths: tuple[Path, ...]
+) -> None:
+    root = evidence_root.resolve(strict=True)
+    for path in paths:
+        if not path.resolve(strict=True).is_relative_to(root):
+            raise CandidateRuntimeProfileError(
+                f"runtime evidence escapes evidence root: {path}"
+            )
+
+
+__all__ = [
+    "CandidateInputPaths",
+    "require_candidate_evidence_root",
+    "resolve_candidate_input_paths",
+]

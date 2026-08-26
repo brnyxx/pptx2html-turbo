@@ -147,20 +147,20 @@ def legacy_candidate_runtime_profile(lock_path: Path) -> CandidateRuntimeProfile
     browser = object_value(lock, "browser")
     runtime = object_value(lock, "candidate_runtime")
     return CandidateRuntimeProfile(
-        1,
-        ReferenceProfile.MICROSOFT_OFFICE,
-        browser,
-        object_value(lock, "sandbox_verifier"),
-        runtime,
-        None,
-        None,
-        None,
-        None,
-        None,
-        string_value(browser, "chromium"),
-        None,
-        string_value(runtime, "build_revision"),
-        string_value(object_value(lock, "sandbox_verifier"), "verifier_id"),
+        schema_version=1,
+        profile=ReferenceProfile.MICROSOFT_OFFICE,
+        browser_lock=browser,
+        candidate_runtime_lock=runtime,
+        sandbox_verifier=object_value(lock, "sandbox_verifier"),
+        font_bundle=None,
+        chromium=None,
+        receipt_executor=None,
+        receipt_public_key=None,
+        attestation=None,
+        browser_version=string_value(browser, "chromium"),
+        routing_sha256=None,
+        project_revision=string_value(runtime, "build_revision"),
+        signer_id=string_value(object_value(lock, "sandbox_verifier"), "verifier_id"),
     )
 
 

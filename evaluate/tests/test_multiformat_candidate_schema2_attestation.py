@@ -21,7 +21,14 @@ from evaluate.tests.multiformat_attestation_fixture import (
 
 class CandidateSchema2AttestationTests(unittest.TestCase):
     def test_distinct_candidate_key_verifies_and_attacks_fail(self) -> None:
-        for attack in ("none", "wrong-key", "signature", "payload"):
+        for attack in (
+            "none",
+            "wrong-key",
+            "signature",
+            "payload",
+            "transplant",
+            "outer-reuse",
+        ):
             with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 candidate = create_test_verifier(root, name="candidate")
@@ -43,7 +50,10 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                     "font_isolation": "locked-bundle-only",
                     "run_nonce": "c" * 64,
                     "verifier_id": "candidate-sandbox",
+                    "scope_sha256": "d" * 64,
                 }
+                if attack == "transplant":
+                    payload["scope_sha256"] = "e" * 64
                 write_signed_attestation(attestation, candidate, payload)
                 key = candidate.public_key
                 if attack == "wrong-key":
@@ -55,6 +65,18 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                     else:
                         value["golden_access"] = "allowed"
                     attestation.write_text(json.dumps(value), encoding="utf-8")
+                elif attack == "outer-reuse":
+                    attestation.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": 1,
+                                "network_isolation": True,
+                                "os": "Darwin",
+                                "architecture": "arm64",
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
                 if attack == "none":
                     verified = verify_candidate_attestation(
                         profile,

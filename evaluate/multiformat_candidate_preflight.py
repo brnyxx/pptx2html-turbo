@@ -9,6 +9,7 @@ from evaluate.multiformat_candidate_attestation import (
 )
 from evaluate.multiformat_candidate_preflight_runtime import (
     resolve_candidate_input_paths,
+    require_candidate_evidence_root,
 )
 from evaluate.multiformat_candidate_preflight_types import CandidatePreflight
 from evaluate.multiformat_candidate_runtime_profile import (
@@ -181,16 +182,15 @@ def preflight_candidate_capture(
             != font_environment.environment_sha256
         ):
             raise CandidatePreflightError("signed font environment mismatch")
-        for evidence_path in [
-            sandbox_attestation,
-            sandbox_public_key,
-            font_bundle,
-            font_environment.config_path,
-        ]:
-            if not evidence_path.resolve(strict=True).is_relative_to(evidence_root):
-                raise CandidatePreflightError(
-                    f"runtime evidence escapes evidence root: {evidence_path}"
-                )
+        require_candidate_evidence_root(
+            evidence_root,
+            (
+                sandbox_attestation,
+                sandbox_public_key,
+                font_bundle,
+                font_environment.config_path,
+            ),
+        )
         runtime_tools = {
             "converter_sha256": sha256_file(runtime.converter),
             "soffice_sha256": sha256_file(runtime.soffice),

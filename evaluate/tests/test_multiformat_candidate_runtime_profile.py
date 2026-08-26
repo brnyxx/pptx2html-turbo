@@ -10,8 +10,12 @@ from unittest import mock
 
 from evaluate.multiformat_candidate_attestation import VerifiedAttestation
 from evaluate.multiformat_candidate_preflight import preflight_candidate_capture
+from evaluate.multiformat_candidate_preflight_runtime import (
+    require_candidate_evidence_root,
+)
 from evaluate.multiformat_candidate_runtime_profile import (
     CandidateRuntimeProfileError,
+    legacy_candidate_runtime_profile,
     resolve_candidate_runtime_profile,
 )
 from evaluate.multiformat_corpus_types import DocumentFormat
@@ -20,6 +24,44 @@ from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
 
 
 class CandidateRuntimeProfileTests(unittest.TestCase):
+    def test_schema_1_adapter_preserves_runtime_and_verifier_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            lock = Path(temp_dir) / "lock.json"
+            runtime: dict[str, JsonValue] = {
+                "build_revision": "a" * 40,
+                "runtime_marker": "candidate-runtime",
+            }
+            verifier: dict[str, JsonValue] = {
+                "algorithm": "ed25519",
+                "verifier_id": "schema1-sandbox",
+                "verifier_marker": "sandbox-verifier",
+            }
+            lock.write_text(
+                json.dumps(
+                    {
+                        "browser": {"chromium": "schema1-browser"},
+                        "candidate_runtime": runtime,
+                        "sandbox_verifier": verifier,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            profile = legacy_candidate_runtime_profile(lock)
+            self.assertEqual(profile.candidate_runtime_lock, runtime)
+            self.assertEqual(profile.sandbox_verifier, verifier)
+
+    def test_candidate_attestation_outside_evidence_root_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            evidence = root / "evidence"
+            evidence.mkdir()
+            outside = root / "candidate-attestation.json"
+            outside.write_text("{}", encoding="utf-8")
+            with self.assertRaisesRegex(
+                CandidateRuntimeProfileError, "escapes evidence root"
+            ):
+                require_candidate_evidence_root(evidence, (outside,))
+
     def test_schema_2_resolves_only_bound_runtime_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = ReceiptFixture(Path(temp_dir))
