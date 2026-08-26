@@ -12,6 +12,11 @@ from evaluate.multiformat_candidate_types import (
     CandidateCaptureError,
     RuntimeArtifactSnapshots,
 )
+from evaluate.multiformat_portable_package_inventory import (
+    package_inventory_for_executable,
+    validate_package_inventory,
+    write_package_inventory,
+)
 from evaluate.multiformat_schema import JsonValue, sha256_file
 
 
@@ -45,6 +50,7 @@ def materialize_runtime_artifacts(
     output_dir: Path,
 ) -> RuntimeArtifactSnapshots:
     evidence_root = evidence_root.resolve(strict=True)
+    output_dir = output_dir.resolve(strict=False)
     if output_dir.exists() and any(output_dir.iterdir()):
         raise CandidateArtifactError(
             f"runtime artifact output is not empty: {output_dir}"
@@ -72,20 +78,26 @@ def materialize_runtime_artifacts(
         if name == "font_config" and font_config is not None:
             result[name] = font_config
             continue
-        package_root = _package_root(name, source)
-        if package_root is not None and output_dir.resolve().is_relative_to(
-            package_root
+        package_source = _package_root(name, source, evidence_root)
+        if package_source is not None and output_dir.resolve().is_relative_to(
+            package_source[0]
         ):
-            package_root = None
-        if package_root is not None:
+            package_source = None
+        if package_source is not None:
+            package_root, inventory = package_source
             destination_root = copied_packages.get(package_root)
             if destination_root is None:
-                destination_root = output_dir / f"{name}-package" / package_root.name
+                container = output_dir / f"{name}-package"
+                destination_root = container / package_root.name
                 _copy_package(package_root, destination_root)
+                if inventory is not None:
+                    copied_inventory = container / "inventory.json"
+                    write_package_inventory(
+                        copied_inventory, destination_root, evidence_root
+                    )
+                    validate_package_inventory(copied_inventory, evidence_root)
                 copied_packages[package_root] = destination_root
-                package_entries.extend(
-                    _package_entries(destination_root, evidence_root)
-                )
+                package_entries.extend(_package_entries(container, evidence_root))
             result[name] = destination_root / source.relative_to(package_root)
             continue
         destination = output_dir / name
@@ -125,17 +137,22 @@ def _regular_source(source_value: Path) -> Path:
     return resolved
 
 
-def _package_root(name: str, source: Path) -> Path | None:
+def _package_root(
+    name: str, source: Path, evidence_root: Path
+) -> tuple[Path, Path | None] | None:
+    inventoried = package_inventory_for_executable(source, evidence_root)
+    if inventoried is not None:
+        return inventoried
     if name not in {"chromium_binary", "soffice_binary"}:
         return None
     for parent in [source, *source.parents]:
         if parent.suffix == ".app":
-            return parent
+            return parent, None
     if name == "chromium_binary":
-        return source.parent
+        return source.parent, None
     for parent in source.parents:
         if parent.name.lower() == "libreoffice":
-            return parent
+            return parent, None
     return None
 
 

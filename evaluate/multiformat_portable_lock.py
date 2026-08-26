@@ -94,10 +94,7 @@ def validate_reference_lock(
             tool = object_value(tools, name)
             string_value(tool, "version")
             executable = _artifact_path(tool, evidence_root)
-            if name == "libreoffice":
-                validate_package_binding(
-                    tool, executable, evidence_root, _artifact_path
-                )
+            validate_package_binding(tool, executable, evidence_root, _artifact_path)
         routing = load_reference_routing(_ROUTING_TABLE)
         if sha256_value(lock, "routing_table_sha256") != routing.sha256:
             raise PortableLockError("portable routing table digest mismatch")
@@ -123,6 +120,12 @@ def validate_reference_lock(
         _artifact_path(object_value(browser, "lock"), evidence_root)
         _artifact_path(object_value(lock, "candidate_runtime_lock"), evidence_root)
 
+        candidate = object_value(lock, "candidate_sandbox")
+        openssl_binding = object_value(candidate, "openssl")
+        openssl = _artifact_path(openssl_binding, evidence_root)
+        validate_package_binding(
+            openssl_binding, openssl, evidence_root, _artifact_path
+        )
         sandbox = validate_outer_sandbox(lock, evidence_root, _artifact_path)
 
         signer = object_value(lock, "signer")

@@ -61,23 +61,11 @@ def bind_package_executable_with_inventory(
         shutil.copyfile(resolved, destination)
         destination.chmod(resolved.stat().st_mode & 0o777)
         return destination, None
+    _scan_package(package)
     copied = destination / package.name
     shutil.copytree(package, copied, symlinks=True)
     inventory = destination / "inventory.json"
-    entries = _scan_package(copied)
-    inventory.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "package_root": copied.relative_to(root).as_posix(),
-                "entries": [_entry_json(entry) for entry in entries],
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    write_package_inventory(inventory, copied, root)
     return copied / resolved.relative_to(package), inventory
 
 
@@ -135,32 +123,70 @@ def validate_package_binding(
     evidence_root: Path,
     resolve_binding: Callable[[JsonObject, Path], Path],
 ) -> None:
-    package = next(
-        (
-            parent
-            for parent in (executable, *executable.parents)
-            if parent.suffix == ".app"
-        ),
-        None,
-    )
     inventory_value = binding.get("package_inventory")
-    if package is None:
-        if inventory_value is not None:
-            raise PortableLockIoError(
-                "portable non-package tool has a package inventory"
-            )
+    if isinstance(inventory_value, dict):
+        inventory = resolve_binding(inventory_value, evidence_root)
+        values = read_strict_object(inventory)
+        package = (evidence_root / string_value(values, "package_root")).resolve(
+            strict=True
+        )
+        _validate_package_executable(package, executable, inventory, evidence_root)
         return
-    if not isinstance(inventory_value, dict):
+    package = next(
+        (parent for parent in executable.parents if parent.suffix == ".app"), None
+    )
+    if package is not None:
         raise PortableLockIoError("portable app package inventory is missing")
-    inventory = resolve_binding(inventory_value, evidence_root)
-    _validate_package_executable(package, executable, inventory, evidence_root)
+    if inventory_value is not None:
+        raise PortableLockIoError("portable package inventory binding is invalid")
+
+
+def package_inventory_for_executable(
+    executable: Path, evidence_root: Path
+) -> tuple[Path, Path] | None:
+    root = evidence_root.resolve(strict=True)
+    resolved = executable.resolve(strict=True)
+    if not resolved.is_relative_to(root):
+        return None
+    for package in resolved.parents:
+        inventory = package.parent / "inventory.json"
+        if not inventory.is_file():
+            continue
+        values = read_strict_object(inventory)
+        declared = root / string_value(values, "package_root")
+        if declared.resolve(strict=True) != package:
+            continue
+        _validate_package_executable(package, resolved, inventory, root)
+        return package, inventory
+    return None
+
+
+def write_package_inventory(
+    inventory: Path, package: Path, evidence_root: Path
+) -> None:
+    entries = _scan_package(package)
+    inventory.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "package_root": package.relative_to(evidence_root).as_posix(),
+                "entries": [_entry_json(entry) for entry in entries],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _validate_package_executable(
     package: Path, executable: Path, inventory: Path, evidence_root: Path
 ) -> None:
-    if inventory != package.parent / "inventory.json":
-        raise PortableLockIoError("portable app package inventory is not adjacent")
+    if inventory.resolve(strict=True) != (package.parent / "inventory.json").resolve(
+        strict=True
+    ):
+        raise PortableLockIoError("portable package inventory is not adjacent")
     entries = validate_package_inventory(inventory, evidence_root)
     values = read_strict_object(inventory)
     package_path = package.relative_to(evidence_root.resolve(strict=True)).as_posix()
@@ -168,7 +194,7 @@ def _validate_package_executable(
     if string_value(values, "package_root") != package_path or not any(
         entry.kind == "file" and entry.path == executable_path for entry in entries
     ):
-        raise PortableLockIoError("portable app executable is outside its inventory")
+        raise PortableLockIoError("portable executable is outside its inventory")
 
 
 def _scan_package(package: Path) -> tuple[PackageEntry, ...]:
@@ -212,7 +238,7 @@ def _entry_json(entry: PackageEntry) -> JsonObject:
     return {"path": entry.path, "kind": entry.kind, "target": entry.target or ""}
 
 
-def _parse_package_entry(value: object) -> PackageEntry:
+def _parse_package_entry(value: JsonValue) -> PackageEntry:
     if not isinstance(value, dict):
         raise PortableLockIoError("portable package inventory entry is invalid")
     entry: JsonObject = value

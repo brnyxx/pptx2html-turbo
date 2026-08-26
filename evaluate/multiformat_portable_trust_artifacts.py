@@ -61,11 +61,17 @@ def load_lock_artifacts(
         ("attestation", object_value(runtime, "attestation")),
     )
     identities = [_bound_identity(binding, root, role) for role, binding in bindings]
+    bound_paths = {identity.path for identity in identities}
     for package_role, executable_binding in (
         ("libreoffice", object_value(tools, "libreoffice")),
+        ("poppler", object_value(tools, "poppler_render")),
         ("chromium", object_value(browser, "chromium")),
+        ("openssl", object_value(candidate, "openssl")),
     ):
-        identities.extend(_package_artifacts(root, package_role, executable_binding))
+        for artifact in _package_artifacts(root, package_role, executable_binding):
+            if artifact.path not in bound_paths:
+                identities.append(artifact)
+                bound_paths.add(artifact.path)
     return tuple(identities)
 
 

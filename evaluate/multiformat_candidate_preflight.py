@@ -8,6 +8,10 @@ from evaluate.multiformat_candidate_attestation import (
     verify_candidate_attestation,
 )
 from evaluate.multiformat_candidate_fonts import prepare_font_environment
+from evaluate.multiformat_candidate_package_validation import (
+    CandidateNativePackages,
+    validate_candidate_native_packages,
+)
 from evaluate.multiformat_candidate_preflight_runtime import (
     require_candidate_evidence_root,
     resolve_candidate_input_paths,
@@ -160,6 +164,10 @@ def preflight_candidate_capture(
             timeout_seconds,
         )
         candidate_runtime = profile.candidate_runtime_lock
+        if "poppler_package_inventory_sha256" in candidate_runtime:
+            validate_candidate_native_packages(
+                CandidateNativePackages(runtime, openssl, profile, evidence_root)
+            )
         versions = validate_candidate_runtime(
             candidate_runtime,
             runtime,

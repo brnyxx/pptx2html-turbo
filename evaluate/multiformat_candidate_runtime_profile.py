@@ -110,8 +110,13 @@ def resolve_candidate_runtime_profile(
         )
         if integer_value(browser_lock, "schema_version") != 1:
             raise CandidateRuntimeProfileError("candidate browser lock schema differs")
-        if integer_value(runtime_lock, "schema_version") != 1:
+        runtime_schema = integer_value(runtime_lock, "schema_version")
+        if runtime_schema not in {1, 2}:
             raise CandidateRuntimeProfileError("candidate runtime lock schema differs")
+        if "candidate_runtime" in runtime_lock:
+            candidate_runtime = object_value(runtime_lock, "candidate_runtime")
+        else:
+            candidate_runtime = runtime_lock
         sandbox_verifier = object_value(runtime_lock, "sandbox_verifier")
         chromium_binding = object_value(browser, "chromium")
         browser_version = string_value(chromium_binding, "version")
@@ -124,7 +129,7 @@ def resolve_candidate_runtime_profile(
             2,
             identity.profile,
             browser_lock,
-            runtime_lock,
+            candidate_runtime,
             sandbox_verifier,
             _bound_path(object_value(lock, "font_bundle"), evidence_root),
             _bound_path(chromium_binding, evidence_root),

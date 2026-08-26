@@ -48,6 +48,7 @@ def validate_candidate_locks(browser_path: Path, runtime_path: Path) -> None:
     runtime = read_strict_object(runtime_path)
     if set(browser) != expected:
         raise PortableLockIoError("portable browser lock is incomplete")
+    schema = runtime.get("schema_version")
     if (
         set(runtime)
         != {
@@ -58,13 +59,13 @@ def validate_candidate_locks(browser_path: Path, runtime_path: Path) -> None:
             "sandbox_verifier",
             "font_bundle_sha256",
         }
-        or runtime.get("schema_version") != 1
+        or schema not in {1, 2}
         or runtime.get("status") != "locked"
     ):
         raise PortableLockIoError("portable candidate runtime lock is incomplete")
     candidate = runtime.get("candidate_runtime")
     verifier = runtime.get("sandbox_verifier")
-    if not isinstance(candidate, dict) or set(candidate) != {
+    candidate_fields = {
         "build_revision",
         "converter_sha256",
         "converter_version",
@@ -76,14 +77,19 @@ def validate_candidate_locks(browser_path: Path, runtime_path: Path) -> None:
         "pdfinfo_version",
         "receipt_signer_sha256",
         "receipt_signer_version",
-    }:
-        raise PortableLockIoError("portable candidate runtime lock is incomplete")
-    if not isinstance(verifier, dict) or set(verifier) != {
+    }
+    verifier_fields = {
         "algorithm",
         "verifier_id",
         "public_key_sha256",
         "openssl_sha256",
-    }:
+    }
+    if schema == 2:
+        candidate_fields.add("poppler_package_inventory_sha256")
+        verifier_fields.add("openssl_package_inventory_sha256")
+    if not isinstance(candidate, dict) or set(candidate) != candidate_fields:
+        raise PortableLockIoError("portable candidate runtime lock is incomplete")
+    if not isinstance(verifier, dict) or set(verifier) != verifier_fields:
         raise PortableLockIoError("portable candidate runtime lock is incomplete")
 
 
@@ -125,6 +131,15 @@ def validate_candidate_artifacts(
         paths["candidate-sandbox-public-key"]
     ) or verifier.get("openssl_sha256") != sha256_file(paths["openssl"]):
         raise PortableLockIoError("portable candidate sandbox lock differs")
+    if candidate.get("schema_version") == 2:
+        if runtime.get("poppler_package_inventory_sha256") != sha256_file(
+            paths["poppler-package-inventory"]
+        ):
+            raise PortableLockIoError("portable Poppler package lock differs")
+        if verifier.get("openssl_package_inventory_sha256") != sha256_file(
+            paths["openssl-package-inventory"]
+        ):
+            raise PortableLockIoError("portable OpenSSL package lock differs")
 
 
 def bind_corpus(source: Path, root: Path, destination_root: Path) -> Path:

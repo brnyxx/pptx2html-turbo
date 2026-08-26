@@ -23,6 +23,7 @@ from evaluate.multiformat_portable_lock_io import (
 )
 from evaluate.multiformat_portable_lock_keys import prepare_key_material
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
+from evaluate.multiformat_portable_runtime_binding import bind_portable_runtime
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_rust_toolchain import (
@@ -88,28 +89,8 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
     )
     artifacts_dir = output / "artifacts"
     artifacts_dir.mkdir(parents=True)
-    artifact_inputs = {
-        "poppler-render": inputs.pdftoppm,
-        "poppler-text": inputs.pdftotext,
-        "poppler-metadata": inputs.pdfinfo,
-        "canonicalizer": inputs.canonicalizer,
-        "configuration": inputs.configuration,
-        "browser-lock": inputs.browser_lock,
-        "candidate-runtime-lock": inputs.candidate_runtime_lock,
-        "converter": inputs.converter,
-        "pdftohtml": inputs.pdftohtml,
-        "openssl": inputs.openssl,
-        "receipt-signer": inputs.receipt_signer,
-        "candidate-sandbox-public-key": inputs.candidate_sandbox_public_key,
-        "executor": inputs.executor,
-        "sandbox-exec": inputs.sandbox_exec,
-        "contract": inputs.contract,
-        "evaluator": inputs.evaluator,
-    }
-    paths = {
-        name: lock_io.bind_file(path, root, artifacts_dir / name)
-        for name, path in artifact_inputs.items()
-    }
+    bound_runtime = bind_portable_runtime(inputs, root, artifacts_dir)
+    paths = bound_runtime.paths
     paths["libreoffice"], libreoffice_inventory = (
         package_io.bind_package_executable_with_inventory(
             inputs.libreoffice, root, artifacts_dir / "libreoffice-package"
@@ -128,15 +109,9 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
             "portable candidate verifier key must be distinct"
         )
     versions = {
+        **bound_runtime.versions,
         "libreoffice": lock_io.tool_version(paths["libreoffice"], ("--version",)),
-        "poppler-render": lock_io.tool_version(paths["poppler-render"], ("-v",)),
-        "poppler-text": lock_io.tool_version(paths["poppler-text"], ("-v",)),
-        "poppler-metadata": lock_io.tool_version(paths["poppler-metadata"], ("-v",)),
         "chromium": lock_io.tool_version(paths["chromium"], ("--version",)),
-        "converter": lock_io.tool_version(paths["converter"], ("--version",)),
-        "pdftohtml": lock_io.tool_version(paths["pdftohtml"], ("-v",)),
-        "openssl": lock_io.tool_version(paths["openssl"], ("version",)),
-        "receipt-signer": lock_io.tool_version(paths["receipt-signer"], ("--version",)),
     }
     east_asian_policy = load_east_asian_policy()
     east_asian_font = east_asian_lock_binding(
@@ -198,14 +173,23 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
             "rust_toolchain": rust_toolchain_value(rust_toolchain),
             "tools": {
                 "libreoffice": libreoffice_binding,
-                "poppler_render": lock_io.versioned(
-                    root, paths["poppler-render"], versions["poppler-render"]
+                "poppler_render": package_io.package_binding(
+                    root,
+                    paths["poppler-render"],
+                    versions["poppler-render"],
+                    bound_runtime.inventories.get("poppler"),
                 ),
-                "poppler_text": lock_io.versioned(
-                    root, paths["poppler-text"], versions["poppler-text"]
+                "poppler_text": package_io.package_binding(
+                    root,
+                    paths["poppler-text"],
+                    versions["poppler-text"],
+                    bound_runtime.inventories.get("poppler"),
                 ),
-                "poppler_metadata": lock_io.versioned(
-                    root, paths["poppler-metadata"], versions["poppler-metadata"]
+                "poppler_metadata": package_io.package_binding(
+                    root,
+                    paths["poppler-metadata"],
+                    versions["poppler-metadata"],
+                    bound_runtime.inventories.get("poppler"),
                 ),
             },
             "routing_table_sha256": routing.sha256,
@@ -228,7 +212,12 @@ def materialize_portable_locks(inputs: PortableLockInputs) -> tuple[Path, ...]:
                 "public_key": lock_io.binding(
                     root, paths["candidate-sandbox-public-key"]
                 ),
-                "openssl": lock_io.binding(root, paths["openssl"]),
+                "openssl": package_io.package_binding(
+                    root,
+                    paths["openssl"],
+                    versions["openssl"],
+                    bound_runtime.inventories.get("openssl"),
+                ),
                 "receipt_signer": lock_io.binding(root, paths["receipt-signer"]),
             },
             "sandbox": {
