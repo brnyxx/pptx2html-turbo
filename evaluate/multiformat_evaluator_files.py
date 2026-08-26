@@ -14,7 +14,7 @@ from evaluate.multiformat_evaluator_security_files import (
     SECURITY_WRITER_FILES,
 )
 
-EVALUATOR_FILES = (
+EVALUATOR_FILES: tuple[str, ...] = (
     ".github/workflows/capture-office-oracles.yml",
     "evaluate/build_multiformat_office_input.py",
     "evaluate/build_multiformat_conformance_plan.py",
@@ -55,6 +55,10 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_conformance_pdf.py",
     "evaluate/multiformat_conformance_pdf_cases.py",
     "evaluate/multiformat_conformance_pptx.py",
+    "evaluate/completion_deck_charts.py",
+    "evaluate/completion_deck_package.py",
+    "evaluate/completion_deck_specs.py",
+    "evaluate/completion_deck_tables.py",
     "evaluate/multiformat_xlsx_package_validation.py",
     "evaluate/multiformat_conformance_pdf_runtime.py",
     "evaluate/multiformat_conformance_xlsx.py",
@@ -258,7 +262,11 @@ EVALUATOR_FILES = (
     "crates/document2html-native/tests/xlsx_conversion_smoke.rs",
     "crates/document2html-native/src/poppler.rs",
     "crates/document2html-native/src/process.rs",
+    "crates/document2html-native/src/process/output_limit.rs",
+    "crates/document2html-native/src/process/spec.rs",
     "crates/document2html-native/src/process_tests.rs",
+    "crates/document2html-native/src/runtime.rs",
+    "crates/document2html-native/src/workspace.rs",
     "crates/pptx2html-cli/src/document2html.rs",
     "crates/pptx2html-cli/src/document2html_tests.rs",
     # Spreadsheet semantics and coordinate attribution decide the cell

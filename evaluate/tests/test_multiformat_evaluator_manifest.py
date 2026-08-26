@@ -1,4 +1,6 @@
+import ast
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +18,33 @@ from evaluate.multiformat_evaluator_portable_wave_files import (
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.scaffold_multiformat_evidence import scaffold_evidence
 from evaluate.tests.multiformat_gate_fixture import CONTRACT_PATH, PROJECT_ROOT
+
+
+def _local_python_dependencies(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    dependencies: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        if not node.module.startswith("evaluate."):
+            continue
+        dependency = Path(*node.module.split(".")).with_suffix(".py")
+        if (PROJECT_ROOT / dependency).is_file():
+            dependencies.add(dependency.as_posix())
+    return dependencies
+
+
+def _rust_submodule_dependencies(path: Path) -> set[str]:
+    dependencies: set[str] = set()
+    source = path.read_text(encoding="utf-8")
+    module_pattern = re.compile(r"^\s*mod\s+([a-zA-Z0-9_]+)\s*;", re.MULTILINE)
+    for module in module_pattern.findall(source):
+        flat = path.parent / f"{module}.rs"
+        nested = path.parent / module / "mod.rs"
+        dependency = flat if flat.is_file() else nested
+        if dependency.is_file():
+            dependencies.add(dependency.relative_to(PROJECT_ROOT).as_posix())
+    return dependencies
 
 
 class MultiFormatEvaluatorManifestTests(unittest.TestCase):
@@ -96,6 +125,18 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
         self.assertIn(regression, PORTABLE_WAVE_TEST_FILES)
         self.assertIn(regression, EVALUATOR_FILES)
 
+    def test_manifest_contains_local_dependency_closure(self) -> None:
+        dependencies = _local_python_dependencies(
+            PROJECT_ROOT / "evaluate/multiformat_conformance_pptx.py"
+        )
+        dependencies.update(
+            _rust_submodule_dependencies(
+                PROJECT_ROOT / "crates/document2html-native/src/process.rs"
+            )
+        )
+
+        self.assertEqual(dependencies - set(EVALUATOR_FILES), set())
+
     def test_manifest_binds_spreadsheet_attribution_sources_and_tests(self) -> None:
         # Every file that can change which cell coordinates are emitted must be
         # covered, otherwise the evaluator could score output it never bound.
@@ -109,6 +150,8 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             "crates/document2html-core/src/lib.rs",
             "crates/document2html-native/src/lib.rs",
             "crates/document2html-native/src/office.rs",
+            "crates/document2html-native/src/runtime.rs",
+            "crates/document2html-native/src/workspace.rs",
             "crates/document2html-native/src/spreadsheet_html.rs",
             "crates/document2html-native/src/spreadsheet_html/diagnostics.rs",
             "crates/document2html-native/src/spreadsheet_html/matching.rs",
