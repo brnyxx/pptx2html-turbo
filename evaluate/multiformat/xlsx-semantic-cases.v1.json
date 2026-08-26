@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "description": "Shared XLSX semantic cases. The Rust core extractor and the Python portable extractor must agree on every outcome, so both test suites read this file rather than restating expectations. `expected` lists the attributable display cells. `unattributed` lists cells that convert but whose display text is not reproduced; Rust retains them as non-attributable cells for its annotation diagnostic, while the Python extractor reports them in `unattributed_cells`.",
+  "cases": [
+    {
+      "name": "boolean_true",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" t=\"b\"><v>1</v></c>",
+      "expected": [{ "address": "A1", "display": "TRUE" }]
+    },
+    {
+      "name": "boolean_false",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" t=\"b\"><v>0</v></c>",
+      "expected": [{ "address": "A1", "display": "FALSE" }]
+    },
+    {
+      "name": "boolean_out_of_domain_value",
+      "outcome": "refuse",
+      "reason": "A boolean cell may only hold 0 or 1; 2 is not a valid ST_Boolean value.",
+      "worksheet_cells": "<c r=\"A1\" t=\"b\"><v>2</v></c>"
+    },
+    {
+      "name": "boolean_non_numeric_value",
+      "outcome": "refuse",
+      "reason": "A boolean cell must be encoded as 0 or 1, never as the literal TRUE.",
+      "worksheet_cells": "<c r=\"A1\" t=\"b\"><v>TRUE</v></c>"
+    },
+    {
+      "name": "coordinate_malformed",
+      "outcome": "refuse",
+      "reason": "A cell reference must be column letters followed by a row number.",
+      "worksheet_cells": "<c r=\"not-A1\"><v>7</v></c>"
+    },
+    {
+      "name": "coordinate_column_out_of_range",
+      "outcome": "refuse",
+      "reason": "Column ZZZZ exceeds the 16384 column maximum.",
+      "worksheet_cells": "<c r=\"ZZZZ99\"><v>7</v></c>"
+    },
+    {
+      "name": "coordinate_row_zero",
+      "outcome": "refuse",
+      "reason": "Row numbers are one-based, so row 0 is invalid.",
+      "worksheet_cells": "<c r=\"A0\"><v>7</v></c>"
+    },
+    {
+      "name": "unknown_cell_type",
+      "outcome": "refuse",
+      "reason": "An unrecognized cell type must not be silently treated as a number.",
+      "worksheet_cells": "<c r=\"A1\" t=\"zzz\"><v>7</v></c>"
+    },
+    {
+      "name": "shared_string_index_out_of_range",
+      "outcome": "refuse",
+      "reason": "A shared string index beyond the table must not resolve to empty text.",
+      "worksheet_cells": "<c r=\"A1\" t=\"s\"><v>99</v></c>"
+    },
+    {
+      "name": "external_worksheet_relationship",
+      "outcome": "refuse",
+      "reason": "An external worksheet relationship must never be dereferenced.",
+      "worksheet_cells": "<c r=\"A1\"><v>7</v></c>",
+      "relationship_target": "http://example.invalid/sheet.xml",
+      "relationship_target_mode": "External"
+    },
+    {
+      "name": "non_worksheet_relationship_target",
+      "outcome": "refuse",
+      "reason": "A worksheet relationship pointing outside xl/worksheets/ must be refused rather than yielding an empty sheet.",
+      "worksheet_cells": "<c r=\"A1\"><v>7</v></c>",
+      "relationship_target": "sharedStrings.xml"
+    },
+    {
+      "name": "parent_traversal_relationship_target",
+      "outcome": "refuse",
+      "reason": "A relationship target must not escape the package via parent traversal.",
+      "worksheet_cells": "<c r=\"A1\"><v>7</v></c>",
+      "relationship_target": "../../etc/passwd"
+    },
+    {
+      "name": "iso_date_cell_midnight",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" t=\"d\"><v>2026-08-26T00:00:00</v></c>",
+      "expected": [{ "address": "A1", "display": "2026-08-26" }]
+    },
+    {
+      "name": "iso_date_cell_with_time",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" t=\"d\"><v>2026-08-26T13:45:30</v></c>",
+      "expected": [{ "address": "A1", "display": "2026-08-26T13:45:30" }]
+    },
+    {
+      "name": "iso_date_cell_invalid_calendar_day",
+      "outcome": "accept",
+      "reason": "2026 is not a leap year, so the value is unattributable rather than fatal.",
+      "worksheet_cells": "<c r=\"A1\" t=\"d\"><v>2026-02-29</v></c>",
+      "expected": [],
+      "unattributed": [{ "address": "A1" }]
+    },
+    {
+      "name": "custom_percent_two_decimals",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>0.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.00%\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [{ "address": "A1", "display": "50.00%" }]
+    },
+    {
+      "name": "builtin_percent_no_decimals",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>0.5</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"9\"/></cellXfs>",
+      "expected": [{ "address": "A1", "display": "50%" }]
+    },
+    {
+      "name": "builtin_short_date_serial",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>46265</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs>",
+      "expected": [{ "address": "A1", "display": "2026-08-31" }]
+    },
+    {
+      "name": "plain_number_without_styles",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\"><v>42</v></c>",
+      "expected": [{ "address": "A1", "display": "42" }]
+    },
+    {
+      "name": "unreproducible_currency_format_is_unattributable",
+      "outcome": "accept",
+      "reason": "An unsupported number format must not fail conversion; the cell converts but is omitted from attribution.",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>12.5</v></c>",
+      "styles": "<cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"44\"/></cellXfs>",
+      "expected": [],
+      "unattributed": [{ "address": "A1" }]
+    }
+  ]
+}

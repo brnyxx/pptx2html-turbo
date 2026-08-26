@@ -186,7 +186,13 @@ def _capture_units(
             ordered,
             strict=True,
         ):
-            parse_inventory(inventory, unit_id)
+            parsed = parse_inventory(inventory, unit_id)
+            # Publishing an oracle whose cell attribution is incomplete would
+            # bake unprovable evidence into the lock, so refuse it here.
+            if parsed.unattributed_cells:
+                raise OfficeOracleFinalizeError(
+                    "office oracle inventory has unattributed cells"
+                )
             result.append(
                 {
                     "unit_id": unit_id,

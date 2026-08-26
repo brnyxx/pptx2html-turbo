@@ -43,11 +43,15 @@ def write_office_oracle_inventories(
     if len(pages) != len(source.units) or len(unit_ids) != len(pages):
         raise OfficeOracleInventoryError("office layout page count differs")
     output_dir.mkdir(parents=True, exist_ok=False)
+    spreadsheet = source.document_format in {"xls", "xlsx"}
     cells = (
         _spreadsheet_cells(source.semantic, pages)
-        if source.document_format in {"xls", "xlsx"}
+        if spreadsheet
         else [[] for _ in pages]
     )
+    # Cells whose display text the extractor refused to reproduce are carried
+    # through as explicit evidence, so a skipped attribution is never silent.
+    unattributed = _unattributed_cells(source.semantic) if spreadsheet else []
     result: list[Path] = []
     for index, (unit_id, page, unit) in enumerate(
         zip(unit_ids, pages, source.units, strict=True)
@@ -68,6 +72,8 @@ def write_office_oracle_inventories(
                 "texts": texts,
                 "cells": _scaled_cells(cells[index], scale_x, scale_y),
                 "objects": [],
+                # Repeated per unit so any single inventory carries the proof.
+                "unattributed_cells": unattributed,
             },
         )
         result.append(path)
@@ -190,6 +196,38 @@ def _spreadsheet_cells(
                     "displayed_value": display,
                     "box": list(line.box),
                     "baseline": line.baseline,
+                }
+            )
+    return result
+
+
+def _unattributed_cells(semantic_path: Path) -> list[JsonValue]:
+    """Collects the extractor's structured attribution refusals."""
+    semantic = read_strict_object(semantic_path)
+    result: list[JsonValue] = []
+    for worksheet in object_list(
+        semantic,
+        "worksheets",
+        "office.semantic.worksheets",
+    ):
+        raw = worksheet.get("unattributed_cells")
+        if raw is None:
+            continue
+        if not isinstance(raw, list):
+            raise OfficeOracleInventoryError(
+                "office semantic unattributed_cells must be a list"
+            )
+        for item in object_list(
+            worksheet,
+            "unattributed_cells",
+            "office.semantic.unattributed_cells",
+        ):
+            result.append(
+                {
+                    "worksheet": string_value(item, "worksheet"),
+                    "address": string_value(item, "address"),
+                    "number_format": string_value(item, "number_format"),
+                    "reason": string_value(item, "reason"),
                 }
             )
     return result

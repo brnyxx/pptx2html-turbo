@@ -6,6 +6,9 @@ from unittest import mock
 
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
 from evaluate.multiformat_evaluator_manifest import validate_evaluator_manifest
+from evaluate.multiformat_evaluator_native_ready_files import (
+    NATIVE_READY_TEST_FILES,
+)
 from evaluate.multiformat_evaluator_portable_wave_files import (
     PORTABLE_WAVE_ENGINE_FILES,
     PORTABLE_WAVE_TEST_FILES,
@@ -89,6 +92,50 @@ class MultiFormatEvaluatorManifestTests(unittest.TestCase):
             self.assertIn(path, EVALUATOR_FILES)
         self.assertIn(regression, PORTABLE_WAVE_TEST_FILES)
         self.assertIn(regression, EVALUATOR_FILES)
+
+    def test_manifest_binds_spreadsheet_attribution_sources_and_tests(self) -> None:
+        # Every file that can change which cell coordinates are emitted must be
+        # covered, otherwise the evaluator could score output it never bound.
+        for path in (
+            "crates/document2html-core/src/spreadsheet.rs",
+            "crates/document2html-core/src/spreadsheet/display.rs",
+            "crates/document2html-core/src/spreadsheet/package.rs",
+            "crates/document2html-core/src/spreadsheet/styles.rs",
+            "crates/document2html-core/src/spreadsheet/worksheet.rs",
+            "crates/document2html-native/src/spreadsheet_html.rs",
+            "crates/document2html-native/src/spreadsheet_html/diagnostics.rs",
+            "crates/document2html-native/src/spreadsheet_html/matching.rs",
+            "crates/document2html-native/src/spreadsheet_html/text.rs",
+            "evaluate/multiformat_portable_spreadsheet.py",
+            "evaluate/multiformat_portable_spreadsheet_formats.py",
+            "evaluate/multiformat/xlsx-semantic-cases.v1.json",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, EVALUATOR_FILES)
+        for path in (
+            "crates/document2html-core/tests/spreadsheet_semantics_test.rs",
+            "crates/document2html-core/tests/spreadsheet_shared_cases_test.rs",
+            "crates/document2html-native/src/spreadsheet_html_tests.rs",
+            "evaluate/tests/test_multiformat_portable_spreadsheet_semantics.py",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, EVALUATOR_FILES)
+
+    def test_manifest_binds_the_native_unit_contract_test(self) -> None:
+        self.assertIn(
+            "evaluate/tests/test_multiformat_native_unit_contract.py",
+            NATIVE_READY_TEST_FILES,
+        )
+        self.assertIn(
+            "evaluate/tests/test_multiformat_native_unit_contract.py",
+            EVALUATOR_FILES,
+        )
+
+    def test_every_evaluator_file_exists(self) -> None:
+        # A bound path that does not exist would silently weaken the digest.
+        for path in EVALUATOR_FILES:
+            with self.subTest(path=path):
+                self.assertTrue((PROJECT_ROOT / path).is_file(), path)
 
     def test_manifest_boundary_includes_portable_lock_validation(self) -> None:
         self.assertIn("evaluate/multiformat_reference_profile.py", EVALUATOR_FILES)

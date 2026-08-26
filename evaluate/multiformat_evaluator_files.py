@@ -248,4 +248,22 @@ EVALUATOR_FILES = (
     "crates/document2html-native/src/process_tests.rs",
     "crates/pptx2html-cli/src/document2html.rs",
     "crates/pptx2html-cli/src/document2html_tests.rs",
+    # Spreadsheet semantics and coordinate attribution decide the cell
+    # evidence the evaluator scores, so every output-affecting source and its
+    # tests are bound into the manifest.
+    "crates/document2html-core/src/spreadsheet.rs",
+    "crates/document2html-core/src/spreadsheet/display.rs",
+    "crates/document2html-core/src/spreadsheet/package.rs",
+    "crates/document2html-core/src/spreadsheet/styles.rs",
+    "crates/document2html-core/src/spreadsheet/worksheet.rs",
+    "crates/document2html-core/tests/spreadsheet_semantics_test.rs",
+    "crates/document2html-core/tests/spreadsheet_shared_cases_test.rs",
+    "crates/document2html-native/src/spreadsheet_html.rs",
+    "crates/document2html-native/src/spreadsheet_html/diagnostics.rs",
+    "crates/document2html-native/src/spreadsheet_html/matching.rs",
+    "crates/document2html-native/src/spreadsheet_html/text.rs",
+    "crates/document2html-native/src/spreadsheet_html_tests.rs",
+    "evaluate/multiformat/xlsx-semantic-cases.v1.json",
+    "evaluate/multiformat_portable_spreadsheet_formats.py",
+    "evaluate/tests/test_multiformat_portable_spreadsheet_semantics.py",
 )

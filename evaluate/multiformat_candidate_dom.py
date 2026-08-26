@@ -25,6 +25,9 @@ def inventory_value(
         "texts": texts,
         "cells": cells,
         "objects": objects,
+        # The rendered DOM has no notion of an unreproducible number format;
+        # attribution refusals originate in the reference extractor.
+        "unattributed_cells": [],
     }
 
 

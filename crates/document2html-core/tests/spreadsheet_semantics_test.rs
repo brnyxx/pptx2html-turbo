@@ -53,6 +53,7 @@ fn cell(worksheet: &str, coordinate: &str, displayed_value: &str) -> Spreadsheet
         worksheet: worksheet.to_owned(),
         coordinate: coordinate.to_owned(),
         displayed_value: displayed_value.to_owned(),
+        attributable: true,
     }
 }
 
@@ -136,4 +137,54 @@ fn entry(
 ) {
     zip.start_file(name, options).expect("start fixture part");
     zip.write_all(value.as_bytes()).expect("write fixture part");
+}
+
+/// An unsupported number format must never fail the conversion. The cell is
+/// preserved as unattributable so the document still converts.
+#[test]
+fn unsupported_number_format_converts_as_unattributable() {
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default();
+    entry(&mut zip, options, "[Content_Types].xml", content_types());
+    entry(&mut zip, options, "_rels/.rels", root_relationships());
+    let sheets: &[(&str, &str)] = &[(
+        "sheet1.xml",
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" s="1"><v>12.5</v></c><c r="B1"><v>7</v></c></row></sheetData></worksheet>"#,
+    )];
+    entry(&mut zip, options, "xl/workbook.xml", workbook_xml(sheets));
+    entry(
+        &mut zip,
+        options,
+        "xl/_rels/workbook.xml.rels",
+        workbook_relationships(sheets),
+    );
+    entry(
+        &mut zip,
+        options,
+        "xl/sharedStrings.xml",
+        "<sst/>".to_owned(),
+    );
+    entry(
+        &mut zip,
+        options,
+        "xl/styles.xml",
+        r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="44"/></cellXfs></styleSheet>"#.to_owned(),
+    );
+    for (name, xml) in sheets {
+        entry(
+            &mut zip,
+            options,
+            &format!("xl/worksheets/{name}"),
+            (*xml).to_owned(),
+        );
+    }
+    let data = zip.finish().expect("finish fixture").into_inner();
+
+    let semantics = parse_xlsx_semantics(&data).expect("conversion must not fail");
+
+    assert_eq!(semantics.cells.len(), 2);
+    assert!(!semantics.cells[0].attributable);
+    assert_eq!(semantics.cells[0].coordinate, "A1");
+    assert!(semantics.cells[1].attributable);
+    assert_eq!(semantics.cells[1].displayed_value, "7");
 }

@@ -80,7 +80,10 @@ class OracleLockInput:
         return self._resolve_per_format(required_formats, evidence_root)
 
     def _resolve_shared(self, formats: list[str]) -> dict[str, ResolvedOracleLock]:
-        assert self.shared is not None
+        if self.shared is None:
+            # `resolve` selects this branch only when a shared lock is set, so
+            # a missing path is a programming error rather than bad input.
+            raise OracleLockInputError(GateStatus.FAIL, "oracle_locks")
         try:
             identity = load_reference_lock_identity(self.shared)
         except ReferenceProfileError as error:

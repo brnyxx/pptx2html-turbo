@@ -49,7 +49,7 @@ class PortableReferenceContractTests(unittest.TestCase):
                 )
                 archive.writestr(
                     "xl/_rels/workbook.xml.rels",
-                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
                 )
                 archive.writestr(
                     "xl/sharedStrings.xml",
@@ -69,8 +69,12 @@ class PortableReferenceContractTests(unittest.TestCase):
             self.assertEqual(
                 worksheet.get("cells"),
                 [
-                    {"address": "A1", "display": "Alpha Beta"},
-                    {"address": "B1", "display": "42"},
+                    {
+                        "address": "A1",
+                        "display": "Alpha Beta",
+                        "attributable": True,
+                    },
+                    {"address": "B1", "display": "42", "attributable": True},
                 ],
             )
 

@@ -1,12 +1,15 @@
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
+use super::display::{Display, formatted_value, iso_date_text};
+use super::styles::StyleTable;
 use super::{SpreadsheetCell, attribute};
 use crate::{DocumentError, DocumentResult};
 
 struct PendingCell {
     coordinate: String,
     kind: Option<String>,
+    style: Option<String>,
     value: String,
     inline: String,
     in_value: bool,
@@ -17,6 +20,7 @@ pub(super) fn parse_worksheet(
     xml: &str,
     worksheet: &str,
     shared_strings: &[String],
+    styles: &StyleTable,
 ) -> DocumentResult<Vec<SpreadsheetCell>> {
     let mut reader = Reader::from_str(xml);
     let mut pending = None;
@@ -33,6 +37,7 @@ pub(super) fn parse_worksheet(
                 pending = Some(PendingCell {
                     coordinate,
                     kind: attribute(&element, b"t")?,
+                    style: attribute(&element, b"s")?,
                     value: String::new(),
                     inline: String::new(),
                     in_value: false,
@@ -72,14 +77,26 @@ pub(super) fn parse_worksheet(
             }
             Event::End(element) if element.local_name().as_ref() == b"c" => {
                 let cell = pending.take().ok_or(DocumentError::UnsupportedFormat)?;
-                if let Some(displayed_value) = displayed_value(&cell, shared_strings)?
-                    && !displayed_value.is_empty()
-                {
-                    cells.push(SpreadsheetCell {
+                let coordinate = cell.coordinate.clone();
+                match displayed_value(&cell, shared_strings, styles)? {
+                    Some(Display::Trusted(displayed_value)) if !displayed_value.is_empty() => {
+                        cells.push(SpreadsheetCell {
+                            worksheet: worksheet.to_owned(),
+                            coordinate,
+                            displayed_value,
+                            attributable: true,
+                        });
+                    }
+                    // The value converts but its visible text cannot be
+                    // reproduced, so it is recorded as unattributable instead
+                    // of being dropped or guessed.
+                    Some(Display::Unattributable) => cells.push(SpreadsheetCell {
                         worksheet: worksheet.to_owned(),
-                        coordinate: cell.coordinate,
-                        displayed_value,
-                    });
+                        coordinate,
+                        displayed_value: String::new(),
+                        attributable: false,
+                    }),
+                    _ => {}
                 }
             }
             Event::Eof => break,
@@ -95,27 +112,36 @@ pub(super) fn parse_worksheet(
 fn displayed_value(
     cell: &PendingCell,
     shared_strings: &[String],
-) -> DocumentResult<Option<String>> {
+    styles: &StyleTable,
+) -> DocumentResult<Option<Display>> {
     match cell.kind.as_deref() {
-        Some("inlineStr") => Ok(Some(cell.inline.clone())),
+        Some("inlineStr") => Ok(Some(Display::Trusted(cell.inline.clone()))),
         Some("s") => {
             let index = cell
                 .value
                 .parse::<usize>()
                 .map_err(|_| DocumentError::UnsupportedFormat)?;
-            Ok(Some(
+            Ok(Some(Display::Trusted(
                 shared_strings
                     .get(index)
                     .ok_or(DocumentError::UnsupportedFormat)?
                     .clone(),
-            ))
+            )))
         }
         Some("b") => match cell.value.as_str() {
-            "0" => Ok(Some("FALSE".to_owned())),
-            "1" => Ok(Some("TRUE".to_owned())),
+            "0" => Ok(Some(Display::Trusted("FALSE".to_owned()))),
+            "1" => Ok(Some(Display::Trusted("TRUE".to_owned()))),
             _ => Err(DocumentError::UnsupportedFormat),
         },
-        Some("str" | "e" | "n") | None => Ok((!cell.value.is_empty()).then(|| cell.value.clone())),
+        // ECMA-376 ISO 8601 date cells convert directly from their text form.
+        Some("d") => Ok(Some(iso_date_text(&cell.value))),
+        // Text-ish values display verbatim; numbers go through the number
+        // format so percentages and serial dates render as displayed.
+        Some("str" | "e") => {
+            Ok((!cell.value.is_empty()).then(|| Display::Trusted(cell.value.clone())))
+        }
+        Some("n") | None => Ok((!cell.value.is_empty())
+            .then(|| formatted_value(&cell.value, styles.format(cell.style.as_deref())))),
         Some(_) => Err(DocumentError::UnsupportedFormat),
     }
 }

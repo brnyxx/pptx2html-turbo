@@ -11,6 +11,7 @@ from evaluate.multiformat_inventory_types import (
     Inventory,
     ObjectItem,
     TextItem,
+    UnattributedCell,
 )
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_schema import (
@@ -26,7 +27,14 @@ def parse_inventory(path: Path, expected_unit_id: str) -> Inventory:
         values = read_strict_object(path)
         require_keys(
             values,
-            {"schema_version", "unit_id", "texts", "cells", "objects"},
+            {
+                "schema_version",
+                "unit_id",
+                "texts",
+                "cells",
+                "objects",
+                "unattributed_cells",
+            },
             "inventory.schema",
         )
         if integer_value(values, "schema_version") != 1:
@@ -45,7 +53,13 @@ def parse_inventory(path: Path, expected_unit_id: str) -> Inventory:
             [item.order for item in (*texts, *cells)],
             "inventory.order",
         )
-        return Inventory(unit_id, texts, cells, objects)
+        return Inventory(
+            unit_id,
+            texts,
+            cells,
+            objects,
+            tuple(_parse_unattributed_cells(values)),
+        )
     except MetricError:
         raise
     except (
@@ -113,6 +127,31 @@ def _parse_cells(values: dict[str, JsonValue]) -> list[CellItem]:
                 _parse_box(item),
                 _decimal(item, "baseline"),
                 integer_value(item, "order"),
+            )
+        )
+    return result
+
+
+def _parse_unattributed_cells(
+    values: dict[str, JsonValue],
+) -> list[UnattributedCell]:
+    result: list[UnattributedCell] = []
+    for item in object_list(
+        values,
+        "unattributed_cells",
+        "inventory.unattributed_cells",
+    ):
+        require_keys(
+            item,
+            {"worksheet", "address", "number_format", "reason"},
+            "inventory.unattributed_cell",
+        )
+        result.append(
+            UnattributedCell(
+                string_value(item, "worksheet"),
+                string_value(item, "address"),
+                string_value(item, "number_format"),
+                string_value(item, "reason"),
             )
         )
     return result

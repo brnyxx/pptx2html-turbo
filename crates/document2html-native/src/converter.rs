@@ -76,19 +76,22 @@ impl NativeDocumentConverter {
             &self.runtime,
             &workspace,
         )?;
+        let mut diagnostics = native_diagnostics(&self.config);
         if matches!(format, DocumentFormat::Xlsx | DocumentFormat::Xls) {
             let semantics = if let Some(path) = office.semantic_xlsx {
                 parse_xlsx_semantics(&fs::read(path)?)?
             } else {
                 parse_xlsx_semantics(input.data)?
             };
-            normalized.html = annotate_spreadsheet_html(&normalized.html, &semantics);
+            let annotated = annotate_spreadsheet_html(&normalized.html, &semantics);
+            normalized.html = annotated.html;
+            diagnostics.extend(annotated.diagnostics);
         }
         Ok(DocumentConversionResult {
             format,
             html: normalized.html,
             external_assets: normalized.assets,
-            diagnostics: native_diagnostics(&self.config),
+            diagnostics,
             unit_count: normalized.page_count,
             unit_kind,
             backend: BackendIdentity {

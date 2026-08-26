@@ -30,6 +30,7 @@ def write_unit_artifacts(
                     "texts": [],
                     "cells": [],
                     "objects": [],
+                    "unattributed_cells": [],
                 },
                 sort_keys=True,
             ),

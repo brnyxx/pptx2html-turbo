@@ -66,7 +66,13 @@ def write_portable_reference_manifests(
         for spec, unit, inventory in zip(
             source.units, batch.units, inventories, strict=True
         ):
-            parse_inventory(inventory, spec.unit_id)
+            parsed = parse_inventory(inventory, spec.unit_id)
+            # A portable reference with unattributable cells cannot back a
+            # content claim, so it must not reach the signed manifest.
+            if parsed.unattributed_cells:
+                raise PortableReferenceManifestError(
+                    "portable reference inventory has unattributed cells"
+                )
             units.append(
                 {
                     "unit_id": spec.unit_id,

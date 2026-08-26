@@ -1,209 +1,138 @@
-use std::collections::{BTreeMap, BTreeSet};
+//! Attaches workbook cell coordinates to rendered spreadsheet HTML.
+//!
+//! Matching is evidence-first: a coordinate is emitted only when it is proven
+//! unique. Tokenization lives in [`text`], the indexed scan in [`matching`],
+//! and refusal reporting in [`diagnostics`].
 
-use document2html_core::{SpreadsheetCell, SpreadsheetSemantics};
+use std::collections::{BTreeMap, HashMap};
 
-#[derive(Clone)]
-struct DecodedChar {
-    value: char,
-    start: usize,
-    end: usize,
-}
+use document2html_core::{DocumentDiagnostic, SpreadsheetCell, SpreadsheetSemantics};
+
+mod diagnostics;
+mod matching;
+mod text;
+
+use diagnostics::{
+    ambiguous_diagnostic, missing_body_diagnostic, overlap_diagnostic, truncated_diagnostic,
+    unreproducible_format_diagnostic,
+};
+use matching::scan_occurrences;
+use text::{body_range, normalize};
 
 struct Annotation {
     start: usize,
     end: usize,
     cell: usize,
-    key: String,
 }
 
-pub(crate) fn annotate_spreadsheet_html(html: &str, semantics: &SpreadsheetSemantics) -> String {
-    let Some(body_start) = html.find("<body") else {
-        return html.to_owned();
+pub(crate) struct AnnotatedSpreadsheetHtml {
+    pub(crate) html: String,
+    pub(crate) diagnostics: Vec<DocumentDiagnostic>,
+    /// Phrase lookups performed while matching. Used only by tests to pin the
+    /// matching cost model; conversion output does not depend on it.
+    #[cfg(test)]
+    pub(crate) probes: usize,
+}
+
+/// Wraps rendered cell text in coordinate-bearing spans.
+///
+/// A cell is annotated only when its displayed value is unambiguous: exactly
+/// one cell carries the value and exactly one rendered occurrence matches it.
+/// Duplicate values are never zipped positionally onto duplicate occurrences,
+/// because the converter does not prove that HTML order matches workbook
+/// order. Every refusal is reported as a diagnostic instead of being guessed.
+pub(crate) fn annotate_spreadsheet_html(
+    html: &str,
+    semantics: &SpreadsheetSemantics,
+) -> AnnotatedSpreadsheetHtml {
+    let Some(content) = body_range(html) else {
+        return AnnotatedSpreadsheetHtml {
+            html: html.to_owned(),
+            diagnostics: vec![missing_body_diagnostic()],
+            #[cfg(test)]
+            probes: 0,
+        };
     };
-    let Some(relative_start) = html[body_start..].find('>') else {
-        return html.to_owned();
-    };
-    let content_start = body_start + relative_start + 1;
-    let Some(relative_end) = html[content_start..].find("</body>") else {
-        return html.to_owned();
-    };
-    let content_end = content_start + relative_end;
-    let text_nodes = text_nodes(html, content_start, content_end);
+
+    // Group cells by normalized value so duplicate values are refused as a set
+    // rather than matched one at a time. Cells whose displayed text could not
+    // be reproduced are counted but never matched, so no coordinate is claimed
+    // for text that may differ from the rendering.
     let mut cells_by_value: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    let mut unreproducible = 0usize;
     for (index, cell) in semantics.cells.iter().enumerate() {
+        if !cell.attributable {
+            unreproducible += 1;
+            continue;
+        }
         let value = normalize(&cell.displayed_value);
         if !value.is_empty() {
             cells_by_value.entry(value).or_default().push(index);
         }
     }
+    let wanted: HashMap<&str, usize> = cells_by_value
+        .iter()
+        .filter(|(_, cells)| cells.len() == 1)
+        .map(|(value, cells)| (value.as_str(), cells[0]))
+        .collect();
+
+    let scan = scan_occurrences(html, &content, &wanted);
     let mut annotations = Vec::new();
-    for (value, cells) in cells_by_value {
-        let mut occurrences = Vec::new();
-        for (start, end) in &text_nodes {
-            occurrences.extend(find_occurrences(&html[*start..*end], *start, &value));
-        }
-        if occurrences.len() != cells.len() {
+    let mut ambiguous = 0usize;
+    for (value, cells) in &cells_by_value {
+        if cells.len() > 1 {
+            ambiguous += 1;
             continue;
         }
-        annotations.extend(
-            occurrences
-                .into_iter()
-                .zip(cells)
-                .map(|((start, end), cell)| Annotation {
-                    start,
-                    end,
-                    cell,
-                    key: value.clone(),
-                }),
-        );
+        match scan.occurrences.get(value.as_str()) {
+            Some(matches) if matches.len() == 1 => annotations.push(Annotation {
+                start: matches[0].0,
+                end: matches[0].1,
+                cell: cells[0],
+            }),
+            Some(_) => ambiguous += 1,
+            None => {}
+        }
     }
-    let conflicts = conflicting_keys(&annotations);
-    annotations.retain(|annotation| !conflicts.contains(&annotation.key));
+
     annotations.sort_by_key(|annotation| annotation.start);
+    // Adjacent-pair comparison suffices on sorted, per-value-unique spans and
+    // avoids the quadratic all-pairs conflict scan.
+    if annotations
+        .windows(2)
+        .any(|pair| pair[0].end > pair[1].start)
+    {
+        return AnnotatedSpreadsheetHtml {
+            html: html.to_owned(),
+            diagnostics: vec![overlap_diagnostic()],
+            #[cfg(test)]
+            probes: scan.probes,
+        };
+    }
+
+    let mut result = Vec::new();
+    if ambiguous > 0 {
+        result.push(ambiguous_diagnostic(ambiguous));
+    }
+    if unreproducible > 0 {
+        result.push(unreproducible_format_diagnostic(unreproducible));
+    }
+    if scan.truncated {
+        result.push(truncated_diagnostic());
+    }
+
     let mut output = html.to_owned();
     for annotation in annotations.into_iter().rev() {
         let cell = &semantics.cells[annotation.cell];
         output.insert_str(annotation.end, "</span>");
         output.insert_str(annotation.start, &opening_span(cell));
     }
-    output
-}
-
-fn text_nodes(html: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
-    let mut nodes = Vec::new();
-    let mut cursor = start;
-    while cursor < end {
-        let Some(tag_offset) = html[cursor..end].find('<') else {
-            nodes.push((cursor, end));
-            break;
-        };
-        let tag_start = cursor + tag_offset;
-        if tag_start > cursor {
-            nodes.push((cursor, tag_start));
-        }
-        let Some(tag_end) = html[tag_start..end].find('>') else {
-            break;
-        };
-        cursor = tag_start + tag_end + 1;
+    AnnotatedSpreadsheetHtml {
+        html: output,
+        diagnostics: result,
+        #[cfg(test)]
+        probes: scan.probes,
     }
-    nodes
-}
-
-fn find_occurrences(raw: &str, offset: usize, needle: &str) -> Vec<(usize, usize)> {
-    let decoded = normalized_chars(raw);
-    let needle = normalize(needle).chars().collect::<Vec<_>>();
-    if needle.is_empty() || decoded.len() < needle.len() {
-        return Vec::new();
-    }
-    decoded
-        .windows(needle.len())
-        .enumerate()
-        .filter_map(|(index, window)| {
-            if window
-                .iter()
-                .zip(&needle)
-                .all(|(actual, expected)| actual.value == *expected)
-                && boundary(&decoded, index, needle.len())
-            {
-                Some((
-                    offset + window[0].start,
-                    offset + window[needle.len() - 1].end,
-                ))
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-fn boundary(value: &[DecodedChar], start: usize, length: usize) -> bool {
-    let left = start == 0 || value[start - 1].value == ' ';
-    let end = start + length;
-    let right = end == value.len() || value[end].value == ' ';
-    left && right
-}
-
-fn normalized_chars(raw: &str) -> Vec<DecodedChar> {
-    let mut decoded = decode_chars(raw);
-    let mut normalized: Vec<DecodedChar> = Vec::new();
-    for mut value in decoded.drain(..) {
-        if value.value.is_whitespace() {
-            if normalized.is_empty() || normalized.last().is_some_and(|last| last.value == ' ') {
-                continue;
-            }
-            value.value = ' ';
-        }
-        normalized.push(value);
-    }
-    if normalized.last().is_some_and(|last| last.value == ' ') {
-        normalized.pop();
-    }
-    normalized
-}
-
-fn decode_chars(raw: &str) -> Vec<DecodedChar> {
-    let mut values = Vec::new();
-    let mut cursor = 0;
-    while cursor < raw.len() {
-        if raw.as_bytes()[cursor] == b'&'
-            && let Some(relative_end) = raw[cursor..].find(';')
-        {
-            let end = cursor + relative_end + 1;
-            if let Some(value) = decode_entity(&raw[cursor + 1..end - 1]) {
-                values.push(DecodedChar {
-                    value,
-                    start: cursor,
-                    end,
-                });
-                cursor = end;
-                continue;
-            }
-        }
-        let Some(value) = raw[cursor..].chars().next() else {
-            break;
-        };
-        let end = cursor + value.len_utf8();
-        values.push(DecodedChar {
-            value,
-            start: cursor,
-            end,
-        });
-        cursor = end;
-    }
-    values
-}
-
-fn decode_entity(entity: &str) -> Option<char> {
-    match entity {
-        "amp" => Some('&'),
-        "lt" => Some('<'),
-        "gt" => Some('>'),
-        "quot" => Some('"'),
-        "apos" => Some('\''),
-        "nbsp" => Some('\u{a0}'),
-        value if value.starts_with("#x") || value.starts_with("#X") => {
-            char::from_u32(u32::from_str_radix(&value[2..], 16).ok()?)
-        }
-        value if value.starts_with('#') => char::from_u32(value[1..].parse().ok()?),
-        _ => None,
-    }
-}
-
-fn normalize(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn conflicting_keys(annotations: &[Annotation]) -> BTreeSet<String> {
-    let mut conflicts = BTreeSet::new();
-    for (index, left) in annotations.iter().enumerate() {
-        for right in &annotations[index + 1..] {
-            if left.start < right.end && right.start < left.end {
-                conflicts.insert(left.key.clone());
-                conflicts.insert(right.key.clone());
-            }
-        }
-    }
-    conflicts
 }
 
 fn opening_span(cell: &SpreadsheetCell) -> String {

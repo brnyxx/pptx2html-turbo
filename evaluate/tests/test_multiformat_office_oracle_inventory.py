@@ -38,6 +38,30 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
             self.assertEqual(second.cells[0].coordinate, "A2")
             self.assertEqual(first.cells[0].box.width, 100)
 
+    def test_unattributed_cells_are_surfaced_in_every_inventory(self) -> None:
+        """An attribution refusal must reach the inventory as evidence.
+
+        Omitting it would make an unsupported number format indistinguishable
+        from a cell that never existed.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = self._spreadsheet_source(root, unattributed=True)
+
+            paths = write_office_oracle_inventories(
+                source,
+                ["xlsx-unit-1", "xlsx-unit-2"],
+                root / "inventories",
+            )
+
+            for index, path in enumerate(paths, start=1):
+                inventory = parse_inventory(path, f"xlsx-unit-{index}")
+                self.assertEqual(len(inventory.unattributed_cells), 1)
+                refusal = inventory.unattributed_cells[0]
+                self.assertEqual(refusal.worksheet, "Sheet1")
+                self.assertEqual(refusal.address, "B9")
+                self.assertEqual(refusal.number_format, "unsupported")
+
     def test_layout_entities_are_rejected_before_parsing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -57,23 +81,31 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
                     root / "inventories",
                 )
 
-    def _spreadsheet_source(self, root: Path) -> OfficeOracleBatchFile:
+    def _spreadsheet_source(
+        self,
+        root: Path,
+        *,
+        unattributed: bool = False,
+    ) -> OfficeOracleBatchFile:
         semantic = root / "semantic.json"
-        semantic.write_text(
-            json.dumps(
+        worksheet: dict[str, object] = {
+            "name": "Sheet1",
+            "cells": [
+                {"address": "$A$1", "display": "Alpha"},
+                {"address": "$A$2", "display": "Beta"},
+            ],
+        }
+        if unattributed:
+            worksheet["unattributed_cells"] = [
                 {
-                    "worksheets": [
-                        {
-                            "name": "Sheet1",
-                            "cells": [
-                                {"address": "$A$1", "display": "Alpha"},
-                                {"address": "$A$2", "display": "Beta"},
-                            ],
-                        }
-                    ]
-                },
-                sort_keys=True,
-            ),
+                    "worksheet": "Sheet1",
+                    "address": "B9",
+                    "number_format": "unsupported",
+                    "reason": "number format display text is not reproduced",
+                }
+            ]
+        semantic.write_text(
+            json.dumps({"worksheets": [worksheet]}, sort_keys=True),
             encoding="utf-8",
         )
         layout = root / "layout.xml"

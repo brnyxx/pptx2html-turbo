@@ -34,6 +34,42 @@ class MultiFormatMetricsTests(unittest.TestCase):
             self.assertTrue(result.determinism.html_hashes_equal)
             self.assertEqual(result.reviewer_count, 2)
 
+    def test_unattributable_number_format_cannot_reach_ready(self) -> None:
+        """An unsupported numFmt must block READY, not lower the score.
+
+        The extractor records a structured refusal instead of a display value.
+        If that evidence were merely carried along, the content metric would
+        score an incomplete cell set and could still publish READY.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            contract, corpus = ready_fixture(root)
+            metrics = write_metrics(contract, corpus, "e" * 64, "a" * 64)
+            inventories = sorted(corpus.parent.glob("artifacts/*-reference.json"))
+            self.assertTrue(inventories, "fixture must write reference inventories")
+            for target in inventories:
+                value = json.loads(target.read_text(encoding="utf-8"))
+                value["unattributed_cells"] = [
+                    {
+                        "worksheet": "Sheet1",
+                        "address": "A1",
+                        "number_format": "unsupported",
+                        "reason": "number format display text is not reproduced",
+                    }
+                ]
+                target.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+
+            # Whether the artifact digest or the attribution gate trips first,
+            # this evidence must never validate as READY.
+            with self.assertRaises(MetricError):
+                _ = validate_metrics_evidence(
+                    contract,
+                    corpus,
+                    metrics,
+                    "e" * 64,
+                    "a" * 64,
+                )
+
     def test_missing_or_orphaned_conformance_unit_is_rejected(self) -> None:
         for mutation in ["missing", "orphan"]:
             with self.subTest(mutation=mutation):

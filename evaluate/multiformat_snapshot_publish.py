@@ -145,8 +145,14 @@ def publish_snapshot(
                 target,
                 SnapshotPublishFailure.PUBLICATION_FAILED,
             ) from error
+        if staging_identity is None:
+            # The staging identity is captured before the rename, so a missing
+            # value here means the publication invariant was broken.
+            raise SnapshotPublishError(
+                target,
+                SnapshotPublishFailure.PUBLICATION_FAILED,
+            )
         try:
-            assert staging_identity is not None
             verify_directory_identity(
                 target,
                 (staging_identity.device, staging_identity.inode),

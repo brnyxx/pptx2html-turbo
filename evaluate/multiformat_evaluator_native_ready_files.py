@@ -80,6 +80,7 @@ NATIVE_READY_TEST_FILES = (
     "evaluate/tests/test_multiformat_native_unit_capture_failures.py",
     "evaluate/tests/test_multiformat_native_unit_capture_gates.py",
     "evaluate/tests/test_multiformat_native_unit_cleanup_races.py",
+    "evaluate/tests/test_multiformat_native_unit_contract.py",
     "evaluate/tests/test_multiformat_native_unit_descendant_timeout.py",
     "evaluate/tests/test_multiformat_native_unit_error_scope.py",
     "evaluate/tests/test_multiformat_native_unit_final2_blockers.py",
