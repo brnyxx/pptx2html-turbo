@@ -31,6 +31,11 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/multiformat_command_evidence.py",
     "evaluate/multiformat_metric_manifest.py",
     "evaluate/multiformat_review_materialize.py",
+    "evaluate/materialize_multiformat_command_plan.py",
+    "evaluate/materialize_multiformat_review_packet.py",
+    "evaluate/multiformat_review_packet.py",
+    "evaluate/run_multiformat_security_case.py",
+    "evaluate/validate_multiformat_review_decision.py",
 )
 
 PORTABLE_WAVE_TEST_FILES = (
@@ -47,4 +52,5 @@ PORTABLE_WAVE_TEST_FILES = (
     "evaluate/tests/test_multiformat_candidate_portable_roles.py",
     "evaluate/tests/test_multiformat_portable_wave_signers.py",
     "evaluate/tests/test_assemble_multiformat_metrics.py",
+    "evaluate/tests/test_multiformat_command_review_tools.py",
 )
