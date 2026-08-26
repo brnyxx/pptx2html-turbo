@@ -301,78 +301,383 @@ readiness remains fail-closed until candidate and native-reference captures,
 metric evidence, seven reports, and `evaluate.multiformat_gate` all pass
 against those exact source bytes.
 
-Capture candidate artifacts only in a clean, externally sandboxed checkout.
-The sandbox attestation must prove disabled network access and that oracle
-directories are absent from the candidate namespace. The runner performs two
-fresh converter/browser runs and publishes `READY` only when HTML, every
-inventory, and every PNG are byte-identical:
+### Production signed portable wave
+
+Run a production wave only from a clean, committed checkout. Every producer is
+create-only. If a command fails, retain the failed wave for diagnosis and start
+again with a new wave and external key directory; do not delete or overwrite
+individual evidence files. The reference receipt private key and candidate
+sandbox private key must remain outside both Git and the evidence root.
+
+The receipt wrapper is bound to one exact future outer-lock path. Consequently,
+each format gets its own wrapper, candidate runtime lock, outer lock, candidate
+attestation, reference capture, and candidate capture. A shared schema-2 lock
+or a wrapper copied between formats is rejected.
+
+Set the production paths. These macOS paths are the validated example; a Linux
+host must point to the corresponding pinned binaries and must not reuse the
+macOS lock.
 
 ```bash
+set -eu
+
+PROJECT_ROOT="$(pwd -P)"
+EVIDENCE_ROOT="$PROJECT_ROOT/artifacts"
+REVISION="$(git rev-parse HEAD)"
+WAVE="$EVIDENCE_ROOT/multiformat-portable-wave-$REVISION"
+READY_ROOT="$EVIDENCE_ROOT/multiformat-ready-corpora-v1"
+KEY_ROOT="$HOME/.local/share/pptx2html-turbo-evidence/$REVISION"
+CONTRACT="$PROJECT_ROOT/evaluate/multiformat/contract.v1.json"
+FONT_BUNDLE="$EVIDENCE_ROOT/multiformat-font-bundle/font-bundle.json"
+CONFIGURATION="$PROJECT_ROOT/evaluate/multiformat/reference-routing.v1.json"
+CANONICALIZER="$PROJECT_ROOT/evaluate/multiformat_conformance_pdf.py"
+
+PYTHON="$(
+  uv run --python 3.11 \
+    --with-requirements evaluate/requirements-test.txt \
+    python -c 'import sys; print(sys.executable)'
+)"
+SOFFICE="/Applications/LibreOffice.app/Contents/MacOS/soffice"
+PDFTOPPM="$(command -v pdftoppm)"
+PDFTOTEXT="$(command -v pdftotext)"
+PDFINFO="$(command -v pdfinfo)"
+PDFTOHTML="$(command -v pdftohtml)"
+OPENSSL="$(command -v openssl)"
+SANDBOX_EXEC="/usr/bin/sandbox-exec"
+CHROMIUM="$HOME/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+CONVERTER="$PROJECT_ROOT/target/release/document2html"
+FORMATS="pptx docx doc xlsx xls ppt pdf"
+
+test ! -e "$WAVE"
+mkdir -p "$EVIDENCE_ROOT" "$KEY_ROOT"
+chmod 700 "$KEY_ROOT"
 cargo build --release -p pptx2html-cli --bin document2html
-uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
-  python -m evaluate.capture_multiformat_candidates \
-  --contract evaluate/multiformat/contract.v1.json \
-  --corpus-manifest evaluate/multiformat/wave/corpora/docx/manifest.json \
-  --evaluator-manifest evaluate/multiformat/wave/evidence/evaluator-manifest.json \
-  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
-  --evidence-root evaluate/multiformat/wave \
-  --output-dir evaluate/multiformat/wave/candidate/docx \
-  --converter target/release/document2html \
-  --soffice /locked/bin/soffice \
-  --pdftohtml /locked/bin/pdftohtml \
-  --pdfinfo /locked/bin/pdfinfo \
-  --chromium /locked/bin/chromium \
-  --font-bundle evaluate/multiformat/wave/font-bundle-manifest.json \
-  --sandbox-attestation evaluate/multiformat/wave/candidate-sandbox-attestation.json \
-  --sandbox-public-key evaluate/multiformat/wave/sandbox-verifier.pub \
-  --openssl /locked/bin/openssl \
-  --receipt-signer /locked/bin/candidate-receipt-signer
+
+uv run --python 3.11 \
+  --with-requirements evaluate/requirements-test.txt \
+  python -m evaluate.scaffold_multiformat_evidence \
+  --project-root "$PROJECT_ROOT" \
+  --contract "$CONTRACT" \
+  --output-dir "$WAVE"
+
+mkdir -p \
+  "$WAVE/keys" \
+  "$WAVE/runtime" \
+  "$WAVE/outer" \
+  "$WAVE/attestations" \
+  "$WAVE/reference" \
+  "$WAVE/candidate" \
+  "$WAVE/commands" \
+  "$WAVE/security-cases" \
+  "$WAVE/review" \
+  "$WAVE/execution" \
+  "$WAVE/final-metrics" \
+  "$WAVE/final-reports"
+```
+
+Generate distinct keypairs. The reference key is raw Ed25519 material used for
+outer receipts. The candidate key is PEM material used only for the sandbox
+attestation. The candidate producer verifies that its public key differs from
+the reference public key.
+
+```bash
+REFERENCE_PRIVATE="$KEY_ROOT/reference-private.raw"
+REFERENCE_PUBLIC="$WAVE/keys/reference-public.raw"
+CANDIDATE_PRIVATE="$KEY_ROOT/candidate-private.pem"
+CANDIDATE_PUBLIC="$WAVE/keys/candidate-public.pem"
+
+"$PYTHON" -m evaluate.materialize_multiformat_portable_reference_keypair \
+  --project-root "$PROJECT_ROOT" \
+  --evidence-root "$EVIDENCE_ROOT" \
+  --private-key "$REFERENCE_PRIVATE" \
+  --public-key "$REFERENCE_PUBLIC"
+
+"$PYTHON" -m evaluate.materialize_multiformat_candidate_sandbox_keypair \
+  --project-root "$PROJECT_ROOT" \
+  --evidence-root "$EVIDENCE_ROOT" \
+  --private-key "$CANDIDATE_PRIVATE" \
+  --public-key "$CANDIDATE_PUBLIC" \
+  --outer-public-key "$REFERENCE_PUBLIC"
+```
+
+Materialize each future-lock-bound receipt wrapper, the fields-only browser
+lock, the schema-1 candidate runtime lock, and the final schema-2 outer lock.
+The candidate runtime lock intentionally does not contain the post-lock
+candidate attestation.
+
+```bash
+for format in $FORMATS; do
+  wrapper="$KEY_ROOT/portable-receipt-$format"
+  runtime="$WAVE/runtime/$format"
+  outer="$WAVE/outer/$format"
+  future_lock="$outer/locks/$format.json"
+  corpus="$READY_ROOT/corpora/$format/manifest.json"
+
+  "$PYTHON" -m evaluate.materialize_multiformat_portable_receipt_wrapper \
+    --output "$wrapper" \
+    --future-lock "$future_lock" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --private-key "$REFERENCE_PRIVATE" \
+    --python-executable "$PYTHON" \
+    --project-root "$PROJECT_ROOT" \
+    --module evaluate.multiformat_portable_receipt_executor
+
+  "$PYTHON" -m evaluate.materialize_multiformat_candidate_runtime_locks_cli \
+    --project-root "$PROJECT_ROOT" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --output-dir "$runtime" \
+    --converter "$CONVERTER" \
+    --soffice "$SOFFICE" \
+    --pdftohtml "$PDFTOHTML" \
+    --pdfinfo "$PDFINFO" \
+    --receipt-signer "$wrapper" \
+    --chromium "$CHROMIUM" \
+    --font-bundle "$FONT_BUNDLE" \
+    --sandbox-public-key "$CANDIDATE_PUBLIC" \
+    --openssl "$OPENSSL" \
+    --verifier-id "candidate-sandbox-$format-v1"
+
+  "$PYTHON" -m evaluate.materialize_multiformat_portable_locks_cli \
+    --project-root "$PROJECT_ROOT" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --output-dir "$outer" \
+    --contract "$CONTRACT" \
+    --evaluator "$WAVE/evidence/evaluator-manifest.json" \
+    --libreoffice "$SOFFICE" \
+    --pdftoppm "$PDFTOPPM" \
+    --pdftotext "$PDFTOTEXT" \
+    --pdfinfo "$PDFINFO" \
+    --canonicalizer "$CANONICALIZER" \
+    --font-bundle "$FONT_BUNDLE" \
+    --configuration "$CONFIGURATION" \
+    --chromium "$CHROMIUM" \
+    --executor "$wrapper" \
+    --sandbox-exec "$SANDBOX_EXEC" \
+    --browser-lock "$runtime/browser-lock.json" \
+    --candidate-runtime-lock "$runtime/candidate-runtime-lock.json" \
+    --converter "$CONVERTER" \
+    --pdftohtml "$PDFTOHTML" \
+    --openssl "$OPENSSL" \
+    --receipt-signer "$wrapper" \
+    --candidate-sandbox-public-key "$CANDIDATE_PUBLIC" \
+    --private-key "$REFERENCE_PRIVATE" \
+    --corpus-manifest "$corpus"
+done
+```
+
+Sign one final-lock-scoped candidate attestation and capture both sides of each
+comparison. The reference capture uses the outer receipt key. Candidate capture
+uses the distinct candidate key only through the signed attestation and uses
+the copied, lock-bound runtime bytes for execution. Each candidate command
+performs two clean converter/browser runs internally and publishes `READY` only
+when HTML, every inventory, and every PNG are byte-identical.
+
+```bash
+for format in $FORMATS; do
+  outer="$WAVE/outer/$format"
+  lock="$outer/locks/$format.json"
+  corpus="$READY_ROOT/corpora/$format/manifest.json"
+  bound_contract="$outer/artifacts/contract"
+  bound_evaluator="$outer/artifacts/evaluator"
+  bound_converter="$outer/artifacts/converter"
+  bound_soffice="$outer/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
+  bound_pdftohtml="$outer/artifacts/pdftohtml"
+  bound_pdfinfo="$outer/artifacts/poppler-metadata"
+  bound_chromium="$outer/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+  bound_openssl="$outer/artifacts/openssl"
+  bound_receipt_signer="$outer/artifacts/receipt-signer"
+  candidate_nonce="$("$OPENSSL" rand -hex 32)"
+  reference_nonce="$("$OPENSSL" rand -hex 32)"
+  attestation="$WAVE/attestations/$format.json"
+
+  "$PYTHON" -m evaluate.sign_multiformat_candidate_attestation \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --output "$attestation" \
+    --private-key "$CANDIDATE_PRIVATE" \
+    --outer-lock "$lock" \
+    --contract "$bound_contract" \
+    --corpus "$corpus" \
+    --evaluator "$bound_evaluator" \
+    --run-nonce "$candidate_nonce"
+
+  "$PYTHON" -m evaluate.capture_multiformat_portable_references \
+    --contract "$bound_contract" \
+    --corpus-manifest "$corpus" \
+    --portable-lock "$lock" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --output-dir "$WAVE/reference/$format" \
+    --private-key "$REFERENCE_PRIVATE" \
+    --run-nonce "$reference_nonce" \
+    --batch-id "portable-$format-$REVISION"
+
+  "$PYTHON" -m evaluate.capture_multiformat_candidates \
+    --project-root "$PROJECT_ROOT" \
+    --contract "$bound_contract" \
+    --corpus-manifest "$corpus" \
+    --evaluator-manifest "$bound_evaluator" \
+    --oracle-lock "$lock" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --output-dir "$WAVE/candidate/$format" \
+    --converter "$bound_converter" \
+    --soffice "$bound_soffice" \
+    --pdftohtml "$bound_pdftohtml" \
+    --pdfinfo "$bound_pdfinfo" \
+    --chromium "$bound_chromium" \
+    --font-bundle "$FONT_BUNDLE" \
+    --sandbox-attestation "$attestation" \
+    --sandbox-public-key "$CANDIDATE_PUBLIC" \
+    --openssl "$bound_openssl" \
+    --receipt-signer "$bound_receipt_signer" \
+    --timeout-seconds 120
+done
 ```
 
 Browser loading uses one intercepted synthetic HTTP document and rejects every
-other resource request. The sandbox attestation must carry a lock-bound Ed25519
-signature from the trusted host verifier; self-authored JSON is rejected.
-The signature carries a per-run nonce, and the evidence package hardlinks or
-copies every executed converter/native/Chromium/OpenSSL binary so the product
-gate re-hashes the exact bytes instead of trusting reported versions.
-After both runs, the lock-bound host signer emits a second signed receipt that
-binds the nonce, runtime identity, execution log, determinism manifest, and the
-canonical root of every HTML, inventory, PNG, runtime binary, and package file.
-Scripts, active objects, service workers, popups,
-downloads, animations, unstable geometry, broken images, unpinned runtime
-bytes, and noncanonical presentation dimensions fail closed. Paged native HTML
-is generated at 144 DPI; 16:9 PPT/PPTX evidence is exactly 960x540. Spreadsheet
-Chromium is launched with a generated fontconfig that contains only the
-hash-locked font bundle, and the signed host attestation binds the effective
-font-environment digest. Cells are emitted only when the DOM carries independently derived worksheet
-and coordinate metadata—coordinates are never invented from visual position.
+other resource request. The signed attestation proves disabled network access,
+denied oracle access, the exact outer-lock scope, and the locked font
+environment. Self-authored JSON is rejected. After both candidate runs, the
+outer signer emits a separate receipt binding the nonce, runtime identity,
+execution log, determinism manifest, and canonical root of every HTML,
+inventory, PNG, runtime binary, and package file.
 
-Metric evidence contains bound candidate/reference PNG and inventory paths,
-never caller-supplied scores. The evaluator re-hashes and parses every artifact,
-checks exact corpus unit/file/case coverage, computes the frozen visual,
-content, and layout formulas, applies file-then-format blind aggregation, and
-retains six decimals with `ROUND_HALF_EVEN`. It also recomputes security,
-per-file determinism, reviewer coverage, quality, and performance hard gates.
+Scripts, active objects, service workers, popups, downloads, animations,
+unstable geometry, broken images, unpinned runtime bytes, and noncanonical
+presentation dimensions fail closed. Paged native HTML is generated at 144
+DPI; 16:9 PPT/PPTX evidence is exactly 960x540. Spreadsheet Chromium uses only
+the hash-locked font bundle. Cell identities come from independently derived
+worksheet and coordinate metadata, never visual position.
 
-After both capture manifests and all raw artifacts are present, assemble the
-only gate-accepted report:
+Create one production command plan and blank two-reviewer packet per format.
+Every command-plan value is a JSON argv array whose first item resolves to a
+real absolute executable. Security placeholders are expanded separately for
+all ten locked cases.
 
 ```bash
-uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
-  python -m evaluate.assemble_multiformat_report \
-  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
-  --evaluator-manifest evaluate/multiformat/wave/evidence/evaluator-manifest.json \
-  --corpus-manifest evaluate/multiformat/wave/corpora/docx/manifest.json \
-  --metrics-evidence evaluate/multiformat/wave/metrics/docx.json \
-  --evidence-root evaluate/multiformat/wave \
-  --output evaluate/multiformat/wave/reports/docx.json
+CARGO="$(rustup which cargo)"
+RUST_BIN="$(dirname "$(rustup which rustc)")"
+TOOL_PATH="$RUST_BIN:/opt/homebrew/bin:/usr/bin:/bin"
+
+for format in $FORMATS; do
+  outer="$WAVE/outer/$format"
+  lock="$outer/locks/$format.json"
+  corpus="$READY_ROOT/corpora/$format/manifest.json"
+  bound_contract="$outer/artifacts/contract"
+  bound_evaluator="$outer/artifacts/evaluator"
+  bound_converter="$outer/artifacts/converter"
+  bound_soffice="$outer/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
+  bound_pdftohtml="$outer/artifacts/pdftohtml"
+  bound_pdfinfo="$outer/artifacts/poppler-metadata"
+  bound_chromium="$outer/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+  bound_openssl="$outer/artifacts/openssl"
+  bound_receipt_signer="$outer/artifacts/receipt-signer"
+  attestation="$WAVE/attestations/$format.json"
+
+  "$PYTHON" -m evaluate.materialize_multiformat_command_plan \
+    --output "$WAVE/commands/$format.json" \
+    --security-argv "[\"$PYTHON\",\"-m\",\"evaluate.run_multiformat_security_case\",\"--project-root\",\"$PROJECT_ROOT\",\"--contract\",\"$bound_contract\",\"--corpus-manifest\",\"$corpus\",\"--evaluator-manifest\",\"$bound_evaluator\",\"--oracle-lock\",\"$lock\",\"--evidence-root\",\"$EVIDENCE_ROOT\",\"--output-dir\",\"$WAVE/security-cases/$format/{source_id}\",\"--source-id\",\"{source_id}\",\"--source\",\"{source}\",\"--converter\",\"$bound_converter\",\"--soffice\",\"$bound_soffice\",\"--pdftohtml\",\"$bound_pdftohtml\",\"--pdfinfo\",\"$bound_pdfinfo\",\"--chromium\",\"$bound_chromium\",\"--font-bundle\",\"$FONT_BUNDLE\",\"--sandbox-attestation\",\"$attestation\",\"--sandbox-public-key\",\"$CANDIDATE_PUBLIC\",\"--openssl\",\"$bound_openssl\",\"--receipt-signer\",\"$bound_receipt_signer\",\"--timeout-seconds\",\"120\"]" \
+    --tests-argv "[\"/usr/bin/env\",\"PATH=$TOOL_PATH\",\"$CARGO\",\"test\",\"-p\",\"document2html-core\",\"-p\",\"document2html-native\"]" \
+    --builds-argv "[\"/usr/bin/env\",\"PATH=$TOOL_PATH\",\"$CARGO\",\"build\",\"--release\",\"-p\",\"pptx2html-cli\",\"--bin\",\"document2html\"]" \
+    --diagnostics-argv "[\"/usr/bin/env\",\"PATH=$TOOL_PATH\",\"$CARGO\",\"clippy\",\"-p\",\"document2html-core\",\"-p\",\"document2html-native\",\"--all-targets\",\"--\",\"-D\",\"warnings\"]" \
+    --contract-checks-argv "[\"$PYTHON\",\"-m\",\"evaluate.check_exactness_contract\",\"--repo-root\",\"$PROJECT_ROOT\"]" \
+    --performance-argv "[\"/usr/bin/env\",\"PATH=$TOOL_PATH\",\"$CARGO\",\"test\",\"--release\",\"-p\",\"document2html-native\"]"
+
+  "$PYTHON" -m evaluate.materialize_multiformat_review_packet \
+    --project-root "$PROJECT_ROOT" \
+    --contract "$bound_contract" \
+    --corpus-manifest "$corpus" \
+    --evaluator-manifest "$bound_evaluator" \
+    --oracle-lock "$lock" \
+    --oracle-capture "$WAVE/reference/$format/capture.json" \
+    --candidate-capture "$WAVE/candidate/$format/manifest.json" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --output-dir "$WAVE/review/$format" \
+    --reviewer-id-1 "visual-reviewer-$format" \
+    --reviewer-role-1 visual-fidelity \
+    --reviewer-id-2 "semantic-security-reviewer-$format" \
+    --reviewer-role-2 semantic-security
+done
 ```
 
-The evaluator manifest binds exact NumPy, SciPy, scikit-image, Pillow, and
-Playwright versions, Python 3.11, its Unicode database, and every scoring, schema,
-aggregation, capture, test, and gate source file. A
-manually edited aggregate report, stale dependency, missing unit, pooled blind
-score, changed raw artifact, incomplete reviewer, or unequal clean run fails.
+Give `review-packet.json` and exactly one decision template to each reviewer.
+The reviewers must work independently. Each completed decision preserves the
+exact pair set, changes `independent` to `true`, changes every `decision` to
+`PASS` or `FAIL`, and changes every `critical_defect` to `true` or `false`.
+Do not auto-fill these files from scores. Validate both files before metrics:
+
+```bash
+for format in $FORMATS; do
+  packet="$WAVE/review/$format/review-packet.json"
+  "$PYTHON" -m evaluate.validate_multiformat_review_decision \
+    --review-packet "$packet" \
+    --decision "$WAVE/review/$format/decision-visual-reviewer-$format.json"
+  "$PYTHON" -m evaluate.validate_multiformat_review_decision \
+    --review-packet "$packet" \
+    --decision "$WAVE/review/$format/decision-semantic-security-reviewer-$format.json"
+done
+```
+
+Metric evidence contains bound candidate/reference PNG and inventory paths,
+never caller-supplied scores. The assembler re-hashes and parses every artifact,
+checks exact corpus unit/file/case coverage, computes the frozen visual,
+content, and layout formulas, applies file-then-format blind aggregation, and
+retains six decimals with `ROUND_HALF_EVEN`. It also derives security,
+per-file determinism, reviewer coverage, quality, and performance hard gates
+from real subprocess results.
+
+```bash
+for format in $FORMATS; do
+  outer="$WAVE/outer/$format"
+  lock="$outer/locks/$format.json"
+  corpus="$READY_ROOT/corpora/$format/manifest.json"
+  bound_contract="$outer/artifacts/contract"
+  bound_evaluator="$outer/artifacts/evaluator"
+
+  "$PYTHON" -m evaluate.assemble_multiformat_metrics \
+    --project-root "$PROJECT_ROOT" \
+    --contract "$bound_contract" \
+    --corpus-manifest "$corpus" \
+    --evaluator-manifest "$bound_evaluator" \
+    --oracle-lock "$lock" \
+    --oracle-capture "$WAVE/reference/$format/capture.json" \
+    --candidate-capture "$WAVE/candidate/$format/manifest.json" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --commands "$WAVE/commands/$format.json" \
+    --review-decisions "$WAVE/review/$format/decision-visual-reviewer-$format.json" \
+    --review-decisions "$WAVE/review/$format/decision-semantic-security-reviewer-$format.json" \
+    --execution-output-dir "$WAVE/execution/$format" \
+    --output "$WAVE/final-metrics/$format.json" \
+    --timeout-seconds 1800
+
+  "$PYTHON" -m evaluate.assemble_multiformat_report \
+    --project-root "$PROJECT_ROOT" \
+    --contract "$bound_contract" \
+    --oracle-lock "$lock" \
+    --evaluator-manifest "$bound_evaluator" \
+    --corpus-manifest "$corpus" \
+    --metrics-evidence "$WAVE/final-metrics/$format.json" \
+    --evidence-root "$EVIDENCE_ROOT" \
+    --output "$WAVE/final-reports/$format.json"
+done
+
+"$PYTHON" -m evaluate.multiformat_gate \
+  --contract "$CONTRACT" \
+  --reports-dir "$WAVE/final-reports" \
+  --evidence-root "$EVIDENCE_ROOT" \
+  --oracle-lock "pptx=$WAVE/outer/pptx/locks/pptx.json" \
+  --oracle-lock "docx=$WAVE/outer/docx/locks/docx.json" \
+  --oracle-lock "doc=$WAVE/outer/doc/locks/doc.json" \
+  --oracle-lock "xlsx=$WAVE/outer/xlsx/locks/xlsx.json" \
+  --oracle-lock "xls=$WAVE/outer/xls/locks/xls.json" \
+  --oracle-lock "ppt=$WAVE/outer/ppt/locks/ppt.json" \
+  --oracle-lock "pdf=$WAVE/outer/pdf/locks/pdf.json"
+```
+
+The evaluator manifest binds exact NumPy, SciPy, scikit-image, Pillow,
+Playwright, Python 3.11, Unicode data, and every scoring, schema, aggregation,
+capture, producer, test, and gate source file. A manually edited aggregate
+report, stale dependency, missing unit, pooled blind score, changed raw
+artifact, incomplete reviewer, unequal clean run, or lock copied across
+formats fails closed.
 
 For the optional `microsoft-office` profile, a network-disabled Windows
 Office host can populate the positive native oracle batch with
