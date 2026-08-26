@@ -20,21 +20,8 @@ from evaluate.multiformat_portable_package_inventory import (
     bind_package_executable_with_inventory,
     validate_package_inventory,
 )
-from evaluate.multiformat_portable_reference_artifacts import load_raw_private_key
-from evaluate.multiformat_revision import current_project_revision
-from evaluate.multiformat_schema import sha256_file
-from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
-
-PROJECT = Path(__file__).resolve().parents[2]
-CARGO = Path(
-    subprocess.run(
-        ["rustup", "which", "cargo"], check=True, capture_output=True, text=True
-    ).stdout.strip()
-)
-RUSTC = Path(
-    subprocess.run(
-        ["rustup", "which", "rustc"], check=True, capture_output=True, text=True
-    ).stdout.strip()
+from evaluate.tests.multiformat_portable_lock_materializer_fixture import (
+    portable_lock_inputs,
 )
 
 
@@ -269,125 +256,7 @@ class PortableLockMaterializerTests(unittest.TestCase):
         self.assertEqual(bad_exit.exception.code, 2)
 
     def _fixture(self, root: Path) -> PortableLockInputs:
-        root.mkdir(parents=True, exist_ok=True)
-        contract, corpus = ready_fixture(root)
-        evaluator = root / "evaluator.json"
-        evaluator.write_text("{}")
-        tools = root / "tools"
-        tools.mkdir()
-        names = [
-            "soffice",
-            "pdftoppm",
-            "pdftotext",
-            "pdfinfo",
-            "chromium",
-            "converter",
-            "pdftohtml",
-            "openssl",
-            "receipt-signer",
-        ]
-        paths = {}
-        for name in names:
-            path = tools / name
-            path.write_text(f"#!/bin/sh\necho '{name} 1.0'\n")
-            path.chmod(0o755)
-            paths[name] = path
-        plain = {}
-        for name in [
-            "canonicalizer",
-            "fonts",
-            "configuration",
-            "executor",
-            "candidate-public-key",
-        ]:
-            path = tools / name
-            path.write_bytes(name.encode())
-            plain[name] = path
-        browser_lock = root / "browser-lock.json"
-        browser_lock.write_text(
-            json.dumps(
-                {
-                    "chromium": "chromium 1.0",
-                    "executable_sha256": sha256_file(paths["chromium"]),
-                    "playwright": "1.62.0",
-                    "os": "Darwin",
-                    "architecture": "arm64",
-                    "font_environment_sha256": "a" * 64,
-                    "viewport_width": 1920,
-                    "viewport_height": 2400,
-                    "device_scale_factor": 1,
-                    "locale": "en-US",
-                    "timezone": "UTC",
-                    "color_profile": "srgb",
-                    "reduced_motion": "reduce",
-                    "animations": "disabled",
-                },
-                sort_keys=True,
-            )
-        )
-        candidate_lock = root / "candidate-runtime-lock.json"
-        candidate_lock.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "status": "locked",
-                    "browser": json.loads(browser_lock.read_text()),
-                    "candidate_runtime": {
-                        "build_revision": current_project_revision(PROJECT),
-                        "converter_sha256": sha256_file(paths["converter"]),
-                        "converter_version": "converter 1.0",
-                        "soffice_sha256": sha256_file(paths["soffice"]),
-                        "soffice_version": "soffice 1.0",
-                        "pdftohtml_sha256": sha256_file(paths["pdftohtml"]),
-                        "pdftohtml_version": "pdftohtml 1.0",
-                        "pdfinfo_sha256": sha256_file(paths["pdfinfo"]),
-                        "pdfinfo_version": "pdfinfo 1.0",
-                        "receipt_signer_sha256": sha256_file(paths["receipt-signer"]),
-                        "receipt_signer_version": "receipt-signer 1.0",
-                    },
-                    "sandbox_verifier": {
-                        "algorithm": "ed25519",
-                        "verifier_id": "candidate-sandbox-v1",
-                        "public_key_sha256": sha256_file(plain["candidate-public-key"]),
-                        "openssl_sha256": sha256_file(paths["openssl"]),
-                    },
-                    "font_bundle_sha256": sha256_file(plain["fonts"]),
-                },
-                sort_keys=True,
-            )
-        )
-        key = root.parent / f"{root.name}.private.raw"
-        key.write_bytes(b"1" * 32)
-        key.chmod(0o600)
-        load_raw_private_key(key)
-        return PortableLockInputs(
-            PROJECT,
-            root,
-            root / "out",
-            contract,
-            evaluator,
-            (corpus,),
-            CARGO,
-            RUSTC,
-            paths["soffice"],
-            paths["pdftoppm"],
-            paths["pdftotext"],
-            paths["pdfinfo"],
-            plain["canonicalizer"],
-            plain["fonts"],
-            plain["configuration"],
-            paths["chromium"],
-            plain["executor"],
-            Path("/usr/bin/sandbox-exec"),
-            browser_lock,
-            candidate_lock,
-            paths["converter"],
-            paths["pdftohtml"],
-            paths["openssl"],
-            paths["receipt-signer"],
-            plain["candidate-public-key"],
-            key,
-        )
+        return portable_lock_inputs(root)
 
 
 if __name__ == "__main__":

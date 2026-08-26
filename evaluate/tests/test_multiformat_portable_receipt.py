@@ -17,6 +17,7 @@ from evaluate.multiformat_portable_receipt import (
     verify_portable_receipt,
 )
 from evaluate.multiformat_schema import JsonValue
+from evaluate.tests.multiformat_json_mutation_fixture import set_json_path
 from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
 
 
@@ -198,7 +199,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             ("runtime.evaluator_sha256", "0" * 64),
             ("runtime.project_revision", "0" * 40),
             ("runtime.reference_profile", "microsoft-office"),
-            ("runtime.platform.os", "Linux"),
+            ("runtime.platform.os", "Darwin"),
             ("runtime.canonicalizer.sha256", "0" * 64),
             ("artifacts.0.role", "other"),
         ):
@@ -206,7 +207,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                 fixture = ReceiptFixture(Path(temp_dir))
                 fixture.sign()
                 value = fixture.read_receipt()
-                _set(value, path, replacement)
+                set_json_path(value, path, replacement)
                 fixture.receipt.write_bytes(canonicalize(value))
                 with self.assertRaises(PortableReceiptError):
                     fixture.verify()
@@ -259,28 +260,3 @@ def _objects(value: dict[str, JsonValue], field: str) -> list[JsonValue]:
         if not isinstance(item, dict):
             raise TypeError(field)
     return result
-
-
-def _set(value: dict[str, JsonValue], path: str, replacement: JsonValue) -> None:
-    current: JsonValue = value
-    parts = path.split(".")
-    for part in parts[:-1]:
-        current = _child(current, part)
-    _assign(current, parts[-1], replacement)
-
-
-def _child(current: JsonValue, part: str) -> JsonValue:
-    if isinstance(current, list):
-        return current[int(part)]
-    if isinstance(current, dict):
-        return current[part]
-    raise TypeError(part)
-
-
-def _assign(current: JsonValue, part: str, replacement: JsonValue) -> None:
-    if isinstance(current, list):
-        current[int(part)] = replacement
-    elif isinstance(current, dict):
-        current[part] = replacement
-    else:
-        raise TypeError(part)

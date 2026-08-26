@@ -14,6 +14,7 @@ from evaluate.multiformat_east_asian_fonts import (
 from evaluate.multiformat_east_asian_fonts import (
     validate_lock_binding as validate_east_asian_binding,
 )
+from evaluate import multiformat_portable_native_contract as native_io
 from evaluate.multiformat_evidence_path import EvidencePathError, resolve_evidence_path
 from evaluate.multiformat_portable_outer_sandbox import (
     RuntimeIdentity,
@@ -78,10 +79,11 @@ def validate_reference_lock(
         platform = object_value(lock, "platform")
         system = string_value(platform, "os")
         architecture = string_value(platform, "architecture")
-        if system not in _SUPPORTED_SYSTEMS:
-            raise PortableLockError("portable reference OS is unsupported")
-        if architecture not in _SUPPORTED_ARCHITECTURES:
-            raise PortableLockError("portable reference architecture is unsupported")
+        if (
+            system not in _SUPPORTED_SYSTEMS
+            or architecture not in _SUPPORTED_ARCHITECTURES
+        ):
+            raise PortableLockError("portable reference platform is unsupported")
 
         load_locked_rust_toolchain(path)
         tools = object_value(lock, "tools")
@@ -118,7 +120,9 @@ def validate_reference_lock(
         chromium_path = _artifact_path(chromium, evidence_root)
         validate_package_binding(chromium, chromium_path, evidence_root, _artifact_path)
         _artifact_path(object_value(browser, "lock"), evidence_root)
-        _artifact_path(object_value(lock, "candidate_runtime_lock"), evidence_root)
+        native_io.validate_native_package_runtime_binding(
+            lock, evidence_root, _artifact_path
+        )
 
         candidate = object_value(lock, "candidate_sandbox")
         openssl_binding = object_value(candidate, "openssl")
@@ -187,7 +191,6 @@ def validate_reference_lock(
 
 
 def portable_lock_template() -> JsonObject:
-    """Return the incomplete schema-2 portable lock scaffold."""
     binding: JsonObject = {"path": "", "sha256": ""}
     versioned: JsonObject = {"version": "", **binding}
     return {
@@ -268,8 +271,6 @@ def _artifact_path(binding: JsonObject, evidence_root: Path) -> Path:
 
 def _revision_value(values: JsonObject, field: str) -> str:
     revision = string_value(values, field)
-    if len(revision) != 40 or any(
-        character not in "0123456789abcdef" for character in revision
-    ):
+    if len(revision) != 40 or revision.strip("0123456789abcdef"):
         raise PortableLockError("portable project revision is malformed")
     return revision

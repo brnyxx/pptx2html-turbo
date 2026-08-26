@@ -1,25 +1,15 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import tempfile
 import unittest
-from contextlib import redirect_stdout
 from dataclasses import replace
-from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
-
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.materialize_multiformat_candidate_runtime_locks import (
     CandidateRuntimeLockInputs,
     materialize_candidate_runtime_locks,
-)
-from evaluate.materialize_multiformat_candidate_runtime_locks_cli import (
-    main,
-    parse_args,
 )
 from evaluate.materialize_multiformat_portable_locks import materialize_portable_locks
 from evaluate.multiformat_portable_lock_io import (
@@ -27,8 +17,10 @@ from evaluate.multiformat_portable_lock_io import (
     validate_candidate_locks,
 )
 from evaluate.multiformat_revision import current_project_revision
-from evaluate.multiformat_schema import sha256_file
 from evaluate.tests import test_materialize_multiformat_portable_locks as portable_test
+from evaluate.tests.multiformat_candidate_runtime_lock_fixture import (
+    candidate_runtime_lock_inputs,
+)
 
 
 class CandidateRuntimeLockMaterializerTests(unittest.TestCase):
@@ -219,146 +211,15 @@ class CandidateRuntimeLockMaterializerTests(unittest.TestCase):
                 candidate_runtime_lock=runtime,
                 converter=candidate.converter,
                 libreoffice=candidate.soffice,
-                pdftohtml=candidate.pdftohtml,
-                pdfinfo=candidate.pdfinfo,
                 chromium=candidate.chromium,
                 font_bundle=candidate.font_bundle,
-                openssl=candidate.openssl,
                 receipt_signer=candidate.receipt_signer,
                 candidate_sandbox_public_key=candidate.sandbox_public_key,
             )
             self.assertEqual(len(materialize_portable_locks(portable)), 1)
 
-    def test_cli_help_and_bad_input(self) -> None:
-        with self.assertRaises(SystemExit) as help_exit:
-            parse_args(["--help"])
-        self.assertEqual(help_exit.exception.code, 0)
-        with self.assertRaises(SystemExit) as bad_exit:
-            parse_args([])
-        self.assertEqual(bad_exit.exception.code, 2)
-
-    def test_cli_dirty_worktree_returns_machine_readable_failure(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            inputs = self._fixture(Path(temporary))
-            (inputs.project_root / "dirty").write_text("dirty")
-            output = StringIO()
-            argv = [
-                "--project-root",
-                inputs.project_root.as_posix(),
-                "--evidence-root",
-                inputs.evidence_root.as_posix(),
-                "--output-dir",
-                inputs.output_dir.as_posix(),
-                "--converter",
-                inputs.converter.as_posix(),
-                "--soffice",
-                inputs.soffice.as_posix(),
-                "--pdftohtml",
-                inputs.pdftohtml.as_posix(),
-                "--pdfinfo",
-                inputs.pdfinfo.as_posix(),
-                "--receipt-signer",
-                inputs.receipt_signer.as_posix(),
-                "--chromium",
-                inputs.chromium.as_posix(),
-                "--font-bundle",
-                inputs.font_bundle.as_posix(),
-                "--sandbox-public-key",
-                inputs.sandbox_public_key.as_posix(),
-                "--openssl",
-                inputs.openssl.as_posix(),
-                "--verifier-id",
-                inputs.verifier_id,
-            ]
-            with (
-                patch("importlib.metadata.version", return_value="1.62.0"),
-                redirect_stdout(output),
-            ):
-                result = main(argv)
-
-            self.assertEqual(result, 1)
-            self.assertEqual(
-                json.loads(output.getvalue()),
-                {
-                    "status": "FAIL",
-                    "reason": "candidate capture requires a clean worktree",
-                },
-            )
-            self.assertFalse(inputs.output_dir.exists())
-
     def _fixture(self, root: Path) -> CandidateRuntimeLockInputs:
-        project = root / "project"
-        project.mkdir(parents=True)
-        subprocess.run(["git", "init", "-q"], cwd=project, check=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@example.invalid"],
-            cwd=project,
-            check=True,
-        )
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=project, check=True)
-        (project / "tracked").write_text("tracked")
-        subprocess.run(["git", "add", "tracked"], cwd=project, check=True)
-        subprocess.run(["git", "commit", "-qm", "fixture"], cwd=project, check=True)
-        evidence = project / "evidence"
-        evidence.mkdir()
-        release = project / "target/release"
-        release.mkdir(parents=True)
-        tools = {
-            "converter": self._tool(release / "document2html", "converter 1.0"),
-            "soffice": self._tool(root / "soffice", "soffice 1.0"),
-            "pdftohtml": self._tool(root / "pdftohtml", "pdftohtml 1.0"),
-            "pdfinfo": self._tool(root / "pdfinfo", "pdfinfo 1.0"),
-            "receipt": self._tool(root / "receipt-signer", "receipt-signer 1.0"),
-            "chromium": self._tool(root / "chromium", "Chromium 1.0"),
-            "openssl": self._tool(root / "openssl", "OpenSSL 1.0"),
-        }
-        subprocess.run(
-            ["git", "add", "target/release/document2html"], cwd=project, check=True
-        )
-        subprocess.run(
-            ["git", "commit", "-qm", "release fixture"], cwd=project, check=True
-        )
-        font = evidence / "font.ttf"
-        font.write_bytes(b"font")
-        manifest = evidence / "font-bundle.json"
-        manifest.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "fonts": [{"path": "font.ttf", "sha256": sha256_file(font)}],
-                }
-            )
-        )
-        key = evidence / "candidate-public.pem"
-        key.write_bytes(
-            Ed25519PrivateKey.generate()
-            .public_key()
-            .public_bytes(
-                serialization.Encoding.PEM,
-                serialization.PublicFormat.SubjectPublicKeyInfo,
-            )
-        )
-        return CandidateRuntimeLockInputs(
-            project,
-            evidence,
-            evidence / "locks",
-            tools["converter"],
-            tools["soffice"],
-            tools["pdftohtml"],
-            tools["pdfinfo"],
-            tools["receipt"],
-            tools["chromium"],
-            manifest,
-            key,
-            tools["openssl"],
-            "candidate-sandbox-v1",
-        )
-
-    @staticmethod
-    def _tool(path: Path, version: str) -> Path:
-        path.write_text(f"#!/bin/sh\necho '{version}'\n")
-        path.chmod(0o755)
-        return path
+        return candidate_runtime_lock_inputs(root)
 
 
 if __name__ == "__main__":

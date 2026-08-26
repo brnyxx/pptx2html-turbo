@@ -8,7 +8,6 @@ from typing import cast
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.jcs import canonicalize
-from evaluate.multiformat_conformance_pdf import pdf_canonicalizer_identity
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptInput,
     PortableReceiptVerification,
@@ -22,16 +21,10 @@ from evaluate.multiformat_portable_receipt_nonce import (
     portable_receipt_nonce,
 )
 from evaluate.multiformat_portable_receipt_trust import load_portable_receipt_trust
-from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, sha256_file
-from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
-    rust_toolchain_lock_value,
+from evaluate.tests.multiformat_outer_lock_fixture import (
+    write_portable_receipt_lock,
 )
-from evaluate.tests.multiformat_east_asian_font_fixture import (
-    east_asian_font_binding,
-)
-
-_ROUTING = Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
 
 
 class ReceiptFixtureError(TypeError):
@@ -137,130 +130,11 @@ class ReceiptFixture:
         self.receipt.write_bytes(canonicalize(value))
 
     def _write_lock(self) -> Path:
-        raw_key = self.private_key.public_key().public_bytes_raw()
-        artifacts = {
-            name: self._artifact(f"locked/{name}", content)
-            for name, content in {
-                "soffice": b"soffice",
-                "pdftoppm": b"pdftoppm",
-                "pdftotext": b"pdftotext",
-                "pdfinfo": b"pdfinfo",
-                "canonicalizer": b"canonicalizer",
-                "fonts": b"fonts",
-                "configuration": b"configuration",
-                "chromium": b"chromium",
-                "candidate-runtime-lock": b"candidate-runtime-lock",
-                "browser-lock": b"browser-lock",
-                "public-key": raw_key,
-                "executor": b"executor",
-                "contract": b"contract",
-                "evaluator": b"evaluator",
-                "candidate-public-key": b"candidate-public-key",
-                "openssl": b"openssl",
-                "receipt-signer": b"receipt-signer",
-                "sandbox-exec": b"sandbox-exec",
-                "sandbox-profile": b"sandbox-profile",
-                "sandbox-host": b"sandbox-host",
-            }.items()
-        }
-        source = self._artifact("corpus/source.docx", b"source")
-        corpus = self.root / "corpus/manifest.json"
-        corpus.write_text(
-            json.dumps(
-                {
-                    "sources": [
-                        {
-                            "path": source.name,
-                            "sha256": sha256_file(source),
-                        }
-                    ]
-                },
-                sort_keys=True,
-            ),
-            encoding="utf-8",
+        return write_portable_receipt_lock(
+            self.root,
+            self.private_key.public_key().public_bytes_raw(),
+            self.candidate_runtime_lock,
         )
-        binding = {name: self._binding(path) for name, path in artifacts.items()}
-        attestation = self.root / "locked/attestation.json"
-        attestation.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "os": "Darwin",
-                    "architecture": "arm64",
-                    "locale": "en-US",
-                    "timezone": "UTC",
-                    "rendering_dpi": 144,
-                    "network_isolation": True,
-                    "sandbox_executable": binding["sandbox-exec"],
-                    "sandbox_host_artifact": binding["sandbox-host"],
-                    "sandbox_profile": binding["sandbox-profile"],
-                },
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
-        candidate_runtime = self.candidate_runtime_lock
-        if candidate_runtime is not None:
-            binding["candidate-runtime-lock"] = self._binding(candidate_runtime)
-        lock: dict[str, JsonValue] = {
-            "schema_version": 2,
-            "status": "locked",
-            "reference_profile": "libreoffice-poppler",
-            "platform": {"os": "Darwin", "architecture": "arm64"},
-            "rust_toolchain": rust_toolchain_lock_value(),
-            "tools": {
-                "libreoffice": {"version": "test", **binding["soffice"]},
-                "poppler_render": {"version": "test", **binding["pdftoppm"]},
-                "poppler_text": {"version": "test", **binding["pdftotext"]},
-                "poppler_metadata": {"version": "test", **binding["pdfinfo"]},
-            },
-            "routing_table_sha256": load_reference_routing(_ROUTING).sha256,
-            "canonicalizer": {
-                "version": pdf_canonicalizer_identity().version,
-                **binding["canonicalizer"],
-            },
-            "font_bundle": {"version": "test", **binding["fonts"]},
-            "east_asian_font": east_asian_font_binding(),
-            "configuration": {"version": "test", **binding["configuration"]},
-            "browser": {
-                "chromium": {"version": "test", **binding["chromium"]},
-                "lock": binding["browser-lock"],
-            },
-            "candidate_runtime_lock": binding["candidate-runtime-lock"],
-            "candidate_sandbox": {
-                "public_key": binding["candidate-public-key"],
-                "openssl": binding["openssl"],
-                "receipt_signer": binding["receipt-signer"],
-            },
-            "sandbox": {
-                "executable": binding["sandbox-exec"],
-                "profile": binding["sandbox-profile"],
-            },
-            "signer": {
-                "algorithm": "ed25519",
-                "signer_id": "multiformat-portable-reference-v1",
-                "public_key": binding["public-key"],
-                "receipt_schema_version": 2,
-                "executor": binding["executor"],
-            },
-            "scope": {
-                "format": "docx",
-                "contract": binding["contract"],
-                "evaluator": binding["evaluator"],
-                "corpus": self._binding(corpus),
-                "project_revision": "6" * 40,
-            },
-            "runtime": {
-                "locale": "en-US",
-                "timezone": "UTC",
-                "rendering_dpi": 144,
-                "network_isolation": True,
-                "attestation": self._binding(attestation),
-            },
-        }
-        path = self.root / "portable-lock.json"
-        path.write_text(json.dumps(lock, sort_keys=True), encoding="utf-8")
-        return path
 
     def _artifact_record(
         self, *, path: Path | None = None, role: str = "canonical-pdf"

@@ -5,6 +5,9 @@ from pathlib import Path
 
 from evaluate.multiformat_evidence import resolve_evidence_path
 from evaluate.multiformat_portable_lock import validate_reference_lock
+from evaluate.multiformat_portable_native_contract import (
+    has_native_package_inventories,
+)
 from evaluate.multiformat_reference_profile import ReferenceProfile
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -42,6 +45,7 @@ class CandidateRuntimeProfile:
     sandbox_executable: Path | None = None
     sandbox_profile: Path | None = None
     libreoffice: Path | None = None
+    native_packages: bool = False
 
     @property
     def portable(self) -> bool:
@@ -102,6 +106,7 @@ def resolve_candidate_runtime_profile(
                 "candidate portable scope differs: project revision"
             )
         browser = object_value(lock, "browser")
+        # Browser locks are fields-only; the outer digest authenticates their bytes.
         browser_lock = read_strict_object(
             _bound_path(object_value(browser, "lock"), evidence_root)
         )
@@ -145,6 +150,7 @@ def resolve_candidate_runtime_profile(
             _bound_path(object_value(sandbox, "executable"), evidence_root),
             _bound_path(object_value(sandbox, "profile"), evidence_root),
             _bound_path(object_value(tools, "libreoffice"), evidence_root),
+            native_packages=has_native_package_inventories(lock),
         )
     except CandidateRuntimeProfileError:
         raise

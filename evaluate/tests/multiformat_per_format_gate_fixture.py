@@ -57,7 +57,7 @@ class PerFormatGateFixture(MultiFormatGateFixture):
             json.dumps(
                 {
                     "schema_version": 1,
-                    "os": "Darwin",
+                    "os": "Linux",
                     "architecture": "arm64",
                     "locale": "en-US",
                     "timezone": "UTC",
@@ -88,7 +88,7 @@ class PerFormatGateFixture(MultiFormatGateFixture):
                     "schema_version": 2,
                     "status": "locked",
                     "reference_profile": "libreoffice-poppler",
-                    "platform": {"os": "Darwin", "architecture": "arm64"},
+                    "platform": {"os": "Linux", "architecture": "arm64"},
                     "rust_toolchain": rust_toolchain_lock_value(),
                     "tools": {
                         "libreoffice": {"version": "test", **binding["soffice"]},

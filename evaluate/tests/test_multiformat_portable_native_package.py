@@ -20,14 +20,16 @@ from evaluate.multiformat_portable_lock import (
 )
 from evaluate.multiformat_portable_package_inventory import (
     bind_package_executable_with_inventory,
-    package_binding,
 )
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import sha256_file
-from evaluate.tests.test_materialize_multiformat_portable_locks import (
-    PortableLockMaterializerTests,
+from evaluate.tests import (
+    test_materialize_multiformat_portable_locks as materializer_test,
 )
-from evaluate.tests.test_multiformat_portable_lock import MultiFormatPortableLockTests
+from evaluate.tests import test_multiformat_portable_lock as portable_lock_test
+from evaluate.tests import (
+    test_multiformat_portable_native_contract as native_contract_test,
+)
 
 
 class PortableNativePackageTests(unittest.TestCase):
@@ -47,7 +49,7 @@ class PortableNativePackageTests(unittest.TestCase):
         if any("Cellar" not in path.parts for path in resolved.values()):
             self.skipTest("tools are not Homebrew Cellar installations")
         with tempfile.TemporaryDirectory() as temporary:
-            fixture = PortableLockMaterializerTests()._fixture(
+            fixture = materializer_test.PortableLockMaterializerTests()._fixture(
                 Path(temporary) / "evidence"
             )
             candidate = json.loads(fixture.candidate_runtime_lock.read_text())
@@ -179,28 +181,32 @@ class PortableNativePackageTests(unittest.TestCase):
                     check=True,
                     text=True,
                 ).stdout
+                load_commands = subprocess.run(
+                    ["/usr/bin/otool", "-l", path.as_posix()],
+                    capture_output=True,
+                    check=True,
+                    text=True,
+                ).stdout
                 self.assertNotIn("/opt/homebrew/", linked)
+                self.assertNotIn("/opt/homebrew/", load_commands)
 
     def test_outer_validation_rejects_mutated_poppler_package_member(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             # Given: a Poppler binding backed by a declared package inventory.
-            root, lock_path, lock = MultiFormatPortableLockTests._portable_lock(
-                Path(temporary)
+            root, lock_path, lock = (
+                native_contract_test.PortableNativeRuntimeContractTests._native_lock(
+                    Path(temporary)
+                )
             )
-            package = root.parent / f"{root.name}-Poppler.app"
-            executable = package / "Contents/MacOS/pdftoppm"
-            library = package / "Contents/lib/libpoppler.dylib"
-            executable.parent.mkdir(parents=True)
-            library.parent.mkdir(parents=True)
-            executable.write_bytes(b"tool")
-            library.write_bytes(b"library")
-            bound, inventory = bind_package_executable_with_inventory(
-                executable, root, root / "artifacts/poppler-package"
+            tools = portable_lock_test.MultiFormatPortableLockTests._mapping(
+                lock, "tools"
             )
-            binding = package_binding(root, bound, "test", inventory)
-            tools = MultiFormatPortableLockTests._mapping(lock, "tools")
-            tools["poppler_render"] = binding
-            MultiFormatPortableLockTests._write(lock_path, lock)
+            poppler = portable_lock_test.MultiFormatPortableLockTests._mapping(
+                tools, "poppler_render"
+            )
+            bound = root / portable_lock_test.MultiFormatPortableLockTests._string(
+                poppler, "path"
+            )
             validate_reference_lock(lock_path, root)
 
             # When: a non-executable package member is mutated.

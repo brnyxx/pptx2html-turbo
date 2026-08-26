@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import platform
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -150,15 +152,21 @@ class PortableReferenceManifestTests(unittest.TestCase):
                     private_key,
                 )
 
-            capture = write_portable_reference_manifests(
-                published,
-                sources,
-                [batch],
-                fixture.trust,
-                Path("unused-injected-executor"),
-                batch_id="batch-1",
-                execute=execute,
-            )
+            with patch(
+                "evaluate.multiformat_portable_reference_manifest.platform"
+            ) as runtime_platform:
+                runtime_platform.system.return_value = "Linux"
+                runtime_platform.machine.return_value = "arm64"
+                runtime_platform.python_version.return_value = platform.python_version()
+                capture = write_portable_reference_manifests(
+                    published,
+                    sources,
+                    [batch],
+                    fixture.trust,
+                    Path("unused-injected-executor"),
+                    batch_id="batch-1",
+                    execute=execute,
+                )
             identity = verify_portable_receipt(
                 published / "portable-receipt.json",
                 PortableReceiptVerification(fixture.trust),

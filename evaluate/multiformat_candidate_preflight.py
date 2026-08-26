@@ -164,7 +164,7 @@ def preflight_candidate_capture(
             timeout_seconds,
         )
         candidate_runtime = profile.candidate_runtime_lock
-        if "poppler_package_inventory_sha256" in candidate_runtime:
+        if profile.native_packages:
             validate_candidate_native_packages(
                 CandidateNativePackages(runtime, openssl, profile, evidence_root)
             )

@@ -1,12 +1,18 @@
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 from evaluate.multiformat_candidate_preflight import (
     CandidatePreflightError,
     preflight_candidate_capture,
 )
+from evaluate.multiformat_candidate_runtime_profile import (
+    legacy_candidate_runtime_profile,
+)
+from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.tests.multiformat_candidate_pipeline_fixture import (
     PipelineFixture,
     prepare_pipeline_fixture,
@@ -43,6 +49,36 @@ class MultiFormatCandidatePreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 CandidatePreflightError,
                 "not empty",
+            ):
+                self._preflight(fixture)
+
+    def test_native_package_profile_always_runs_package_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Given: a native-package profile whose runtime mapping omits the trigger field.
+            fixture = prepare_pipeline_fixture(Path(temp_dir), PROJECT_ROOT)
+            profile = legacy_candidate_runtime_profile(fixture.oracle_lock)
+            native_profile = replace(profile, native_packages=True)
+
+            # When/Then: profile-driven validation runs despite the missing field.
+            with (
+                mock.patch(
+                    "evaluate.multiformat_candidate_preflight.oracle_lock_ready",
+                    return_value=True,
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_preflight.validate_evaluator_manifest"
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_preflight.resolve_candidate_runtime_profile",
+                    return_value=native_profile,
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_preflight.validate_candidate_native_packages",
+                    side_effect=CandidateCaptureError("native-package-validation-ran"),
+                ),
+                self.assertRaisesRegex(
+                    CandidatePreflightError, "native-package-validation-ran"
+                ),
             ):
                 self._preflight(fixture)
 

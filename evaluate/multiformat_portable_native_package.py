@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import platform
 import shutil
 import stat
 import subprocess
@@ -34,6 +35,7 @@ class _MachO:
     source: Path
     install_name: str | None
     dependencies: tuple[tuple[str, Path], ...]
+    rpaths: tuple[str, ...]
 
 
 def bind_homebrew_package_closure(
@@ -54,6 +56,8 @@ def bind_homebrew_package_closure(
         inventory = inventories.pop()
         validate_package_inventory(inventory, evidence)
         return NativePackageClosure(resolved, inventory)
+    if platform.system() != "Darwin":
+        return None
     prefixes = tuple(_cellar_prefix(source) for source in resolved)
     if all(prefix is None for prefix in prefixes):
         return None
@@ -78,12 +82,14 @@ def bind_homebrew_package_closure(
             (load, f"@loader_path/{os.path.relpath(copied[dependency], target.parent)}")
             for load, dependency in macho.dependencies
         )
-        if changes or macho.install_name is not None:
+        if changes or macho.install_name is not None or macho.rpaths:
             command = [_INSTALL_NAME_TOOL.as_posix()]
             if macho.install_name is not None:
                 command.extend(("-id", f"@loader_path/{target.name}"))
             for old, new in changes:
                 command.extend(("-change", old, new))
+            for rpath in macho.rpaths:
+                command.extend(("-delete_rpath", rpath))
             _run((*command, target.as_posix()), "cannot relocate native package")
             _run(
                 (
@@ -113,13 +119,14 @@ def _collect_closure(sources: tuple[Path, ...]) -> dict[Path, _MachO]:
             continue
         install_name = _install_name(source)
         loads = _load_commands(source)
+        rpaths = _rpaths(source)
         dependencies = tuple(
             (load, resolved)
             for load in loads
             if load != install_name
-            if (resolved := _resolve_dependency(source, load)) is not None
+            if (resolved := _resolve_dependency(source, load, rpaths)) is not None
         )
-        values[source] = _MachO(source, install_name, dependencies)
+        values[source] = _MachO(source, install_name, dependencies, rpaths)
         pending.extend(path for _load, path in dependencies)
     return values
 
@@ -161,7 +168,9 @@ def _rpaths(path: Path) -> tuple[str, ...]:
     )
 
 
-def _resolve_dependency(loader: Path, load: str) -> Path | None:
+def _resolve_dependency(
+    loader: Path, load: str, rpaths: tuple[str, ...]
+) -> Path | None:
     if load.startswith(_SYSTEM_PREFIXES):
         return None
     if load.startswith("/"):
@@ -170,7 +179,7 @@ def _resolve_dependency(loader: Path, load: str) -> Path | None:
         return (loader.parent / load.removeprefix("@loader_path/")).resolve(strict=True)
     if load.startswith("@rpath/"):
         suffix = load.removeprefix("@rpath/")
-        for rpath in _rpaths(loader):
+        for rpath in rpaths:
             if rpath.startswith("@loader_path/"):
                 candidate = loader.parent / rpath.removeprefix("@loader_path/") / suffix
             elif rpath.startswith("/"):
@@ -207,6 +216,14 @@ def _validate_relocated_closure(paths: tuple[Path, ...], package: Path) -> None:
             "portable native signature verification failed",
         )
         install_name = _install_name(path)
+        for rpath in _rpaths(path):
+            if not rpath.startswith("@loader_path/"):
+                raise PortableLockIoError("portable native rpath remains external")
+            resolved_rpath = (
+                path.parent / rpath.removeprefix("@loader_path/")
+            ).resolve(strict=True)
+            if not resolved_rpath.is_relative_to(package.resolve(strict=True)):
+                raise PortableLockIoError("portable native rpath escapes package")
         for load in _load_commands(path):
             if load == install_name:
                 if not load.startswith("@loader_path/"):

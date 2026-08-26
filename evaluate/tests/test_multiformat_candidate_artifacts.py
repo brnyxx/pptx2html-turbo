@@ -9,12 +9,20 @@ from evaluate.multiformat_candidate_artifacts import (
     materialize_runtime_artifacts,
 )
 from evaluate.multiformat_candidate_types import CandidateRuntimeSnapshotError
+from evaluate.multiformat_evaluator_portable_wave_files import PORTABLE_WAVE_TEST_FILES
 from evaluate.multiformat_portable_package_inventory import (
     bind_package_executable_with_inventory,
 )
 
 
 class CandidateRuntimeArtifactTests(unittest.TestCase):
+    def test_candidate_artifact_regressions_are_portable_wave_bound(self) -> None:
+        # Given/When: the portable evaluator closure is inspected.
+        path = "evaluate/tests/test_multiformat_candidate_artifacts.py"
+
+        # Then: candidate runtime snapshot regressions are digest-bound.
+        self.assertIn(path, PORTABLE_WAVE_TEST_FILES)
+
     def test_in_root_runtime_is_a_private_snapshot_when_source_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             evidence_root = Path(temporary)
