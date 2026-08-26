@@ -11,6 +11,7 @@ from evaluate.materialize_multiformat_candidate_runtime_locks import (
     CandidateRuntimeLockInputs,
     materialize_candidate_runtime_locks,
 )
+from evaluate.multiformat_candidate_types import CandidateCaptureError
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -47,7 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except CandidateRuntimeLockIncompleteError as error:
         status, reason, code = "INCOMPLETE", str(error), 2
-    except (OSError, TypeError, ValueError) as error:
+    except (CandidateCaptureError, OSError, TypeError, ValueError) as error:
         status, reason, code = "FAIL", str(error), 1
     else:
         sys.stdout.write(

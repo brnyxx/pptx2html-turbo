@@ -4,7 +4,9 @@ import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from dataclasses import replace
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,7 +17,10 @@ from evaluate.materialize_multiformat_candidate_runtime_locks import (
     CandidateRuntimeLockInputs,
     materialize_candidate_runtime_locks,
 )
-from evaluate.materialize_multiformat_candidate_runtime_locks_cli import parse_args
+from evaluate.materialize_multiformat_candidate_runtime_locks_cli import (
+    main,
+    parse_args,
+)
 from evaluate.materialize_multiformat_portable_locks import materialize_portable_locks
 from evaluate.multiformat_portable_lock_io import (
     validate_candidate_artifacts,
@@ -206,6 +211,55 @@ class CandidateRuntimeLockMaterializerTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as bad_exit:
             parse_args([])
         self.assertEqual(bad_exit.exception.code, 2)
+
+    def test_cli_dirty_worktree_returns_machine_readable_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            inputs = self._fixture(Path(temporary))
+            (inputs.project_root / "dirty").write_text("dirty")
+            output = StringIO()
+            argv = [
+                "--project-root",
+                inputs.project_root.as_posix(),
+                "--evidence-root",
+                inputs.evidence_root.as_posix(),
+                "--output-dir",
+                inputs.output_dir.as_posix(),
+                "--converter",
+                inputs.converter.as_posix(),
+                "--soffice",
+                inputs.soffice.as_posix(),
+                "--pdftohtml",
+                inputs.pdftohtml.as_posix(),
+                "--pdfinfo",
+                inputs.pdfinfo.as_posix(),
+                "--receipt-signer",
+                inputs.receipt_signer.as_posix(),
+                "--chromium",
+                inputs.chromium.as_posix(),
+                "--font-bundle",
+                inputs.font_bundle.as_posix(),
+                "--sandbox-public-key",
+                inputs.sandbox_public_key.as_posix(),
+                "--openssl",
+                inputs.openssl.as_posix(),
+                "--verifier-id",
+                inputs.verifier_id,
+            ]
+            with (
+                patch("importlib.metadata.version", return_value="1.62.0"),
+                redirect_stdout(output),
+            ):
+                result = main(argv)
+
+            self.assertEqual(result, 1)
+            self.assertEqual(
+                json.loads(output.getvalue()),
+                {
+                    "status": "FAIL",
+                    "reason": "candidate capture requires a clean worktree",
+                },
+            )
+            self.assertFalse(inputs.output_dir.exists())
 
     def _fixture(self, root: Path) -> CandidateRuntimeLockInputs:
         project = root / "project"
