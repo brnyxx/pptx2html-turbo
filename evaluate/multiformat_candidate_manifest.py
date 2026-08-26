@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+from collections.abc import Mapping
 from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import (
@@ -22,6 +23,7 @@ from evaluate.multiformat_candidate_types import (
     CandidateCaptureError,
     CandidateManifestPaths,
     CandidateRun,
+    RuntimeArtifactSnapshots,
 )
 from evaluate.multiformat_capture_manifest import validate_capture_manifest
 from evaluate.multiformat_metric_links import load_metric_spec
@@ -46,13 +48,16 @@ def write_candidate_manifests(
     *,
     project_revision: str,
     runtime_tools: dict[str, str],
-    runtime_artifacts: dict[str, Path],
+    runtime_artifacts: Mapping[str, Path],
     receipt_signer: Path,
     font_bundle_sha256: str,
     runtime_profile: CandidateRuntimeProfile | None = None,
+    runtime_snapshots: RuntimeArtifactSnapshots | None = None,
     security_artifacts: tuple[Path, ...] = (),
 ) -> CandidateManifestPaths:
     evidence_root = evidence_root.resolve(strict=True)
+    if runtime_snapshots is not None:
+        runtime_snapshots.revalidate()
     runtime_profile = runtime_profile or legacy_candidate_runtime_profile(
         oracle_lock_path
     )
@@ -154,6 +159,7 @@ def write_candidate_manifests(
         runs=(run1, run2),
         runtime_artifacts=runtime_artifacts,
         runtime_profile=runtime_profile,
+        runtime_snapshots=runtime_snapshots,
         security_artifacts=security_artifacts,
     )
     common["determinism_manifest"] = evidence_binding(

@@ -20,6 +20,7 @@ from evaluate.multiformat_candidate_types import (
     CandidateCaptureError,
     CandidateManifestPaths,
     CandidateRuntimePaths,
+    RuntimeArtifactSnapshots,
 )
 from evaluate.multiformat_schema import sha256_file
 
@@ -28,7 +29,7 @@ def materialize_candidate_runtime(
     preflight: CandidatePreflight,
     evidence_root: Path,
     output_dir: Path,
-) -> tuple[CandidateRuntimePaths, dict[str, Path]]:
+) -> tuple[CandidateRuntimePaths, RuntimeArtifactSnapshots]:
     runtime_artifacts = materialize_runtime_artifacts(
         preflight.runtime_artifacts,
         evidence_root,
@@ -110,10 +111,12 @@ def capture_candidate_evidence(
     )
     runtime_tools = {
         **preflight.runtime_tools,
+        "font_config_sha256": sha256_file(runtime_artifacts["font_config"]),
         "runtime_package_sha256": sha256_file(
             runtime_artifacts["runtime_package_manifest"]
         ),
     }
+    runtime_artifacts.revalidate()
     run1 = capture_clean_run(
         1,
         preflight.source_set,
@@ -121,11 +124,13 @@ def capture_candidate_evidence(
         evidence_root,
         runtime,
     )
+    runtime_artifacts.revalidate()
     _revalidate_sources(
         contract_path,
         corpus_path,
         preflight.source_set,
     )
+    runtime_artifacts.revalidate()
     run2 = capture_clean_run(
         2,
         preflight.source_set,
@@ -133,6 +138,7 @@ def capture_candidate_evidence(
         evidence_root,
         runtime,
     )
+    runtime_artifacts.revalidate()
     _revalidate_sources(
         contract_path,
         corpus_path,
@@ -140,6 +146,7 @@ def capture_candidate_evidence(
     )
     security_artifacts: tuple[Path, ...] = ()
     if preflight.runtime_profile.portable:
+        runtime_artifacts.revalidate()
         security_artifacts = capture_candidate_security(
             contract_path,
             corpus_path,
@@ -148,7 +155,8 @@ def capture_candidate_evidence(
             runtime,
             preflight.project_revision,
         )
-    return write_candidate_manifests(
+        runtime_artifacts.revalidate()
+    manifests = write_candidate_manifests(
         evidence_root,
         output_dir / "published",
         preflight.source_set,
@@ -161,11 +169,14 @@ def capture_candidate_evidence(
         project_revision=preflight.project_revision,
         runtime_tools=runtime_tools,
         runtime_artifacts=runtime_artifacts,
+        runtime_snapshots=runtime_artifacts,
         receipt_signer=runtime.receipt_signer,
         font_bundle_sha256=preflight.font_bundle_sha256,
         runtime_profile=preflight.runtime_profile,
         security_artifacts=security_artifacts,
     )
+    runtime_artifacts.revalidate()
+    return manifests
 
 
 def _revalidate_sources(

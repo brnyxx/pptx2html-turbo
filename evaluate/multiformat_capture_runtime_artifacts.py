@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 from evaluate.multiformat_candidate_fonts import (
@@ -50,6 +51,10 @@ def validate_runtime_artifacts(
         )
         for name in expected
     }
+    for name, path in paths.items():
+        value = path.lstat()
+        if not stat.S_ISREG(value.st_mode) or path.is_symlink() or value.st_nlink != 1:
+            raise MetricError("metrics.binding.capture", f"candidate {name} alias")
     comparisons = {
         "sandbox_attestation": "sandbox_attestation_sha256",
         "sandbox_public_key": "sandbox_public_key_sha256",
@@ -105,25 +110,21 @@ def _validate_package_manifest(path: Path, evidence_root: Path) -> None:
             if part.endswith("-package"):
                 package_roots.add(evidence_root.joinpath(*parts[: index + 1]))
                 break
-        if "sha256" in entry:
-            require_keys(entry, {"path", "sha256"}, "runtime.package.file")
-            if not candidate.is_file() or candidate.is_symlink():
-                raise MetricError("metrics.binding.capture", relative)
-            if sha256_file(candidate) != sha256_value(entry, "sha256"):
-                raise MetricError("metrics.binding.capture", relative)
-        else:
-            require_keys(entry, {"path", "symlink"}, "runtime.package.symlink")
-            if not candidate.is_symlink():
-                raise MetricError("metrics.binding.capture", relative)
-            if candidate.readlink().as_posix() != string_value(entry, "symlink"):
-                raise MetricError("metrics.binding.capture", relative)
-            if not candidate.resolve(strict=True).is_relative_to(evidence_root):
-                raise MetricError("metrics.binding.capture", relative)
+        require_keys(entry, {"path", "sha256"}, "runtime.package.file")
+        value = candidate.lstat()
+        if (
+            not stat.S_ISREG(value.st_mode)
+            or candidate.is_symlink()
+            or value.st_nlink != 1
+        ):
+            raise MetricError("metrics.binding.capture", relative)
+        if sha256_file(candidate) != sha256_value(entry, "sha256"):
+            raise MetricError("metrics.binding.capture", relative)
     actual = {
         candidate
         for root in package_roots
         for candidate in root.rglob("*")
-        if candidate.is_file() or candidate.is_symlink()
+        if candidate.is_file()
     }
     if actual != listed:
         raise MetricError("metrics.binding.capture", "runtime package file set")

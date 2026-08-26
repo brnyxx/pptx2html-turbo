@@ -5,6 +5,7 @@ import html
 import json
 import shutil
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,6 +64,23 @@ def prepare_font_environment(
         sha256_file(resolved),
         environment_hash,
         config,
+    )
+
+
+def snapshot_font_environment(
+    font_bundle: Path,
+    snapshot_root: Path,
+    copy_file: Callable[[Path, Path], str],
+) -> tuple[Path, CandidateFontEnvironment]:
+    _environment_hash, fonts = _validated_fonts(font_bundle)
+    bundle_root = snapshot_root / "bundle"
+    copied_manifest = bundle_root / font_bundle.name
+    copy_file(font_bundle, copied_manifest)
+    for font in fonts:
+        copy_file(font, bundle_root / font.relative_to(font_bundle.parent))
+    return copied_manifest, prepare_font_environment(
+        copied_manifest,
+        snapshot_root / "runtime",
     )
 
 

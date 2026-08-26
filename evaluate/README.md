@@ -522,9 +522,16 @@ LOCKED_CHROMIUM="$WAVE/outer/pptx/artifacts/chromium-package/Google Chrome for T
 Sign one final-lock-scoped candidate attestation and capture both sides of each
 comparison. The reference capture uses the outer receipt key. Candidate capture
 uses the distinct candidate key only through the signed attestation and uses
-the copied, lock-bound runtime bytes for execution. Each candidate command
-performs two clean converter/browser runs internally and publishes `READY` only
-when HTML, every inventory, and every PNG are byte-identical.
+private, lock-bound runtime snapshots for execution. Every runtime file is a
+new single-link inode under `runtime-inputs`; package links are accepted only
+when they resolve inside the package and are materialized as private regular
+files. Escaping links, hardlinks, special files, and output aliases fail closed.
+The capture retains each snapshot's path, inode, mode, size, timestamps, and
+hash, then revalidates that identity before and after each clean run and before
+and after receipt verification. Thus mutate-execute-restore cannot pass receipt
+closure. Each candidate command publishes `READY` only when HTML, every
+inventory, and every PNG from its two clean converter/browser runs are
+byte-identical.
 
 ```bash
 for format in $FORMATS; do
