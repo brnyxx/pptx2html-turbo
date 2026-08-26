@@ -32,7 +32,7 @@ class CaptureMultiFormatOfficeOraclesTests(unittest.TestCase):
         self.assertIn("Source hash does not match frozen input", script)
         self.assertIn(
             "office_oracle_verifier",
-            (PROJECT_ROOT / "evaluate" / "scaffold_multiformat_evidence.py").read_text(
+            (PROJECT_ROOT / "evaluate" / "multiformat_scaffold_templates.py").read_text(
                 encoding="utf-8"
             ),
         )
