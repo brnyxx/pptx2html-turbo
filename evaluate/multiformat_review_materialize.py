@@ -140,9 +140,8 @@ def materialize_review_attestations(
     return bindings, critical
 
 
-def _pair_value(
+def review_pair_artifacts(
     pair_id: str,
-    decision: str,
     oracle: CaptureManifest,
     candidate: CaptureManifest,
 ) -> dict[str, JsonValue]:
@@ -156,5 +155,16 @@ def _pair_value(
         "candidate_png_sha256": captured.png.sha256,
         "reference_inventory_sha256": reference.inventory.sha256,
         "candidate_inventory_sha256": captured.inventory.sha256,
+    }
+
+
+def _pair_value(
+    pair_id: str,
+    decision: str,
+    oracle: CaptureManifest,
+    candidate: CaptureManifest,
+) -> dict[str, JsonValue]:
+    return {
+        **review_pair_artifacts(pair_id, oracle, candidate),
         "decision": decision,
     }

@@ -240,6 +240,18 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
                 with self.assertRaises(MetricsAssemblyError):
                     self._assemble(fixture)
 
+    def test_blank_reviewer_template_is_rejected_by_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = self._fixture(Path(temporary))
+            review = read_object(fixture.reviews[0])
+            pairs = object_list(review, "pairs", "review.pairs")
+            for pair in pairs:
+                pair["decision"] = None
+                pair["critical_defect"] = None
+            fixture.reviews[0].write_text(json.dumps(review), encoding="utf-8")
+            with self.assertRaises((MetricsAssemblyError, TypeError, ValueError)):
+                self._assemble(fixture)
+
     def test_reviewer_roles_must_be_distinct(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = self._fixture(Path(temporary))
