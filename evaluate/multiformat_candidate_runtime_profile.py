@@ -108,8 +108,6 @@ def resolve_candidate_runtime_profile(
         runtime_lock = read_strict_object(
             _bound_path(object_value(lock, "candidate_runtime_lock"), evidence_root)
         )
-        if integer_value(browser_lock, "schema_version") != 1:
-            raise CandidateRuntimeProfileError("candidate browser lock schema differs")
         runtime_schema = integer_value(runtime_lock, "schema_version")
         if runtime_schema not in {1, 2}:
             raise CandidateRuntimeProfileError("candidate runtime lock schema differs")

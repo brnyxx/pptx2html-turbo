@@ -93,7 +93,7 @@ def preflight_candidate_capture(
         output_parent = output_dir.parent.resolve(strict=True)
         if not output_parent.is_relative_to(evidence_root):
             raise CandidatePreflightError("candidate output escapes evidence root")
-        if not oracle_lock_ready(oracle_lock_path):
+        if not oracle_lock_ready(oracle_lock_path, evidence_root):
             raise CandidatePreflightError("oracle lock is not ready")
         validate_evaluator_manifest(project_root, contract_path, evaluator_path)
         source_set = load_candidate_sources(contract_path, corpus_path)

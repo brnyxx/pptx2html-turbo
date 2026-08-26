@@ -51,6 +51,42 @@ class MultiFormatPortableLockTests(unittest.TestCase):
 
         self.assertEqual(poppler["path"], "")
 
+    def test_missing_lock_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            ready = oracle_lock_ready(root / "missing.json", root)
+
+            self.assertFalse(ready)
+
+    def test_malformed_lock_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = root / "malformed.json"
+            path.write_text("{", encoding="utf-8")
+
+            ready = oracle_lock_ready(path, root)
+
+            self.assertFalse(ready)
+
+    def test_schema_two_lock_without_evidence_root_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _root, path, _lock = self._portable_lock(Path(temp_dir))
+
+            ready = oracle_lock_ready(path)
+
+            self.assertFalse(ready)
+
+    def test_schema_two_lock_with_wrong_evidence_root_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, path, _lock = self._portable_lock(Path(temp_dir) / "evidence")
+            wrong_root = root.parent / "wrong-evidence"
+            wrong_root.mkdir()
+
+            ready = oracle_lock_ready(path, wrong_root)
+
+            self.assertFalse(ready)
+
     def test_complete_lock_returns_typed_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, path, _lock = self._portable_lock(Path(temp_dir))
@@ -61,7 +97,7 @@ class MultiFormatPortableLockTests(unittest.TestCase):
             self.assertIs(identity.profile, ReferenceProfile.LIBREOFFICE_POPPLER)
             self.assertEqual(identity.sha256, sha256_file(path))
             self.assertEqual(identity.routing, load_reference_routing(ROUTING_TABLE))
-            self.assertTrue(oracle_lock_ready(path))
+            self.assertTrue(oracle_lock_ready(path, root))
 
     def test_routing_digest_substitution_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -95,7 +131,7 @@ class MultiFormatPortableLockTests(unittest.TestCase):
 
             self.assertIs(identity.profile, ReferenceProfile.LIBREOFFICE_POPPLER)
             self.assertEqual(identity.sha256, sha256_file(path))
-            self.assertTrue(oracle_lock_ready(path))
+            self.assertTrue(oracle_lock_ready(path, root))
 
     def test_incomplete_lock_reports_incomplete_before_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

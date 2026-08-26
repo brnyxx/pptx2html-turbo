@@ -73,6 +73,7 @@ PORTABLE_WAVE_TEST_FILES = (
     "evaluate/tests/multiformat_portable_receipt_fixture.py",
     "evaluate/tests/test_materialize_multiformat_portable_locks.py",
     "evaluate/tests/test_multiformat_portable_native_package.py",
+    "evaluate/tests/test_multiformat_portable_native_tools.py",
     "evaluate/tests/test_multiformat_portable_lock.py",
     "evaluate/tests/test_multiformat_portable_receipt.py",
     "evaluate/tests/test_multiformat_portable_receipt_nonce.py",

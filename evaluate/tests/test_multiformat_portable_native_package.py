@@ -11,11 +11,18 @@ from pathlib import Path
 
 from evaluate.materialize_multiformat_portable_locks import materialize_portable_locks
 from evaluate.multiformat_candidate_artifacts import materialize_runtime_artifacts
-from evaluate.multiformat_portable_lock import PortableLockError, validate_reference_lock
+from evaluate.multiformat_candidate_runtime_profile import (
+    resolve_candidate_runtime_profile,
+)
+from evaluate.multiformat_portable_lock import (
+    PortableLockError,
+    validate_reference_lock,
+)
 from evaluate.multiformat_portable_package_inventory import (
     bind_package_executable_with_inventory,
     package_binding,
 )
+from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import sha256_file
 from evaluate.tests.test_materialize_multiformat_portable_locks import (
     PortableLockMaterializerTests,
@@ -34,7 +41,9 @@ class PortableNativePackageTests(unittest.TestCase):
         }
         if any(value is None for value in tools.values()):
             self.skipTest("Homebrew Poppler and OpenSSL are required")
-        resolved = {name: Path(value).resolve() for name, value in tools.items() if value}
+        resolved = {
+            name: Path(value).resolve() for name, value in tools.items() if value
+        }
         if any("Cellar" not in path.parts for path in resolved.values()):
             self.skipTest("tools are not Homebrew Cellar installations")
         with tempfile.TemporaryDirectory() as temporary:
@@ -44,9 +53,7 @@ class PortableNativePackageTests(unittest.TestCase):
             candidate = json.loads(fixture.candidate_runtime_lock.read_text())
             runtime = candidate["candidate_runtime"]
             runtime["pdftohtml_sha256"] = sha256_file(resolved["pdftohtml"])
-            runtime["pdftohtml_version"] = self._version(
-                resolved["pdftohtml"], "-v"
-            )
+            runtime["pdftohtml_version"] = self._version(resolved["pdftohtml"], "-v")
             runtime["pdfinfo_sha256"] = sha256_file(resolved["pdfinfo"])
             runtime["pdfinfo_version"] = self._version(resolved["pdfinfo"], "-v")
             candidate["sandbox_verifier"]["openssl_sha256"] = sha256_file(
@@ -68,29 +75,76 @@ class PortableNativePackageTests(unittest.TestCase):
             poppler = lock["tools"]
             sandbox = lock["candidate_sandbox"]
             candidate_lock = json.loads(
-                (inputs.evidence_root / lock["candidate_runtime_lock"]["path"]).read_text()
+                (
+                    inputs.evidence_root / lock["candidate_runtime_lock"]["path"]
+                ).read_text()
             )
+            scope = lock["scope"]
+            profile = resolve_candidate_runtime_profile(
+                lock_path,
+                inputs.evidence_root,
+                inputs.evidence_root / scope["contract"]["path"],
+                inputs.evidence_root / scope["corpus"]["path"],
+                inputs.evidence_root / scope["evaluator"]["path"],
+                current_project_revision(inputs.project_root),
+            )
+            self.assertTrue(profile.portable)
             self.assertEqual(candidate_lock["schema_version"], 2)
             self.assertEqual(
-                candidate_lock["candidate_runtime"][
-                    "poppler_package_inventory_sha256"
-                ],
+                candidate_lock["candidate_runtime"]["poppler_package_inventory_sha256"],
                 poppler["poppler_render"]["package_inventory"]["sha256"],
             )
             self.assertEqual(
-                candidate_lock["sandbox_verifier"][
-                    "openssl_package_inventory_sha256"
-                ],
+                candidate_lock["sandbox_verifier"]["openssl_package_inventory_sha256"],
                 sandbox["openssl"]["package_inventory"]["sha256"],
             )
             copied = (
                 inputs.evidence_root / poppler["poppler_render"]["path"],
                 inputs.evidence_root / poppler["poppler_text"]["path"],
                 inputs.evidence_root / poppler["poppler_metadata"]["path"],
-                (
-                    inputs.evidence_root / poppler["poppler_render"]["path"]
-                ).with_name("pdftohtml"),
+                (inputs.evidence_root / poppler["poppler_render"]["path"]).with_name(
+                    "pdftohtml"
+                ),
                 inputs.evidence_root / sandbox["openssl"]["path"],
+            )
+            self.assertEqual(
+                copied,
+                (
+                    inputs.output_dir / "artifacts/poppler-package/root/bin/pdftoppm",
+                    inputs.output_dir / "artifacts/poppler-package/root/bin/pdftotext",
+                    inputs.output_dir / "artifacts/poppler-package/root/bin/pdfinfo",
+                    inputs.output_dir / "artifacts/poppler-package/root/bin/pdftohtml",
+                    inputs.output_dir / "artifacts/openssl-package/root/bin/openssl",
+                ),
+            )
+            second_inputs = replace(
+                inputs,
+                output_dir=inputs.evidence_root / "out-second",
+                pdftoppm=copied[0],
+                pdftotext=copied[1],
+                pdfinfo=copied[2],
+                pdftohtml=copied[3],
+                openssl=copied[4],
+                candidate_runtime_lock=(
+                    inputs.evidence_root / lock["candidate_runtime_lock"]["path"]
+                ),
+            )
+            second_lock = json.loads(
+                materialize_portable_locks(second_inputs)[0].read_text()
+            )
+            self.assertEqual(
+                second_lock["tools"]["poppler_render"]["path"],
+                lock["tools"]["poppler_render"]["path"],
+            )
+            self.assertEqual(
+                second_lock["candidate_sandbox"]["openssl"]["path"],
+                lock["candidate_sandbox"]["openssl"]["path"],
+            )
+            self.assertFalse(
+                (second_inputs.output_dir / "artifacts/poppler-package").exists()
+            )
+            self.assertFalse(
+                (second_inputs.output_dir / "artifacts/openssl-package").exists()
             )
             snapshots = materialize_runtime_artifacts(
                 {
@@ -114,8 +168,13 @@ class PortableNativePackageTests(unittest.TestCase):
                     [path.as_posix(), argument], capture_output=True, check=False
                 )
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
+                subprocess.run(
+                    ["/usr/bin/codesign", "--verify", "--strict", path.as_posix()],
+                    capture_output=True,
+                    check=True,
+                )
                 linked = subprocess.run(
-                    ["otool", "-L", path.as_posix()],
+                    ["/usr/bin/otool", "-L", path.as_posix()],
                     capture_output=True,
                     check=True,
                     text=True,

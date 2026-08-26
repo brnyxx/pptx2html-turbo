@@ -17,6 +17,10 @@ from evaluate.multiformat_portable_package_inventory import (
 )
 
 _SYSTEM_PREFIXES: Final = ("/usr/lib/", "/System/")
+_OTOOL: Final = Path("/usr/bin/otool")
+_INSTALL_NAME_TOOL: Final = Path("/usr/bin/install_name_tool")
+_CODESIGN: Final = Path("/usr/bin/codesign")
+_APPLE_TOOLS: Final = (_OTOOL, _INSTALL_NAME_TOOL, _CODESIGN)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +62,8 @@ def bind_homebrew_package_closure(
     prefix = prefixes[0]
     if prefix is None:
         return None
+    if any(not tool.is_file() or not os.access(tool, os.X_OK) for tool in _APPLE_TOOLS):
+        raise PortableLockIoError("required Apple native tool is unavailable")
     machos = _collect_closure(resolved)
     identities = {path: _identity(path) for path in machos}
     package = destination / "root"
@@ -73,14 +79,20 @@ def bind_homebrew_package_closure(
             for load, dependency in macho.dependencies
         )
         if changes or macho.install_name is not None:
-            command = ["install_name_tool"]
+            command = [_INSTALL_NAME_TOOL.as_posix()]
             if macho.install_name is not None:
                 command.extend(("-id", f"@loader_path/{target.name}"))
             for old, new in changes:
                 command.extend(("-change", old, new))
             _run((*command, target.as_posix()), "cannot relocate native package")
             _run(
-                ("codesign", "--force", "--sign", "-", target.as_posix()),
+                (
+                    _CODESIGN.as_posix(),
+                    "--force",
+                    "--sign",
+                    "-",
+                    target.as_posix(),
+                ),
                 "cannot sign native package",
             )
     if any(_identity(path) != identity for path, identity in identities.items()):
@@ -113,7 +125,10 @@ def _collect_closure(sources: tuple[Path, ...]) -> dict[Path, _MachO]:
 
 
 def _load_commands(path: Path) -> tuple[str, ...]:
-    output = _run(("otool", "-L", path.as_posix()), "cannot inspect native package")
+    output = _run(
+        (_OTOOL.as_posix(), "-L", path.as_posix()),
+        "cannot inspect native package",
+    )
     lines = output.splitlines()
     if not lines or not lines[0].endswith(":"):
         raise PortableLockIoError("portable native package is not Mach-O")
@@ -125,7 +140,9 @@ def _load_commands(path: Path) -> tuple[str, ...]:
 
 
 def _install_name(path: Path) -> str | None:
-    output = _run(("otool", "-D", path.as_posix()), "cannot inspect install name")
+    output = _run(
+        (_OTOOL.as_posix(), "-D", path.as_posix()), "cannot inspect install name"
+    )
     lines = tuple(line.strip() for line in output.splitlines()[1:] if line.strip())
     if len(lines) > 1:
         raise PortableLockIoError("portable native install name is ambiguous")
@@ -133,7 +150,9 @@ def _install_name(path: Path) -> str | None:
 
 
 def _rpaths(path: Path) -> tuple[str, ...]:
-    output = _run(("otool", "-l", path.as_posix()), "cannot inspect native rpaths")
+    output = _run(
+        (_OTOOL.as_posix(), "-l", path.as_posix()), "cannot inspect native rpaths"
+    )
     lines = output.splitlines()
     return tuple(
         lines[index + 2].strip().split(" (offset", maxsplit=1)[0].removeprefix("path ")
@@ -183,6 +202,10 @@ def _relative_member(path: Path, primary: Path) -> Path:
 
 def _validate_relocated_closure(paths: tuple[Path, ...], package: Path) -> None:
     for path in paths:
+        _run(
+            (_CODESIGN.as_posix(), "--verify", "--strict", path.as_posix()),
+            "portable native signature verification failed",
+        )
         install_name = _install_name(path)
         for load in _load_commands(path):
             if load == install_name:

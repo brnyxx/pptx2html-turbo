@@ -58,19 +58,21 @@ def resolve_evidence_path(root: Path, relative_path: str) -> Path:
     return candidate
 
 
-def oracle_lock_ready(path: Path) -> bool:
-    if not path.is_file():
-        return False
+def oracle_lock_ready(path: Path, evidence_root: Path | None = None) -> bool:
     try:
+        if not path.is_file():
+            return False
         lock = read_strict_object(path)
         if lock.get("schema_version") == 2:
+            if evidence_root is None:
+                return False
             from evaluate.multiformat_portable_lock import (
                 PortableLockError,
                 validate_reference_lock,
             )
 
             try:
-                validate_reference_lock(path, path.parent)
+                validate_reference_lock(path, evidence_root)
             except PortableLockError:
                 return False
             return True

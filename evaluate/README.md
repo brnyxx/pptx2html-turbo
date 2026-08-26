@@ -447,10 +447,18 @@ request, lock-declared receipt, and receipt schema versions are all 2, and v1
 inputs are rejected without a compatibility shim. No mutable replay ledger or
 external signer account is required. The candidate
 runtime lock intentionally does not contain the post-lock candidate attestation.
+The first `pptx` outer lock relocates and inventories Poppler and OpenSSL; every
+later format reuses those exact inventory-bound package members rather than
+copying the host Homebrew closures again.
 
 ```bash
 package_soffice="$SOFFICE"
 package_chromium="$CHROMIUM"
+package_pdftoppm="$PDFTOPPM"
+package_pdftotext="$PDFTOTEXT"
+package_pdfinfo="$PDFINFO"
+package_pdftohtml="$PDFTOHTML"
+package_openssl="$OPENSSL"
 # Resolve paths dynamically; the materializer accepts them only when their
 # bytes and versions match the evaluator-controlled, revision-bound
 # evaluate/multiformat/rust-toolchain-lock.v1.json identity for this platform.
@@ -479,13 +487,13 @@ for format in $FORMATS; do
     --output-dir "$runtime" \
     --converter "$CONVERTER" \
     --soffice "$package_soffice" \
-    --pdftohtml "$PDFTOHTML" \
-    --pdfinfo "$PDFINFO" \
+    --pdftohtml "$package_pdftohtml" \
+    --pdfinfo "$package_pdfinfo" \
     --receipt-signer "$wrapper" \
     --chromium "$package_chromium" \
     --font-bundle "$FONT_BUNDLE" \
     --sandbox-public-key "$CANDIDATE_PUBLIC" \
-    --openssl "$OPENSSL" \
+    --openssl "$package_openssl" \
     --verifier-id "candidate-sandbox-$format-v1"
 
   "$PYTHON" -m evaluate.materialize_multiformat_portable_locks_cli \
@@ -497,9 +505,9 @@ for format in $FORMATS; do
     --cargo "$CARGO" \
     --rustc "$RUSTC" \
     --libreoffice "$package_soffice" \
-    --pdftoppm "$PDFTOPPM" \
-    --pdftotext "$PDFTOTEXT" \
-    --pdfinfo "$PDFINFO" \
+    --pdftoppm "$package_pdftoppm" \
+    --pdftotext "$package_pdftotext" \
+    --pdfinfo "$package_pdfinfo" \
     --canonicalizer "$CANONICALIZER" \
     --font-bundle "$FONT_BUNDLE" \
     --configuration "$CONFIGURATION" \
@@ -509,8 +517,8 @@ for format in $FORMATS; do
     --browser-lock "$runtime/browser-lock.json" \
     --candidate-runtime-lock "$runtime/candidate-runtime-lock.json" \
     --converter "$CONVERTER" \
-    --pdftohtml "$PDFTOHTML" \
-    --openssl "$OPENSSL" \
+    --pdftohtml "$package_pdftohtml" \
+    --openssl "$package_openssl" \
     --receipt-signer "$wrapper" \
     --candidate-sandbox-public-key "$CANDIDATE_PUBLIC" \
     --private-key "$REFERENCE_PRIVATE" \
@@ -519,11 +527,19 @@ for format in $FORMATS; do
   if [ "$format" = "pptx" ]; then
     package_soffice="$outer/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
     package_chromium="$outer/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+    package_pdftoppm="$outer/artifacts/poppler-package/root/bin/pdftoppm"
+    package_pdftotext="$outer/artifacts/poppler-package/root/bin/pdftotext"
+    package_pdfinfo="$outer/artifacts/poppler-package/root/bin/pdfinfo"
+    package_pdftohtml="$outer/artifacts/poppler-package/root/bin/pdftohtml"
+    package_openssl="$outer/artifacts/openssl-package/root/bin/openssl"
   fi
 done
 
 LOCKED_SOFFICE="$WAVE/outer/pptx/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
 LOCKED_CHROMIUM="$WAVE/outer/pptx/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+LOCKED_PDFTOHTML="$WAVE/outer/pptx/artifacts/poppler-package/root/bin/pdftohtml"
+LOCKED_PDFINFO="$WAVE/outer/pptx/artifacts/poppler-package/root/bin/pdfinfo"
+LOCKED_OPENSSL="$WAVE/outer/pptx/artifacts/openssl-package/root/bin/openssl"
 ```
 
 Sign one final-lock-scoped candidate attestation and capture both sides of each
@@ -550,10 +566,10 @@ for format in $FORMATS; do
   bound_evaluator="$outer/artifacts/evaluator"
   bound_converter="$outer/artifacts/converter"
   bound_soffice="$LOCKED_SOFFICE"
-  bound_pdftohtml="$outer/artifacts/pdftohtml"
-  bound_pdfinfo="$outer/artifacts/poppler-metadata"
+  bound_pdftohtml="$LOCKED_PDFTOHTML"
+  bound_pdfinfo="$LOCKED_PDFINFO"
   bound_chromium="$LOCKED_CHROMIUM"
-  bound_openssl="$outer/artifacts/openssl"
+  bound_openssl="$LOCKED_OPENSSL"
   bound_receipt_signer="$outer/artifacts/receipt-signer"
   candidate_nonce="$("$OPENSSL" rand -hex 32)"
   attestation="$WAVE/attestations/$format.json"
@@ -684,10 +700,10 @@ for format in $FORMATS; do
   bound_evaluator="$outer/artifacts/evaluator"
   bound_converter="$outer/artifacts/converter"
   bound_soffice="$LOCKED_SOFFICE"
-  bound_pdftohtml="$outer/artifacts/pdftohtml"
-  bound_pdfinfo="$outer/artifacts/poppler-metadata"
+  bound_pdftohtml="$LOCKED_PDFTOHTML"
+  bound_pdfinfo="$LOCKED_PDFINFO"
   bound_chromium="$LOCKED_CHROMIUM"
-  bound_openssl="$outer/artifacts/openssl"
+  bound_openssl="$LOCKED_OPENSSL"
   bound_receipt_signer="$outer/artifacts/receipt-signer"
   attestation="$WAVE/attestations/$format.json"
 
