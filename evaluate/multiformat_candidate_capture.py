@@ -10,15 +10,14 @@ from evaluate.multiformat_candidate_sources import (
     CandidateSourceSet,
     load_candidate_sources,
 )
+from evaluate.multiformat_candidate_security import capture_candidate_security
 from evaluate.multiformat_candidate_types import CandidateManifestPaths
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_candidate_types import CandidateRuntimePaths
 from evaluate.multiformat_candidate_runtime_lock import (
     validate_candidate_runtime,
 )
-from evaluate.multiformat_schema import object_value
 from evaluate.multiformat_schema import sha256_file
-from evaluate.multiformat_strict_json import read_strict_object
 
 
 def capture_candidate_evidence(
@@ -86,7 +85,7 @@ def capture_candidate_evidence(
         preflight.runtime.timeout_seconds,
     )
     validate_candidate_runtime(
-        object_value(read_strict_object(oracle_lock_path), "candidate_runtime"),
+        preflight.runtime_profile.candidate_runtime_lock,
         runtime,
         preflight.project_revision,
     )
@@ -120,6 +119,16 @@ def capture_candidate_evidence(
         corpus_path,
         preflight.source_set,
     )
+    security_artifacts: tuple[Path, ...] = ()
+    if preflight.runtime_profile.portable:
+        security_artifacts = capture_candidate_security(
+            contract_path,
+            corpus_path,
+            evaluator_path,
+            output_dir / "security",
+            runtime,
+            preflight.project_revision,
+        )
     return write_candidate_manifests(
         evidence_root,
         output_dir / "published",
@@ -135,6 +144,8 @@ def capture_candidate_evidence(
         runtime_artifacts=runtime_artifacts,
         receipt_signer=runtime.receipt_signer,
         font_bundle_sha256=preflight.font_bundle_sha256,
+        runtime_profile=preflight.runtime_profile,
+        security_artifacts=security_artifacts,
     )
 
 

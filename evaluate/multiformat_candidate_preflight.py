@@ -6,7 +6,12 @@ from pathlib import Path
 
 from evaluate.multiformat_candidate_attestation import (
     attestation_scope_sha256,
-    verify_signed_attestation,
+    verify_candidate_attestation,
+)
+from evaluate.multiformat_candidate_runtime_profile import (
+    CandidateRuntimeProfile,
+    require_profile_path,
+    resolve_candidate_runtime_profile,
 )
 from evaluate.multiformat_candidate_sources import (
     CandidateSourceSet,
@@ -28,7 +33,6 @@ from evaluate.multiformat_candidate_runtime_lock import (
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import (
-    object_value,
     sha256_file,
     sha256_value,
     string_value,
@@ -48,6 +52,7 @@ class CandidatePreflight:
     runtime_tools: dict[str, str]
     runtime_artifacts: dict[str, Path]
     font_bundle_sha256: str
+    runtime_profile: CandidateRuntimeProfile
 
 
 def preflight_candidate_capture(
@@ -96,6 +101,14 @@ def preflight_candidate_capture(
             raise CandidatePreflightError("oracle lock is not ready")
         validate_evaluator_manifest(project_root, contract_path, evaluator_path)
         source_set = load_candidate_sources(contract_path, corpus_path)
+        profile = resolve_candidate_runtime_profile(
+            oracle_lock_path,
+            evidence_root,
+            contract_path,
+            corpus_path,
+            evaluator_path,
+            revision,
+        )
         if (
             require_release_binary
             and converter.resolve(strict=True).parent.name != "release"
@@ -104,9 +117,21 @@ def preflight_candidate_capture(
                 "candidate capture requires a release converter"
             )
         lock = read_strict_object(oracle_lock_path)
-        browser = object_value(lock, "browser")
-        browser_version = string_value(browser, "chromium")
-        executable = chromium.resolve(strict=True)
+        browser = profile.browser_lock
+        browser_version = profile.browser_version
+        executable = require_profile_path(chromium, profile.chromium, "Chromium")
+        font_bundle = require_profile_path(
+            font_bundle, profile.font_bundle, "font bundle"
+        )
+        receipt_signer = require_profile_path(
+            receipt_signer, profile.receipt_executor, "receipt executor"
+        )
+        sandbox_public_key = require_profile_path(
+            sandbox_public_key, profile.public_key, "public key"
+        )
+        sandbox_attestation = require_profile_path(
+            sandbox_attestation, profile.attestation, "attestation"
+        )
         if sha256_file(executable) != sha256_value(browser, "executable_sha256"):
             raise CandidatePreflightError("Chromium executable hash mismatch")
         playwright_version = importlib.metadata.version("playwright")
@@ -117,10 +142,12 @@ def preflight_candidate_capture(
             font_bundle,
             output_parent / ".candidate-font-runtime",
         )
-        if font_environment.manifest_sha256 != sha256_value(
-            lock,
-            "font_bundle_sha256",
-        ):
+        expected_font_hash = (
+            sha256_file(profile.font_bundle)
+            if profile.font_bundle is not None
+            else sha256_value(lock, "font_bundle_sha256")
+        )
+        if font_environment.manifest_sha256 != expected_font_hash:
             raise CandidatePreflightError("font bundle hash mismatch")
         if font_environment.environment_sha256 != sha256_value(
             browser,
@@ -138,13 +165,14 @@ def preflight_candidate_capture(
             browser_version,
             timeout_seconds,
         )
-        candidate_runtime = object_value(lock, "candidate_runtime")
+        candidate_runtime = profile.candidate_runtime_lock
         versions = validate_candidate_runtime(
             candidate_runtime,
             runtime,
             revision,
         )
-        verified_attestation = verify_signed_attestation(
+        verified_attestation = verify_candidate_attestation(
+            profile,
             sandbox_attestation,
             sandbox_public_key,
             openssl,
@@ -209,6 +237,7 @@ def preflight_candidate_capture(
                 "receipt_signer_binary": runtime.receipt_signer,
             },
             font_environment.manifest_sha256,
+            profile,
         )
     except CandidatePreflightError:
         raise

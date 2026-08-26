@@ -8,8 +8,11 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_schema import (
+    boolean_value,
+    integer_value,
     JsonValue,
     object_value,
     sha256_file,
@@ -76,7 +79,7 @@ def attestation_scope_from_hashes(
     evaluator_sha256: str,
     oracle_lock_sha256: str,
 ) -> str:
-    value = {
+    value: dict[str, JsonValue] = {
         "contract_sha256": contract_sha256,
         "corpus_sha256": corpus_sha256,
         "evaluator_sha256": evaluator_sha256,
@@ -92,6 +95,49 @@ def canonical_payload(value: dict[str, JsonValue]) -> bytes:
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
+
+
+def verify_candidate_attestation(
+    profile: CandidateRuntimeProfile,
+    attestation_path: Path,
+    public_key_path: Path,
+    openssl_path: Path,
+    oracle_lock_path: Path,
+    *,
+    project_revision: str,
+    scope_sha256: str,
+) -> VerifiedAttestation:
+    if not profile.portable:
+        return verify_signed_attestation(
+            attestation_path,
+            public_key_path,
+            openssl_path,
+            oracle_lock_path,
+            project_revision=project_revision,
+            scope_sha256=scope_sha256,
+        )
+    values = read_strict_object(attestation_path.resolve(strict=True))
+    expected_strings: dict[str, str] = {
+        "status": "PASS",
+        "golden_access": "denied",
+        "project_revision": project_revision,
+        "font_isolation": "locked-bundle-only",
+        "signer_id": profile.signer_id,
+    }
+    if integer_value(values, "schema_version") != 1 or any(
+        string_value(values, field) != expected
+        for field, expected in expected_strings.items()
+    ):
+        raise CandidateAttestationError("portable sandbox attestation mismatch")
+    if not boolean_value(values, "network_isolation"):
+        raise CandidateAttestationError("portable sandbox network is not isolated")
+    nonce = sha256_value(values, "run_nonce")
+    font_environment = sha256_value(values, "font_environment_sha256")
+    if font_environment != sha256_value(
+        profile.browser_lock, "font_environment_sha256"
+    ):
+        raise CandidateAttestationError("portable sandbox font environment differs")
+    return VerifiedAttestation(profile.signer_id, font_environment, nonce)
 
 
 def verify_signed_attestation(
@@ -115,7 +161,7 @@ def verify_signed_attestation(
         character not in "0123456789abcdef" for character in run_nonce
     ):
         raise CandidateAttestationError("sandbox run nonce is invalid")
-    expected = {
+    expected: dict[str, JsonValue] = {
         "schema_version": 1,
         "status": "PASS",
         "network_isolation": "disabled",
@@ -140,8 +186,8 @@ def verify_signed_attestation(
         oracle_lock_path,
     )
     return VerifiedAttestation(
-        expected["verifier_id"],
-        expected["font_environment_sha256"],
+        string_value(expected, "verifier_id"),
+        sha256_value(expected, "font_environment_sha256"),
         run_nonce,
     )
 

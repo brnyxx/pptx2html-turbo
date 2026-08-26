@@ -13,6 +13,10 @@ from evaluate.multiformat_candidate_determinism import (
     validate_clean_runs,
 )
 from evaluate.multiformat_candidate_receipt import write_execution_receipt
+from evaluate.multiformat_candidate_runtime_profile import (
+    CandidateRuntimeProfile,
+    legacy_candidate_runtime_profile,
+)
 from evaluate.multiformat_candidate_sources import CandidateSourceSet
 from evaluate.multiformat_candidate_types import (
     CandidateCaptureError,
@@ -45,8 +49,13 @@ def write_candidate_manifests(
     runtime_artifacts: dict[str, Path],
     receipt_signer: Path,
     font_bundle_sha256: str,
+    runtime_profile: CandidateRuntimeProfile | None = None,
+    security_artifacts: tuple[Path, ...] = (),
 ) -> CandidateManifestPaths:
     evidence_root = evidence_root.resolve(strict=True)
+    runtime_profile = runtime_profile or legacy_candidate_runtime_profile(
+        oracle_lock_path
+    )
     if output_dir.exists() and any(output_dir.iterdir()):
         raise CandidateManifestError(f"candidate output is not empty: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -145,6 +154,8 @@ def write_candidate_manifests(
         determinism=determinism,
         runs=(run1, run2),
         runtime_artifacts=runtime_artifacts,
+        runtime_profile=runtime_profile,
+        security_artifacts=security_artifacts,
     )
     common["determinism_manifest"] = evidence_binding(
         evidence_root,
