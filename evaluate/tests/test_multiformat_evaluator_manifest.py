@@ -17,6 +17,15 @@ from evaluate.tests.multiformat_gate_fixture import CONTRACT_PATH, PROJECT_ROOT
 
 class MultiFormatEvaluatorManifestTests(unittest.TestCase):
     def test_manifest_binds_portable_wave_producers_and_tests(self) -> None:
+        for path in (
+            "evaluate/materialize_multiformat_candidate_runtime_locks.py",
+            "evaluate/materialize_multiformat_candidate_runtime_locks_cli.py",
+        ):
+            self.assertIn(path, PORTABLE_WAVE_ENGINE_FILES)
+        self.assertIn(
+            "evaluate/tests/test_materialize_multiformat_candidate_runtime_locks.py",
+            PORTABLE_WAVE_TEST_FILES,
+        )
         for path in (*PORTABLE_WAVE_ENGINE_FILES, *PORTABLE_WAVE_TEST_FILES):
             with self.subTest(path=path):
                 self.assertIn(path, EVALUATOR_FILES)
