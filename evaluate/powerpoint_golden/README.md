@@ -2,7 +2,7 @@
 
 This directory stores optional Microsoft PowerPoint-rendered reference
 artifacts for the separate PPTX `exact`-promotion contract. They are not
-required by the default macOS/Linux `libreoffice-poppler` seven-format
+required by the default macOS `libreoffice-poppler` seven-format
 acceptance profile.
 
 ## Purpose

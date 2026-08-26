@@ -437,7 +437,7 @@ Reuse `run_bounded_process` for process-group timeout and log bounds. Resolve
 tool paths strictly, hash them, capture versions, use
 `clean_subprocess_environment`, and add only isolated runtime keys. Apply
 `prepare_font_environment` only for the six Office formats on supported
-macOS/Linux hosts. PDF must not resolve LibreOffice or the font bundle. Parse
+macOS hosts. PDF must not resolve LibreOffice or the font bundle. Parse
 exactly one positive `Pages:` record from `pdfinfo`.
 
 LibreOffice and pdfinfo stdout/stderr live only in isolated temporary files

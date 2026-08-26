@@ -160,12 +160,16 @@ corpora, tools, runtimes, and admitted outputs; they establish evidence
 identity, not byte-identical output across separate capture environments.
 Microsoft Office pixel-accuracy wording is prohibited for this general claim.
 
-The default `libreoffice-poppler` profile uses the locked macOS/Linux
+The default `libreoffice-poppler` profile uses the locked macOS
 LibreOffice + Poppler route for the six Office formats and locked Poppler
 directly for PDF. Signed Microsoft Office/Windows exports remain supported
 only as the optional `microsoft-office` profile; they are not required for the
 default path. Each selected profile must satisfy the same signed, hash-bound,
 fail-closed evidence contract.
+
+The native converter may run on Linux, but signed portable reference capture
+currently requires the macOS `sandbox-exec` backend. A Linux capture attempt is
+`INCOMPLETE` until an equivalent process-sandbox implementation is available.
 
 Run the gate:
 

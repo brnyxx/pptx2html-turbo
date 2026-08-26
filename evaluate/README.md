@@ -8,7 +8,7 @@ The evaluation strategy now has three tracks:
 2. **LibreOffice-backed regression detection** for fast, broad visual comparison during iteration.
 3. **Independent synthetic exactness** for deterministic parser and renderer contracts.
 
-The existing composite score remains useful for regression control, but it is no longer the only fidelity signal. These PPTX fidelity tracks are separate from the universal seven-format acceptance gate, whose default required profile is the signed macOS/Linux `libreoffice-poppler` path below.
+The existing composite score remains useful for regression control, but it is no longer the only fidelity signal. These PPTX fidelity tracks are separate from the universal seven-format acceptance gate, whose currently validated default profile is the signed macOS `libreoffice-poppler` path below.
 
 ## Seven-format acceptance gate
 
@@ -32,8 +32,10 @@ The machine-consumed contract is
 the conformance, blind, component, stratum, minimum-unit, security,
 determinism, review, and SHA-256 evidence-binding checks in the same wave.
 The default required reference profile is `libreoffice-poppler`, using locked
-LibreOffice and Poppler on supported macOS/Linux hosts over seven frozen format
-corpora (Poppler is used directly for PDF). A schema-2 portable lock, signed
+LibreOffice and Poppler on a supported macOS host over seven frozen format
+corpora (Poppler is used directly for PDF). Linux document conversion remains
+supported, but signed portable reference capture is `INCOMPLETE` there until a
+Linux process-sandbox backend is implemented. A schema-2 portable lock, signed
 receipt, and every bound artifact must validate; missing, stale, substituted, or
 tampered evidence remains `INCOMPLETE` or `FAIL`.
 
@@ -121,9 +123,10 @@ before the files can enter a corpus manifest.
 Build the exact 700-case conformance identity plan from the same contract:
 
 ```bash
+mkdir -p artifacts/multiformat-conformance-plan-v1
 uv run python -m evaluate.build_multiformat_conformance_plan \
   --contract evaluate/multiformat/contract.v1.json \
-  --output artifacts/multiformat-conformance-plan.json
+  --output artifacts/multiformat-conformance-plan-v1/conformance-plan.json
 ```
 
 The plan expands every modern/PDF stratum quota into 400 generated cases and
@@ -132,20 +135,33 @@ authored binary-specific cases. Case IDs, ordinals, pair links, strata, and
 feature seeds are byte-deterministic. A plan does not claim corpus readiness;
 the corresponding source documents and native unit counts remain required.
 
+Create and validate the exact font snapshot before any generator consumes it.
+`/locked/font-source` is an operator-owned, immutable directory of the approved
+font files:
+
+```bash
+uv run python -m evaluate.generate_multiformat_font_bundle generate \
+  --font-dir /locked/font-source \
+  --output-dir artifacts/multiformat-font-bundle
+uv run python -m evaluate.generate_multiformat_font_bundle validate \
+  --manifest artifacts/multiformat-font-bundle/font-bundle.json \
+  --snapshot-root artifacts/multiformat-font-bundle
+```
+
 Materialize the 60 plan-bound modern/legacy pairs for each binary Office
 format with locked LibreOffice, Poppler, and font artifacts:
 
 ```bash
 uv run --python 3.11 python -m evaluate.generate_multiformat_legacy_conformance \
   --contract evaluate/multiformat/contract.v1.json \
-  --plan artifacts/multiformat-conformance-plan.json \
-  --docx-manifest artifacts/multiformat-docx-conformance/generation-manifest.json \
-  --xlsx-manifest artifacts/multiformat-xlsx-conformance/generation-manifest.json \
-  --pptx-manifest artifacts/multiformat-pptx-conformance/generation-manifest.json \
-  --output-dir artifacts/multiformat-legacy-pairs \
+  --plan artifacts/multiformat-conformance-plan-v1/conformance-plan.json \
+  --docx-manifest artifacts/multiformat-conformance-docx-v1/generation-manifest.json \
+  --xlsx-manifest artifacts/multiformat-conformance-xlsx-v1/generation-manifest.json \
+  --pptx-manifest artifacts/multiformat-conformance-pptx-v1/generation-manifest.json \
+  --output-dir artifacts/multiformat-conformance-legacy-v1 \
   --soffice /locked/bin/soffice \
   --pdfinfo /locked/bin/pdfinfo \
-  --font-bundle artifacts/font-bundle.json
+  --font-bundle artifacts/multiformat-font-bundle/font-bundle.json
 ```
 
 The materializer verifies the contract, plan, all three modern snapshot
@@ -218,12 +234,12 @@ and font artifacts:
 ```bash
 uv run --python 3.11 python -m evaluate.generate_multiformat_pdf_conformance \
   --contract evaluate/multiformat/contract.v1.json \
-  --plan artifacts/multiformat-conformance-plan.json \
-  --output-dir artifacts/multiformat-pdf-conformance \
+  --plan artifacts/multiformat-conformance-plan-v1/conformance-plan.json \
+  --output-dir artifacts/multiformat-conformance-pdf-v1 \
   --soffice /locked/bin/soffice \
   --pdfinfo /locked/bin/pdfinfo \
   --pdftocairo /locked/bin/pdftocairo \
-  --font-bundle artifacts/font-bundle.json
+  --font-bundle artifacts/multiformat-font-bundle/font-bundle.json
 ```
 
 The materializer validates the exact 100-case set, one-page structure, stratum
@@ -268,12 +284,12 @@ publishes it with one rename:
 ```bash
 uv run --python 3.11 python -m evaluate.assemble_multiformat_ready_corpora \
   --contract evaluate/multiformat/contract.v1.json \
-  --plan artifacts/multiformat-conformance-plan/conformance-plan.json \
-  --pptx-manifest artifacts/multiformat-pptx-conformance/generation-manifest.json \
-  --docx-manifest artifacts/multiformat-docx-conformance/generation-manifest.json \
-  --xlsx-manifest artifacts/multiformat-xlsx-conformance/generation-manifest.json \
-  --pdf-manifest artifacts/multiformat-pdf-conformance/generation-manifest.json \
-  --legacy-manifest artifacts/multiformat-legacy-pairs/generation-manifest.json \
+  --plan artifacts/multiformat-conformance-plan-v1/conformance-plan.json \
+  --pptx-manifest artifacts/multiformat-conformance-pptx-v1/generation-manifest.json \
+  --docx-manifest artifacts/multiformat-conformance-docx-v1/generation-manifest.json \
+  --xlsx-manifest artifacts/multiformat-conformance-xlsx-v1/generation-manifest.json \
+  --pdf-manifest artifacts/multiformat-conformance-pdf-v1/generation-manifest.json \
+  --legacy-manifest artifacts/multiformat-conformance-legacy-v1/generation-manifest.json \
   --public-config evaluate/multiformat/public-pool-sources.v1.json \
   --public-pool-manifest artifacts/multiformat-public-pool/public-pool.json \
   --legacy-binary-config evaluate/multiformat/legacy-binary-sources.v1.json \
@@ -284,12 +300,12 @@ uv run --python 3.11 python -m evaluate.assemble_multiformat_ready_corpora \
   --soffice /locked/bin/soffice \
   --pdfinfo /locked/bin/pdfinfo \
   --native-inventory-root artifacts/multiformat-native-units \
-  --output-dir artifacts/multiformat-ready-corpora
+  --output-dir artifacts/multiformat-ready-corpora-v1
 ```
 
 Run the standalone validator with the same source arguments and replace only
 `--output-dir` with
-`--corpus-root artifacts/multiformat-ready-corpora`. Then run
+`--corpus-root artifacts/multiformat-ready-corpora-v1`. Then run
 `evaluate.multiformat_corpus` against every
 `corpora/<format>/manifest.json`. The published root contains exactly 1,485
 physical files: 1,295 primaries, 180 support files, seven corpus manifests,
@@ -314,9 +330,9 @@ each format gets its own wrapper, candidate runtime lock, outer lock, candidate
 attestation, reference capture, and candidate capture. A shared schema-2 lock
 or a wrapper copied between formats is rejected.
 
-Set the production paths. These macOS paths are the validated example; a Linux
-host must point to the corresponding pinned binaries and must not reuse the
-macOS lock.
+Set the production paths. These are the validated macOS paths. Linux may run
+the converter, but this signed capture workflow fails `INCOMPLETE` there until
+a Linux process-sandbox backend is available.
 
 ```bash
 set -eu
@@ -332,11 +348,18 @@ FONT_BUNDLE="$EVIDENCE_ROOT/multiformat-font-bundle/font-bundle.json"
 CONFIGURATION="$PROJECT_ROOT/evaluate/multiformat/reference-routing.v1.json"
 CANONICALIZER="$PROJECT_ROOT/evaluate/multiformat_conformance_pdf.py"
 
-PYTHON="$(
-  uv run --python 3.11 \
-    --with-requirements evaluate/requirements-test.txt \
-    python -c 'import sys; print(sys.executable)'
-)"
+test ! -e "$WAVE"
+mkdir -p "$EVIDENCE_ROOT" "$KEY_ROOT"
+chmod 700 "$KEY_ROOT"
+
+PYTHON_ENV="$KEY_ROOT/python-env"
+test ! -e "$PYTHON_ENV"
+uv venv --python 3.11 "$PYTHON_ENV"
+PYTHON="$PYTHON_ENV/bin/python"
+uv pip install \
+  --python "$PYTHON" \
+  --requirements "$PROJECT_ROOT/evaluate/requirements-test.txt"
+
 SOFFICE="/Applications/LibreOffice.app/Contents/MacOS/soffice"
 PDFTOPPM="$(command -v pdftoppm)"
 PDFTOTEXT="$(command -v pdftotext)"
@@ -348,14 +371,9 @@ CHROMIUM="$HOME/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Goog
 CONVERTER="$PROJECT_ROOT/target/release/document2html"
 FORMATS="pptx docx doc xlsx xls ppt pdf"
 
-test ! -e "$WAVE"
-mkdir -p "$EVIDENCE_ROOT" "$KEY_ROOT"
-chmod 700 "$KEY_ROOT"
 cargo build --release -p pptx2html-cli --bin document2html
 
-uv run --python 3.11 \
-  --with-requirements evaluate/requirements-test.txt \
-  python -m evaluate.scaffold_multiformat_evidence \
+"$PYTHON" -m evaluate.scaffold_multiformat_evidence \
   --project-root "$PROJECT_ROOT" \
   --contract "$CONTRACT" \
   --output-dir "$WAVE"
@@ -406,6 +424,9 @@ The candidate runtime lock intentionally does not contain the post-lock
 candidate attestation.
 
 ```bash
+package_soffice="$SOFFICE"
+package_chromium="$CHROMIUM"
+
 for format in $FORMATS; do
   wrapper="$KEY_ROOT/portable-receipt-$format"
   runtime="$WAVE/runtime/$format"
@@ -427,11 +448,11 @@ for format in $FORMATS; do
     --evidence-root "$EVIDENCE_ROOT" \
     --output-dir "$runtime" \
     --converter "$CONVERTER" \
-    --soffice "$SOFFICE" \
+    --soffice "$package_soffice" \
     --pdftohtml "$PDFTOHTML" \
     --pdfinfo "$PDFINFO" \
     --receipt-signer "$wrapper" \
-    --chromium "$CHROMIUM" \
+    --chromium "$package_chromium" \
     --font-bundle "$FONT_BUNDLE" \
     --sandbox-public-key "$CANDIDATE_PUBLIC" \
     --openssl "$OPENSSL" \
@@ -443,14 +464,14 @@ for format in $FORMATS; do
     --output-dir "$outer" \
     --contract "$CONTRACT" \
     --evaluator "$WAVE/evidence/evaluator-manifest.json" \
-    --libreoffice "$SOFFICE" \
+    --libreoffice "$package_soffice" \
     --pdftoppm "$PDFTOPPM" \
     --pdftotext "$PDFTOTEXT" \
     --pdfinfo "$PDFINFO" \
     --canonicalizer "$CANONICALIZER" \
     --font-bundle "$FONT_BUNDLE" \
     --configuration "$CONFIGURATION" \
-    --chromium "$CHROMIUM" \
+    --chromium "$package_chromium" \
     --executor "$wrapper" \
     --sandbox-exec "$SANDBOX_EXEC" \
     --browser-lock "$runtime/browser-lock.json" \
@@ -462,7 +483,15 @@ for format in $FORMATS; do
     --candidate-sandbox-public-key "$CANDIDATE_PUBLIC" \
     --private-key "$REFERENCE_PRIVATE" \
     --corpus-manifest "$corpus"
+
+  if [ "$format" = "pptx" ]; then
+    package_soffice="$outer/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
+    package_chromium="$outer/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+  fi
 done
+
+LOCKED_SOFFICE="$WAVE/outer/pptx/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
+LOCKED_CHROMIUM="$WAVE/outer/pptx/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
 ```
 
 Sign one final-lock-scoped candidate attestation and capture both sides of each
@@ -480,10 +509,10 @@ for format in $FORMATS; do
   bound_contract="$outer/artifacts/contract"
   bound_evaluator="$outer/artifacts/evaluator"
   bound_converter="$outer/artifacts/converter"
-  bound_soffice="$outer/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
+  bound_soffice="$LOCKED_SOFFICE"
   bound_pdftohtml="$outer/artifacts/pdftohtml"
   bound_pdfinfo="$outer/artifacts/poppler-metadata"
-  bound_chromium="$outer/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+  bound_chromium="$LOCKED_CHROMIUM"
   bound_openssl="$outer/artifacts/openssl"
   bound_receipt_signer="$outer/artifacts/receipt-signer"
   candidate_nonce="$("$OPENSSL" rand -hex 32)"
@@ -594,10 +623,10 @@ for format in $FORMATS; do
   bound_contract="$outer/artifacts/contract"
   bound_evaluator="$outer/artifacts/evaluator"
   bound_converter="$outer/artifacts/converter"
-  bound_soffice="$outer/artifacts/libreoffice-package/LibreOffice.app/Contents/MacOS/soffice"
+  bound_soffice="$LOCKED_SOFFICE"
   bound_pdftohtml="$outer/artifacts/pdftohtml"
   bound_pdfinfo="$outer/artifacts/poppler-metadata"
-  bound_chromium="$outer/artifacts/chromium-package/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+  bound_chromium="$LOCKED_CHROMIUM"
   bound_openssl="$outer/artifacts/openssl"
   bound_receipt_signer="$outer/artifacts/receipt-signer"
   attestation="$WAVE/attestations/$format.json"

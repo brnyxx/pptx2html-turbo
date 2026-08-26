@@ -451,7 +451,7 @@ code enforces input, cumulative output, log, and time bounds on every platform.
 The standardized claim is
 `96% under the documented general conversion evaluation contract`. The gate is
 an acceptance gate, not an `exact` promotion. Its default required reference
-profile is `libreoffice-poppler`: supported macOS/Linux hosts use
+profile is `libreoffice-poppler`: supported macOS hosts use
 locked LibreOffice and Poppler over the seven frozen format corpora, with PDF
 entering Poppler directly. Existing PPTX exactness remains a separate,
 stricter PowerPoint-native zero-RGBA-difference contract. A signed

@@ -6,7 +6,7 @@ Scope: fidelity evidence and scoring tooling. Root `AGENTS.md` rules apply; not 
 For the separate PPTX `exact`-promotion track, PowerPoint is the exactness
 oracle and LibreOffice is secondary regression evidence; they never substitute
 for each other there. The default seven-format general conversion contract
-uses the locked macOS/Linux LibreOffice/Poppler profile over frozen admitted
+uses the locked macOS LibreOffice/Poppler profile over frozen admitted
 corpora. Optional Office/native captures may enrich a selected profile or
 support exact promotion, but they are not prerequisites for the default gate
 and cannot be substituted into it.
