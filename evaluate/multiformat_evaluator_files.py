@@ -71,6 +71,12 @@ EVALUATOR_FILES = (
     "evaluate/multiformat_reference_profile.py",
     "evaluate/multiformat/reference-routing.v1.json",
     "evaluate/multiformat_reference_routing.py",
+    # The reviewer trust anchor decides which two independent reviewers the
+    # evaluator accepts, so the registry and both public keys are digest-bound;
+    # the loader and its tests are bound with the review wave below.
+    "evaluate/multiformat/reviewer-registry.v1.json",
+    "evaluate/multiformat/reviewer-keys/visual.ed25519.public",
+    "evaluate/multiformat/reviewer-keys/semantic.ed25519.public",
     "evaluate/multiformat_scaffold_templates.py",
     "evaluate/multiformat_office_oracle_receipt.py",
     "evaluate/multiformat_office_oracle_provenance.py",

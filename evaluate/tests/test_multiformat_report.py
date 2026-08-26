@@ -7,11 +7,18 @@ from pathlib import Path
 from evaluate.multiformat_metrics import validate_metrics_evidence
 from evaluate.multiformat_report import acceptance_failures, build_report
 from evaluate.multiformat_schema import JsonValue, read_object
-from evaluate.tests.multiformat_metrics_fixture import write_metrics
+from evaluate.tests.multiformat_metrics_fixture import (
+    patched_reviewer_registry,
+    write_metrics,
+)
 from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 
 class MultiFormatReportTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Fixture reviews are signed by test-only reviewers.
+        self.enterContext(patched_reviewer_registry())
+
     def test_report_is_assembled_only_from_recomputed_metric_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

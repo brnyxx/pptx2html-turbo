@@ -6,11 +6,19 @@ from pathlib import Path
 
 from evaluate.multiformat_metric_types import MetricError, MetricStatus
 from evaluate.multiformat_metrics import validate_metrics_evidence
-from evaluate.tests.multiformat_metrics_fixture import write_metrics
+from evaluate.tests.multiformat_metrics_fixture import (
+    patched_reviewer_registry,
+    write_metrics,
+)
 from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 
 class MultiFormatMetricsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Fixture packets are signed by test-only reviewers, so metrics must
+        # resolve trust through the matching test registry.
+        self.enterContext(patched_reviewer_registry())
+
     def test_ready_metrics_cross_link_every_corpus_record(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

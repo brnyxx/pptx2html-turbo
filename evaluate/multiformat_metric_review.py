@@ -3,13 +3,22 @@ from __future__ import annotations
 from pathlib import Path
 
 from evaluate.multiformat_capture_types import CaptureManifest
-from evaluate.multiformat_corpus_items import object_list, require_keys
+from evaluate.multiformat_corpus_items import (
+    canonical_identity,
+    object_list,
+    require_keys,
+)
+from evaluate.multiformat_corpus_types import CorpusError
 from evaluate.multiformat_metric_compute import resolve_artifact_binding
 from evaluate.multiformat_metric_types import CorpusMetricSpec, MetricError
 from evaluate.multiformat_review_materialize import (
     ReviewMaterializeError,
     load_review_decision,
     load_review_packet,
+)
+from evaluate.multiformat_review_registry import (
+    ReviewRegistryError,
+    load_reviewer_registry,
 )
 from evaluate.multiformat_schema import JsonValue, object_value, string_value
 from evaluate.multiformat_strict_json import read_strict_object
@@ -40,21 +49,41 @@ def compute_review(
         if key not in {"command_plan", "command_plan_sha256"}
     }
     try:
+        # Metrics re-derive reviewer trust from the evaluator-bound registry
+        # instead of inheriting whatever keys the packet happens to carry.
+        registry = load_reviewer_registry()
         trusts, packet_hash = load_review_packet(
             packet, spec.pair_ids(), oracle, candidate, packet_bindings
         )
+        if {
+            (item.reviewer_id, item.reviewer_role, item.public_key_sha256)
+            for item in trusts.values()
+        } != {
+            (item.reviewer_id, item.reviewer_role, item.public_key_sha256)
+            for item in registry.reviewers
+        }:
+            raise ReviewMaterializeError("review trust is not registry-bound")
         reviews = []
         for path in decision_paths:
             raw = read_strict_object(path)
-            trust = trusts.get(string_value(raw, "reviewer_id"))
+            trust = trusts.get(
+                canonical_identity(string_value(raw, "reviewer_id"), "reviewer_id")
+            )
             if trust is None:
-                raise ReviewMaterializeError("review signer is not packet-bound")
+                raise ReviewMaterializeError("review signer is not registry-bound")
             reviews.append(
                 load_review_decision(path, spec.pair_ids(), packet_hash, trust)
             )
         if {review.reviewer_id for review in reviews} != set(trusts):
             raise ReviewMaterializeError("review signer set differs")
-    except (ReviewMaterializeError, OSError, TypeError, ValueError) as error:
+    except (
+        CorpusError,
+        ReviewMaterializeError,
+        ReviewRegistryError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         raise MetricError("review.signature", "verification failed") from error
     all_passed = all(
         decision == "PASS"

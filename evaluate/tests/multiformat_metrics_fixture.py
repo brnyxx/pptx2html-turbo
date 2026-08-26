@@ -4,13 +4,20 @@ import hashlib
 import json
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from evaluate.jcs import canonicalize
 from evaluate.materialize_multiformat_command_plan import materialize_command_plan
 from evaluate.multiformat_command_evidence import load_command_plan
+from evaluate.multiformat_review_registry import (
+    RegisteredReviewer,
+    ReviewerRegistry,
+)
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import JsonValue
 from evaluate.tests.multiformat_capture_fixture import (
@@ -47,6 +54,46 @@ REVIEWER_ROLES: dict[str, str] = {
 def reviewer_key(reviewer_id: str) -> Ed25519PrivateKey:
     """Returns the deterministic test-only signing key for one reviewer."""
     return Ed25519PrivateKey.from_private_bytes(REVIEWER_SEEDS[reviewer_id])
+
+
+def test_reviewer_registry() -> ReviewerRegistry:
+    """Builds the registry that trusts exactly these test-only reviewers.
+
+    Metrics re-load reviewer trust from the registry, so fixture-built packets
+    are only valid against a registry carrying the same public keys. Tests
+    patch the consumer-side loader with this value; the tracked production
+    registry is never involved.
+    """
+    return ReviewerRegistry(
+        tuple(
+            RegisteredReviewer(
+                reviewer_id,
+                REVIEWER_ROLES[reviewer_id],
+                reviewer_key(reviewer_id).public_key().public_bytes_raw(),
+                hashlib.sha256(
+                    reviewer_key(reviewer_id).public_key().public_bytes_raw()
+                ).hexdigest(),
+            )
+            for reviewer_id in REVIEWER_SEEDS
+        )
+    )
+
+
+@contextmanager
+def patched_reviewer_registry() -> Iterator[None]:
+    """Points every registry consumer at the test-only reviewer set."""
+    registry = test_reviewer_registry()
+    with (
+        mock.patch(
+            "evaluate.multiformat_review_packet_trust.load_reviewer_registry",
+            return_value=registry,
+        ),
+        mock.patch(
+            "evaluate.multiformat_metric_review.load_reviewer_registry",
+            return_value=registry,
+        ),
+    ):
+        yield
 
 
 def sign_decision_value(decision: dict[str, JsonValue]) -> bytes:

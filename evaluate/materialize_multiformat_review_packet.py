@@ -12,11 +12,15 @@ from evaluate.multiformat_metric_manifest import (
 )
 from evaluate.multiformat_review_materialize import ReviewMaterializeError
 from evaluate.multiformat_review_packet import materialize_review_packet
+from evaluate.multiformat_review_registry import ReviewRegistryError
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate captures and create an immutable blank review packet."
+        description=(
+            "Validate captures and create an immutable blank review packet "
+            "bound to the fixed reviewer registry."
+        )
     )
     parser.add_argument("--project-root", type=Path, default=Path("."))
     parser.add_argument("--contract", type=Path, required=True)
@@ -27,12 +31,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--candidate-capture", type=Path, required=True)
     parser.add_argument("--evidence-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--reviewer-id-1", required=True)
-    parser.add_argument("--reviewer-role-1", required=True)
-    parser.add_argument("--reviewer-id-2", required=True)
-    parser.add_argument("--reviewer-role-2", required=True)
-    parser.add_argument("--reviewer-public-key-1", type=Path, required=True)
-    parser.add_argument("--reviewer-public-key-2", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -54,10 +52,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             context.oracle,
             context.candidate,
             context.spec.pair_ids(),
-            reviewers=(
-                (args.reviewer_id_1, args.reviewer_role_1, args.reviewer_public_key_1),
-                (args.reviewer_id_2, args.reviewer_role_2, args.reviewer_public_key_2),
-            ),
             bindings={
                 "project_revision": context.project_revision,
                 "contract_sha256": context.contract_hash,
@@ -71,6 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (
         MetricsAssemblyError,
         ReviewMaterializeError,
+        ReviewRegistryError,
         OSError,
         TypeError,
         ValueError,

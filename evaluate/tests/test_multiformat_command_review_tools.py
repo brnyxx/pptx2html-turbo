@@ -7,8 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from unittest import mock
 
 from evaluate.materialize_multiformat_command_plan import (
     CommandPlanMaterializeError,
@@ -30,10 +29,18 @@ from evaluate.multiformat_review_materialize import (
     load_review_packet,
 )
 from evaluate.multiformat_review_packet import materialize_review_packet
+from evaluate.multiformat_review_registry import (
+    ReviewerRegistry,
+    ReviewRegistryError,
+)
 from evaluate.multiformat_schema import JsonValue, read_object, sha256_file
 from evaluate.sign_multiformat_review_decision import (
     ReviewSigningError,
     sign_review_decision,
+)
+from evaluate.tests.multiformat_review_registry_fixture import (
+    TestRegistry,
+    write_test_registry,
 )
 from evaluate.validate_multiformat_review_decision import validate_completed_review
 
@@ -235,6 +242,36 @@ class CommandPlanMaterializerTests(unittest.TestCase):
 
 
 class ReviewAuthenticationTests(unittest.TestCase):
+    """Reviewer trust comes from the registry, so every case installs one.
+
+    Each test builds a throwaway registry with freshly generated keypairs and
+    patches the loader in the two consumer modules. No test private key is ever
+    committed, and production keeps resolving the tracked registry.
+    """
+
+    def __init__(self, methodName: str = "runTest") -> None:
+        super().__init__(methodName)
+        self.fixture = TestRegistry(Path(), {})
+        self.registry = ReviewerRegistry(())
+        self.first_id = ""
+        self.first_role = ""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.fixture = write_test_registry(Path(directory.name))
+        registry = self.fixture.load()
+        self.registry = registry
+        for module in (
+            "evaluate.multiformat_review_packet.load_reviewer_registry",
+            "evaluate.multiformat_review_packet_trust.load_reviewer_registry",
+        ):
+            patcher = mock.patch(module, return_value=registry)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.first_id = registry.reviewers[0].reviewer_id
+        self.first_role = registry.reviewers[0].reviewer_role
+
     def test_two_packet_bound_keys_sign_and_verify_complete_decisions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -279,8 +316,8 @@ class ReviewAuthenticationTests(unittest.TestCase):
             summary = validate_completed_review(packet, signed)
 
             self.assertEqual(summary["status"], "VALID")
-            self.assertEqual(summary["reviewer_id"], "alice")
-            self.assertEqual(summary["reviewer_role"], "visual")
+            self.assertEqual(summary["reviewer_id"], self.first_id)
+            self.assertEqual(summary["reviewer_role"], self.first_role)
             self.assertEqual(summary["pair_count"], 1)
 
     def test_validate_cli_canonicalizes_signed_reviewer_identity(self) -> None:
@@ -288,8 +325,8 @@ class ReviewAuthenticationTests(unittest.TestCase):
             root = Path(temporary)
             packet, templates, keys, _trusts, _hash = self._packet(root)
             value = read_object(templates[0])
-            value["reviewer_id"] = "Alice"
-            value["reviewer_role"] = "Visual"
+            value["reviewer_id"] = self.first_id.upper()
+            value["reviewer_role"] = self.first_role.upper()
             _objects(value, "pairs")[0].update(
                 {"decision": "PASS", "critical_defect": False}
             )
@@ -299,8 +336,8 @@ class ReviewAuthenticationTests(unittest.TestCase):
 
             summary = validate_completed_review(packet, signed)
 
-            self.assertEqual(summary["reviewer_id"], "alice")
-            self.assertEqual(summary["reviewer_role"], "visual")
+            self.assertEqual(summary["reviewer_id"], self.first_id)
+            self.assertEqual(summary["reviewer_role"], self.first_role)
 
     def test_validate_cli_rejects_foreign_key_and_unbound_signer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -315,15 +352,20 @@ class ReviewAuthenticationTests(unittest.TestCase):
             sign_review_decision(templates[0], keys[0], signed)
 
             foreign = read_object(signed)
-            foreign["reviewer_id"] = "carol"
+            foreign["reviewer_id"] = "unregistered-reviewer"
             unbound = root / "unbound.json"
             unbound.write_text(json.dumps(foreign), encoding="utf-8")
             with self.assertRaises(ReviewMaterializeError):
                 validate_completed_review(packet, unbound)
 
+            # A decision stays bound to the exact packet it was signed for,
+            # even though both packets carry the same registered reviewers.
             second = root / "second"
             second.mkdir()
-            other_packet, _t, _k, _tr, _h = self._packet(second)
+            other_packet, _t, _k, _tr, _h = self._packet(
+                second, oracle=self._capture("9", "8")
+            )
+            self.assertNotEqual(sha256_file(other_packet), sha256_file(packet))
             with self.assertRaises(ReviewMaterializeError):
                 validate_completed_review(other_packet, signed)
 
@@ -359,22 +401,32 @@ class ReviewAuthenticationTests(unittest.TestCase):
             signed.write_text(json.dumps(edited), encoding="utf-8")
             with self.assertRaises(ReviewMaterializeError):
                 load_review_decision(signed, frozenset({"pair-1"}), packet_hash, trust)
-            duplicate_root = root / "duplicate"
-            with self.assertRaises(ReviewMaterializeError):
+
+    def test_duplicate_registry_key_blocks_packet_materialization(self) -> None:
+        # A registry that reuses one key cannot yield two independent
+        # reviewers, so the packet must never be published from it.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            duplicate = write_test_registry(root / "registry", duplicate_key=True)
+            with (
+                mock.patch(
+                    "evaluate.multiformat_review_packet.load_reviewer_registry",
+                    side_effect=ReviewRegistryError("duplicate reviewer key"),
+                ),
+                self.assertRaises(ReviewMaterializeError),
+            ):
                 materialize_review_packet(
-                    duplicate_root,
+                    root / "duplicate",
                     self._capture("a", "b"),
                     self._capture("c", "d"),
                     frozenset({"pair-1"}),
-                    reviewers=(
-                        ("alice", "visual", root / "public-0.key"),
-                        ("bob", "semantic-security", root / "public-0.key"),
-                    ),
                     bindings=self._bindings(),
                 )
+            with self.assertRaises(ReviewRegistryError):
+                duplicate.load()
 
     def _packet(
-        self, root: Path
+        self, root: Path, oracle: CaptureManifest | None = None
     ) -> tuple[
         Path,
         tuple[Path, ...],
@@ -382,32 +434,26 @@ class ReviewAuthenticationTests(unittest.TestCase):
         dict[str, ReviewerTrust],
         str,
     ]:
-        private_paths: list[Path] = []
-        for index in range(2):
-            key = Ed25519PrivateKey.generate()
-            private = root / f"private-{index}.key"
-            public = root / f"public-{index}.key"
-            private.write_bytes(key.private_bytes_raw())
-            os.chmod(private, 0o600)
-            public.write_bytes(key.public_key().public_bytes_raw())
-            private_paths.append(private)
+        reference = oracle or self._capture("a", "b")
+        # Private keys come from the injected test registry, matching the
+        # order in which its reviewers were registered.
+        private_paths = [
+            self.fixture.private_key(reviewer.reviewer_id)
+            for reviewer in self.registry.reviewers
+        ]
         output = root / "review"
         summary = materialize_review_packet(
             output,
-            self._capture("a", "b"),
+            reference,
             self._capture("c", "d"),
             frozenset({"pair-1"}),
-            reviewers=(
-                ("alice", "visual", root / "public-0.key"),
-                ("bob", "semantic-security", root / "public-1.key"),
-            ),
             bindings=self._bindings(),
         )
         packet = Path(_string(summary, "review_packet"))
         trusts, packet_hash = load_review_packet(
             packet,
             frozenset({"pair-1"}),
-            self._capture("a", "b"),
+            reference,
             self._capture("c", "d"),
             self._bindings(),
         )

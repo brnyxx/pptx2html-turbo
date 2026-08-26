@@ -625,14 +625,21 @@ CARGO="$(rustup which cargo)"
 RUST_BIN="$(dirname "$(rustup which rustc)")"
 TOOL_PATH="$RUST_BIN:/opt/homebrew/bin:/usr/bin:/bin"
 
-# The producer receives only the two distinct raw 32-byte Ed25519 public keys.
-# Reviewer private keys never enter the producer workspace or environment.
-VISUAL_REVIEWER_PUBLIC="/reviewer-public-keys/visual.ed25519.public"
-SEMANTIC_REVIEWER_PUBLIC="/reviewer-public-keys/semantic.ed25519.public"
-for key in "$VISUAL_REVIEWER_PUBLIC" "$SEMANTIC_REVIEWER_PUBLIC"; do
-  test "$(wc -c < "$key" | tr -d ' ')" = 32
-done
-cmp -s "$VISUAL_REVIEWER_PUBLIC" "$SEMANTIC_REVIEWER_PUBLIC" && exit 1
+# Reviewer trust is not producer-supplied. The tracked registry at
+# evaluate/multiformat/reviewer-registry.v1.json fixes both reviewer IDs,
+# roles, and raw 32-byte Ed25519 public keys, and the evaluator re-loads it
+# independently. The producer holds no reviewer private key material: it reads
+# the tracked public keys under evaluate/multiformat/reviewer-keys/ through the
+# registry, while each reviewer keeps its own private key outside this
+# repository and returns only signed decisions. There is no flag or environment
+# variable that can point the trust anchor anywhere else.
+"$PYTHON" - <<'PY'
+from evaluate.multiformat_review_registry import load_reviewer_registry
+
+registry = load_reviewer_registry()
+for reviewer in registry.reviewers:
+    print(reviewer.reviewer_id, reviewer.reviewer_role, reviewer.public_key_sha256)
+PY
 
 for format in $FORMATS; do
   outer="$WAVE/outer/$format"
@@ -667,19 +674,17 @@ for format in $FORMATS; do
     --oracle-capture "$WAVE/reference/$format/capture.json" \
     --candidate-capture "$WAVE/candidate/$format/manifest.json" \
     --evidence-root "$EVIDENCE_ROOT" \
-    --output-dir "$WAVE/review/$format" \
-    --reviewer-id-1 "visual-reviewer-$format" \
-    --reviewer-role-1 visual-fidelity \
-    --reviewer-id-2 "semantic-security-reviewer-$format" \
-    --reviewer-role-2 semantic-security \
-    --reviewer-public-key-1 "$VISUAL_REVIEWER_PUBLIC" \
-    --reviewer-public-key-2 "$SEMANTIC_REVIEWER_PUBLIC"
+    --output-dir "$WAVE/review/$format"
 done
 ```
 
 Give `review-packet.json` and exactly one decision template to each reviewer.
-The packet embeds two distinct raw Ed25519 public keys and binds both identities,
-roles, captures, artifact hashes, and the complete pair set before review. Each
+The packet restates the two registry-fixed identities, roles, and distinct raw
+Ed25519 public keys, and binds the captures, artifact hashes, and the complete
+pair set before review. Packet materialization accepts no reviewer identity,
+role, or key arguments, so a producer cannot substitute a reviewer it controls;
+packet validation, decision validation, and metrics each re-load the tracked
+registry and reject any key the registry does not fix. Each
 reviewer changes every `decision` to `PASS` or `FAIL` and every
 `critical_defect` to `true` or `false`, then uses their private key to create a
 separate signed file. Do not auto-fill decisions from scores and never exchange
@@ -690,7 +695,11 @@ copy, changes every null decision/critical-defect value, signs with their own
 private key, and returns only the signed output:
 
 The visual reviewer runs this only in their private workspace after receiving
-`review-packet.json` and the generated `decision-visual-reviewer-FORMAT.json`.
+`review-packet.json` and the generated `decision-visual-fidelity-reviewer.json`.
+Each reviewer retains sole custody of its own private key outside this
+repository and outside the evidence tree, and hands back only the signed
+decision. Only the matching public key is committed, under
+`evaluate/multiformat/reviewer-keys/`.
 The private key is a nonsymlink, regular raw 32-byte Ed25519 file with mode 0600:
 
 ```bash
@@ -698,7 +707,7 @@ REVIEW_WORKSPACE="/private/visual-review"
 VISUAL_REVIEWER_PRIVATE="$REVIEW_WORKSPACE/visual.ed25519.private"
 chmod 0600 "$VISUAL_REVIEWER_PRIVATE"
 for format in $FORMATS; do
-  decision="$REVIEW_WORKSPACE/$format/decision-visual-reviewer-$format.json"
+  decision="$REVIEW_WORKSPACE/$format/decision-visual-fidelity-reviewer.json"
   # Independently inspect the packet artifacts, then replace every null in
   # this exact decision file with the reviewer's decision/critical-defect value.
   "$PYTHON" -m evaluate.sign_multiformat_review_decision \
@@ -718,7 +727,7 @@ REVIEW_WORKSPACE="/private/semantic-security-review"
 SEMANTIC_REVIEWER_PRIVATE="$REVIEW_WORKSPACE/semantic.ed25519.private"
 chmod 0600 "$SEMANTIC_REVIEWER_PRIVATE"
 for format in $FORMATS; do
-  decision="$REVIEW_WORKSPACE/$format/decision-semantic-security-reviewer-$format.json"
+  decision="$REVIEW_WORKSPACE/$format/decision-semantic-security-reviewer.json"
   # Independently inspect and complete every null in this exact decision file.
   "$PYTHON" -m evaluate.sign_multiformat_review_decision \
     --decision "$decision" \

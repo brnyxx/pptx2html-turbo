@@ -1,0 +1,20 @@
+{
+  "algorithm": "ed25519",
+  "reviewers": [
+    {
+      "algorithm": "ed25519",
+      "public_key_path": "reviewer-keys/visual.ed25519.public",
+      "public_key_sha256": "11be501b3861aa4818da927e82d3b4a631eed633c7ab66e8786f70b65e4adb4c",
+      "reviewer_id": "visual-fidelity-reviewer",
+      "reviewer_role": "visual-fidelity"
+    },
+    {
+      "algorithm": "ed25519",
+      "public_key_path": "reviewer-keys/semantic.ed25519.public",
+      "public_key_sha256": "f80f50186e4497f3a5626737fa76ed8f3cfa5bee0bcc527d1cb53206673c41c9",
+      "reviewer_id": "semantic-security-reviewer",
+      "reviewer_role": "semantic-security"
+    }
+  ],
+  "schema_version": 1
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unittest
 from pathlib import Path
 
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
@@ -19,13 +20,23 @@ from evaluate.tests.multiformat_corpus_fixture import (
 from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
     write_gate_oracle_lock,
 )
-from evaluate.tests.multiformat_metrics_fixture import write_metrics
+from evaluate.tests.multiformat_metrics_fixture import (
+    patched_reviewer_registry,
+    write_metrics,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
 
 
-class MultiFormatGateFixture:
+class MultiFormatGateFixture(unittest.TestCase):
+    def setUp(self) -> None:
+        # Fixture metrics carry decisions signed by the deterministic test-only
+        # reviewers, so every consumer of this fixture resolves reviewer trust
+        # through the matching test registry instead of the tracked one.
+        super().setUp()
+        self.enterContext(patched_reviewer_registry())
+
     def _write_oracle_lock(self, root: Path) -> Path:
         return write_gate_oracle_lock(root, PROJECT_ROOT)
 

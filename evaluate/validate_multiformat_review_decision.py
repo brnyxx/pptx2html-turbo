@@ -17,6 +17,7 @@ from evaluate.multiformat_review_materialize import (
     load_review_decision,
     reviewer_trusts,
 )
+from evaluate.multiformat_review_registry import ReviewRegistryError
 from evaluate.multiformat_schema import (
     JsonValue,
     integer_value,
@@ -65,6 +66,7 @@ def validate_completed_review(
         if pair_id in pair_ids:
             raise ReviewMaterializeError(f"duplicate review packet pair: {pair_id}")
         pair_ids.add(pair_id)
+    # Independently re-loads the fixed registry; packet keys are not trusted.
     trusts = reviewer_trusts(packet)
     signer = canonical_identity(
         string_value(read_strict_object(decision_path), "reviewer_id"), "reviewer_id"
@@ -99,6 +101,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (
         CorpusError,
         ReviewMaterializeError,
+        ReviewRegistryError,
         OSError,
         TypeError,
         ValueError,

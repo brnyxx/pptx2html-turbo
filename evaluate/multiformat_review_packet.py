@@ -8,20 +8,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_capture_types import CaptureManifest
-from evaluate.multiformat_corpus_items import canonical_identity
-from evaluate.multiformat_review_materialize import (
-    ReviewMaterializeError,
-    review_pair_artifacts,
+from evaluate.multiformat_review_packet_trust import review_pair_artifacts
+from evaluate.multiformat_review_types import ReviewMaterializeError
+from evaluate.multiformat_review_registry import (
+    ReviewRegistryError,
+    load_reviewer_registry,
 )
 from evaluate.multiformat_schema import JsonValue, sha256_file
-
-
-def _public_key(path: Path) -> bytes:
-    value = path.resolve(strict=True).read_bytes()
-    if len(value) != 32:
-        raise ReviewMaterializeError("reviewer public key must be raw 32-byte Ed25519")
-    Ed25519PublicKey.from_public_bytes(value)
-    return value
 
 
 def materialize_review_packet(
@@ -30,25 +23,24 @@ def materialize_review_packet(
     candidate: CaptureManifest,
     expected_pairs: frozenset[str],
     *,
-    reviewers: tuple[tuple[str, str, Path], tuple[str, str, Path]],
     bindings: dict[str, JsonValue],
 ) -> dict[str, JsonValue]:
+    """Publishes a blank packet bound to the fixed reviewer registry.
+
+    Reviewer identities, roles, and public keys are never caller-chosen: they
+    come from the evaluator-bound registry, so a producer cannot introduce a
+    reviewer whose private key it holds.
+    """
+    try:
+        registry = load_reviewer_registry()
+    except ReviewRegistryError as error:
+        raise ReviewMaterializeError("reviewer registry is unusable") from error
     identities = tuple(
-        (
-            canonical_identity(item[0], "reviewer_id"),
-            canonical_identity(item[1], "reviewer_role"),
-            _public_key(item[2]),
-        )
-        for item in reviewers
+        (reviewer.reviewer_id, reviewer.reviewer_role, reviewer.public_key)
+        for reviewer in registry.reviewers
     )
-    if (
-        len({item[0] for item in identities}) != 2
-        or len({item[1] for item in identities}) != 2
-        or len({item[2] for item in identities}) != 2
-    ):
-        raise ReviewMaterializeError(
-            "reviewer identities, roles, and public keys must be distinct"
-        )
+    for _reviewer_id, _role, key in identities:
+        Ed25519PublicKey.from_public_bytes(key)
     if not expected_pairs:
         raise ReviewMaterializeError("review packet pair set is empty")
     output_dir.mkdir(parents=True, exist_ok=False)

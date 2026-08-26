@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import os
 import subprocess
@@ -33,6 +34,10 @@ from evaluate.multiformat_metric_manifest import (
 from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_metrics import validate_metrics_evidence
 from evaluate.multiformat_review_packet import materialize_review_packet
+from evaluate.multiformat_review_registry import (
+    RegisteredReviewer,
+    ReviewerRegistry,
+)
 from evaluate.multiformat_revision import current_project_revision
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -73,6 +78,35 @@ class Fixture:
 
 
 class AssembleMultiformatMetricsTests(unittest.TestCase):
+    # Reviewer identities used by this test's generated keypairs. Trust is
+    # resolved through a test registry built from those exact public keys, so
+    # the tracked production registry is never consulted here.
+    REVIEWERS = (
+        ("reviewer-1", "visual"),
+        ("reviewer-2", "semantic-security"),
+    )
+
+    def _patch_registry(self, public_keys: tuple[bytes, bytes]) -> None:
+        registry = ReviewerRegistry(
+            tuple(
+                RegisteredReviewer(
+                    reviewer_id,
+                    role,
+                    key,
+                    hashlib.sha256(key).hexdigest(),
+                )
+                for (reviewer_id, role), key in zip(
+                    self.REVIEWERS, public_keys, strict=True
+                )
+            )
+        )
+        for target in (
+            "evaluate.multiformat_review_packet.load_reviewer_registry",
+            "evaluate.multiformat_review_packet_trust.load_reviewer_registry",
+            "evaluate.multiformat_metric_review.load_reviewer_registry",
+        ):
+            self.enterContext(mock.patch(target, return_value=registry))
+
     def test_real_commands_publish_self_validating_metrics_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = self._fixture(Path(temporary))
@@ -622,26 +656,21 @@ class AssembleMultiformatMetricsTests(unittest.TestCase):
         self, root: Path, context
     ) -> tuple[Path, tuple[Path, Path], tuple[Path, Path]]:
         private_paths: list[Path] = []
-        public_paths: list[Path] = []
+        public_bytes: list[bytes] = []
         for index in range(2):
             key = Ed25519PrivateKey.generate()
             private = root / f"review-private-{index}.key"
-            public = root / f"review-public-{index}.key"
             private.write_bytes(key.private_bytes_raw())
             os.chmod(private, 0o600)
-            public.write_bytes(key.public_key().public_bytes_raw())
             private_paths.append(private)
-            public_paths.append(public)
+            public_bytes.append(key.public_key().public_bytes_raw())
+        self._patch_registry((public_bytes[0], public_bytes[1]))
         review_root = root / "review"
         summary = materialize_review_packet(
             review_root,
             context.oracle,
             context.candidate,
             context.spec.pair_ids(),
-            reviewers=(
-                ("reviewer-1", "visual", public_paths[0]),
-                ("reviewer-2", "semantic-security", public_paths[1]),
-            ),
             bindings={
                 "project_revision": context.project_revision,
                 "contract_sha256": context.contract_hash,
