@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-08-26
+
+### Changed
+
+- Update repository metadata to the new GitHub namespace `brnyxx/pptx2html-turbo` (username change; old `kim62210` URLs redirect)
+
 ## [2.0.1] - 2026-08-19
 
 ### Added

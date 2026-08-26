@@ -1,6 +1,6 @@
 [package]
 name = "document2html-py"
-version = "2.0.1"
+version = "2.0.2"
 edition = "2024"
 description = "Python bindings for universal Office and PDF to HTML conversion"
 license = "MIT"
