@@ -4,8 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from evaluate.multiformat_portable_lock_io import validate_candidate_locks
+from evaluate.multiformat_portable_lock_io import (
+    validate_candidate_artifacts,
+    validate_candidate_locks,
+)
 from evaluate.multiformat_portable_package_inventory import PortableLockIoError
 
 
@@ -31,6 +35,82 @@ class PortableLockIoContractTests(unittest.TestCase):
                 PortableLockIoError, "browser lock is incomplete"
             ):
                 validate_candidate_locks(browser, runtime)
+
+    def test_schema_two_missing_package_inventory_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            # Given: a schema-2 candidate runtime lock with incomplete package paths.
+            runtime, paths, versions, revision = self._candidate_artifacts(
+                Path(temporary)
+            )
+
+            # When/Then: missing package inventory keys fail closed with a typed error.
+            for missing in (
+                "poppler-package-inventory",
+                "openssl-package-inventory",
+            ):
+                with self.subTest(missing=missing):
+                    missing_paths = dict(paths)
+                    missing_paths.pop(missing)
+                    with (
+                        self.assertRaisesRegex(
+                            PortableLockIoError,
+                            "portable candidate package inventory is missing",
+                        ),
+                        patch(
+                            "evaluate.multiformat_portable_lock_io.sha256_file",
+                            return_value="0" * 64,
+                        ),
+                    ):
+                        validate_candidate_artifacts(
+                            runtime, missing_paths, versions, revision
+                        )
+
+    @staticmethod
+    def _candidate_artifacts(
+        root: Path,
+    ) -> tuple[Path, dict[str, Path], dict[str, str], str]:
+        browser, runtime = PortableLockIoContractTests._locks(root)
+        runtime_value = json.loads(runtime.read_text(encoding="utf-8"))
+        runtime_value["schema_version"] = 2
+        runtime_value["browser"] = json.loads(browser.read_text(encoding="utf-8"))
+        runtime_value["candidate_runtime"]["poppler_package_inventory_sha256"] = (
+            "0" * 64
+        )
+        runtime_value["sandbox_verifier"]["openssl_package_inventory_sha256"] = "0" * 64
+        runtime.write_text(json.dumps(runtime_value, sort_keys=True), encoding="utf-8")
+        paths: dict[str, Path] = {}
+        for name in (
+            "browser-lock",
+            "chromium",
+            "converter",
+            "libreoffice",
+            "pdftohtml",
+            "poppler-metadata",
+            "receipt-signer",
+            "candidate-sandbox-public-key",
+            "openssl",
+            "font-bundle",
+            "poppler-package-inventory",
+            "openssl-package-inventory",
+        ):
+            path = root / f"{name}.json"
+            path.write_text(name, encoding="utf-8")
+            paths[name] = path
+        paths["browser-lock"] = browser
+        versions = {
+            "chromium": "test",
+            "converter": "test",
+            "libreoffice": "test",
+            "pdftohtml": "test",
+            "poppler-metadata": "test",
+            "receipt-signer": "test",
+        }
+        return (
+            runtime,
+            paths,
+            versions,
+            runtime_value["candidate_runtime"]["build_revision"],
+        )
 
     @staticmethod
     def _locks(root: Path) -> tuple[Path, Path]:

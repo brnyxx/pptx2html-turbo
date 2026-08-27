@@ -132,6 +132,11 @@ def validate_candidate_artifacts(
     ) or verifier.get("openssl_sha256") != sha256_file(paths["openssl"]):
         raise PortableLockIoError("portable candidate sandbox lock differs")
     if candidate.get("schema_version") == 2:
+        if (
+            "poppler-package-inventory" not in paths
+            or "openssl-package-inventory" not in paths
+        ):
+            raise PortableLockIoError("portable candidate package inventory is missing")
         if runtime.get("poppler_package_inventory_sha256") != sha256_file(
             paths["poppler-package-inventory"]
         ):
