@@ -236,6 +236,7 @@ def _run_reference_process(
             timeout,
             tools.sandbox_exec,
             tools.sandbox_profile,
+            tools.libreoffice,
             tools.verify_runtime,
         )
     except PortableReferenceProcessIncompleteError as error:

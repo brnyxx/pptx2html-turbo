@@ -5,15 +5,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from evaluate.multiformat_candidate_process import run_bounded_process
+from evaluate.multiformat_portable_lock_io import sandbox_profile_text
 from evaluate.multiformat_portable_reference_outputs import executable
 
 MAX_LOG_BYTES = 8 * 1024 * 1024
-_SANDBOX_PROFILE = (
-    "(version 1)\n(allow default)\n(deny network*)\n"
-    "(allow network* (local unix-socket))\n"
-    "(allow network* (remote unix-socket))\n"
-    '(deny file-read* (subpath (param "ORACLE_ROOT")))\n'
-)
 
 
 class PortableReferenceProcessError(ValueError):
@@ -32,10 +27,11 @@ def run_trusted_process(
     timeout: int,
     sandbox_exec: Path,
     sandbox_profile: Path,
+    libreoffice: Path,
     verify_runtime: Callable[[], None],
 ) -> None:
     verify_runtime()
-    sandboxed = _sandbox(command, sandbox_exec, sandbox_profile)
+    sandboxed = _sandbox(command, sandbox_exec, sandbox_profile, libreoffice)
     result = run_bounded_process(
         sandboxed,
         cwd,
@@ -52,7 +48,10 @@ def run_trusted_process(
 
 
 def _sandbox(
-    command: tuple[str, ...], sandbox_exec: Path, sandbox_profile: Path
+    command: tuple[str, ...],
+    sandbox_exec: Path,
+    sandbox_profile: Path,
+    libreoffice: Path,
 ) -> tuple[str, ...]:
     if platform.system() != "Darwin":
         raise PortableReferenceProcessIncompleteError(
@@ -60,14 +59,14 @@ def _sandbox(
         )
     sandbox = executable(sandbox_exec)
     profile = sandbox_profile.resolve(strict=True)
-    if profile.read_text(encoding="utf-8") != _SANDBOX_PROFILE:
+    if profile.read_text(encoding="utf-8") != sandbox_profile_text():
         raise PortableReferenceProcessError("portable sandbox profile differs")
     return (
         sandbox,
         "-D",
         "ORACLE_ROOT=/var/empty",
         "-D",
-        "ORACLE_SENTINEL=/dev/null",
+        f"LIBREOFFICE={executable(libreoffice)}",
         "-f",
         profile.as_posix(),
         *command,

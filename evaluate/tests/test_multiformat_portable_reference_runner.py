@@ -157,7 +157,15 @@ class PortableReferenceRunnerTests(unittest.TestCase):
     def _tools(self, root: Path, width: int, height: int) -> PortableReferenceTools:
         profile = root / "sandbox.sb"
         profile.write_text(
-            '(version 1)\n(allow default)\n(deny network*)\n(allow network* (local unix-socket))\n(allow network* (remote unix-socket))\n(deny file-read* (subpath (param "ORACLE_ROOT")))\n'
+            "(version 1)\n"
+            "(allow default)\n"
+            "(deny network*)\n"
+            '(if (param "LIBREOFFICE")\n'
+            '  (with-filter (process-path (param "LIBREOFFICE"))\n'
+            "    (allow network-bind\n"
+            '      (local unix-socket (regex #"^/private/tmp/'
+            'OSL_PIPE_[0-9]+_SingleOfficeIPC_[0-9a-f]+$")))))\n'
+            '(deny file-read* (subpath (param "ORACLE_ROOT")))\n'
         )
         soffice = self._script(
             root,
