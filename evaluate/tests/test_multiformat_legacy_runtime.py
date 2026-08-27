@@ -11,12 +11,11 @@ from evaluate.multiformat_legacy_runtime import (
     LegacyProcessRequest,
     build_legacy_runtime,
 )
-from evaluate.multiformat_legacy_types import (
-    LegacyConformanceError,
-    LegacyPairJob,
-)
+from evaluate import multiformat_legacy_ppt_canonicalizer as legacy_ppt
+from evaluate.multiformat_legacy_types import LegacyConformanceError, LegacyPairJob
 from evaluate.multiformat_schema import sha256_file
 from evaluate.multiformat_source_fixture import write_positive_source
+from evaluate.tests.multiformat_legacy_ppt_fixture import make_legacy_ppt_fixture
 
 
 class MultiFormatLegacyRuntimeTests(unittest.TestCase):
@@ -137,6 +136,91 @@ class MultiFormatLegacyRuntimeTests(unittest.TestCase):
             self.assertFalse(destination.exists())
             self.assertFalse((root / "work").exists())
 
+    def test_relative_workspace_uses_absolute_libreoffice_profile_uri(self) -> None:
+        # Given
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp_dir:
+            root = Path(temp_dir)
+            requests: list[LegacyProcessRequest] = []
+            runtime = build_legacy_runtime(
+                self._tools(root),
+                runner=lambda request: self._run(requests, request),
+            )
+            source = root / "source.docx"
+            destination = root / "result.doc"
+            write_positive_source(source, "docx", "source")
+            workspace = root.relative_to(Path.cwd()) / "work"
+
+            # When
+            unit_count = runtime.materialize(
+                LegacyPairJob(
+                    "doc-conformance-001",
+                    DocumentFormat.DOC,
+                    source,
+                    destination,
+                    workspace,
+                )
+            )
+
+            # Then
+            conversion = next(
+                request for request in requests if "--convert-to" in request.command
+            )
+            profile = next(
+                argument
+                for argument in conversion.command
+                if argument.startswith("-env:UserInstallation=")
+            )
+            output_dir = Path(
+                conversion.command[conversion.command.index("--outdir") + 1]
+            )
+            self.assertEqual(unit_count, 1)
+            self.assertTrue(profile.startswith("-env:UserInstallation=file://"))
+            self.assertTrue(conversion.cwd.is_absolute())
+            self.assertTrue(output_dir.is_absolute())
+            self.assertTrue(Path(conversion.command[-1]).is_absolute())
+
+    def test_ppt_output_canonicalizes_nested_chart_timestamps(self) -> None:
+        # Given
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = make_legacy_ppt_fixture(0x579F, 0xBF7D)
+            requests: list[LegacyProcessRequest] = []
+
+            def run(request: LegacyProcessRequest) -> int:
+                if "--convert-to" not in request.command:
+                    return self._run(requests, request)
+                output_filter = request.command[
+                    request.command.index("--convert-to") + 1
+                ]
+                if output_filter != "ppt:MS PowerPoint 97":
+                    return self._run(requests, request)
+                requests.append(request)
+                output = Path(request.command[request.command.index("--outdir") + 1])
+                source = Path(request.command[-1])
+                _ = (output / f"{source.stem}.ppt").write_bytes(fixture.value)
+                return 0
+
+            runtime = build_legacy_runtime(self._tools(root), runner=run)
+            source = root / "source.pptx"
+            destination = root / "result.ppt"
+            write_positive_source(source, "pptx", "source")
+
+            # When
+            _ = runtime.materialize(
+                LegacyPairJob(
+                    "ppt-conformance-034",
+                    DocumentFormat.PPT,
+                    source,
+                    destination,
+                    root / "work",
+                )
+            )
+
+            # Then
+            expected = legacy_ppt.canonicalize_legacy_ppt_bytes(fixture.value)
+            self.assertNotEqual(fixture.value, expected)
+            self.assertEqual(destination.read_bytes(), expected)
+
     def _tools(self, root: Path) -> LegacyExternalTools:
         soffice = root / "soffice"
         pdfinfo = root / "pdfinfo"
@@ -181,6 +265,11 @@ class MultiFormatLegacyRuntimeTests(unittest.TestCase):
         source = Path(request.command[-1])
         extension = convert_to.split(":", maxsplit=1)[0]
         output = output_dir / f"{source.stem}.{extension}"
+        if extension == "ppt":
+            _ = output.write_bytes(
+                make_legacy_ppt_fixture(0x579F, 0xBF7D, include_packages=False).value
+            )
+            return 0
         write_positive_source(output, extension, source.stem)
         return 0
 

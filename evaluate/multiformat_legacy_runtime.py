@@ -27,6 +27,7 @@ from evaluate.multiformat_legacy_process import (
     run_process,
     tool_version,
 )
+from evaluate import multiformat_legacy_ppt_canonicalizer as legacy_ppt
 from evaluate.multiformat_legacy_types import (
     LegacyConformanceError,
     LegacyPairJob,
@@ -62,9 +63,10 @@ class _LegacyMaterializer:
         try:
             modern_extension, output_filter = _FILTERS[job.document_format]
             job.workspace.mkdir(parents=True)
-            input_dir = job.workspace / "input"
-            binary_dir = job.workspace / "binary"
-            pdf_dir = job.workspace / "pdf"
+            workspace = job.workspace.resolve(strict=True)
+            input_dir = workspace / "input"
+            binary_dir = workspace / "binary"
+            pdf_dir = workspace / "pdf"
             input_dir.mkdir()
             binary_dir.mkdir()
             pdf_dir.mkdir()
@@ -72,10 +74,10 @@ class _LegacyMaterializer:
             shutil.copyfile(job.source, source)
             font_environment = prepare_font_environment(
                 self.tools.font_bundle,
-                job.workspace / "fonts",
+                workspace / "fonts",
             )
             environment = _environment(
-                job.workspace,
+                workspace,
                 font_environment.config_path,
             )
             run_checked(
@@ -85,13 +87,16 @@ class _LegacyMaterializer:
                     source,
                     output_filter,
                     binary_dir,
-                    job.workspace / "profile-binary",
+                    workspace / "profile-binary",
                     environment,
-                    job.workspace / "binary",
+                    workspace / "binary",
                 ),
                 "LibreOffice conversion failed",
             )
             binary = binary_dir / f"{job.case_id}.{job.document_format.value}"
+            if job.document_format is DocumentFormat.PPT:
+                value = binary.read_bytes()
+                binary.write_bytes(legacy_ppt.canonicalize_legacy_ppt_bytes(value))
             _validate_output(binary, job.document_format)
             run_checked(
                 self.runner,
@@ -100,9 +105,9 @@ class _LegacyMaterializer:
                     binary,
                     "pdf",
                     pdf_dir,
-                    job.workspace / "profile-pdf",
+                    workspace / "profile-pdf",
                     environment,
-                    job.workspace / "pdf",
+                    workspace / "pdf",
                 ),
                 "LibreOffice PDF inspection export failed",
             )
@@ -110,10 +115,10 @@ class _LegacyMaterializer:
             _validate_output(pdf, DocumentFormat.PDF)
             page_request = LegacyProcessRequest(
                 (self.tools.pdfinfo.as_posix(), pdf.as_posix()),
-                job.workspace,
+                workspace,
                 environment,
-                job.workspace / "pdfinfo.stdout",
-                job.workspace / "pdfinfo.stderr",
+                workspace / "pdfinfo.stdout",
+                workspace / "pdfinfo.stderr",
                 30.0,
             )
             run_checked(
@@ -133,6 +138,7 @@ class _LegacyMaterializer:
             CorpusError,
             EastAsianFontError,
             KeyError,
+            legacy_ppt.LegacyPptCanonicalizationError,
             OSError,
             UnicodeError,
         ) as error:
@@ -210,7 +216,7 @@ def _soffice_request(
     return LegacyProcessRequest(
         (
             soffice.as_posix(),
-            f"-env:UserInstallation={profile.as_uri()}",
+            f"-env:UserInstallation={profile.resolve().as_uri()}",
             "--headless",
             "--nologo",
             "--nolockcheck",
