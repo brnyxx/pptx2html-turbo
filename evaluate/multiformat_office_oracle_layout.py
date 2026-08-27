@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
 
+_POPPLER_XHTML_DOCTYPE = (
+    b'<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" '
+    b'"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">'
+)
+
 
 class OfficeOracleInventoryError(Exception):
     pass
@@ -29,8 +34,14 @@ class LayoutPage:
 def layout_pages(path: Path) -> list[LayoutPage]:
     value = path.read_bytes()
     upper = value.upper()
-    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+    if b"<!ENTITY" in upper:
         raise OfficeOracleInventoryError("office layout XML is unsafe")
+    if b"<!DOCTYPE" in upper:
+        if upper.count(b"<!DOCTYPE") != 1 or not value.startswith(
+            _POPPLER_XHTML_DOCTYPE
+        ):
+            raise OfficeOracleInventoryError("office layout XML is unsafe")
+        value = value[len(_POPPLER_XHTML_DOCTYPE) :]
     try:
         root = ElementTree.fromstring(value)
     except ElementTree.ParseError as error:

@@ -81,6 +81,26 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
                     root / "inventories",
                 )
 
+    def test_fixed_poppler_xhtml_doctype_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = self._spreadsheet_source(root)
+            value = source.layout.read_text(encoding="utf-8")
+            source.layout.write_text(
+                '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" '
+                '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">'
+                f'<html xmlns="http://www.w3.org/1999/xhtml"><body>{value}</body></html>',
+                encoding="utf-8",
+            )
+
+            paths = write_office_oracle_inventories(
+                source,
+                ["xlsx-unit-1", "xlsx-unit-2"],
+                root / "inventories",
+            )
+
+            self.assertEqual(len(paths), 2)
+
     def _spreadsheet_source(
         self,
         root: Path,
