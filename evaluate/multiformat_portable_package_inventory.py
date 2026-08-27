@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,7 @@ class PackageEntry:
     kind: str
     sha256: str | None = None
     size: int | None = None
+    mode: int | None = None
     target: str | None = None
 
 
@@ -58,12 +60,16 @@ def bind_package_executable_with_inventory(
         _validate_package_executable(package, resolved, inventory, root)
         return resolved, inventory
     if package is None:
-        shutil.copyfile(resolved, destination)
+        _ = shutil.copyfile(resolved, destination)
         destination.chmod(resolved.stat().st_mode & 0o777)
         return destination, None
-    _scan_package(package)
+    source_entries = _scan_package(package)
     copied = destination / package.name
-    shutil.copytree(package, copied, symlinks=True)
+    _ = shutil.copytree(package, copied, symlinks=True)
+    if _scan_package(package) != source_entries:
+        raise PortableLockIoError("portable app package changed while copying")
+    if _scan_package(copied) != source_entries:
+        raise PortableLockIoError("portable copied app package differs")
     inventory = destination / "inventory.json"
     write_package_inventory(inventory, copied, root)
     return copied / resolved.relative_to(package), inventory
@@ -101,7 +107,7 @@ def validate_package_inventory(
     package = evidence_root / package_relative
     try:
         package = package.resolve(strict=True)
-        package.relative_to(evidence_root.resolve(strict=True))
+        _ = package.relative_to(evidence_root.resolve(strict=True))
     except (OSError, ValueError) as error:
         raise PortableLockIoError("portable package root escapes evidence") from error
     raw_entries = values.get("entries")
@@ -165,7 +171,7 @@ def write_package_inventory(
     inventory: Path, package: Path, evidence_root: Path
 ) -> None:
     entries = _scan_package(package)
-    inventory.write_text(
+    _ = inventory.write_text(
         json.dumps(
             {
                 "schema_version": 1,
@@ -207,7 +213,7 @@ def _scan_package(package: Path) -> tuple[PackageEntry, ...]:
         relative = item.relative_to(package).as_posix()
         if item.is_symlink():
             try:
-                item.resolve(strict=True).relative_to(root)
+                _ = item.resolve(strict=True).relative_to(root)
             except (OSError, ValueError) as error:
                 raise PortableLockIoError(
                     "portable package symlink escapes package"
@@ -218,7 +224,13 @@ def _scan_package(package: Path) -> tuple[PackageEntry, ...]:
             if metadata.st_nlink != 1:
                 raise PortableLockIoError("portable package file has an external alias")
             entries.append(
-                PackageEntry(relative, "file", sha256_file(item), metadata.st_size)
+                PackageEntry(
+                    relative,
+                    "file",
+                    sha256_file(item),
+                    metadata.st_size,
+                    stat.S_IMODE(metadata.st_mode),
+                )
             )
         elif not item.is_dir():
             raise PortableLockIoError("portable package contains a special file")
@@ -234,6 +246,7 @@ def _entry_json(entry: PackageEntry) -> JsonObject:
             "kind": entry.kind,
             "sha256": entry.sha256 or "",
             "size": entry.size if entry.size is not None else -1,
+            "mode": entry.mode if entry.mode is not None else -1,
         }
     return {"path": entry.path, "kind": entry.kind, "target": entry.target or ""}
 
@@ -246,12 +259,14 @@ def _parse_package_entry(value: JsonValue) -> PackageEntry:
     if not path or Path(path).is_absolute() or ".." in Path(path).parts:
         raise PortableLockIoError("portable package inventory path is invalid")
     if kind == "file":
-        if set(entry) != {"path", "kind", "sha256", "size"}:
+        if set(entry) != {"path", "kind", "sha256", "size", "mode"}:
             raise PortableLockIoError("portable package file entry fields differ")
-        size = integer_value(entry, "size")
+        size, mode = integer_value(entry, "size"), integer_value(entry, "mode")
         if size < 0:
             raise PortableLockIoError("portable package file size is invalid")
-        return PackageEntry(path, kind, sha256_value(entry, "sha256"), size)
+        if not 0 <= mode <= 0o7777:
+            raise PortableLockIoError("portable package file mode is invalid")
+        return PackageEntry(path, kind, sha256_value(entry, "sha256"), size, mode)
     if kind == "symlink":
         if set(entry) != {"path", "kind", "target"}:
             raise PortableLockIoError("portable package symlink entry fields differ")

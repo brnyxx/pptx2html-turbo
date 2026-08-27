@@ -82,6 +82,7 @@ PORTABLE_WAVE_TEST_FILES = (
     "evaluate/tests/test_multiformat_portable_native_contract.py",
     "evaluate/tests/test_multiformat_portable_macho_contract.py",
     "evaluate/tests/test_multiformat_portable_native_package.py",
+    "evaluate/tests/test_multiformat_portable_package_identity.py",
     "evaluate/tests/test_multiformat_portable_native_tools.py",
     "evaluate/tests/test_multiformat_portable_lock.py",
     "evaluate/tests/test_multiformat_portable_lock_io_contract.py",

@@ -73,6 +73,17 @@ def bind_portable_runtime(
     inputs: PortableRuntimeInputs, root: Path, artifacts: Path
 ) -> BoundPortableRuntime:
     """Bind flat artifacts and relocatable Homebrew package closures."""
+    value = read_strict_object(inputs.candidate_runtime_lock)
+    candidate = object_value(value, "candidate_runtime")
+    verifier = object_value(value, "sandbox_verifier")
+    if (
+        candidate.get("pdftohtml_sha256") != sha256_file(inputs.pdftohtml)
+        or candidate.get("pdfinfo_sha256") != sha256_file(inputs.pdfinfo)
+        or verifier.get("openssl_sha256") != sha256_file(inputs.openssl)
+    ):
+        raise package_io.PortableLockIoError(
+            "portable candidate tool lock differs from source bytes"
+        )
     flat = {
         "canonicalizer": inputs.canonicalizer,
         "configuration": inputs.configuration,
@@ -118,7 +129,7 @@ def bind_portable_runtime(
         "openssl": lock_io.tool_version(paths["openssl"], ("version",)),
         "receipt-signer": lock_io.tool_version(paths["receipt-signer"], ("--version",)),
     }
-    inventories = {}
+    inventories: dict[str, Path] = {}
     if poppler.inventory is not None:
         inventories["poppler"] = poppler.inventory
         paths["poppler-package-inventory"] = poppler.inventory
@@ -135,7 +146,6 @@ def bind_portable_runtime(
         raise package_io.PortableLockIoError(
             "portable candidate native package closure is incomplete"
         )
-    value = read_strict_object(inputs.candidate_runtime_lock)
     value["schema_version"] = 2
     candidate = object_value(value, "candidate_runtime")
     candidate["pdftohtml_sha256"] = sha256_file(paths["pdftohtml"])
