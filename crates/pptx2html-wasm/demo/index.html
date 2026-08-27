@@ -3,111 +3,1087 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="pptx2html-turbo converts PowerPoint decks to HTML with a from-scratch ECMA-376 renderer written in Rust and compiled to WebAssembly. Files never leave the browser.">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="data:,">
-<title>pptx-to-html Demo · v2.0.2</title>
+<title>pptx2html-turbo · PPTX to HTML in the browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
-.header { padding: 24px 32px; background: #fff; border-bottom: 1px solid #e0e0e0; }
-.header h1 { font-size: 20px; font-weight: 600; }
-.header p { font-size: 14px; color: #666; margin-top: 4px; }
-.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-.release-panel {
-  background: #fff;
-  border: 1px solid #d8e3ff;
-  border-radius: 10px;
-  padding: 16px 18px;
-  margin-bottom: 16px;
+:root {
+  color-scheme: dark;
+
+  --ink: #0E1211;
+  --ink-raised: #131917;
+  --ink-panel: #19201D;
+  --ink-well: #0A0D0C;
+  --edge: #242D29;
+  --edge-strong: #35403A;
+  --edge-control: #5E6D65;
+
+  --paper: #ECF1EE;
+  --paper-soft: #9FB3A9;
+  --paper-faint: #75897F;
+
+  --ember: #F2703C;
+  --ember-deep: #C4501F;
+  --amber: #F0C24E;
+  --celadon: #8FD9AE;
+  --flag: #F2705C;
+  --ember-lift: #FF8552;
+  --on-ember: #180E08;
+  --amber-edge: #776536;
+  --plate-line: #4E5C54;
+  --scroll-thumb-hover: #48544C;
+  --wash: rgba(255, 255, 255, 0.028);
+  --topbar-veil: rgba(12, 16, 15, 0.93);
+
+  --font-display: 'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-text: 'Archivo', 'Segoe UI', 'Liberation Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.64, 0, 0.78, 0);
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --gutter: clamp(20px, 5vw, 72px);
+  --band-well: #0B0F0E;
+  --measure: 38rem;
 }
-.release-panel p {
-  font-size: 14px;
-  color: #4a5568;
-  line-height: 1.5;
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.substrate {
+  position: fixed;
+  inset: -140px 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cg fill='none' stroke='%23FFFFFF'%3E%3Cpath stroke-opacity='.03' stroke-width='1' d='M24 0v96M48 0v96M72 0v96M0 24h96M0 48h96M0 72h96'/%3E%3Cpath stroke-opacity='.07' stroke-width='1' d='M0 0v96M0 0h96'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  transform: translate3d(0, var(--sub-y, 0px), 0);
+  will-change: transform;
 }
-.release-panel a {
-  color: #2b6cb0;
-  font-weight: 600;
-  text-decoration: none;
+
+.warmth {
+  position: absolute;
+  inset: -12% -6% -18% -10%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 62% 52% at 30% 40%, #1A130D 0%, #12100E 46%, var(--ink) 74%);
+  opacity: 0.72;
+  animation: warmBreathe 17s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
 }
-.release-panel a:hover { text-decoration: underline; }
-.badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+@keyframes warmBreathe {
+  from { opacity: 0.5; transform: scale(1); }
+  to   { opacity: 0.9; transform: scale(1.06); }
 }
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
+
+.topbar, main, .site-foot { position: relative; z-index: 1; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--paper);
+  background-color: var(--ink);
+  background-image:
+    linear-gradient(168deg, #101615 0%, #0E1211 42%, #0C100F 100%),
+    linear-gradient(96deg, #121A17 0%, #0E1211 55%, #131614 100%);
+  background-size: 100% 100%, 240% 240%;
+  background-position: 0 0, 0% 50%;
+}
+
+section[id], main[id] { scroll-margin-top: 76px; }
+
+::selection { background: var(--ember-deep); color: #FFF3EC; }
+::target-text { background: var(--ember-deep); color: #FFF3EC; }
+:root { scrollbar-color: var(--edge-strong) var(--ink-well); }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--ink-well); }
+::-webkit-scrollbar-thumb { background: var(--edge-strong); border: 3px solid var(--ink-well); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+a {
+  color: var(--paper);
+  text-decoration-color: var(--edge-strong);
+  text-underline-offset: 0.28em;
+  text-decoration-thickness: 1px;
+  transition: color 180ms var(--ease), text-decoration-color 180ms var(--ease);
+}
+a:hover { color: var(--ember); text-decoration-color: var(--ember); }
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; }
+p { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
-.badge.stable { background: #ebf8ff; color: #2b6cb0; }
-.badge.version { background: #e6fffa; color: #0f766e; }
-.badge.feature { background: #faf5ff; color: #7c3aed; }
+
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 40;
+  padding: 12px 20px;
+  background: var(--ember);
+  color: var(--on-ember);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 3px;
+  text-decoration: none;
+  transform: translate3d(0, -200%, 0);
+  transition: transform 200ms var(--ease-out);
+}
+.skip-link:hover, .skip-link:focus { color: var(--on-ember); }
+.skip-link:focus { transform: none; }
+
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.glyph { width: 1em; height: 1em; display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.glyph--brand { fill: currentColor; stroke: none; }
+
+/* ---------- header ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  padding: 14px var(--gutter);
+  border-bottom: 1px solid var(--edge);
+  background: var(--topbar-veil);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.wordmark {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--paper);
+  text-decoration: none;
+}
+.wordmark:hover { color: var(--paper); }
+.wordmark b { color: var(--ember); font-weight: 600; }
+
+.release {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--amber);
+  padding: 3px 9px 4px;
+  border: 1px solid var(--amber-edge);
+  border-radius: 3px;
+  text-decoration: none;
+}
+.release:hover { color: var(--amber); border-color: var(--amber); }
+@keyframes chipSettle {
+  0%   { transform: translate3d(0, -7px, 0) scale(0.94); opacity: 0; }
+  62%  { transform: translate3d(0, 1px, 0) scale(1.02); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+.release { animation: chipSettle 640ms var(--ease-out) 320ms both; }
+
+.topnav { margin-left: auto; display: flex; align-items: center; gap: 22px; }
+.topnav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--paper-soft);
+  text-decoration: none;
+}
+.topnav a:hover { color: var(--paper); }
+
+/* header and footer links draw small; their hit area does not */
+.wordmark, .topnav a, .release, .site-foot a { position: relative; }
+.wordmark::after, .topnav a::after, .release::after, .site-foot a::after {
+  content: "";
+  position: absolute;
+  inset: -11px -6px;
+}
+.wordmark::after { inset: -10px -4px; }
+.topnav a::after { inset: -11px -8px; }
+.site-foot a::after { inset: -11px -13px; }
+
+/* ---------- layout primitives ---------- */
+
+main { display: block; }
+
+.band { padding: 0 var(--gutter); }
+.band-inner { max-width: 1180px; margin: 0 auto; }
+
+.section-head { display: flex; align-items: baseline; gap: 4px 18px; flex-wrap: wrap; margin-bottom: 12px; }
+.section-head h2 { font-size: clamp(1.9rem, 3.4vw, 2.6rem); line-height: 1.08; letter-spacing: -0.01em; }
+.section-head .tick {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--paper-faint);
+  letter-spacing: 0.02em;
+}
+.section-note { max-width: var(--measure); color: var(--paper-soft); font-size: 16px; }
+
+
+/* ---------- hero ---------- */
+
+.hero {
+  position: relative;
+  padding: clamp(56px, 9vw, 112px) var(--gutter) clamp(40px, 5vw, 66px);
+  overflow: hidden;
+}
+
+.plate {
+  position: absolute;
+  right: 0.5%;
+  top: 10.5%;
+  width: min(806px, 53.5%);
+  opacity: 0.95;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(96deg, transparent 0%, #000 11%, #000 93%, transparent 100%);
+  mask-image: linear-gradient(96deg, transparent 0%, #000 11%, #000 93%, transparent 100%);
+  animation: plateDrift 40s var(--ease) infinite alternate;
+}
+@keyframes plateDrift {
+  from { transform: translate3d(0, calc(var(--plate-lift, 0px)), 0); }
+  to   { transform: translate3d(-26px, calc(18px + var(--plate-lift, 0px)), 0); }
+}
+
+/* The plate is a machine bed. A deck enters at the left, is unzipped, parsed,
+   resolved against its placeholders and drawn, and leaves as a page at the
+   right. The bed itself never animates, so a paused or reduced-motion plate
+   still reads as the finished journey rather than an empty frame. */
+.plate {
+  --pl-cycle: 14s;
+  --pl-enter: var(--ease-enter);
+  --pl-exit: var(--ease-exit);
+  /* the two signature moves get curves cut for them rather than borrowed:
+     the caret leaves its mark decisively and coasts into the far edge, and
+     a drawn stroke commits early then lands without a bounce */
+  --pl-sweep: cubic-bezier(0.32, 0.06, 0.22, 1);
+  --pl-draw: cubic-bezier(0.45, 0.05, 0.16, 1);
+  --pl-move: var(--ease-move);
+}
+.plate g, .plate rect, .plate path { stroke: var(--plate-line); fill: none; }
+.plate text { fill: var(--plate-line); stroke: none; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: 0.4px; }
+.plate .pl-frame { stroke-width: 1.2; }
+.plate .pl-tick { stroke-width: 1.1; }
+.plate .pl-tick-minor { opacity: 0.6; }
+
+.plate .pl-doc { stroke-width: 1.4; }
+.plate .pl-docline { stroke-width: 3; stroke-linecap: round; opacity: 0.5; }
+.plate .pl-tag { fill: var(--ember); font-size: 14px; opacity: 0.85; }
+.plate .pl-part { stroke-width: 1.2; opacity: 0; }
+.plate .pl-xml path { stroke: var(--amber); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.plate .pl-ghost { stroke-width: 1; stroke-dasharray: 5 6; opacity: 0.22; }
+.plate .pl-solid { stroke-width: 1.3; stroke-dashoffset: 0; }
+.plate .pl-solid-a { stroke-dasharray: 1164; }
+.plate .pl-solid-b { stroke-dasharray: 1480; }
+.plate .pl-runs path { stroke-width: 5; stroke-linecap: round; opacity: 0.5; }
+.plate .pl-runs-body path { stroke-width: 4; }
+.plate .pl-clip { transform-box: fill-box; }
+.plate .pl-clip-x, .plate .pl-clip-out { transform-origin: left center; }
+.plate .pl-clip-y { transform-origin: center top; }
+.plate .pl-caret path { stroke: var(--ember); stroke-width: 1.6; }
+.plate .pl-caret { opacity: 0; transform: translateX(920px); }
+.plate .pl-arrow path { stroke: var(--ember); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.plate .pl-card { stroke-width: 1.4; stroke: var(--celadon); stroke-dasharray: 516; stroke-dashoffset: 0; }
+.plate .pl-outbar { stroke: var(--celadon); stroke-width: 8; opacity: 0.55; }
+.plate .pl-outrun { stroke: var(--celadon); stroke-width: 3.4; stroke-linecap: round; opacity: 0.6; }
+.plate .pl-out .pl-tag { fill: var(--celadon); }
+.plate .pl-phlabels text { fill: #8CA096; }
+.plate .pl-pass text { fill: var(--ember); font-size: 15px; opacity: 0.9; }
+
+/* The loop is a sentence, so it is paced like one: the derivation runs across
+   the first two thirds, the finished claim -- source, resolved slide, output --
+   holds together from 70% to 93%, and the cast leaves in the order it arrived
+   so the outgoing card is still on the bed while the next file slides in. The
+   frame is never empty. */
+@keyframes plSrcIn {
+  0%        { opacity: 0; transform: translate3d(-34px, 0, 0); animation-timing-function: var(--pl-enter); }
+  4%        { opacity: 1; transform: none; animation-timing-function: linear; }
+  92%       { opacity: 1; transform: none; animation-timing-function: var(--pl-exit); }
+  96%, 100% { opacity: 0; transform: translate3d(14px, 0, 0); }
+}
+@keyframes plPart1 {
+  0%, 6%    { opacity: 0; transform: none; animation-timing-function: var(--pl-move); }
+  10%       { opacity: 0.9; transform: translate3d(26px, -20px, 0); animation-timing-function: var(--pl-exit); }
+  17%, 100% { opacity: 0; transform: translate3d(54px, -34px, 0); }
+}
+@keyframes plPart2 {
+  0%, 7%    { opacity: 0; transform: none; animation-timing-function: var(--pl-move); }
+  11%       { opacity: 0.9; transform: translate3d(30px, 0, 0); animation-timing-function: var(--pl-exit); }
+  18%, 100% { opacity: 0; transform: translate3d(60px, 0, 0); }
+}
+@keyframes plPart3 {
+  0%, 8%    { opacity: 0; transform: none; animation-timing-function: var(--pl-move); }
+  12%       { opacity: 0.9; transform: translate3d(26px, 20px, 0); animation-timing-function: var(--pl-exit); }
+  19%, 100% { opacity: 0; transform: translate3d(54px, 34px, 0); }
+}
+@keyframes plXml {
+  0%, 14%   { opacity: 0; transform: translate3d(-16px, 0, 0); animation-timing-function: var(--pl-move); }
+  19%       { opacity: 0.85; transform: none; animation-timing-function: var(--pl-exit); }
+  26%, 100% { opacity: 0; transform: translate3d(92px, 0, 0); }
+}
+@keyframes plGhost {
+  0%, 20%   { opacity: 0; animation-timing-function: var(--pl-enter); }
+  25%       { opacity: 0.55; animation-timing-function: var(--pl-move); }
+  38%       { opacity: 0.24; animation-timing-function: linear; }
+  93%       { opacity: 0.24; animation-timing-function: var(--pl-exit); }
+  97%, 100% { opacity: 0; }
+}
+@keyframes plSolidA {
+  0%, 26%   { stroke-dashoffset: 1164; opacity: 0; animation-timing-function: var(--pl-draw); }
+  28%       { opacity: 1; animation-timing-function: var(--pl-draw); }
+  38%       { stroke-dashoffset: 0; animation-timing-function: linear; }
+  93%       { stroke-dashoffset: 0; opacity: 1; animation-timing-function: var(--pl-exit); }
+  97%, 100% { opacity: 0; }
+}
+@keyframes plSolidB {
+  0%, 30%   { stroke-dashoffset: 1480; opacity: 0; animation-timing-function: var(--pl-draw); }
+  32%       { opacity: 1; animation-timing-function: var(--pl-draw); }
+  44%       { stroke-dashoffset: 0; animation-timing-function: linear; }
+  93%       { stroke-dashoffset: 0; opacity: 1; animation-timing-function: var(--pl-exit); }
+  97%, 100% { opacity: 0; }
+}
+@keyframes plClipX {
+  0%, 36%   { transform: scaleX(0); animation-timing-function: var(--pl-draw); }
+  46%       { transform: scaleX(1); animation-timing-function: linear; }
+  93%       { transform: scaleX(1); animation-timing-function: var(--pl-exit); }
+  97%, 100% { transform: scaleX(0); }
+}
+@keyframes plClipY {
+  0%, 40%   { transform: scaleY(0); animation-timing-function: var(--pl-draw); }
+  52%       { transform: scaleY(1); animation-timing-function: linear; }
+  93%       { transform: scaleY(1); animation-timing-function: var(--pl-exit); }
+  97%, 100% { transform: scaleY(0); }
+}
+@keyframes plCaret {
+  0%, 43%   { transform: translateX(430px); opacity: 0; animation-timing-function: var(--pl-enter); }
+  45%       { opacity: 0.95; transform: translateX(430px); animation-timing-function: var(--pl-sweep); }
+  56%       { opacity: 0.95; transform: translateX(920px); animation-timing-function: var(--pl-exit); }
+  59%, 100% { opacity: 0; transform: translateX(920px); }
+}
+@keyframes plArrow {
+  0%, 55%   { opacity: 0; transform: translate3d(-12px, 0, 0); animation-timing-function: var(--pl-enter); }
+  61%       { opacity: 0.9; transform: none; animation-timing-function: linear; }
+  94%       { opacity: 0.9; transform: none; animation-timing-function: var(--pl-exit); }
+  98%, 100% { opacity: 0; transform: none; }
+}
+@keyframes plCard {
+  0%        { opacity: 1; stroke-dashoffset: 0; transform: none; animation-timing-function: var(--pl-exit); }
+  6%        { opacity: 0; stroke-dashoffset: 0; transform: none; }
+  8%, 58%   { opacity: 0; stroke-dashoffset: 516; transform: translate3d(-14px, 0, 0); animation-timing-function: var(--pl-enter); }
+  62%       { opacity: 1; transform: none; animation-timing-function: var(--pl-draw); }
+  70%, 100% { stroke-dashoffset: 0; opacity: 1; transform: none; }
+}
+@keyframes plOutBody {
+  0%        { opacity: 1; animation-timing-function: var(--pl-exit); }
+  6%, 63%   { opacity: 0; animation-timing-function: var(--pl-enter); }
+  69%, 100% { opacity: 1; }
+}
+@keyframes plClipOut {
+  0%, 6%    { transform: scaleX(1); }
+  8%, 64%   { transform: scaleX(0); animation-timing-function: var(--pl-draw); }
+  71%, 100% { transform: scaleX(1); }
+}
+@keyframes plPass1 {
+  0%, 5%    { opacity: 0; animation-timing-function: var(--pl-enter); }
+  9%        { opacity: 0.9; animation-timing-function: linear; }
+  94%       { opacity: 0.9; animation-timing-function: var(--pl-exit); }
+  98%, 100% { opacity: 0; }
+}
+@keyframes plPass2 {
+  0%, 14%   { opacity: 0; animation-timing-function: var(--pl-enter); }
+  18%       { opacity: 0.9; animation-timing-function: linear; }
+  94%       { opacity: 0.9; animation-timing-function: var(--pl-exit); }
+  98%, 100% { opacity: 0; }
+}
+@keyframes plPass3 {
+  0%, 25%   { opacity: 0; animation-timing-function: var(--pl-enter); }
+  29%       { opacity: 0.9; animation-timing-function: linear; }
+  94%       { opacity: 0.9; animation-timing-function: var(--pl-exit); }
+  98%, 100% { opacity: 0; }
+}
+@keyframes plPass4 {
+  0%, 58%   { opacity: 0; animation-timing-function: var(--pl-enter); }
+  62%       { opacity: 0.9; animation-timing-function: linear; }
+  94%       { opacity: 0.9; animation-timing-function: var(--pl-exit); }
+  98%, 100% { opacity: 0; }
+}
+
+.plate-live .pl-src     { animation: plSrcIn  var(--pl-cycle) linear infinite; }
+.plate-live .pl-part-1  { animation: plPart1  var(--pl-cycle) linear infinite; }
+.plate-live .pl-part-2  { animation: plPart2  var(--pl-cycle) linear infinite; }
+.plate-live .pl-part-3  { animation: plPart3  var(--pl-cycle) linear infinite; }
+.plate-live .pl-x1      { animation: plXml    var(--pl-cycle) linear infinite; }
+.plate-live .pl-x2      { animation: plXml    var(--pl-cycle) linear infinite -0.5s; }
+.plate-live .pl-x3      { animation: plXml    var(--pl-cycle) linear infinite -0.25s; }
+.plate-live .pl-x4      { animation: plXml    var(--pl-cycle) linear infinite -0.75s; }
+.plate-live .pl-ghost,
+.plate-live .pl-phlabels{ animation: plGhost  var(--pl-cycle) linear infinite; }
+.plate-live .pl-solid-a { animation: plSolidA var(--pl-cycle) linear infinite; }
+.plate-live .pl-solid-b { animation: plSolidB var(--pl-cycle) linear infinite; }
+.plate-live .pl-clip-x  { animation: plClipX  var(--pl-cycle) linear infinite; }
+.plate-live .pl-clip-y  { animation: plClipY  var(--pl-cycle) linear infinite; }
+.plate-live .pl-clip-out{ animation: plClipOut var(--pl-cycle) linear infinite; }
+.plate-live .pl-caret   { animation: plCaret  var(--pl-cycle) linear infinite; }
+.plate-live .pl-arrow   { animation: plArrow  var(--pl-cycle) linear infinite; }
+.plate-live .pl-card    { animation: plCard   var(--pl-cycle) linear infinite; }
+.plate-live .pl-outbar,
+.plate-live .pl-outrun,
+.plate-live .pl-out .pl-tag { animation: plOutBody var(--pl-cycle) linear infinite; }
+.plate-live .pl-pass-1  { animation: plPass1  var(--pl-cycle) linear infinite; }
+.plate-live .pl-pass-2  { animation: plPass2  var(--pl-cycle) linear infinite; }
+.plate-live .pl-pass-3  { animation: plPass3  var(--pl-cycle) linear infinite; }
+.plate-live .pl-pass-4  { animation: plPass4  var(--pl-cycle) linear infinite; }
+
+/* the journey only runs while the hero is on screen */
+.plate-rest * { animation-play-state: paused !important; }
+
+.hero-inner { position: relative; max-width: 1180px; margin: 0 auto; }
+
+
+.hero h1 {
+  transform: translate3d(0, var(--hero-lift, 0px), 0);
+  font-size: clamp(2.7rem, 7.2vw, 4.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  max-width: 15ch;
+}
+.hero h1 em { font-style: normal; color: var(--ember); }
+.hero h1 .hl { display: block; }
+.reveal-ready .hero h1 .hl { opacity: 0; transform: translate3d(0, 18px, 0); }
+.reveal-ready .hero h1.is-shown .hl {
+  opacity: 1;
+  transform: none;
+  transition: opacity 760ms var(--ease-out) var(--d, 0ms), transform 760ms var(--ease-out) var(--d, 0ms);
+}
+
+.deck {
+  margin-top: 22px;
+  max-width: var(--measure);
+  font-size: 19px;
+  line-height: 1.62;
+  color: var(--paper-soft);
+}
+.deck strong { color: var(--paper); font-weight: 500; }
+
+.hero-actions { margin-top: 34px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 22px;
+  font-family: var(--font-text);
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 180ms var(--ease), border-color 180ms var(--ease), color 180ms var(--ease), transform 180ms var(--ease-out);
+}
+.btn-primary { background: var(--ember); color: var(--on-ember); }
+.btn-primary:hover { background: var(--ember-lift); color: var(--on-ember); transform: translateY(-1px); }
+.btn-ghost { border-color: var(--edge-control); color: var(--paper); }
+.btn-ghost:hover { border-color: var(--paper-soft); color: var(--paper); background: var(--wash); }
+.btn .glyph { width: 15px; height: 15px; }
+
+.facts {
+  margin-top: clamp(40px, 5vw, 64px);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  border-top: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
+}
+.fact { padding: 24px 30px 27px; }
+.fact:first-child { padding-left: 0; }
+.fact + .fact { border-left: 1px solid var(--edge); }
+.fact dt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ember);
+  margin-bottom: 9px;
+}
+.fact dd { margin: 0; font-size: 15px; line-height: 1.55; color: var(--paper-soft); }
+
+/* ---------- converter ---------- */
+
+.converter {
+  padding: clamp(58px, 7vw, 92px) var(--gutter) clamp(58px, 7vw, 92px);
+  background-color: var(--band-well);
+  border-top: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
+}
+
+.platen {
+  position: relative;
+  display: block;
+  margin-top: 30px;
+  padding: clamp(38px, 6vw, 68px) 28px;
+  text-align: center;
+  cursor: pointer;
+  border: 0;
+  border-radius: 4px;
+  background-color: var(--ink-raised);
+  overflow: hidden;
+  transition: background-color 200ms var(--ease);
+}
+.platen:hover { background-color: var(--ink-panel); }
+.platen:focus-within { outline: 2px solid var(--amber); outline-offset: 3px; }
+.platen.is-hot { background-color: #1B1714; }
+.platen.is-busy { cursor: progress; }
+
+.platen-outline { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.platen-outline rect {
+  x: 1px;
+  y: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  rx: 4px;
+  fill: none;
+  stroke: var(--edge-control);
+  stroke-width: 1;
+  stroke-dasharray: 9 7;
+  transition: stroke 220ms var(--ease);
+}
+@keyframes dashMarch { to { stroke-dashoffset: -32; } }
+.platen:hover .platen-outline rect { stroke: var(--paper-faint); animation: dashMarch 3.2s linear infinite; }
+.platen:focus-within .platen-outline rect { stroke: var(--amber); }
+.platen.is-hot .platen-outline rect {
+  stroke: var(--ember);
+  stroke-width: 1.8;
+  stroke-dasharray: 10 6;
+  animation: dashMarch 1s linear infinite;
+}
+.platen.is-busy .platen-outline rect { stroke: var(--edge-control); animation: none; }
+
+/* a neutral light rides the border under the pointer: a machined edge catching
+   the light, not a coloured glow */
+.platen-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  padding: 1.5px;
+  pointer-events: none;
+  opacity: 0;
+  /* a wide, faint pool spread the light so thin it read as nothing; a tighter
+     and brighter core is what makes the edge feel lit under the cursor */
+  background: radial-gradient(150px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 250, 244, 0.98), rgba(255, 250, 244, 0.34) 42%, rgba(255, 250, 244, 0) 72%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  transition: opacity 280ms var(--ease);
+}
+.platen:hover .platen-glow { opacity: 0.85; }
+.platen.is-hot .platen-glow { opacity: 1; }
+.platen.is-loaded { padding: 20px 26px 21px; }
+.platen.is-loaded .platen-mark { display: inline-block; width: 20px; height: 20px; margin: 0 11px 0 0; vertical-align: -4px; }
+.platen.is-loaded .platen-title { display: inline; font-size: 16px; font-weight: 500; color: var(--paper-soft); }
+.platen.is-loaded .platen-sub { display: none; }
+.platen.is-loaded .platen-hint { display: inline; margin: 0 0 0 16px; font-size: 11px; }
+
+.platen-mark { display: block; width: 34px; height: 34px; margin: 0 auto 18px; color: var(--paper-faint); transition: color 200ms var(--ease), transform 320ms var(--ease-out); }
+.platen:hover .platen-mark { color: var(--paper-soft); transform: translate3d(0, -5px, 0) rotate(-4deg) scale(1.05); }
+.platen.is-hot .platen-mark { color: var(--ember); transform: translate3d(0, -9px, 0) rotate(3deg) scale(1.14); }
+
+.platen-title { display: block; font-size: 20px; font-weight: 600; letter-spacing: -0.005em; }
+.platen-sub { display: block; margin-top: 8px; font-size: 15px; color: var(--paper-soft); }
+.platen-hint { display: block; margin-top: 16px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.05em; color: var(--paper-faint); }
+
+.platen-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--ember);
+  transform: scaleX(var(--progress, 0));
+  transform-origin: left center;
+  opacity: var(--progress-alpha, 0);
+  pointer-events: none;
+  transition: transform 420ms var(--ease-out), opacity 420ms var(--ease);
+}
+
+@keyframes platenLand {
+  from { background-color: #1D1814; }
+  to   { background-color: var(--ink-raised); }
+}
+.platen.is-landed { animation: platenLand 640ms var(--ease-out); }
+
+.rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+.rail li { display: flex; align-items: center; gap: 9px; color: var(--paper-soft); transition: color 220ms var(--ease); }
+.rail li::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.4;
+  transform: scaleX(0.5);
+  transform-origin: left center;
+  transition: transform 320ms var(--ease-out), opacity 220ms var(--ease);
+}
+.rail li[data-state="active"] { color: var(--amber); }
+.rail li[data-state="done"] { color: var(--celadon); }
+.rail li[data-state="active"]::before,
+.rail li[data-state="done"]::before { transform: scaleX(1); opacity: 1; }
+
+.status {
+  margin-top: 22px;
+  font-size: 15px;
+  line-height: 1.5;
+  border-left: 1px solid var(--edge-strong);
+  padding-left: 0;
+  color: var(--paper-soft);
+  transition: color 200ms var(--ease), border-color 200ms var(--ease);
+}
+.status:not(:empty) { padding: 2px 0 2px 16px; }
+.status:empty { border-left-color: transparent; }
+.status.info { color: var(--paper-soft); border-left-color: var(--edge-strong); }
+.status.success { color: var(--celadon); border-left-color: var(--celadon); }
+.status.error { color: var(--flag); border-left-color: var(--flag); }
+
 .controls {
   display: none;
-  grid-template-columns: 120px minmax(180px, 1fr) 96px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 14px 20px;
   align-items: center;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  margin-top: 26px;
+  padding: 20px 22px 22px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background-color: var(--ink-raised);
 }
-.controls .control-label { font-size: 14px; font-weight: 600; color: #444; }
-.controls input[type="range"] { width: 100%; }
-.controls input[type="number"] {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  font-size: 14px;
-}
-.controls .hint {
+.control-label {
   grid-column: 1 / -1;
+  font-family: var(--font-mono);
   font-size: 12px;
-  color: #666;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-soft);
 }
-.drop-zone {
-  border: 2px dashed #ccc; border-radius: 8px; padding: 48px; text-align: center;
-  cursor: pointer; transition: border-color 0.2s, background 0.2s;
-  background: #fff; margin-bottom: 24px;
-  display: block;
+.controls .hint { grid-column: 1 / -1; font-size: 13px; line-height: 1.5; color: var(--paper-faint); max-width: 60ch; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
 }
-.drop-zone.dragover { border-color: #4472C4; background: #f0f4ff; }
-.drop-zone p { font-size: 16px; color: #888; }
-.drop-zone .icon { font-size: 36px; margin-bottom: 12px; display: block; color: #bbb; }
-.status { border-radius: 6px; font-size: 14px; }
-.status:not(:empty) { padding: 12px 16px; margin-bottom: 16px; }
-.status.info { background: #e8f4fd; color: #1565c0; }
-.status.error { background: #fdecea; color: #c62828; }
-.status.success { background: #e8f5e9; color: #2e7d32; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--edge-control); border-radius: 2px; }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--ember);
+  border: 0;
+  transition: transform 160ms var(--ease-out);
+}
+input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.15); }
+input[type="range"]::-moz-range-track { height: 2px; background: var(--edge-control); border-radius: 2px; }
+input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--ember); }
+
+input[type="number"] {
+  width: 100%;
+  padding: 9px 11px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--paper);
+  background: var(--ink-well);
+  min-height: 44px;
+  border: 1px solid var(--edge-control);
+  border-radius: 3px;
+  caret-color: var(--ember);
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  margin-top: 26px;
+  border-top: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
+}
+.meta:empty { display: none; }
+.stat { flex: 1 1 156px; padding: 15px 20px 17px; }
+.stat:first-child { padding-left: 0; }
+.stat + .stat { border-left: 1px solid var(--edge); }
+.meta .stat { --i: 0; }
+.meta.is-arriving .stat { opacity: 0; transform: translate3d(0, 9px, 0); }
+.meta.is-arriving .stat.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 400ms var(--ease-out), transform 460ms var(--ease-out);
+  transition-delay: calc(var(--i) * 55ms);
+}
+.stat-k {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+.stat-v {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  color: var(--paper);
+}
+
+.diag { margin-top: 18px; font-size: 14px; }
+.diag[hidden] { display: none; }
+.diag summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
   font-size: 13px;
-  color: #666;
-  margin-bottom: 16px;
+  letter-spacing: 0.04em;
+  color: var(--amber);
+  padding: 6px 0;
 }
+.diag summary::marker { color: var(--paper-faint); }
+.diag summary { min-height: 44px; display: flex; align-items: center; }
+.diag ul { margin-top: 8px; border-top: 1px solid var(--edge); }
+.diag li {
+  display: flex;
+  gap: 16px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--edge);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--paper-soft);
+}
+.diag li b { color: var(--amber); font-weight: 500; flex: 0 0 auto; }
+
+.stage {
+  margin-top: 30px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  padding: 9px 14px 9px 18px;
+  min-height: 46px;
+  border-bottom: 1px solid var(--edge);
+  background-color: var(--ink-raised);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--paper-faint);
+}
+.stage-bar b { color: var(--paper-soft); font-weight: 500; }
+.stage-bar .spacer { margin-left: auto; }
+
+.mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 13px 8px;
+  font-family: var(--font-text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--paper);
+  background: transparent;
+  border: 1px solid var(--edge-control);
+  border-radius: 3px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 180ms var(--ease), color 180ms var(--ease), background-color 180ms var(--ease);
+}
+.mini:hover { border-color: var(--ember); color: var(--ember); background-color: var(--wash); }
+.mini .glyph { width: 14px; height: 14px; }
+.mini[data-done="true"] { border-color: var(--celadon); color: var(--celadon); }
+
+@keyframes saveArrive {
+  0%   { transform: scale(0.92); opacity: 0; }
+  55%  { transform: scale(1.035); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.stage-bar .mini { animation: saveArrive 560ms var(--ease-out) 120ms both; }
+.stage-body { padding: 18px; background-color: var(--ink-well); overflow: auto; }
+
+.stage-idle {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  min-height: 232px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: var(--paper-faint);
+  text-align: center;
+  padding: 28px 20px;
+}
+.stage-idle .glyph { width: 30px; height: 30px; color: var(--paper-faint); }
+.stage-idle[hidden] { display: none; }
+
 .output-frame {
-  width: 100%; min-height: 600px; border: 1px solid #e0e0e0;
-  border-radius: 8px; background: #fff; display: none;
+  display: none;
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+  border-radius: 2px;
+  background: #FFFFFF;
 }
-@media (max-width: 640px) {
-  .header { padding: 20px 16px; }
-  .container { padding: 16px; }
-  .drop-zone { padding: 32px 16px; }
-  .controls { grid-template-columns: minmax(0, 1fr) 96px; }
-  .controls .control-label,
-  .controls .hint { grid-column: 1 / -1; }
-  .output-frame { min-height: 320px; }
+
+/* ---------- pipeline ---------- */
+
+.pipeline { padding: clamp(58px, 7vw, 94px) var(--gutter) clamp(18px, 2.5vw, 28px); }
+
+.stages { position: relative; margin-top: 38px; border-bottom: 1px solid var(--edge); }
+
+.rail-line {
+  position: absolute;
+  left: 15px;
+  top: 30px;
+  width: 2px;
+  height: calc(100% - 60px);
+  overflow: visible;
+  pointer-events: none;
 }
+.rail-line line {
+  stroke: var(--edge-strong);
+  stroke-width: 1.4;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  vector-effect: non-scaling-stroke;
+}
+.reveal-ready .rail-line line { stroke-dashoffset: 1; }
+.reveal-ready .rail-line.is-shown line {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1500ms var(--ease-out) 180ms;
+}
+
+.rail-token {
+  position: absolute;
+  left: 12px;
+  top: 30px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ember);
+  opacity: 0;
+  pointer-events: none;
+}
+@keyframes railToken {
+  0%   { opacity: 0; transform: translate3d(0, 0, 0); animation-timing-function: var(--ease-enter); }
+  5%   { opacity: 1; transform: translate3d(0, 0, 0); }
+  12%  { transform: translate3d(0, 0, 0); animation-timing-function: var(--ease-move); }
+  24%  { transform: translate3d(0, calc(var(--rail-h, 480px) * 0.24), 0); }
+  32%  { transform: translate3d(0, calc(var(--rail-h, 480px) * 0.24), 0); animation-timing-function: var(--ease-move); }
+  44%  { transform: translate3d(0, calc(var(--rail-h, 480px) * 0.47), 0); }
+  52%  { transform: translate3d(0, calc(var(--rail-h, 480px) * 0.47), 0); animation-timing-function: var(--ease-move); }
+  64%  { transform: translate3d(0, calc(var(--rail-h, 480px) * 0.70), 0); }
+  72%  { transform: translate3d(0, calc(var(--rail-h, 480px) * 0.70), 0); animation-timing-function: var(--ease-move); }
+  86%  { opacity: 1; transform: translate3d(0, calc(var(--rail-h, 480px) * 0.93), 0); }
+  100% { opacity: 0; transform: translate3d(0, calc(var(--rail-h, 480px) * 0.93), 0); }
+}
+.reveal-ready .stages.is-shown .rail-token { animation: railToken 5.4s linear 420ms 1 both; }
+.stage-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 10.5rem) minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  gap: 4px 24px;
+  align-items: start;
+  padding: 26px 4px 28px;
+  border-top: 1px solid var(--edge);
+}
+.stage-step .glyph { width: 26px; height: 26px; color: var(--ember); margin-top: 2px; }
+.stage-step { position: relative; }
+.stage-step::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  background: var(--ember);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 460ms var(--ease-out);
+}
+.stage-step:hover::after { transform: scaleX(1); }
+.stage-step .glyph { transition: color 220ms var(--ease), transform 300ms var(--ease-out); }
+.stage-step:hover .glyph { color: var(--amber); transform: translate3d(2px, 0, 0); }
+.reveal-ready .stage-step > .glyph { opacity: 0; transform: scale(0.55) rotate(-14deg); }
+.reveal-ready .stage-step.is-shown > .glyph {
+  opacity: 1;
+  transform: none;
+  transition: opacity 480ms var(--ease-out) calc(var(--stagger, 0ms) + 200ms),
+              transform 620ms var(--ease-out) calc(var(--stagger, 0ms) + 200ms);
+}
+.stage-step h3 { grid-column: 2; grid-row: 1; font-family: var(--font-text); font-size: 17px; font-weight: 600; letter-spacing: 0.01em; }
+.stage-step > .glyph { grid-column: 1; grid-row: 1; }
+.stage-step .module { grid-column: 2; grid-row: 2; margin-top: 4px; font-size: 12px; letter-spacing: 0.05em; color: var(--paper-faint); }
+.stage-step > p:not(.module) { grid-column: 3; grid-row: 1 / -1; font-size: 15px; line-height: 1.6; color: var(--paper-soft); max-width: 64ch; }
+
+/* the two editorial sections run a left rail so the wide band stays composed */
+@media (min-width: 901px) {
+  .pipeline .band-inner,
+  .coverage .band-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    column-gap: 56px;
+    align-items: start;
+  }
+  .pipeline .section-head,
+  .coverage .section-head { flex-direction: column; align-items: flex-start; gap: 7px; margin-bottom: 16px; }
+  .pipeline .section-note { font-size: 15px; }
+  .pipeline .stages,
+  .coverage .spec { grid-column: 2; grid-row: 1 / -1; margin-top: 6px; }
+}
+
+/* ---------- coverage ---------- */
+
+.coverage { padding: clamp(58px, 7vw, 94px) var(--gutter) clamp(50px, 6vw, 78px); }
+
+.spec { width: 100%; border-collapse: collapse; margin-top: 34px; text-align: left; }
+.spec caption { text-align: left; max-width: 46rem; font-size: 14px; color: var(--paper-soft); padding-bottom: 14px; }
+.spec th, .spec td { padding: 16px 20px 17px 0; border-bottom: 1px solid var(--edge); vertical-align: top; }
+.spec thead th {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  border-bottom-color: var(--edge-strong);
+  padding-bottom: 12px;
+}
+.spec tbody th { font-family: var(--font-text); font-size: 16px; font-weight: 600; color: var(--paper); width: 17rem; }
+.spec td { font-size: 15px; line-height: 1.58; color: var(--paper-soft); }
+.spec tbody tr { transition: background-color 180ms var(--ease); }
+.spec tbody tr:hover { background-color: var(--wash); }
+
+/* ---------- usage ---------- */
+
+.usage { padding: clamp(56px, 7vw, 92px) var(--gutter) clamp(64px, 8vw, 104px); }
+.panes { margin-top: 36px; display: grid; gap: 26px; grid-template-columns: repeat(auto-fit, minmax(min(310px, 100%), 1fr)); }
+.pane { display: flex; flex-direction: column; }
+
+.pane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 2px 11px;
+}
+.pane-head h3 { font-family: var(--font-text); font-size: 15px; font-weight: 600; }
+.pane-head .mini { min-height: 34px; padding: 5px 11px 6px; font-size: 12px; }
+.pane pre {
+  margin: 0;
+  flex: 1;
+  padding: 20px;
+  overflow-x: auto;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background-color: var(--ink-well);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--paper-soft);
+  tab-size: 2;
+}
+.pane pre .lg { display: block; }
+.pane pre .lg + .lg { margin-top: 1.55em; }
+.reveal-ready .pane .lg { opacity: 0; transform: translate3d(0, 7px, 0); }
+.reveal-ready .pane.is-shown .lg {
+  opacity: 1;
+  transform: none;
+  transition: opacity 460ms var(--ease-out) calc(var(--stagger, 0ms) + var(--d, 0ms)),
+              transform 460ms var(--ease-out) calc(var(--stagger, 0ms) + var(--d, 0ms));
+}
+.pane pre b { color: var(--paper); font-weight: 500; }
+.pane pre i { color: var(--paper-faint); font-style: normal; }
+.pane pre u { color: var(--celadon); text-decoration: none; }
+
+/* ---------- footer ---------- */
+
+.site-foot {
+  padding: 34px var(--gutter) 44px;
+  border-top: 1px solid var(--edge);
+}
+.foot-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 32px;
+  align-items: baseline;
+  font-size: 14px;
+  color: var(--paper-faint);
+}
+.site-foot nav { display: flex; flex-wrap: wrap; gap: 26px; margin-left: auto; }
+.site-foot nav a { display: inline-flex; align-items: center; gap: 7px; }
+.topnav a .glyph, .site-foot nav a .glyph { width: 14px; height: 14px; flex: none; opacity: .82; transition: opacity 180ms var(--ease-out, ease); }
+.topnav a:hover .glyph, .site-foot nav a:hover .glyph { opacity: 1; }
+.site-foot a { color: var(--paper-soft); text-decoration: none; }
+.site-foot a:hover { color: var(--ember); }
+.site-foot .mono { font-size: 12px; letter-spacing: 0.05em; }
+
+/* ---------- reveal ---------- */
+
+.reveal-ready [data-reveal] { opacity: 0; }
+.reveal-ready [data-reveal="rise"] { transform: translate3d(0, 20px, 0); }
+.reveal-ready [data-reveal="wipe"] { transform: translate3d(-16px, 0, 0); }
+.reveal-ready [data-reveal="fade"] { transform: none; }
+.reveal-ready [data-reveal].is-shown {
+  opacity: 1;
+  transform: none;
+  transition: opacity 720ms var(--ease-out), transform 720ms var(--ease-out);
+  transition-delay: var(--stagger, 0ms);
+}
+
 input[type="file"] {
   position: absolute;
   width: 1px;
@@ -119,43 +1095,456 @@ input[type="file"] {
   white-space: nowrap;
   border: 0;
 }
+
+@media (max-width: 900px) {
+  .stage-step { grid-template-columns: 32px minmax(0, 1fr); }
+  .stage-step .module { grid-column: 2; grid-row: 2; }
+  .stage-step { grid-template-rows: auto auto auto; }
+  .stage-step > p:not(.module) { grid-column: 2; grid-row: 3; margin-top: 12px; }
+  .spec tbody th { width: auto; }
+}
+
+@media (max-width: 760px) {
+  .topnav a[href^="#"] { display: none; }
+}
+
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .topbar { gap: 12px; padding: 12px var(--gutter); }
+  .topnav { gap: 18px; }
+  .topnav a { font-size: 14px; }
+  /* the journey is the point, so on a narrow screen it becomes a band under the
+     hero instead of a backdrop, with type and strokes scaled up to survive it */
+  .hero { display: flex; flex-direction: column; padding-top: 64px; }
+  .hero-inner { order: 1; }
+  .plate {
+    order: 2;
+    position: static;
+    width: 100%;
+    margin-top: 34px;
+    opacity: 1;
+    -webkit-mask-image: none;
+    mask-image: none;
+    animation: none;
+  }
+  .plate text { font-size: 32px; }
+  .plate .pl-tag { font-size: 36px; }
+  .plate .pl-pass text { font-size: 36px; }
+  /* the band is the only thing on screen here rather than a backdrop beside a
+     headline, so the drawing has to carry its own legibility */
+  .plate { --plate-line: #77887F; }
+  .plate .pl-tag { opacity: 1; }
+  .plate .pl-pass text { opacity: 1; }
+  .plate .pl-coords text { opacity: 0.75; }
+  .plate .pl-frame { stroke-width: 2.6; }
+  .plate .pl-tick { stroke-width: 2.4; }
+  .plate .pl-doc { stroke-width: 3; }
+  .plate .pl-docline { stroke-width: 6; }
+  .plate .pl-solid { stroke-width: 2.8; }
+  .plate .pl-ghost { stroke-width: 2.2; stroke-dasharray: 10 12; }
+  .plate .pl-runs path { stroke-width: 9; }
+  .plate .pl-runs-body path { stroke-width: 7; }
+  .plate .pl-caret path { stroke-width: 3.4; }
+  .plate .pl-arrow path { stroke-width: 3; }
+  .plate .pl-card { stroke-width: 3; }
+  .plate .pl-outbar { stroke-width: 14; }
+  .plate .pl-outrun { stroke-width: 6; }
+  .plate .pl-part { stroke-width: 2.4; }
+  .plate .pl-xml path { stroke-width: 3.2; }
+  .hero h1 { max-width: none; font-size: clamp(2.35rem, 10.4vw, 3rem); }
+  .section-head h2 { font-size: clamp(1.7rem, 8vw, 2.1rem); }
+  .spec caption { display: block; padding-bottom: 18px; }
+  .diag li { flex-direction: column; gap: 4px; }
+  .rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+  .stage-bar { padding: 10px 12px; }
+  .stage-bar .spacer { margin-left: 0; }
+  .mini { min-height: 44px; padding: 10px 15px 11px; }
+  .pane-head .mini { min-height: 44px; padding: 10px 14px 11px; font-size: 13px; }
+  .deck { font-size: 17px; }
+  .btn { width: 100%; justify-content: center; }
+  .controls { grid-template-columns: minmax(0, 1fr) 92px; }
+  .stage-body { padding: 10px; }
+  .output-frame { min-height: 220px; }
+  .spec, .spec tbody, .spec tr, .spec th, .spec td { display: block; width: auto; }
+  .spec thead { display: none; }
+  .spec tbody tr { padding: 18px 0 4px; border-bottom: 1px solid var(--edge); }
+  .spec th, .spec td { border-bottom: 0; padding: 0 0 10px; }
+  .site-foot nav { margin-left: 0; }
+  .fact + .fact { border-left: 0; border-top: 1px solid var(--edge); }
+  .fact, .fact:first-child { padding: 20px 16px 22px; }
+  .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat, .stat:first-child, .stat + .stat { padding: 14px 14px 16px; border-left: 0; }
+  .stat:nth-child(even) { border-left: 1px solid var(--edge); }
+  .stat:nth-child(n+3) { border-top: 1px solid var(--edge); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body { animation: none; }
+  .plate { animation: none; }
+  .plate * { animation: none !important; }
+  .warmth { animation: none; opacity: 0.72; }
+  .substrate { transform: none; }
+  .hero h1, .hero .plate, .plate { transform: none !important; }
+  .platen.is-landed { animation: none; }
+  .platen-outline rect { animation: none !important; }
+  .platen-glow { transition: none; }
+  .stage-bar .mini { animation: none; }
+  .meta.is-arriving .stat { opacity: 1; transform: none; }
+  .release { animation: none; }
+  .stage-step::after { transition: none; }
+  .rail-token { animation: none !important; opacity: 0; }
+  .reveal-ready .rail-line line,
+  .reveal-ready .stage-step > .glyph,
+  .reveal-ready .pane .lg,
+  .reveal-ready .hero h1 .hl { opacity: 1; transform: none; stroke-dashoffset: 0; }
+  .reveal-ready [data-reveal] { opacity: 1; transform: none; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>pptx-to-html Demo · v2.0.2</h1>
-  <p>Convert PPTX files locally in your browser with the v2.0.2 high-fidelity Rust/WASM engine.</p>
-</div>
-<div class="container">
-  <div class="release-panel">
-    <div class="badges">
-      <span class="badge version">v2.0.2</span>
-      <span class="badge stable">56/56 bounded semantics</span>
-      <span class="badge feature">187 presets</span>
+
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M4 8.5 12 13l8-4.5M12 13v7"/></symbol>
+  <symbol id="i-stream" viewBox="0 0 24 24"><path d="M8 7 3 12l5 5M16 7l5 5-5 5M13.5 4l-3 16"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13.5 12 18l9-4.5"/></symbol>
+  <symbol id="i-rule" viewBox="0 0 24 24"><path d="M3 9h18v6H3z"/><path d="M7 9v3M11 9v4M15 9v3M19 9v4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11.5 12 15.5l4-4"/><path d="M4 18.5h16"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path d="M9 9h11v11H9z"/><path d="M15 9V4H4v11h5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12.5 5.5 5.5L20 7"/></symbol>
+  <symbol id="i-github" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-npm" viewBox="0 0 24 24"><path d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.04 19.17H5.113z"/></symbol>
+  <symbol id="i-frame" viewBox="0 0 24 24"><path d="M3 5h18v14H3z"/><path d="M3 9h18"/><path d="M7 13h7M7 16h4"/></symbol>
+</svg>
+
+<div class="substrate" id="substrate" aria-hidden="true"></div>
+
+<a class="skip-link" href="#convert">Skip to the converter</a>
+
+<header class="topbar">
+  <a class="wordmark" href="https://github.com/brnyxx/pptx2html-turbo">pptx2html<b>-turbo</b></a>
+  <a class="release mono" href="https://github.com/brnyxx/pptx2html-turbo/releases">v2.0.2</a>
+  <nav class="topnav" aria-label="Project links">
+    <a href="#convert">Converter</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="https://www.npmjs.com/package/@briank-dev/pptx-to-html" target="_blank" rel="noopener noreferrer"><svg class="glyph glyph--brand" aria-hidden="true"><use href="#i-npm"></use></svg>npm</a>
+    <a href="https://github.com/brnyxx/pptx2html-turbo" target="_blank" rel="noopener noreferrer"><svg class="glyph glyph--brand" aria-hidden="true"><use href="#i-github"></use></svg>GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+
+  <section class="hero">
+    <div class="warmth" aria-hidden="true"></div>
+    <svg class="plate" id="plate" viewBox="0 0 1200 700" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="plClipTitle"><rect class="pl-clip pl-clip-x" x="430" y="150" width="490" height="92"/></clipPath>
+        <clipPath id="plClipBody"><rect class="pl-clip pl-clip-y" x="430" y="290" width="490" height="250"/></clipPath>
+        <clipPath id="plClipOut"><rect class="pl-clip pl-clip-out" x="946" y="240" width="146" height="112"/></clipPath>
+      </defs>
+
+      <g class="pl-bed">
+        <rect class="pl-frame" x="90" y="70" width="1020" height="574"/>
+        <path class="pl-tick" d="M90 40v18M290 40v18M490 40v18M690 40v18M890 40v18M1090 40v18"/>
+        <path class="pl-tick pl-tick-minor" d="M140 48v10M190 48v10M240 48v10M340 48v10M390 48v10M440 48v10M540 48v10M590 48v10M640 48v10M740 48v10M790 48v10M840 48v10M940 48v10M990 48v10M1040 48v10"/>
+        <path class="pl-tick" d="M52 70h18M52 214h18M52 358h18M52 502h18M52 644h18"/>
+        <path class="pl-tick pl-tick-minor" d="M74 138h12M74 286h12M74 430h12M74 574h12"/>
+        <path class="pl-tick" d="M76 56h28M76 84h28M62 70v28M90 70v28M1096 630h28M1096 658h28M1110 616v28M1138 616v28"/>
+        <g class="pl-coords">
+          <text x="90" y="30">0</text>
+          <text x="490" y="30">4572000</text>
+          <text x="1090" y="30" text-anchor="end">9144000 EMU</text>
+        </g>
+      </g>
+
+      <g class="pl-src">
+        <path class="pl-doc" d="M148 236h74l30 30v152a4 4 0 0 1-4 4h-100a4 4 0 0 1-4-4V240a4 4 0 0 1 4-4z"/>
+        <path class="pl-doc" d="M222 236v30h30"/>
+        <path class="pl-docline" d="M166 300h60M166 324h72M166 348h44"/>
+        <text class="pl-tag" x="148" y="452">deck.pptx</text>
+      </g>
+
+      <g class="pl-parts">
+        <rect class="pl-part pl-part-1" x="250" y="252" width="34" height="26" rx="2"/>
+        <rect class="pl-part pl-part-2" x="250" y="292" width="34" height="26" rx="2"/>
+        <rect class="pl-part pl-part-3" x="250" y="332" width="34" height="26" rx="2"/>
+      </g>
+
+      <g class="pl-xml">
+        <path class="pl-x1" d="M300 292l-11 11 11 11M320 292l11 11-11 11M312 288l-8 30"/>
+        <path class="pl-x2" d="M356 292l-11 11 11 11M376 292l11 11-11 11M368 288l-8 30"/>
+        <path class="pl-x3" d="M300 348l-11 11 11 11M320 348l11 11-11 11M312 344l-8 30"/>
+        <path class="pl-x4" d="M356 348l-11 11 11 11M376 348l11 11-11 11M368 344l-8 30"/>
+      </g>
+
+      <rect class="pl-ghost pl-ghost-a" x="430" y="150" width="490" height="92"/>
+      <rect class="pl-ghost pl-ghost-b" x="430" y="290" width="490" height="250"/>
+      <rect class="pl-solid pl-solid-a" x="430" y="150" width="490" height="92"/>
+      <rect class="pl-solid pl-solid-b" x="430" y="290" width="490" height="250"/>
+
+      <g class="pl-phlabels">
+        <text x="430" y="138">ph type=&quot;ctrTitle&quot;</text>
+        <text x="430" y="562">ph type=&quot;body&quot; idx=&quot;1&quot;</text>
+      </g>
+
+      <g class="pl-runs" clip-path="url(#plClipTitle)">
+        <path d="M456 182h394"/>
+        <path d="M456 214h250"/>
+      </g>
+      <g class="pl-runs pl-runs-body" clip-path="url(#plClipBody)">
+        <path d="M456 332h438"/>
+        <path d="M456 370h396"/>
+        <path d="M456 408h438"/>
+        <path d="M456 446h312"/>
+        <path d="M456 484h414"/>
+        <path d="M456 522h228"/>
+      </g>
+
+      <g class="pl-caret">
+        <path d="M0 96v492"/>
+        <path d="M-8 96h16M-8 588h16"/>
+      </g>
+
+      <g class="pl-arrow">
+        <path d="M926 298h30"/>
+        <path d="M948 292l8 6-8 6"/>
+      </g>
+
+      <g class="pl-out">
+        <rect class="pl-card" x="946" y="240" width="146" height="112" rx="3"/>
+        <g clip-path="url(#plClipOut)">
+          <path class="pl-outbar" d="M946 260h146"/>
+          <path class="pl-outrun" d="M964 288h100M964 306h112M964 324h74"/>
+        </g>
+        <text class="pl-tag" x="946" y="382">deck.html</text>
+      </g>
+
+      <g class="pl-pass">
+        <text class="pl-pass-1" x="150" y="676">unzip</text>
+        <text class="pl-pass-2" x="326" y="676">parse</text>
+        <text class="pl-pass-3" x="530" y="676">resolve</text>
+        <text class="pl-pass-4" x="800" y="676">render</text>
+      </g>
+    </svg>
+
+    <div class="hero-inner">
+      <h1 data-reveal="fade"><span class="hl">PPTX to HTML,</span> <em class="hl" style="--d:110ms">without a server.</em></h1>
+      <p class="deck" data-reveal="rise" style="--stagger:70ms">
+        <strong>pptx2html-turbo</strong> is a from-scratch ECMA-376 renderer written in Rust and
+        compiled to WebAssembly. Drop a deck below and it is unzipped, parsed, resolved against its
+        layout and master, and drawn as positioned HTML. Nothing is uploaded.
+      </p>
+      <div class="hero-actions" data-reveal="rise" style="--stagger:140ms">
+        <a class="btn btn-primary" href="#convert">Convert a deck<svg class="glyph" aria-hidden="true"><use href="#i-arrow"></use></svg></a>
+        <a class="btn btn-ghost" href="https://github.com/brnyxx/pptx2html-turbo" target="_blank" rel="noopener noreferrer">Read the source</a>
+      </div>
+
+      <dl class="facts" data-reveal="fade" style="--stagger:210ms">
+        <div class="fact">
+          <dt>Pure Rust</dt>
+          <dd>No headless Office, no Java, no C++ dependency. quick-xml streams the OOXML parts as SAX events.</dd>
+        </div>
+        <div class="fact">
+          <dt>Zero server</dt>
+          <dd>One WebAssembly module carries the whole pipeline, so the file is read, converted, and drawn in this tab.</dd>
+        </div>
+        <div class="fact">
+          <dt>ECMA-376</dt>
+          <dd>Theme colour resolution, master and layout inheritance, 187 preset shape geometries, ordered diagnostics.</dd>
+        </div>
+      </dl>
     </div>
-    <p>
-      This page demonstrates in-browser conversion, ordered diagnostic counts, renderer-owned actions and timing, and image-like whole-slide zoom.
-      Review the
-      <a href="https://www.npmjs.com/package/@briank-dev/pptx-to-html" target="_blank" rel="noopener noreferrer">npm package</a>,
-      <a href="https://github.com/brnyxx/pptx2html-turbo" target="_blank" rel="noopener noreferrer">repository</a>, and
-      <a href="https://github.com/brnyxx/pptx2html-turbo/releases" target="_blank" rel="noopener noreferrer">release history</a>.
-    </p>
+  </section>
+
+  <section class="converter band" id="convert" aria-labelledby="convertHeading">
+    <div class="band-inner">
+      <div class="section-head" data-reveal="rise">
+        <h2 id="convertHeading">Convert a deck</h2>
+        <span class="tick mono">.pptx / local only</span>
+      </div>
+      <p class="section-note" data-reveal="rise" style="--stagger:60ms">
+        The file is read into memory, converted by the WebAssembly module, and rendered into a
+        sandboxed frame with an opaque origin. Reload the page and it is gone.
+      </p>
+
+      <label class="platen" id="dropZone" for="fileInput">
+        <span class="platen-progress" aria-hidden="true"></span>
+        <span class="platen-glow" aria-hidden="true"></span>
+        <svg class="platen-outline" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><rect/></svg>
+        <svg class="glyph platen-mark" aria-hidden="true" focusable="false"><use href="#i-file"></use></svg>
+        <span class="platen-title" id="platenTitle">Drop a .pptx here</span>
+        <span class="platen-sub">or click to choose a file from your machine</span>
+        <span class="platen-hint mono">NOTHING LEAVES THE BROWSER</span>
+        <input type="file" id="fileInput" accept=".pptx">
+      </label>
+
+      <ol class="rail mono" id="rail" aria-hidden="true">
+        <li data-stage="read">Read</li>
+        <li data-stage="inspect">Inspect</li>
+        <li data-stage="render">Render</li>
+        <li data-stage="paint">Paint</li>
+      </ol>
+
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+
+      <div class="controls" id="controls" role="group" aria-labelledby="scaleLabel">
+        <label class="control-label mono" id="scaleLabel" for="scaleRange">Slide zoom</label>
+        <input type="range" id="scaleRange" min="0.1" max="3" step="0.01" value="1" aria-label="Slide zoom slider" aria-describedby="scaleHint">
+        <input type="number" id="scaleNumber" min="0.1" max="3" step="0.01" value="1.0" aria-label="Slide zoom value" aria-describedby="scaleHint">
+        <p class="hint" id="scaleHint">Layout-preserving whole-slide scale. The output grows like an image without changing coordinates or reflowing text.</p>
+      </div>
+
+      <div class="meta" id="meta"></div>
+
+      <details class="diag" id="diagPanel" hidden>
+        <summary id="diagSummary">Diagnostics</summary>
+        <ul id="diagList"></ul>
+      </details>
+
+      <div class="stage">
+        <div class="stage-bar mono" id="stageBar"><b>Output</b> <span>sandboxed frame, opaque origin</span></div>
+        <div class="stage-body">
+          <div class="stage-idle" id="stageIdle">
+            <svg class="glyph" aria-hidden="true"><use href="#i-frame"></use></svg>
+            <span>The rendered slide appears here</span>
+          </div>
+          <iframe class="output-frame" id="output" sandbox="allow-scripts" title="Converted slide output"></iframe>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pipeline band" id="pipeline" aria-labelledby="pipelineHeading">
+    <div class="band-inner">
+      <div class="section-head" data-reveal="rise">
+        <h2 id="pipelineHeading">How a slide becomes a page</h2>
+        <span class="tick mono">five passes</span>
+      </div>
+      <p class="section-note" data-reveal="rise" style="--stagger:60ms">
+        Each pass is a crate module, and the same code runs in the CLI, the Python bindings, and here.
+      </p>
+
+      <div class="stages" data-reveal="fade">
+        <span class="rail-token" aria-hidden="true"></span>
+        <svg class="rail-line" data-reveal="fade" viewBox="0 0 2 100" preserveAspectRatio="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><line x1="1" y1="0" x2="1" y2="100" pathLength="1"/></svg>
+        <article class="stage-step" data-reveal="wipe">
+          <svg class="glyph" aria-hidden="true"><use href="#i-package"></use></svg>
+          <h3>Unzip</h3>
+          <p class="module mono">parser / opc</p>
+          <p>A .pptx is an Open Packaging Convention archive. The ZIP central directory is read in memory and relationship parts are followed to reach slides, layouts, masters, and the theme.</p>
+        </article>
+        <article class="stage-step" data-reveal="wipe" style="--stagger:70ms">
+          <svg class="glyph" aria-hidden="true"><use href="#i-stream"></use></svg>
+          <h3>Parse</h3>
+          <p class="module mono">parser / xml</p>
+          <p>quick-xml walks every part as a stream of SAX events rather than building a document tree, which keeps a large deck inside a small, predictable memory envelope.</p>
+        </article>
+        <article class="stage-step" data-reveal="wipe" style="--stagger:140ms">
+          <svg class="glyph" aria-hidden="true"><use href="#i-layers"></use></svg>
+          <h3>Resolve</h3>
+          <p class="module mono">resolver</p>
+          <p>Every property walks the inheritance chain in order: shape, layout placeholder, master placeholder, txStyles, defaultTextStyle, then the specification default. Colours resolve through the slide colour map into the theme.</p>
+        </article>
+        <article class="stage-step" data-reveal="wipe" style="--stagger:210ms">
+          <svg class="glyph" aria-hidden="true"><use href="#i-rule"></use></svg>
+          <h3>Measure</h3>
+          <p class="module mono">model / units</p>
+          <p>English Metric Units become CSS pixels at 914400 EMU to the inch. Geometry stays absolute, so scaling the slide behaves like scaling an image and text never reflows.</p>
+        </article>
+        <article class="stage-step" data-reveal="wipe" style="--stagger:280ms">
+          <svg class="glyph" aria-hidden="true"><use href="#i-frame"></use></svg>
+          <h3>Render</h3>
+          <p class="module mono">renderer</p>
+          <p>Shapes, text runs, tables, and preset geometry are emitted as positioned HTML with inline SVG paths. Anything the renderer cannot resolve is recorded as a coded diagnostic instead of being dropped.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="coverage band" id="coverage" aria-labelledby="coverageHeading">
+    <div class="band-inner">
+      <div class="section-head" data-reveal="rise">
+        <h2 id="coverageHeading">What the renderer resolves</h2>
+        <span class="tick mono">implemented, not stubbed</span>
+      </div>
+
+      <table class="spec">
+        <caption>Behaviour is implemented directly from the ECMA-376 specification; no reference implementation is translated.</caption>
+        <thead>
+          <tr><th scope="col">Area</th><th scope="col">Behaviour</th></tr>
+        </thead>
+        <tbody>
+          <tr data-reveal="fade"><th scope="row">Theme colours</th><td>Twelve modifiers resolved through the slide colour map, including tint, shade, lumMod, and satMod, with layout-level overrides honoured.</td></tr>
+          <tr data-reveal="fade" style="--stagger:50ms"><th scope="row">Inheritance</th><td>Slide to layout to master to theme, with placeholders matched by type and index at every level.</td></tr>
+          <tr data-reveal="fade" style="--stagger:100ms"><th scope="row">Preset shapes</th><td>187 geometries rendered as SVG with adjust values. An unresolved custom guide formula is preserved verbatim and reported rather than substituted with zero.</td></tr>
+          <tr data-reveal="fade" style="--stagger:150ms"><th scope="row">Text</th><td>Runs, paragraph properties, bullet definitions, body insets, and autofit hints, kept in absolute boxes so line breaks match the source.</td></tr>
+          <tr data-reveal="fade" style="--stagger:200ms"><th scope="row">Tables and groups</th><td>Cell spans, borders, and fills from the table style part; nested group shapes with their own child coordinate spaces.</td></tr>
+          <tr data-reveal="fade" style="--stagger:250ms"><th scope="row">Images</th><td>Embedded parts are inlined as base64 by default with source cropping applied, or written alongside the document when external mode is selected.</td></tr>
+          <tr data-reveal="fade" style="--stagger:300ms"><th scope="row">Diagnostics</th><td>Every fallback carries a stable code and an order, so coverage gaps stay countable instead of silent. Convert a deck above to see the ones your own file produces.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="usage band" id="usage" aria-labelledby="usageHeading">
+    <div class="band-inner">
+      <div class="section-head" data-reveal="rise">
+        <h2 id="usageHeading">Use it outside this page</h2>
+        <span class="tick mono">same core, three surfaces</span>
+      </div>
+
+      <div class="panes">
+        <div class="pane" data-reveal="rise">
+          <div class="pane-head"><h3>Browser</h3><button type="button" class="mini" data-copy="paneBrowser" aria-label="Copy the browser snippet"><svg class="glyph" aria-hidden="true"><use href="#i-copy"></use></svg>Copy</button></div>
+<pre id="paneBrowser"><span class="lg"><i># install</i>
+npm i <b>@briank-dev/pptx-to-html</b>
+</span><span class="lg" style="--d:110ms"><i>// render into a sandboxed frame</i>
+import { <u>pptxToHtml</u> } from
+  '@briank-dev/pptx-to-html';
+</span><span class="lg" style="--d:220ms">frame.srcdoc = await <u>pptxToHtml</u>(file);</span></pre>
+        </div>
+
+        <div class="pane" data-reveal="rise" style="--stagger:70ms">
+          <div class="pane-head"><h3>Command line</h3><button type="button" class="mini" data-copy="paneCli" aria-label="Copy the command line snippet"><svg class="glyph" aria-hidden="true"><use href="#i-copy"></use></svg>Copy</button></div>
+<pre id="paneCli"><span class="lg"><i># binaries ship with each release</i>
+<b>pptx2html</b> deck.pptx -o deck.html
+</span><span class="lg" style="--d:110ms"><b>pptx2html</b> deck.pptx --slides 1,3,5-8
+<b>pptx2html</b> deck.pptx --scale 2.0
+<b>pptx2html</b> deck.pptx --diagnostics d.json</span></pre>
+        </div>
+
+        <div class="pane" data-reveal="rise" style="--stagger:140ms">
+          <div class="pane-head"><h3>Python</h3><button type="button" class="mini" data-copy="panePy" aria-label="Copy the Python snippet"><svg class="glyph" aria-hidden="true"><use href="#i-copy"></use></svg>Copy</button></div>
+<pre id="panePy"><span class="lg"><i># bindings built with maturin</i>
+import <b>pptx2html</b>
+</span><span class="lg" style="--d:110ms">html = pptx2html.<u>convert_file</u>("deck.pptx")
+</span><span class="lg" style="--d:220ms">out = pptx2html.<u>convert_with_metadata</u>(
+    "deck.pptx")
+print(len(out.diagnostics))</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="band-inner foot-inner">
+  <span class="mono">pptx2html-turbo v2.0.2 &middot; MIT</span>
+  <nav aria-label="Footer links">
+    <a href="https://github.com/brnyxx/pptx2html-turbo" target="_blank" rel="noopener noreferrer"><svg class="glyph glyph--brand" aria-hidden="true"><use href="#i-github"></use></svg>Repository</a>
+    <a href="https://github.com/brnyxx/pptx2html-turbo/releases" target="_blank" rel="noopener noreferrer"><svg class="glyph" aria-hidden="true"><use href="#i-package"></use></svg>Releases</a>
+    <a href="https://www.npmjs.com/package/@briank-dev/pptx-to-html" target="_blank" rel="noopener noreferrer"><svg class="glyph glyph--brand" aria-hidden="true"><use href="#i-npm"></use></svg>npm package</a>
+  </nav>
   </div>
-  <label class="drop-zone" id="dropZone" for="fileInput">
-    <span class="icon">&#128196;</span>
-    <p>Drop a .pptx file here or click to select</p>
-  </label>
-  <input type="file" id="fileInput" accept=".pptx">
-  <div class="status" id="status" role="status" aria-live="polite"></div>
-  <div class="controls" id="controls" role="group" aria-labelledby="scaleLabel">
-    <label class="control-label" id="scaleLabel" for="scaleRange">Slide zoom</label>
-    <input type="range" id="scaleRange" min="0.1" max="3" step="0.01" value="1" aria-label="Slide zoom slider" aria-describedby="scaleHint">
-    <input type="number" id="scaleNumber" min="0.1" max="3" step="0.01" value="1.0" aria-label="Slide zoom value" aria-describedby="scaleHint">
-    <div class="hint" id="scaleHint">Layout-preserving whole-slide scale. The output grows like an image without changing coordinates or reflowing text.</div>
-  </div>
-  <div class="meta" id="meta"></div>
-  <iframe class="output-frame" id="output" sandbox="allow-scripts" title="Converted slide output"></iframe>
-</div>
+</footer>
+
 <script type="module">
 import init, { convert_with_options_metadata, get_info } from './pkg/pptx2html_wasm.js';
 
@@ -167,13 +1556,56 @@ const scaleRange = document.getElementById('scaleRange');
 const scaleNumber = document.getElementById('scaleNumber');
 const meta = document.getElementById('meta');
 const output = document.getElementById('output');
+const rail = document.getElementById('rail');
+const stageIdle = document.getElementById('stageIdle');
+const stageBar = document.getElementById('stageBar');
+const diagPanel = document.getElementById('diagPanel');
+const diagSummary = document.getElementById('diagSummary');
+const diagList = document.getElementById('diagList');
+const platenTitle = document.getElementById('platenTitle');
 let currentBuffer = null;
 let currentInfo = null;
 let currentDiagnostics = [];
+let currentName = '';
+let currentHtml = '';
+let currentDownloadUrl = '';
+let rerenderTimer = 0;
+let freshConversion = false;
+
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 function setStatus(msg, type) {
   status.textContent = msg;
   status.className = 'status ' + type;
+}
+
+function setProgress(value) {
+  if (value === null) {
+    dropZone.style.setProperty('--progress-alpha', '0');
+    window.setTimeout(() => dropZone.style.setProperty('--progress', '0'), 460);
+    return;
+  }
+  dropZone.style.setProperty('--progress-alpha', '1');
+  dropZone.style.setProperty('--progress', String(value));
+}
+
+function setStages(state) {
+  const order = ['read', 'inspect', 'render', 'paint'];
+  const active = order.indexOf(state);
+  for (const item of rail.children) {
+    const idx = order.indexOf(item.dataset.stage);
+    if (state === 'idle' || active < 0) item.removeAttribute('data-state');
+    else if (idx < active) item.dataset.state = 'done';
+    else if (idx === active) item.dataset.state = state === 'paint' ? 'done' : 'active';
+    else item.removeAttribute('data-state');
+  }
+  if (state === 'paint') {
+    for (const item of rail.children) item.dataset.state = 'done';
+  }
+}
+
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
 function clampScale(value) {
@@ -207,22 +1639,138 @@ function fitScaleToContainer() {
   return clampScale(fitScale);
 }
 
-function updateMeta() {
+function frameHeightFor(scale) {
+  if (!currentInfo) return 0;
+  const visibleSlides = Math.min(currentInfo.slide_count || 1, 3);
+  const stackHeight = Math.round(currentInfo.height_px * scale) * visibleSlides + 8;
+  const viewportCap = Math.round(window.innerHeight * 0.86);
+  return Math.max(320, Math.min(stackHeight, viewportCap));
+}
+
+function statCell(key, value) {
+  const cell = document.createElement('div');
+  cell.className = 'stat';
+  const k = document.createElement('span');
+  k.className = 'stat-k';
+  k.textContent = key;
+  const v = document.createElement('span');
+  v.className = 'stat-v';
+  v.textContent = value;
+  cell.append(k, v);
+  return cell;
+}
+
+// Each field renders at a progress t so a fresh conversion can count the
+// figures up; a zoom scrub just renders them at t = 1.
+function metaFields(scale) {
+  const px = (n) => n.toFixed(0);
+  const fields = [
+    ['Slides', (t) => String(Math.round(currentInfo.slide_count * t))],
+    ['Original', (t) => px(currentInfo.width_px * t) + ' x ' + px(currentInfo.height_px * t) + ' px'],
+    ['Rendered', (t) => px(currentInfo.width_px * scale * t) + ' x ' + px(currentInfo.height_px * scale * t) + ' px'],
+    ['Zoom', () => formatScale(scale) + 'x'],
+    ['Diagnostics', (t) => String(Math.round(currentDiagnostics.length * t))],
+  ];
+  if (currentInfo.title) fields.push(['Title', () => currentInfo.title]);
+  return fields;
+}
+
+function countUp(cells, fields) {
+  const started = performance.now();
+  const step = (now) => {
+    const raw = Math.min(1, (now - started) / 720);
+    const t = 1 - Math.pow(1 - raw, 3);
+    for (let i = 0; i < cells.length; i += 1) {
+      cells[i].lastElementChild.textContent = fields[i][1](t);
+    }
+    if (raw < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function updateMeta(arrive) {
   if (!currentInfo) return;
   const scale = clampScale(scaleNumber.value);
-  const fields = [
-    'Slides: ' + currentInfo.slide_count,
-    'Original: ' + currentInfo.width_px.toFixed(0) + ' x ' + currentInfo.height_px.toFixed(0) + ' px',
-    'Rendered: ' + (currentInfo.width_px * scale).toFixed(0) + ' x ' + (currentInfo.height_px * scale).toFixed(0) + ' px',
-    'Zoom: ' + formatScale(scale) + 'x',
-    'Diagnostics: ' + currentDiagnostics.length,
-  ];
-  if (currentInfo.title) fields.push('Title: ' + currentInfo.title);
-  meta.replaceChildren(...fields.map((text) => {
-    const span = document.createElement('span');
-    span.textContent = text;
-    return span;
-  }));
+  const fields = metaFields(scale);
+  const animate = Boolean(arrive) && !reducedMotion.matches;
+  const cells = fields.map(([key, render], index) => {
+    const cell = statCell(key, render(animate ? 0 : 1));
+    cell.style.setProperty('--i', String(index));
+    return cell;
+  });
+  meta.classList.toggle('is-arriving', animate);
+  meta.replaceChildren(...cells);
+  if (!animate) return;
+  requestAnimationFrame(() => {
+    for (const cell of cells) cell.classList.add('is-in');
+    countUp(cells, fields);
+  });
+}
+
+function updateDiagnostics() {
+  if (currentDiagnostics.length === 0) {
+    diagPanel.hidden = true;
+    diagPanel.open = false;
+    diagList.replaceChildren();
+    return;
+  }
+  diagPanel.hidden = false;
+  diagSummary.textContent =
+    currentDiagnostics.length + ' diagnostic' + (currentDiagnostics.length === 1 ? '' : 's') + ' recorded';
+  const shown = currentDiagnostics.slice(0, 40);
+  const rows = shown.map((entry) => {
+    const row = document.createElement('li');
+    const code = document.createElement('b');
+    code.textContent = entry && entry.code ? entry.code : 'DIAGNOSTIC';
+    const detail = document.createElement('span');
+    const parts = [];
+    if (entry && entry.slide_index !== undefined && entry.slide_index !== null) {
+      parts.push('slide ' + entry.slide_index);
+    }
+    if (entry && entry.detail) parts.push(entry.detail);
+    if (entry && entry.message) parts.push(entry.message);
+    detail.textContent = parts.length > 0 ? parts.join(' — ') : 'reported by the renderer';
+    row.append(code, detail);
+    return row;
+  });
+  if (currentDiagnostics.length > shown.length) {
+    const rest = document.createElement('li');
+    const more = document.createElement('span');
+    more.textContent = (currentDiagnostics.length - shown.length) + ' further diagnostics are not listed here';
+    rest.append(more);
+    rows.push(rest);
+  }
+  diagList.replaceChildren(...rows);
+}
+
+function releaseDownloadUrl() {
+  if (!currentDownloadUrl) return;
+  URL.revokeObjectURL(currentDownloadUrl);
+  currentDownloadUrl = '';
+}
+
+function updateStageBar(extra) {
+  stageBar.replaceChildren();
+  const label = document.createElement('b');
+  label.textContent = currentName || 'Output';
+  const note = document.createElement('span');
+  note.textContent = extra || 'sandboxed frame, opaque origin';
+  stageBar.append(label, note);
+  if (!currentHtml) return;
+  releaseDownloadUrl();
+  currentDownloadUrl = URL.createObjectURL(new Blob([currentHtml], { type: 'text/html' }));
+  const save = document.createElement('a');
+  save.className = 'mini spacer';
+  save.href = currentDownloadUrl;
+  save.download = currentName.replace(/\.pptx$/i, '') + '.html';
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('class', 'glyph');
+  icon.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#i-download');
+  icon.append(use);
+  save.append(icon, document.createTextNode('Save .html'));
+  stageBar.append(save);
 }
 
 async function renderCurrentBuffer() {
@@ -231,6 +1779,10 @@ async function renderCurrentBuffer() {
   syncScaleInputs(scale);
   updateMeta();
   setStatus('Converting at ' + formatScale(scale) + 'x…', 'info');
+  setStages('render');
+  setProgress(0.78);
+  dropZone.classList.add('is-busy');
+  if (!reducedMotion.matches) await nextFrame();
 
   try {
     const t0 = performance.now();
@@ -248,14 +1800,35 @@ async function renderCurrentBuffer() {
     } finally {
       result.free();
     }
+    currentHtml = html;
     const elapsed = (performance.now() - t0).toFixed(0);
 
     output.srcdoc = html;
+    output.style.height = frameHeightFor(scale) + 'px';
     output.style.display = 'block';
-    updateMeta();
+    stageIdle.hidden = true;
+    setStages('paint');
+    setProgress(1);
+    updateMeta(freshConversion);
+    freshConversion = false;
+    dropZone.classList.add('is-loaded');
+    platenTitle.textContent = 'Drop another .pptx, or click to choose one';
+    updateDiagnostics();
+    const slideCount = currentInfo ? currentInfo.slide_count : 1;
+    updateStageBar(
+      (html.length / 1024).toFixed(1) + ' KB HTML' +
+      (slideCount > 1 ? ' · ' + slideCount + ' slides, scroll inside the frame' : ''),
+    );
     setStatus('Converted in ' + elapsed + ' ms (' + (html.length / 1024).toFixed(1) + ' KB HTML, ' + formatScale(scale) + 'x zoom)', 'success');
   } catch (e) {
-    setStatus('Conversion failed: ' + e.message, 'error');
+    setStages('idle');
+    currentHtml = '';
+    releaseDownloadUrl();
+    updateStageBar();
+    setStatus('The deck could not be converted. ' + e.message, 'error');
+  } finally {
+    dropZone.classList.remove('is-busy');
+    setProgress(null);
   }
 }
 
@@ -264,49 +1837,207 @@ async function handleFile(file) {
   currentBuffer = null;
   currentInfo = null;
   currentDiagnostics = [];
+  currentHtml = '';
+  releaseDownloadUrl();
+  currentName = file ? file.name : '';
+  freshConversion = true;
   meta.replaceChildren();
+  updateDiagnostics();
   output.style.display = 'none';
+  stageIdle.hidden = false;
+  updateStageBar();
+  setStages('idle');
+  setProgress(0.06);
 
   if (!file.name.toLowerCase().endsWith('.pptx')) {
-    setStatus('Please select a .pptx file.', 'error');
+    setProgress(null);
+    setStatus('That is not a .pptx file. Choose a PowerPoint presentation and try again.', 'error');
     return;
   }
-  setStatus('Loading presentation…', 'info');
+  setStatus('Reading ' + file.name + '…', 'info');
+  setStages('read');
+  setProgress(0.22);
 
   try {
     currentBuffer = new Uint8Array(await file.arrayBuffer());
+    setStages('inspect');
+    setProgress(0.48);
     currentInfo = JSON.parse(get_info(currentBuffer));
     controls.style.display = 'grid';
     syncScaleInputs(fitScaleToContainer());
     await renderCurrentBuffer();
   } catch (e) {
-    setStatus('Conversion failed: ' + e.message, 'error');
+    setStages('idle');
+    setProgress(null);
+    currentHtml = '';
+    releaseDownloadUrl();
+    updateStageBar();
+    setStatus('That file could not be read as a .pptx. ' + e.message, 'error');
   }
 }
 
+function landed() {
+  dropZone.classList.remove('is-hot');
+  if (reducedMotion.matches) return;
+  dropZone.classList.remove('is-landed');
+  void dropZone.offsetWidth;
+  dropZone.classList.add('is-landed');
+}
+
+if (!reducedMotion.matches && window.matchMedia('(hover: hover)').matches) {
+  dropZone.addEventListener('pointermove', (e) => {
+    const rect = dropZone.getBoundingClientRect();
+    dropZone.style.setProperty('--mx', (e.clientX - rect.left).toFixed(0) + 'px');
+    dropZone.style.setProperty('--my', (e.clientY - rect.top).toFixed(0) + 'px');
+  });
+}
+
 fileInput.addEventListener('change', (e) => {
-  if (e.target.files[0]) handleFile(e.target.files[0]);
+  if (e.target.files[0]) {
+    landed();
+    handleFile(e.target.files[0]);
+  }
   e.target.value = '';
 });
-dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('is-hot'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('is-hot'));
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
-  dropZone.classList.remove('dragover');
+  landed();
   if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
 });
 scaleRange.addEventListener('input', () => {
   syncScaleInputs(scaleRange.value);
   updateMeta();
 });
-scaleRange.addEventListener('change', () => { void renderCurrentBuffer(); });
+function scheduleRerender() {
+  window.clearTimeout(rerenderTimer);
+  rerenderTimer = window.setTimeout(() => { void renderCurrentBuffer(); }, 260);
+}
+scaleRange.addEventListener('change', scheduleRerender);
 scaleNumber.addEventListener('input', () => {
   syncScaleInputs(scaleNumber.value);
   updateMeta();
 });
-scaleNumber.addEventListener('change', () => { void renderCurrentBuffer(); });
+scaleNumber.addEventListener('change', scheduleRerender);
 
-init().then(() => setStatus('WASM module loaded — ready to convert.', 'info'));
+const substrate = document.getElementById('substrate');
+const hero = document.querySelector('.hero');
+const heroTitle = document.querySelector('.hero h1');
+
+if (!reducedMotion.matches && substrate) {
+  let ticking = false;
+  const applyParallax = () => {
+    ticking = false;
+    const y = window.scrollY;
+    substrate.style.setProperty('--sub-y', (y * -0.14).toFixed(1) + 'px');
+    if (!hero) return;
+    const depth = Math.max(0, Math.min(1, y / Math.max(1, hero.offsetHeight)));
+    hero.style.setProperty('--hero-lift', (depth * -26).toFixed(1) + 'px');
+    hero.style.setProperty('--plate-lift', (depth * 46).toFixed(1) + 'px');
+  };
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(applyParallax);
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  applyParallax();
+}
+
+const stages = document.querySelector('.stages');
+if (stages) {
+  const sizeRail = () => stages.style.setProperty('--rail-h', (stages.offsetHeight - 60) + 'px');
+  sizeRail();
+  window.addEventListener('resize', sizeRail, { passive: true });
+}
+
+const plate = document.getElementById('plate');
+if (plate && 'IntersectionObserver' in window) {
+  // built unconditionally: the class it toggles does nothing until the loop is
+  // live, and building it lazily left a mid-session opt-in running off screen
+  const heroWatch = new IntersectionObserver((entries) => {
+    for (const entry of entries) plate.classList.toggle('plate-rest', !entry.isIntersecting);
+  }, { threshold: 0 });
+  heroWatch.observe(plate);
+}
+if (plate && !reducedMotion.matches) plate.classList.add('plate-live');
+
+if (!reducedMotion.matches && 'IntersectionObserver' in window) {
+  document.documentElement.classList.add('reveal-ready');
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add('is-shown');
+      observer.unobserve(entry.target);
+    }
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+  for (const el of document.querySelectorAll('[data-reveal]')) observer.observe(el);
+}
+
+// Honour the setting if it is flipped mid-session. Reveals are one-shot, so
+// motion coming back must not re-arm them and hide copy that is already read.
+reducedMotion.addEventListener('change', (event) => {
+  if (event.matches) {
+    if (plate) plate.classList.remove('plate-live');
+    document.documentElement.classList.remove('reveal-ready');
+  } else if (plate) {
+    plate.classList.add('plate-live');
+  }
+});
+
+// execCommand runs synchronously and never waits on a permission prompt, so the
+// button can report the result immediately; the async API is the fallback.
+function copySelection(source) {
+  const selection = window.getSelection();
+  if (!selection) return false;
+  const range = document.createRange();
+  range.selectNodeContents(source);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  }
+  selection.removeAllRanges();
+  return copied;
+}
+
+for (const button of document.querySelectorAll('[data-copy]')) {
+  button.addEventListener('click', () => {
+    const source = document.getElementById(button.dataset.copy);
+    if (!source) return;
+    const label = button.lastChild;
+    const report = (ok) => {
+      label.textContent = ok ? 'Copied' : 'Select and copy';
+      if (ok) button.dataset.done = 'true';
+      window.setTimeout(() => {
+        button.removeAttribute('data-done');
+        label.textContent = 'Copy';
+      }, 1800);
+    };
+    if (copySelection(source)) {
+      report(true);
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(source.textContent.trim()).then(
+        () => report(true),
+        () => report(false),
+      );
+      return;
+    }
+    report(false);
+  });
+}
+
+updateStageBar();
+
+init()
+  .then(() => setStatus('WebAssembly module loaded. Drop a .pptx to convert it.', 'info'))
+  .catch((e) => setStatus('The WebAssembly module could not load: ' + e.message, 'error'));
 </script>
 </body>
 </html>

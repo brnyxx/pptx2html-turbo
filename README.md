@@ -305,8 +305,10 @@ console.log(`HTML: ${result.html.length}, Unresolved: ${result.unresolvedElement
 </script>
 ```
 
-A drag-and-drop demo page is included at `crates/pptx2html-wasm/demo/index.html`.
-The included demo displays ordered diagnostic counts, runs renderer-owned actions and timing in an opaque-origin frame, and initializes image-like whole-slide zoom to the available width while keeping slide coordinates and text flow intact.
+A single-file demo page is included at `crates/pptx2html-wasm/demo/index.html`, combining a
+project overview with a working drag-and-drop converter. It has no build step and no runtime
+dependencies beyond the generated `pkg/` output.
+The included demo displays ordered diagnostic counts and expands them into the individual coded entries, runs renderer-owned actions and timing in an opaque-origin frame, and initializes image-like whole-slide zoom to the available width while keeping slide coordinates and text flow intact.
 
 ## Supported Features
 
