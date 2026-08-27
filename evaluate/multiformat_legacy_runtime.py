@@ -126,10 +126,10 @@ class _LegacyMaterializer:
                 page_request,
                 "PDF unit inspection failed",
             )
-            _validate_pdf_pages(page_request.stdout_path)
+            unit_count = _validate_pdf_pages(page_request.stdout_path)
             job.destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(binary, job.destination)
-            return 1
+            return unit_count
         except LegacyConformanceError:
             raise
         except (
@@ -264,8 +264,8 @@ def _validate_output(path: Path, document_format: DocumentFormat) -> None:
     )
 
 
-def _validate_pdf_pages(path: Path) -> None:
-    value = path.read_text(encoding="utf-8")
-    match = _PAGE_PATTERN.search(value)
+def _validate_pdf_pages(path: Path) -> int:
+    match = _PAGE_PATTERN.search(path.read_text(encoding="utf-8"))
     if match is None or int(match.group(1)) <= 0:
         raise LegacyConformanceError("PDF unit inspection failed")
+    return int(match.group(1))

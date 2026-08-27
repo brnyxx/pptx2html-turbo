@@ -52,7 +52,7 @@ class MultiFormatLegacyRuntimeTests(unittest.TestCase):
                         root / f"work-{document_format.value}",
                     )
                 )
-                self.assertEqual(count, 1)
+                self.assertEqual(count, 2)
                 self.assertTrue(destination.is_file())
                 self.assertFalse((root / f"work-{document_format.value}").exists())
 
@@ -173,7 +173,7 @@ class MultiFormatLegacyRuntimeTests(unittest.TestCase):
             output_dir = Path(
                 conversion.command[conversion.command.index("--outdir") + 1]
             )
-            self.assertEqual(unit_count, 1)
+            self.assertEqual(unit_count, 2)
             self.assertTrue(profile.startswith("-env:UserInstallation=file://"))
             self.assertTrue(conversion.cwd.is_absolute())
             self.assertTrue(output_dir.is_absolute())
