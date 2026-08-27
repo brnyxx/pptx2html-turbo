@@ -202,21 +202,42 @@ class CandidateRuntimeLockMaterializerTests(unittest.TestCase):
             outer = portable_test.PortableLockMaterializerTests()._fixture(
                 root / "outer"
             )
-            with patch("importlib.metadata.version", return_value="1.62.0"):
+            with (
+                patch("importlib.metadata.version", return_value="1.62.0"),
+                patch(
+                    "evaluate.materialize_multiformat_candidate_runtime_locks.platform"
+                ) as candidate_platform,
+                patch(
+                    "evaluate.materialize_multiformat_portable_locks.platform"
+                ) as portable_platform,
+                patch(
+                    "evaluate.multiformat_candidate_runtime_lock.platform"
+                ) as browser_platform,
+            ):
+                for runtime_platform in (
+                    candidate_platform,
+                    portable_platform,
+                    browser_platform,
+                ):
+                    runtime_platform.system.return_value = "Linux"
+                    runtime_platform.machine.return_value = "arm64"
                 browser, runtime = materialize_candidate_runtime_locks(candidate)
-            portable = replace(
-                outer,
-                project_root=candidate.project_root,
-                browser_lock=browser,
-                candidate_runtime_lock=runtime,
-                converter=candidate.converter,
-                libreoffice=candidate.soffice,
-                chromium=candidate.chromium,
-                font_bundle=candidate.font_bundle,
-                receipt_signer=candidate.receipt_signer,
-                candidate_sandbox_public_key=candidate.sandbox_public_key,
-            )
-            self.assertEqual(len(materialize_portable_locks(portable)), 1)
+                portable = replace(
+                    outer,
+                    project_root=candidate.project_root,
+                    browser_lock=browser,
+                    candidate_runtime_lock=runtime,
+                    converter=candidate.converter,
+                    libreoffice=candidate.soffice,
+                    pdftohtml=candidate.pdftohtml,
+                    pdfinfo=candidate.pdfinfo,
+                    openssl=candidate.openssl,
+                    chromium=candidate.chromium,
+                    font_bundle=candidate.font_bundle,
+                    receipt_signer=candidate.receipt_signer,
+                    candidate_sandbox_public_key=candidate.sandbox_public_key,
+                )
+                self.assertEqual(len(materialize_portable_locks(portable)), 1)
 
     def _fixture(self, root: Path) -> CandidateRuntimeLockInputs:
         return candidate_runtime_lock_inputs(root)
