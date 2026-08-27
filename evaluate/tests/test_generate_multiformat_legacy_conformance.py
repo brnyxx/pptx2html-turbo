@@ -122,7 +122,7 @@ class GenerateMultiFormatLegacyConformanceTests(unittest.TestCase):
             def wrong_count(job: LegacyPairJob) -> int:
                 nonlocal calls
                 calls += 1
-                self._materialize(job)
+                _ = self._materialize(job)
                 return 2 if calls == 2 else 1
 
             # When / Then
@@ -140,6 +140,7 @@ class GenerateMultiFormatLegacyConformanceTests(unittest.TestCase):
                     LegacyPairRuntime(wrong_count, self._tools()),
                 )
 
+            self.assertEqual(calls, 2)
             self.assertFalse((root / "legacy").exists())
 
     def test_existing_output_is_never_modified(self) -> None:

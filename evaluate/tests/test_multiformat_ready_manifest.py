@@ -81,6 +81,28 @@ class MultiFormatReadyManifestTests(unittest.TestCase):
                 build_format_manifest(digest, document_format, reversed_set),
             )
 
+    def test_paired_legacy_conformance_rejects_multiple_units(self) -> None:
+        source = next(
+            item
+            for item in self.sources.sources
+            if item.document_format is DocumentFormat.DOC
+            and isinstance(item.details, ReadyConformance)
+            and item.details.primary_stratum == "paired-legacy"
+        )
+        values = _replace(
+            self.sources.sources,
+            source,
+            replace(source, unit_count=2),
+        )
+
+        with self.assertRaises(ReadyManifestError) as raised:
+            build_format_manifest(
+                sha256_file(CONTRACT),
+                DocumentFormat.DOC,
+                ReadySourceSet(values, self.sources.supports),
+            )
+        self.assertEqual(raised.exception.failure, ReadyManifestFailure.CONFORMANCE)
+
     def test_rejects_invalid_inventory_with_typed_failures(self) -> None:
         target = DocumentFormat.PPTX
         any_source = next(

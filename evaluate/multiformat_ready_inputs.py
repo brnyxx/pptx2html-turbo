@@ -209,6 +209,7 @@ def _paired(
                 schema.string_value(item, "id") == source_id
                 and schema.string_value(paired, "id") == modern_id
                 and schema.sha256_value(paired, "sha256") == selected.source_sha256
+                and schema.integer_value(item, "unit_count") == 1
             )
             _check(joined, ReadyInputFailure.LEGACY_CONFORMANCE_INVALID, source_id)
             source, support = (

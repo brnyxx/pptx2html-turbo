@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 import tempfile
 import unittest
 from collections import Counter
@@ -114,6 +115,29 @@ class MultiFormatReadyInputTests(unittest.TestCase):
             )
             self.assertIn((support.support_format, support.modern_case_id), primary_ids)
             self.assertNotIn((support.support_format, support.support_id), primary_ids)
+
+    def test_paired_legacy_rejects_multi_page_unit_count(self) -> None:
+        manifest = self.fixture.paths.legacy_conformance
+        original = manifest.read_bytes()
+        original_mode = stat.S_IMODE(manifest.stat().st_mode)
+        manifest.chmod(original_mode | stat.S_IWUSR)
+        try:
+            values = read_strict_object(manifest)
+            formats = object_value(values, "formats")
+            doc = object_value(formats, "doc")
+            files = object_list(doc, "files", "ready.test.legacy")
+            files[0]["unit_count"] = 2
+            write_canonical_json(manifest, values)
+
+            with self.assertRaises(ReadyInputError) as raised:
+                load_ready_inputs(self.fixture.paths)
+            self.assertEqual(
+                raised.exception.failure,
+                ReadyInputFailure.LEGACY_CONFORMANCE_INVALID,
+            )
+        finally:
+            _ = manifest.write_bytes(original)
+            manifest.chmod(original_mode)
 
     def test_modern_status_mutation_fails_typed(self) -> None:
         manifest = self.fixture.paths.pptx_conformance
