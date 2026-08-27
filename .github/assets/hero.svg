@@ -1,0 +1,155 @@
+<svg width="1200" height="512" viewBox="0 0 1200 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="pptx2html-turbo - PPTX to HTML, without a server. A pure-Rust ECMA-376 renderer compiled to WebAssembly.">
+  <title>pptx2html-turbo — PPTX to HTML, without a server.</title>
+  <desc>An EMU-ruled measuring bed carries a deck from left to right: deck.pptx is unzipped into package parts, parsed into XML fragments, resolved from dashed layout placeholders into solid slide shapes with text runs, and rendered out as deck.html.</desc>
+
+  <defs>
+    <radialGradient id="h-bg" cx="50%" cy="40%" r="82%">
+      <stop offset="0%" stop-color="#141A18"/>
+      <stop offset="52%" stop-color="#0E1211"/>
+      <stop offset="100%" stop-color="#0B0F0E"/>
+    </radialGradient>
+    <linearGradient id="h-trail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F2703C" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#F2703C" stop-opacity="0.15"/>
+    </linearGradient>
+    <filter id="h-glow" x="-400%" y="-30%" width="900%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <style>
+      /* Motion is enhancement only. Every element below already carries its
+         finished state in presentation attributes, so a stripped or reduced
+         stylesheet still renders the complete journey rather than an empty bed.
+         The pass travels linearly so each label lights exactly as it is reached;
+         negative delays start every label mid-cycle, so the first pass reads the
+         same as every later one. */
+      .h-caret { animation: h-sweep 14s linear infinite; }
+      @keyframes h-sweep {
+        0%   { transform: translateX(64px);   opacity: 0; }
+        7%   { opacity: 1; }
+        86%  { opacity: 1; }
+        100% { transform: translateX(1136px); opacity: 0; }
+      }
+      .h-stage { animation: h-lit 14s linear infinite; }
+      @keyframes h-lit {
+        0%   { opacity: 0.5; }
+        4%   { opacity: 1; }
+        16%  { opacity: 0.5; }
+        100% { opacity: 0.5; }
+      }
+      .h-s1 { animation-delay: -0.06s; }
+      .h-s2 { animation-delay: -11.66s; }
+      .h-s3 { animation-delay: -8.56s; }
+      .h-s4 { animation-delay: -4.86s; }
+      @media (prefers-reduced-motion: reduce) {
+        .h-caret, .h-stage { animation: none; }
+        .h-caret { opacity: 0; }
+        .h-stage { opacity: 0.9; }
+      }
+    </style>
+  </defs>
+
+  <rect width="1200" height="512" rx="6" fill="url(#h-bg)"/>
+  <rect x="0.5" y="0.5" width="1199" height="511" rx="6" fill="none" stroke="#242D29"/>
+
+  <!-- title block: the drawing identifies itself and the standard it answers to -->
+  <g font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace">
+    <text x="64" y="41" fill="#ECF1EE" font-size="16" letter-spacing="2.4">pptx2html-turbo</text>
+    <text x="1136" y="41" text-anchor="end" fill="#75897F" font-size="12" letter-spacing="2.6">ECMA-376 · PresentationML</text>
+  </g>
+
+  <!-- the bed is the slide, measured in English Metric Units -->
+  <g stroke="#4E5C54" fill="none">
+    <rect x="64" y="96" width="1072" height="248" stroke-width="1.2"/>
+    <path stroke-width="1.1" d="M64 74v18M332 74v18M600 74v18M868 74v18M1136 74v18"/>
+    <path stroke-width="1.1" opacity="0.55" d="M131 82v10M198 82v10M265 82v10M399 82v10M466 82v10M533 82v10M667 82v10M734 82v10M801 82v10M935 82v10M1002 82v10M1069 82v10"/>
+    <path stroke-width="1.1" d="M42 96h18M42 158h18M42 220h18M42 282h18M42 344h18"/>
+    <path stroke-width="1.1" opacity="0.55" d="M50 127h10M50 189h10M50 251h10M50 313h10"/>
+    <g stroke-width="1" opacity="0.5">
+      <path d="M30 62h18M39 53v18"/>
+      <circle cx="39" cy="62" r="5.5"/>
+      <path d="M1152 378h18M1161 369v18"/>
+      <circle cx="1161" cy="378" r="5.5"/>
+    </g>
+  </g>
+  <g font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="11" fill="#4E5C54" letter-spacing="0.8">
+    <text x="64" y="64">0</text>
+    <text x="600" y="64" text-anchor="middle">4572000</text>
+    <text x="1136" y="64" text-anchor="end">9144000 EMU</text>
+  </g>
+
+  <!-- unzip: the package arrives and comes apart into its parts -->
+  <g stroke="#4E5C54" fill="none">
+    <path stroke-width="1.4" d="M104 166h56l24 24v80a4 4 0 0 1-4 4h-76a4 4 0 0 1-4-4V170a4 4 0 0 1 4-4z"/>
+    <path stroke-width="1.4" d="M160 166v24h24"/>
+    <path stroke-width="3" stroke-linecap="round" opacity="0.45" d="M118 212h48M118 228h56M118 244h34"/>
+    <path stroke-width="1" opacity="0.3" stroke-dasharray="3 4" d="M186 200l18-19M186 220h26M186 240l18 19"/>
+    <rect x="204" y="170" width="30" height="22" rx="2" stroke-width="1.2" opacity="0.75"/>
+    <rect x="212" y="209" width="30" height="22" rx="2" stroke-width="1.2" opacity="0.9"/>
+    <rect x="204" y="248" width="30" height="22" rx="2" stroke-width="1.2" opacity="0.75"/>
+  </g>
+  <text x="100" y="300" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#F2703C" opacity="0.9" letter-spacing="0.4">deck.pptx</text>
+
+  <!-- parse: parts become XML the renderer can read -->
+  <g stroke="#F0C24E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.82">
+    <path d="M300 176l-11 11 11 11M320 176l11 11-11 11M312 172l-8 30"/>
+    <path d="M360 176l-11 11 11 11M380 176l11 11-11 11M372 172l-8 30"/>
+    <path d="M300 234l-11 11 11 11M320 234l11 11-11 11M312 230l-8 30"/>
+    <path d="M360 234l-11 11 11 11M380 234l11 11-11 11M372 230l-8 30"/>
+  </g>
+
+  <!-- resolve: the dashed box is the inherited layout placeholder, the solid
+       box is the slide shape it resolves into -->
+  <g fill="none">
+    <rect x="434" y="128" width="428" height="46" stroke="#4E5C54" stroke-width="1" stroke-dasharray="5 6" opacity="0.4"/>
+    <rect x="434" y="200" width="428" height="104" stroke="#4E5C54" stroke-width="1" stroke-dasharray="5 6" opacity="0.4"/>
+    <rect x="444" y="134" width="428" height="46" stroke="#4E5C54" stroke-width="1.3"/>
+    <rect x="444" y="206" width="428" height="104" stroke="#4E5C54" stroke-width="1.3"/>
+  </g>
+  <g font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="11" fill="#8CA096" opacity="0.85" letter-spacing="0.3">
+    <text x="444" y="118">ph type="ctrTitle"</text>
+    <text x="444" y="334">ph type="body" idx="1"</text>
+  </g>
+
+  <!-- render: text runs are drawn into the resolved shapes -->
+  <g stroke="#6E8077" fill="none" stroke-linecap="round">
+    <path stroke-width="7" opacity="0.75" d="M462 152h344M462 170h196"/>
+    <path stroke-width="5" opacity="0.6" d="M462 228h392M462 250h348M462 272h392M462 294h256"/>
+  </g>
+
+  <!-- and leave as a page -->
+  <g stroke="#F2703C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M888 220h30"/>
+    <path d="M910 214l8 6-8 6"/>
+  </g>
+  <g fill="none">
+    <rect x="940" y="160" width="160" height="120" rx="3" stroke="#8FD9AE" stroke-width="1.4"/>
+    <path stroke="#8FD9AE" stroke-width="10" opacity="0.45" d="M940 180h160"/>
+    <path stroke="#8FD9AE" stroke-width="3.6" stroke-linecap="round" opacity="0.6" d="M958 208h112M958 226h124M958 244h84"/>
+  </g>
+  <text x="940" y="304" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#8FD9AE" opacity="0.9" letter-spacing="0.4">deck.html</text>
+
+  <!-- the pass that moves across the bed, trailing the ground it has covered -->
+  <g class="h-caret" opacity="0">
+    <rect x="-96" y="100" width="96" height="240" fill="url(#h-trail)"/>
+    <g stroke="#F2703C" fill="none" filter="url(#h-glow)">
+      <path stroke-width="1.4" d="M0 100V340"/>
+      <path stroke-width="1.4" d="M-7 100h14M-7 340h14"/>
+    </g>
+  </g>
+
+  <!-- the four passes, named -->
+  <g font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" fill="#F2703C" letter-spacing="0.6">
+    <text class="h-stage h-s1" x="100" y="374" opacity="0.9">unzip</text>
+    <text class="h-stage h-s2" x="289" y="374" opacity="0.9">parse</text>
+    <text class="h-stage h-s3" x="520" y="374" opacity="0.9">resolve</text>
+    <text class="h-stage h-s4" x="810" y="374" opacity="0.9">render</text>
+  </g>
+
+  <text x="600" y="442" text-anchor="middle" fill="#ECF1EE" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif" font-size="46">PPTX to HTML, <tspan font-style="italic">without a server.</tspan></text>
+  <text x="600" y="480" text-anchor="middle" fill="#75897F" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" letter-spacing="3.2">PURE-RUST ECMA-376 RENDERER · COMPILED TO WEBASSEMBLY</text>
+</svg>
