@@ -76,6 +76,7 @@ def materialize_portable_references(
             by_role["tool:poppler-text"],
             root / string_value(object_value(sandbox, "executable"), "path"),
             root / string_value(object_value(sandbox, "profile"), "path"),
+            by_role["font-bundle"],
             verify_runtime,
             validate_east_asian_binding(
                 object_value(lock, "east_asian_font"),

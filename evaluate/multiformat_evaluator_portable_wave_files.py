@@ -25,6 +25,7 @@ PORTABLE_WAVE_ENGINE_FILES = (
     "evaluate/multiformat_portable_receipt_trust.py",
     "evaluate/multiformat_portable_receipt_validation.py",
     "evaluate/multiformat_portable_reference_artifacts.py",
+    "evaluate/multiformat_portable_reference_environment.py",
     "evaluate/multiformat_portable_reference_manifest.py",
     "evaluate/multiformat_portable_reference_materializer.py",
     "evaluate/multiformat_portable_reference_outputs.py",

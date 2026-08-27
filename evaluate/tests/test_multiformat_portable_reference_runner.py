@@ -57,6 +57,14 @@ class PortableReferenceRunnerTests(unittest.TestCase):
             self.assertEqual(
                 (result.units[0].width, result.units[0].height), (960, 540)
             )
+            environment = json.loads(
+                (root / "output/soffice.env.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(environment["LANG"], "en_US.UTF-8")
+            self.assertEqual(environment["LC_ALL"], "en_US.UTF-8")
+            self.assertEqual(environment["TZ"], "UTC")
+            self.assertTrue(Path(environment["TMPDIR"]).is_dir())
+            self.assertTrue(Path(environment["FONTCONFIG_FILE"]).is_file())
             canonicalize.assert_called_once()
             self.assertEqual(runtime_verifier.call_count, 4)
 
@@ -170,7 +178,7 @@ class PortableReferenceRunnerTests(unittest.TestCase):
         soffice = self._script(
             root,
             "soffice",
-            "import json,pathlib,sys\np=pathlib.Path.cwd();(p/'soffice.argv.json').write_text(json.dumps(sys.argv[1:]));(p/'source.pdf').write_bytes(b'raw')",
+            "import json,os,pathlib,sys\np=pathlib.Path.cwd();(p/'soffice.argv.json').write_text(json.dumps(sys.argv[1:]));(p/'soffice.env.json').write_text(json.dumps({key:os.environ.get(key) for key in ('FONTCONFIG_FILE','LANG','LC_ALL','TMPDIR','TZ')}));(p/'source.pdf').write_bytes(b'raw')",
         )
         pdfinfo = self._script(
             root,
@@ -189,7 +197,19 @@ class PortableReferenceRunnerTests(unittest.TestCase):
             "pdftotext",
             'import json,pathlib,sys\np=pathlib.Path.cwd();(p/\'pdftotext.argv.json\').write_text(json.dumps(sys.argv[1:]));pathlib.Path(sys.argv[-1]).write_text(\'<doc><page width="960" height="540"><line><word xMin="1" yMin="1" xMax="2" yMax="2">x</word></line></page></doc>\')',
         )
-        runtime = (soffice, pdfinfo, pdftoppm, pdftotext, profile)
+        font = root / "font.ttf"
+        font.write_bytes(b"font")
+        font_bundle = root / "font-bundle.json"
+        font_bundle.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "fonts": [{"path": font.name, "sha256": sha256_file(font)}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        runtime = (soffice, pdfinfo, pdftoppm, pdftotext, profile, font_bundle, font)
         expected = {path: sha256_file(path) for path in runtime}
 
         def verify_runtime() -> None:
@@ -203,6 +223,7 @@ class PortableReferenceRunnerTests(unittest.TestCase):
             pdftotext,
             Path("/usr/bin/sandbox-exec"),
             profile,
+            font_bundle,
             verify_runtime,
         )
 

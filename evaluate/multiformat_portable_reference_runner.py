@@ -12,15 +12,14 @@ from evaluate.multiformat_conformance_pdf import (
     PdfConformanceError,
     canonicalize_pdf_bytes,
 )
-from evaluate.multiformat_east_asian_fonts import (
-    EastAsianFontError,
-    EastAsianSubstitute,
-    load_policy,
-    seed_profile,
-)
+from evaluate.multiformat_east_asian_fonts import EastAsianSubstitute
 from evaluate.multiformat_office_oracle_batch import OfficeOracleBatchFile
 from evaluate.multiformat_portable_reference_outputs import (
     PortableReferenceOutputError,
+)
+from evaluate.multiformat_portable_reference_environment import (
+    PortableReferenceEnvironmentError,
+    prepare_reference_environment,
 )
 from evaluate.multiformat_portable_reference_outputs import (
     executable as _executable,
@@ -64,6 +63,7 @@ class PortableReferenceTools:
     poppler_text: Path
     sandbox_exec: Path
     sandbox_profile: Path
+    font_bundle: Path
     verify_runtime: Callable[[], None]
     east_asian_font: EastAsianSubstitute | None = None
 
@@ -92,11 +92,16 @@ def run_reference_source(
         raise PortableReferenceRunError("portable reference source drifted")
     staged = output_dir / f"source.{document_format.value}"
     shutil.copyfile(source.path, staged)
-    profile = output_dir / "profile"
-    home = output_dir / "home"
-    profile.mkdir()
-    home.mkdir()
-    _seed_font_substitution(profile, tools.east_asian_font)
+    try:
+        prepared = prepare_reference_environment(
+            tools.font_bundle,
+            output_dir,
+            tools.east_asian_font,
+        )
+    except PortableReferenceEnvironmentError as error:
+        raise PortableReferenceRunError(str(error)) from error
+    profile = prepared.profile
+    environment = prepared.values
     route = next(
         (item for item in routing.routes if item.format.value == document_format.value),
         None,
@@ -111,12 +116,6 @@ def run_reference_source(
         "reference_pdf": reference_pdf.as_posix(),
         "render_prefix": (output_dir / "page").as_posix(),
         "text_output": (output_dir / "text-layout.html").as_posix(),
-    }
-    environment = {
-        "HOME": home.as_posix(),
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "TZ": "UTC",
     }
     try:
         for index, command in enumerate(route.commands, start=1):
@@ -197,7 +196,6 @@ def _convert_xls_semantics(
 ) -> Path:
     target = root / "xlsx-semantic"
     target.mkdir()
-    _seed_font_substitution(profile, tools.east_asian_font)
     command = (
         _executable(tools.libreoffice),
         "--headless",
@@ -243,26 +241,6 @@ def _run_reference_process(
         raise PortableReferenceIncompleteError(str(error)) from error
     except PortableReferenceProcessError as error:
         raise PortableReferenceRunError(str(error)) from error
-
-
-def _seed_font_substitution(
-    profile: Path,
-    substitute: EastAsianSubstitute | None,
-) -> None:
-    """Pin east-Asian families before LibreOffice first reads the profile.
-
-    The reference producer applies the same lock-bound policy as the shipped
-    converter, so a named-but-unresolvable family cannot resolve to a different
-    host face on either side of the wave.
-    """
-    if substitute is None:
-        return
-    try:
-        _ = seed_profile(profile, substitute.family, load_policy())
-    except (EastAsianFontError, OSError) as error:
-        raise PortableReferenceRunError(
-            "portable reference font substitution failed"
-        ) from error
 
 
 def _after_command(_source: Path) -> None:
