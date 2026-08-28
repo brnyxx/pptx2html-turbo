@@ -62,7 +62,9 @@ def capture_html_units(
     # Chromium binds its singleton socket under TMPDIR and AF_UNIX socket
     # paths are limited to roughly 100 bytes, so the browser temp directory
     # must stay short even when output_dir is deeply nested.
-    browser_temp = Path(tempfile.mkdtemp(prefix=".browser-tmp-"))
+    browser_temp = Path(
+        tempfile.mkdtemp(prefix="pptx2html-chromium-", dir="/private/tmp")
+    )
     browser_environment = {
         "HOME": browser_home.as_posix(),
         "TMPDIR": browser_temp.as_posix(),

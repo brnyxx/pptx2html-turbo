@@ -246,6 +246,10 @@ def sandbox_profile_text() -> str:
                 '  (with-filter (process-path (param "LIBREOFFICE"))',
                 "    (allow network-bind",
                 '      (local unix-socket (regex #"^/private/tmp/OSL_PIPE_[0-9]+_SingleOfficeIPC_[0-9a-f]+$")))))',
+                '(if (param "CHROMIUM")',
+                '  (with-filter (process-path (param "CHROMIUM"))',
+                "    (allow network-bind",
+                '      (local unix-socket (regex #"^/private/tmp/pptx2html-chromium-[A-Za-z0-9_]+/.*$")))))',
                 '(deny file-read* (subpath (param "ORACLE_ROOT")))',
             )
         )

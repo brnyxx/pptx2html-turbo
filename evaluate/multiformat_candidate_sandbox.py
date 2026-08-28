@@ -42,6 +42,7 @@ class CandidateSandbox:
     executable: Path
     profile: Path
     libreoffice: Path
+    chromium: Path
     oracle_root: Path
     sentinel: Path
 
@@ -64,20 +65,22 @@ class CandidateSandbox:
 
 def resolve_locked_sandbox(
     lock: dict[str, JsonValue], root: Path
-) -> tuple[Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path]:
     sandbox = object_value(lock, "sandbox")
     tools = object_value(lock, "tools")
+    browser = object_value(lock, "browser")
     return (
         _bound_path(root, object_value(sandbox, "executable")),
         _bound_path(root, object_value(sandbox, "profile")),
         _bound_path(root, object_value(tools, "libreoffice")),
+        _bound_path(root, object_value(browser, "chromium")),
     )
 
 
 def resolve_attested_sandbox(
-    values: dict[str, JsonValue], root: Path, locked: tuple[Path, Path, Path]
+    values: dict[str, JsonValue], root: Path, locked: tuple[Path, Path, Path, Path]
 ) -> CandidateSandbox:
-    executable, profile, libreoffice = locked
+    executable, profile, libreoffice, chromium = locked
     attested_executable = _bound_path(root, object_value(values, "sandbox_executable"))
     attested_profile = _bound_path(root, object_value(values, "sandbox_profile"))
     locked_paths = (executable.resolve(strict=True), profile.resolve(strict=True))
@@ -101,7 +104,14 @@ def resolve_attested_sandbox(
     )
     if not sentinel.is_relative_to(oracle_root) or sentinel == oracle_root:
         raise CandidateSandboxError("candidate oracle sentinel escapes oracle root")
-    return CandidateSandbox(executable, profile, libreoffice, oracle_root, sentinel)
+    return CandidateSandbox(
+        executable,
+        profile,
+        libreoffice,
+        chromium,
+        oracle_root,
+        sentinel,
+    )
 
 
 def observe_network_control() -> None:
@@ -178,6 +188,8 @@ def sandbox_command(
         f"ORACLE_SENTINEL={sandbox.sentinel.as_posix()}",
         "-D",
         f"LIBREOFFICE={sandbox.libreoffice.as_posix()}",
+        "-D",
+        f"CHROMIUM={sandbox.chromium.as_posix()}",
         "-f",
         sandbox.profile.as_posix(),
         *command,

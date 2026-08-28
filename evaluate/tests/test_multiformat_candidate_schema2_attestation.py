@@ -230,7 +230,7 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
             candidate_runtime_lock={},
             sandbox_verifier=verifier,
             font_bundle=None,
-            chromium=None,
+            chromium=sandbox_executable,
             receipt_executor=None,
             receipt_public_key=receipt_public_key,
             attestation=None,

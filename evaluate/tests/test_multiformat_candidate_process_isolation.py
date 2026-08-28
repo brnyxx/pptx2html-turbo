@@ -68,6 +68,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             command, environment = sandbox_command(sandbox, ["converter", "input"])
             self.assertEqual(command[-2:], ["converter", "input"])
             self.assertIn(f"LIBREOFFICE={sandbox.libreoffice.as_posix()}", command)
+            self.assertIn(f"CHROMIUM={sandbox.chromium.as_posix()}", command)
             self.assertEqual(
                 environment["PPTX2HTML_CANDIDATE_SANDBOX"],
                 sha256_file(sandbox.profile),
@@ -155,6 +156,7 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                         sandbox.executable,
                         sandbox.profile,
                         sandbox.libreoffice,
+                        sandbox.chromium,
                     ),
                 ),
                 mock.patch(
@@ -244,7 +246,12 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 resolved = resolve_attested_sandbox(
                     values,
                     root,
-                    (sandbox.executable, sandbox.profile, sandbox.libreoffice),
+                    (
+                        sandbox.executable,
+                        sandbox.profile,
+                        sandbox.libreoffice,
+                        sandbox.chromium,
+                    ),
                 )
             hashed_paths = {call.args[0] for call in digest.call_args_list}
             self.assertEqual(resolved.executable, sandbox.executable)
@@ -277,7 +284,12 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 resolved = resolve_attested_sandbox(
                     values,
                     root,
-                    (sandbox.executable, sandbox.profile, sandbox.libreoffice),
+                    (
+                        sandbox.executable,
+                        sandbox.profile,
+                        sandbox.libreoffice,
+                        sandbox.chromium,
+                    ),
                 )
 
             self.assertEqual(resolved.oracle_root, expected_root)
@@ -304,7 +316,12 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                     resolve_attested_sandbox(
                         values,
                         root,
-                        (sandbox.executable, sandbox.profile, sandbox.libreoffice),
+                        (
+                            sandbox.executable,
+                            sandbox.profile,
+                            sandbox.libreoffice,
+                            sandbox.chromium,
+                        ),
                     )
 
     @staticmethod
@@ -361,7 +378,14 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             encoding="utf-8",
         )
         executable.chmod(0o755)
-        return CandidateSandbox(executable, profile, executable, oracle_root, sentinel)
+        return CandidateSandbox(
+            executable,
+            profile,
+            executable,
+            executable,
+            oracle_root,
+            sentinel,
+        )
 
 
 if __name__ == "__main__":
