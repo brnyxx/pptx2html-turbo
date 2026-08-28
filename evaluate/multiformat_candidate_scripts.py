@@ -38,11 +38,17 @@ NORMALIZE_PRESENTATION_SCRIPT = """
     if (!(rect.width > 0 && rect.height > 0)) {
       throw new Error(`invalid presentation geometry: ${node.id}`);
     }
-    if (getComputedStyle(node).transform !== "none") {
-      throw new Error(`presentation unit already transformed: ${node.id}`);
+    const existing = getComputedStyle(node).transform;
+    if (existing !== "none") {
+      const matrix = new DOMMatrix(existing);
+      if (matrix.b !== 0 || matrix.c !== 0 || matrix.e !== 0 || matrix.f !== 0
+          || !(matrix.a > 0 && matrix.d > 0)) {
+        throw new Error(`unsupported presentation transform: ${node.id}`);
+      }
     }
     node.style.transformOrigin = "top left";
-    node.style.transform = `scale(${width / rect.width}, ${height / rect.height})`;
+    const prefix = existing === "none" ? "" : `${existing} `;
+    node.style.transform = `${prefix}scale(${width / rect.width}, ${height / rect.height})`;
   });
 }
 """

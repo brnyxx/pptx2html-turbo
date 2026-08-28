@@ -101,7 +101,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
         html = """
         <html><body>
           <div class="slide" id="slide-1" data-slide="1"
-               style="position:relative;width:960px;height:720px;background:#fff">
+               style="position:relative;width:960px;height:720px;background:#fff;
+                      transform:scale(0.5);transform-origin:top left">
             <span style="position:absolute;left:100px;top:680px;font:20px Arial">Bottom</span>
           </div>
         </body></html>
