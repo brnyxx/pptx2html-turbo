@@ -90,6 +90,7 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 DocumentFormat.PPTX,
                 ("slide-1",),
                 Path(temp_dir),
+                expected_browser_version="Google Chrome for Testing 151.0.7922.34",
             )
 
             self.assertEqual(png_dimensions(result.units[0].png), (960, 540))

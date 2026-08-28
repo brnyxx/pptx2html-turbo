@@ -95,7 +95,7 @@ def capture_html_units(
             )
             if (
                 expected_browser_version is not None
-                and browser.version != expected_browser_version
+                and browser.version != expected_browser_version.rsplit(" ", 1)[-1]
             ):
                 raise CandidateCaptureError(
                     f"Chromium version mismatch: {browser.version}"
