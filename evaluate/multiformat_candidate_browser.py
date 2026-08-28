@@ -63,7 +63,10 @@ def capture_html_units(
     # paths are limited to roughly 100 bytes, so the browser temp directory
     # must stay short even when output_dir is deeply nested.
     browser_temp = Path(
-        tempfile.mkdtemp(prefix="pptx2html-chromium-", dir="/private/tmp")
+        tempfile.mkdtemp(
+            prefix=".browser-",
+            dir=os.environ.get("TMPDIR"),
+        )
     )
     browser_environment = {
         "HOME": browser_home.as_posix(),
