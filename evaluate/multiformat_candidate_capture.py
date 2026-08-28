@@ -40,7 +40,7 @@ def materialize_candidate_runtime(
         runtime_artifacts["soffice_binary"],
         runtime_artifacts["pdftohtml_binary"],
         runtime_artifacts["pdfinfo_binary"],
-        runtime_artifacts["chromium_binary"],
+        preflight.runtime.chromium,
         runtime_artifacts["receipt_signer_binary"],
         runtime_artifacts["font_config"],
         preflight.runtime.browser_version,
