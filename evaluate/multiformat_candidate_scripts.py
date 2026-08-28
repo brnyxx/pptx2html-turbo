@@ -27,6 +27,26 @@ async () => {
 }
 """
 
+NORMALIZE_PRESENTATION_SCRIPT = """
+({format, width, height}) => {
+  const nodes = format === "pptx"
+    ? [...document.querySelectorAll(".slide")]
+    : [...document.querySelectorAll('div[id^="page"][id$="-div"]')];
+  if (!nodes.length) throw new Error("presentation units are missing");
+  nodes.forEach(node => {
+    const rect = node.getBoundingClientRect();
+    if (!(rect.width > 0 && rect.height > 0)) {
+      throw new Error(`invalid presentation geometry: ${node.id}`);
+    }
+    if (getComputedStyle(node).transform !== "none") {
+      throw new Error(`presentation unit already transformed: ${node.id}`);
+    }
+    node.style.transformOrigin = "top left";
+    node.style.transform = `scale(${width / rect.width}, ${height / rect.height})`;
+  });
+}
+"""
+
 DISCOVER_UNITS_SCRIPT = """
 format => {
   const corePresentation = format === "pptx";

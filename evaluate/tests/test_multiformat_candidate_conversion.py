@@ -105,7 +105,7 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             scale = float(args[args.index("--presentation-scale") + 1])
             self.assertAlmostEqual(scale, 0.75, places=6)
 
-    def test_pptx_capture_rejects_non_16_by_9_slide_geometry(self) -> None:
+    def test_pptx_capture_scales_four_by_three_slide_to_canonical_width(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "source.pptx"
@@ -113,20 +113,21 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             converter = self._converter(root, exit_code=0)
             tool = self._tool(root, "tool")
 
-            with self.assertRaisesRegex(
-                CandidateConversionError,
-                "16:9",
-            ):
-                run_conversion(
-                    converter,
-                    source,
-                    DocumentFormat.PPTX,
-                    root / "run",
-                    soffice=tool,
-                    pdftohtml=tool,
-                    pdfinfo=tool,
-                    timeout_seconds=30,
-                )
+            result = run_conversion(
+                converter,
+                source,
+                DocumentFormat.PPTX,
+                root / "run",
+                soffice=tool,
+                pdftohtml=tool,
+                pdfinfo=tool,
+                timeout_seconds=30,
+            )
+
+            diagnostics = json.loads(result.diagnostics.read_text(encoding="utf-8"))
+            args = diagnostics[0]["args"]
+            scale = float(args[args.index("--presentation-scale") + 1])
+            self.assertAlmostEqual(scale, 1.0, places=6)
 
     def test_kills_converter_when_a_log_crosses_the_bound(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

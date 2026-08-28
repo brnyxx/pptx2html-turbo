@@ -17,6 +17,7 @@ from evaluate.multiformat_candidate_browser_network import (
 )
 from evaluate.multiformat_candidate_dom import inventory_value
 from evaluate.multiformat_candidate_browser_checks import (
+    TARGET_PRESENTATION_SIZE,
     record_string,
     require_presentation_dimensions,
     unit_records,
@@ -26,6 +27,7 @@ from evaluate.multiformat_candidate_scripts import (
     DISCOVER_UNITS_SCRIPT,
     EXTERNAL_RESOURCES_SCRIPT,
     EXTRACT_DOM_SCRIPT,
+    NORMALIZE_PRESENTATION_SCRIPT,
     READINESS_SCRIPT,
     STATIC_STYLE,
 )
@@ -151,6 +153,15 @@ def capture_html_units(
                     f"network request attempted: {external_requests[0]}"
                 )
             page.add_style_tag(content=STATIC_STYLE)
+            if presentation:
+                page.evaluate(
+                    NORMALIZE_PRESENTATION_SCRIPT,
+                    {
+                        "format": document_format.value,
+                        "width": TARGET_PRESENTATION_SIZE[0],
+                        "height": TARGET_PRESENTATION_SIZE[1],
+                    },
+                )
             page.evaluate(READINESS_SCRIPT)
             if external_requests:
                 raise CandidateCaptureError(

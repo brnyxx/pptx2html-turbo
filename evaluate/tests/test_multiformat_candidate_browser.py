@@ -96,25 +96,26 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             inventory = parse_inventory(result.units[0].inventory, "slide-1")
             self.assertLess(inventory.texts[0].box.y, 540)
 
-    def test_presentation_capture_rejects_noncanonical_dimensions(self) -> None:
+    def test_presentation_capture_normalizes_noncanonical_dimensions(self) -> None:
         html = """
         <html><body>
           <div class="slide" id="slide-1" data-slide="1"
                style="position:relative;width:960px;height:720px;background:#fff">
+            <span style="position:absolute;left:100px;top:680px;font:20px Arial">Bottom</span>
           </div>
         </body></html>
         """
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(
-                CandidateCaptureError,
-                "presentation dimensions",
-            ):
-                capture_html_units(
-                    html,
-                    DocumentFormat.PPTX,
-                    ("slide-1",),
-                    Path(temp_dir),
-                )
+            result = capture_html_units(
+                html,
+                DocumentFormat.PPTX,
+                ("slide-1",),
+                Path(temp_dir),
+            )
+
+            self.assertEqual(png_dimensions(result.units[0].png), (960, 540))
+            inventory = parse_inventory(result.units[0].inventory, "slide-1")
+            self.assertLess(inventory.texts[0].box.y, 540)
 
     def test_legacy_ppt_uses_native_page_container_as_slide(self) -> None:
         html = """

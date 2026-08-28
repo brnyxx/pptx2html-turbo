@@ -163,8 +163,8 @@ def _presentation_args(
         zipfile.BadZipFile,
     ) as error:
         raise CandidateConversionError("invalid PPTX slide geometry") from error
-    if width <= 0 or height <= 0 or abs(width / height - 16 / 9) > 0.000001:
-        raise CandidateConversionError("PPTX capture requires 16:9 slide geometry")
+    if width <= 0 or height <= 0:
+        raise CandidateConversionError("invalid PPTX slide geometry")
     css_width = width * 96 / 914_400
     scale = 960 / css_width
     return "--presentation-scale", f"{scale:.12g}"
