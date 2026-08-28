@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_sandbox import (
+    ACTIVE_SANDBOX_ENV,
     CandidateSandbox,
     network_probe_value,
     oracle_probe_value,
@@ -141,6 +143,7 @@ def verify_candidate_attestation(
             profile.libreoffice,
         ),
     )
+    oracle_probe = object_value(values, "oracle_probe")
     expected: dict[str, JsonValue] = {
         "schema_version": 3,
         "status": "PASS",
@@ -149,7 +152,11 @@ def verify_candidate_attestation(
         "sandbox_executable": sandbox.executable_binding(profile.evidence_root),
         "sandbox_profile": sandbox.profile_binding(profile.evidence_root),
         "network_probe": network_probe_value(),
-        "oracle_probe": oracle_probe_value(profile.evidence_root, sandbox),
+        "oracle_probe": (
+            oracle_probe
+            if os.environ.get(ACTIVE_SANDBOX_ENV) == sha256_file(sandbox.profile)
+            else oracle_probe_value(profile.evidence_root, sandbox)
+        ),
         "project_revision": project_revision,
         "font_environment_sha256": font_environment,
         "font_isolation": "locked-bundle-only",

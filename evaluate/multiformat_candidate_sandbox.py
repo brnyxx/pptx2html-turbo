@@ -29,7 +29,7 @@ from evaluate.multiformat_schema import (
 from evaluate.multiformat_strict_json import read_strict_object
 
 _PROBE_TIMEOUT_SECONDS: Final = 5
-_ACTIVE_ENV: Final = "PPTX2HTML_CANDIDATE_SANDBOX"
+ACTIVE_SANDBOX_ENV: Final = "PPTX2HTML_CANDIDATE_SANDBOX"
 _PROBE_ENV: Final = "PPTX2HTML_SANDBOX_PROBE"
 
 
@@ -89,7 +89,7 @@ def resolve_attested_sandbox(
     oracle = object_value(values, "oracle_probe")
     if string_value(oracle, "result") != "denied":
         raise CandidateSandboxError("candidate oracle probe attestation differs")
-    verify_oracle_paths = os.environ.get(_ACTIVE_ENV) != sha256_file(profile)
+    verify_oracle_paths = os.environ.get(ACTIVE_SANDBOX_ENV) != sha256_file(profile)
     sentinel = _bound_path(
         root,
         object_value(oracle, "sentinel"),
@@ -141,7 +141,7 @@ def enter_locked_sandbox(
     locked = resolve_locked_sandbox(lock, root)
     values = read_strict_object(attestation_path.resolve(strict=True))
     sandbox = resolve_attested_sandbox(values, root, locked)
-    if os.environ.get(_ACTIVE_ENV) == sha256_file(sandbox.profile):
+    if os.environ.get(ACTIVE_SANDBOX_ENV) == sha256_file(sandbox.profile):
         _require_current_process_isolation(sandbox)
         return
     command, environment = sandbox_command(
@@ -151,7 +151,7 @@ def enter_locked_sandbox(
 
 
 def require_active_sandbox(sandbox: CandidateSandbox) -> None:
-    if os.environ.get(_ACTIVE_ENV) != sha256_file(sandbox.profile):
+    if os.environ.get(ACTIVE_SANDBOX_ENV) != sha256_file(sandbox.profile):
         raise CandidateSandboxError("candidate process is not under the locked sandbox")
     _require_current_process_isolation(sandbox)
 
@@ -169,7 +169,7 @@ def sandbox_command(
     sandbox: CandidateSandbox, command: list[str]
 ) -> tuple[list[str], dict[str, str]]:
     environment = dict(os.environ)
-    environment[_ACTIVE_ENV] = sha256_file(sandbox.profile)
+    environment[ACTIVE_SANDBOX_ENV] = sha256_file(sandbox.profile)
     argv = [
         sandbox.executable.as_posix(),
         "-D",

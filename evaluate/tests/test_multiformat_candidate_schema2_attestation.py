@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from evaluate.multiformat_candidate_attestation import (
     verify_candidate_attestation,
@@ -57,39 +59,9 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                 )
                 self.assertNotEqual(profile.receipt_public_key, candidate.public_key)
                 attestation = root / "attestation.json"
-                payload: dict[str, JsonValue] = {
-                    "schema_version": 3,
-                    "status": "PASS",
-                    "network_isolation": True,
-                    "golden_access": "denied",
-                    "sandbox_executable": {
-                        "path": sandbox.name,
-                        "sha256": sha256_file(sandbox),
-                    },
-                    "sandbox_profile": {
-                        "path": sandbox_profile.name,
-                        "sha256": sha256_file(sandbox_profile),
-                    },
-                    "network_probe": {
-                        "endpoint": "1.1.1.1:443",
-                        "control": "reachable",
-                        "sandbox": "denied",
-                    },
-                    "oracle_probe": {
-                        "root": {"path": oracle_root.name},
-                        "sentinel": {
-                            "path": sentinel.relative_to(root).as_posix(),
-                            "sha256": sha256_file(sentinel),
-                        },
-                        "result": "denied",
-                    },
-                    "project_revision": "a" * 40,
-                    "font_environment_sha256": "b" * 64,
-                    "font_isolation": "locked-bundle-only",
-                    "run_nonce": "c" * 64,
-                    "verifier_id": "candidate-sandbox",
-                    "scope_sha256": "d" * 64,
-                }
+                payload = self._payload(
+                    sandbox, sandbox_profile, oracle_root, sentinel, root
+                )
                 if attack == "transplant":
                     payload["scope_sha256"] = "e" * 64
                 elif attack == "sandbox-path":
@@ -147,6 +119,101 @@ class CandidateSchema2AttestationTests(unittest.TestCase):
                             project_revision="a" * 40,
                             scope_sha256="d" * 64,
                         )
+
+    def test_active_verification_does_not_read_denied_oracle_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            candidate = create_test_verifier(root, name="candidate")
+            receipt = create_test_verifier(root, name="receipt")
+            verifier = {
+                **verifier_lock(candidate, verifier_id="candidate-sandbox"),
+                "openssl_sha256": sha256_file(candidate.openssl),
+            }
+            sandbox = root / "sandbox-exec"
+            sandbox.write_bytes(b"sandbox")
+            sandbox_profile = root / "profile.sb"
+            sandbox_profile.write_bytes(b"profile")
+            oracle_root = root / "reference"
+            oracle_root.mkdir()
+            sentinel = oracle_root / ".candidate-denial-sentinel"
+            sentinel.write_bytes(b"golden")
+            profile = self._profile(
+                verifier,
+                receipt.public_key,
+                root,
+                sandbox,
+                sandbox_profile,
+            )
+            payload = self._payload(
+                sandbox, sandbox_profile, oracle_root, sentinel, root
+            )
+            attestation = root / "attestation.json"
+            write_signed_attestation(attestation, candidate, payload)
+            marker = sha256_file(sandbox_profile)
+            original_resolve = Path.resolve
+
+            def deny_oracle_resolution(path: Path, *, strict: bool = False) -> Path:
+                if path.name in {oracle_root.name, sentinel.name}:
+                    raise PermissionError(1, "sandbox denied oracle path")
+                return original_resolve(path, strict=strict)
+
+            with (
+                mock.patch.dict(os.environ, {"PPTX2HTML_CANDIDATE_SANDBOX": marker}),
+                mock.patch.object(Path, "resolve", deny_oracle_resolution),
+            ):
+                verified = verify_candidate_attestation(
+                    profile,
+                    attestation,
+                    candidate.public_key,
+                    candidate.openssl,
+                    root / "outer-lock.json",
+                    project_revision="a" * 40,
+                    scope_sha256="d" * 64,
+                )
+
+            self.assertEqual(verified.verifier_id, "candidate-sandbox")
+
+    @staticmethod
+    def _payload(
+        sandbox: Path,
+        sandbox_profile: Path,
+        oracle_root: Path,
+        sentinel: Path,
+        root: Path,
+    ) -> dict[str, JsonValue]:
+        return {
+            "schema_version": 3,
+            "status": "PASS",
+            "network_isolation": True,
+            "golden_access": "denied",
+            "sandbox_executable": {
+                "path": sandbox.name,
+                "sha256": sha256_file(sandbox),
+            },
+            "sandbox_profile": {
+                "path": sandbox_profile.name,
+                "sha256": sha256_file(sandbox_profile),
+            },
+            "network_probe": {
+                "endpoint": "1.1.1.1:443",
+                "control": "reachable",
+                "sandbox": "denied",
+            },
+            "oracle_probe": {
+                "root": {"path": oracle_root.name},
+                "sentinel": {
+                    "path": sentinel.relative_to(root).as_posix(),
+                    "sha256": sha256_file(sentinel),
+                },
+                "result": "denied",
+            },
+            "project_revision": "a" * 40,
+            "font_environment_sha256": "b" * 64,
+            "font_isolation": "locked-bundle-only",
+            "run_nonce": "c" * 64,
+            "verifier_id": "candidate-sandbox",
+            "scope_sha256": "d" * 64,
+        }
 
     @staticmethod
     def _profile(
