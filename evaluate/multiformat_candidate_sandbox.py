@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -181,10 +180,6 @@ def sandbox_command(
 ) -> tuple[list[str], dict[str, str]]:
     environment = dict(os.environ)
     environment[ACTIVE_SANDBOX_ENV] = sha256_file(sandbox.profile)
-    environment["TMPDIR"] = tempfile.mkdtemp(
-        prefix="pptx2html-chromium-",
-        dir="/private/tmp",
-    )
     argv = [
         sandbox.executable.as_posix(),
         "-D",

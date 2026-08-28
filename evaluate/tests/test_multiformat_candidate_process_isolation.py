@@ -66,13 +66,9 @@ class CandidateProcessIsolationTests(unittest.TestCase):
                 "1.1.1.1:443",
             )
             command, environment = sandbox_command(sandbox, ["converter", "input"])
-            self.addCleanup(Path(environment["TMPDIR"]).rmdir)
             self.assertEqual(command[-2:], ["converter", "input"])
             self.assertIn(f"LIBREOFFICE={sandbox.libreoffice.as_posix()}", command)
             self.assertIn(f"CHROMIUM={sandbox.chromium.as_posix()}", command)
-            self.assertTrue(
-                environment["TMPDIR"].startswith("/private/tmp/pptx2html-chromium-")
-            )
             self.assertEqual(
                 environment["PPTX2HTML_CANDIDATE_SANDBOX"],
                 sha256_file(sandbox.profile),

@@ -249,7 +249,7 @@ def sandbox_profile_text() -> str:
                 '(if (param "CHROMIUM")',
                 '  (with-filter (process-path (param "CHROMIUM"))',
                 "    (allow network-bind",
-                '      (local unix-socket (regex #"^/private/tmp/pptx2html-chromium-[A-Za-z0-9_]+/.*$")))))',
+                '      (local unix-socket (regex #"^/private/var/folders/[A-Za-z0-9_]+/[A-Za-z0-9_]+/T/com[.]google[.]chrome[.]for[.]testing[.][A-Za-z0-9]+/SingletonSocket$")))))',
                 '(deny file-read* (subpath (param "ORACLE_ROOT")))',
             )
         )
