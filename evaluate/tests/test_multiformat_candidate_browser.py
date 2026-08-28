@@ -160,6 +160,27 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
 
             self.assertEqual(png_dimensions(result.units[0].png), (960, 540))
 
+    def test_presentation_capture_preserves_unsupported_vector_metadata(self) -> None:
+        html = """
+        <html><body>
+          <div class="slide" id="slide-1" data-slide="1"
+               style="position:relative;width:960px;height:540px">
+            <img alt="unsupported-preview" src="data:image/x-emf;base64,AQID">
+          </div>
+        </body></html>
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = capture_html_units(
+                html,
+                DocumentFormat.PPTX,
+                ("slide-1",),
+                Path(temp_dir),
+            )
+
+            inventory = parse_inventory(result.units[0].inventory, "slide-1")
+            self.assertEqual(len(inventory.objects), 1)
+            self.assertEqual(inventory.objects[0].object_type, "image")
+
     def test_external_request_attempt_fails_closed(self) -> None:
         html = """
         <html><body>

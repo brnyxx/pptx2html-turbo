@@ -11,7 +11,14 @@ READINESS_SCRIPT = """
 async () => {
   await document.fonts.ready;
   if (document.fonts.status !== "loaded") throw new Error("fonts are not loaded");
-  await Promise.all([...document.images].map(image => image.decode()));
+  await Promise.all([...document.images].map(async image => {
+    try {
+      await image.decode();
+    } catch (error) {
+      if (/^data:image\\/x-(?:emf|wmf);base64,/i.test(image.src)) return;
+      throw error;
+    }
+  }));
   if (document.readyState !== "complete") {
     await new Promise(resolve => addEventListener("load", resolve, {once: true}));
   }
