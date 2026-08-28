@@ -232,7 +232,7 @@ pub fn selected_slides_package() -> Vec<u8> {
         r#"<p:presentation xmlns:r="{REL}" xmlns:p="{PML}">
 <p:sldIdLst>
 <p:sldId id="256" r:id="rIdSlide1"/>
-<p:sldId id="257" r:id="rIdSlide2" show="0"/>
+<p:sldId id="257" r:id="rIdSlide2"/>
 </p:sldIdLst>
 <p:sldSz cx="9144000" cy="6858000"/>
 </p:presentation>"#,

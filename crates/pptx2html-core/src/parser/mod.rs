@@ -54,7 +54,6 @@ use crate::model::{
 #[derive(Debug, Clone)]
 struct SlideRef {
     rel_id: String,
-    hidden: bool,
 }
 
 /// SAX-based streaming parser for PPTX (ZIP + OOXML) packages.
@@ -332,7 +331,6 @@ impl PptxParser {
                         &mut archive,
                     );
                     resolve_table_style_references(&mut slide.shapes, &table_styles);
-                    slide.hidden = slide_ref.hidden;
 
                     // Find which layout this slide references
                     let layout_ref = find_target_by_type(&slide_relationships, "slideLayout");
@@ -477,19 +475,15 @@ impl PptxParser {
                         }
                         "sldId" => {
                             let mut rel_id: Option<String> = None;
-                            let mut hidden = false;
                             for attr in e.attributes().flatten() {
                                 let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
                                 if key.ends_with("id") && key.contains(':') {
                                     let val = String::from_utf8_lossy(&attr.value);
                                     rel_id = Some(val.to_string());
-                                } else if key == "show" {
-                                    let val = String::from_utf8_lossy(&attr.value);
-                                    hidden = val == "0" || val == "false";
                                 }
                             }
                             if let Some(rel_id) = rel_id {
-                                slide_refs.push(SlideRef { rel_id, hidden });
+                                slide_refs.push(SlideRef { rel_id });
                             }
                         }
                         // Empty lvlNpPr inside defaultTextStyle
@@ -904,14 +898,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_presentation_xml_reads_hidden_slides_and_default_text_style() {
+    fn parse_presentation_xml_reads_slide_refs_and_default_text_style() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
                 xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:sldIdLst>
     <p:sldId id="256" r:id="rId1"/>
-    <p:sldId id="257" r:id="rId2" show="0"/>
+    <p:sldId id="257" r:id="rId2"/>
   </p:sldIdLst>
   <p:sldSz cx="9144000" cy="6858000"/>
   <p:defaultTextStyle>
@@ -936,8 +930,7 @@ mod tests {
         assert_eq!(slide_size.height.to_px(), Emu::parse_emu("6858000").to_px());
         assert_eq!(slide_refs.len(), 2);
         assert_eq!(slide_refs[0].rel_id, "rId1");
-        assert!(!slide_refs[0].hidden);
-        assert!(slide_refs[1].hidden);
+        assert_eq!(slide_refs[1].rel_id, "rId2");
 
         let style = default_text_style.expect("default text style should exist");
         let lvl1 = style.levels[0].as_ref().expect("level 1 defaults");

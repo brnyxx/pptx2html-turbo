@@ -190,18 +190,35 @@ fn test_hyperlink_parsed_and_rendered() {
 }
 
 #[test]
-fn test_hidden_slide_parsed_from_presentation_xml() {
+fn test_hidden_slide_parsed_from_slide_xml() {
     let pres_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
                 xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:sldMasterIdLst><p:sldMasterId r:id="rId1"/></p:sldMasterIdLst>
-  <p:sldIdLst><p:sldId id="256" r:id="rId2" show="0"/></p:sldIdLst>
+  <p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>
   <p:sldSz cx="9144000" cy="6858000"/>
 </p:presentation>"#;
 
+    let slide_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       show="0">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr/>
+    </p:spTree>
+  </p:cSld>
+</p:sld>"#;
     let pptx = fixtures::MinimalPptx::new("")
         .with_presentation_xml(pres_xml)
+        .with_raw_slide(slide_xml)
         .build();
     let pres = parse_pptx(&pptx);
     assert!(pres.slides[0].hidden, "Slide hidden flag should be parsed");
