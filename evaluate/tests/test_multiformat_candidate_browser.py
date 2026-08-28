@@ -118,6 +118,28 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             inventory = parse_inventory(result.units[0].inventory, "slide-1")
             self.assertLess(inventory.texts[0].box.y, 540)
 
+    def test_presentation_capture_preserves_order_across_hidden_slide_gaps(
+        self,
+    ) -> None:
+        html = """
+        <html><body>
+          <div class="slide" id="slide-1" data-slide="1"
+               style="position:relative;width:960px;height:540px"></div>
+          <div class="slide" id="slide-3" data-slide="3"
+               style="position:relative;width:960px;height:540px"></div>
+        </body></html>
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = capture_html_units(
+                html,
+                DocumentFormat.PPTX,
+                ("visible-slide-1", "visible-slide-2"),
+                Path(temp_dir),
+            )
+
+            self.assertEqual(len(result.units), 2)
+            self.assertEqual(png_dimensions(result.units[1].png), (960, 540))
+
     def test_legacy_ppt_uses_native_page_container_as_slide(self) -> None:
         html = """
         <html><body>

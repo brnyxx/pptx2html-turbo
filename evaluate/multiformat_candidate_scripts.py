@@ -53,10 +53,17 @@ format => {
   const nodes = corePresentation
     ? [...document.querySelectorAll(".slide")]
     : [...document.querySelectorAll('div[id^="page"][id$="-div"]')];
+  let previousSlide = 0;
   return nodes.map((node, index) => {
     const ordinal = index + 1;
-    const expected = corePresentation ? `slide-${ordinal}` : `page${ordinal}-div`;
-    if (node.id !== expected) throw new Error(`nonsequential unit: ${node.id}`);
+    if (corePresentation) {
+      const match = /^slide-([1-9][0-9]*)$/.exec(node.id);
+      const slide = match ? Number(match[1]) : 0;
+      if (slide <= previousSlide) throw new Error(`nonsequential unit: ${node.id}`);
+      previousSlide = slide;
+    } else if (node.id !== `page${ordinal}-div`) {
+      throw new Error(`nonsequential unit: ${node.id}`);
+    }
     return {
       selector: `#${CSS.escape(node.id)}`,
       width: node.getBoundingClientRect().width,
