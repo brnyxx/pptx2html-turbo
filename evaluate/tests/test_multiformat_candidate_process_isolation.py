@@ -255,6 +255,34 @@ class CandidateProcessIsolationTests(unittest.TestCase):
             self.assertIn(sandbox.profile.resolve(), hashed_paths)
             self.assertNotIn(sandbox.sentinel.resolve(), hashed_paths)
 
+    def test_active_resolution_does_not_read_denied_oracle_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sandbox = self._fixture(root, denied={"network", "oracle"})
+            values = self._attestation(root, sandbox)
+            marker = sha256_file(sandbox.profile)
+            original_resolve = Path.resolve
+            expected_root = root.resolve() / "reference"
+            expected_sentinel = expected_root / sandbox.sentinel.name
+
+            def deny_oracle_resolution(path: Path, *, strict: bool = False) -> Path:
+                if path.name in {"reference", sandbox.sentinel.name}:
+                    raise PermissionError(1, "sandbox denied oracle path")
+                return original_resolve(path, strict=strict)
+
+            with (
+                mock.patch.dict(os.environ, {"PPTX2HTML_CANDIDATE_SANDBOX": marker}),
+                mock.patch.object(Path, "resolve", deny_oracle_resolution),
+            ):
+                resolved = resolve_attested_sandbox(
+                    values,
+                    root,
+                    (sandbox.executable, sandbox.profile, sandbox.libreoffice),
+                )
+
+            self.assertEqual(resolved.oracle_root, expected_root)
+            self.assertEqual(resolved.sentinel, expected_sentinel)
+
     def test_path_substitution_and_post_sign_mutation_fail(self) -> None:
         for attack in ("path", "executable-mutation", "profile-mutation"):
             with self.subTest(attack=attack), tempfile.TemporaryDirectory() as temp:

@@ -89,10 +89,15 @@ def resolve_attested_sandbox(
     oracle = object_value(values, "oracle_probe")
     if string_value(oracle, "result") != "denied":
         raise CandidateSandboxError("candidate oracle probe attestation differs")
-    oracle_root = _bound_directory(root, object_value(oracle, "root"))
-    verify_sentinel = os.environ.get(_ACTIVE_ENV) != sha256_file(profile)
+    verify_oracle_paths = os.environ.get(_ACTIVE_ENV) != sha256_file(profile)
     sentinel = _bound_path(
-        root, object_value(oracle, "sentinel"), verify_digest=verify_sentinel
+        root,
+        object_value(oracle, "sentinel"),
+        verify_digest=verify_oracle_paths,
+        verify_access=verify_oracle_paths,
+    )
+    oracle_root = _bound_directory(
+        root, object_value(oracle, "root"), verify_access=verify_oracle_paths
     )
     if not sentinel.is_relative_to(oracle_root) or sentinel == oracle_root:
         raise CandidateSandboxError("candidate oracle sentinel escapes oracle root")
@@ -238,23 +243,51 @@ def _binding(root: Path, path: Path) -> dict[str, JsonValue]:
     }
 
 
-def _bound_directory(root: Path, binding: dict[str, JsonValue]) -> Path:
-    relative = Path(string_value(binding, "path"))
-    if relative.is_absolute() or any(
-        part in {"", ".", ".."} for part in relative.parts
-    ):
-        raise CandidateSandboxError("candidate oracle root path is invalid")
+def _bound_directory(
+    root: Path, binding: dict[str, JsonValue], *, verify_access: bool = True
+) -> Path:
     resolved_root = root.resolve(strict=True)
-    path = (resolved_root / relative).resolve(strict=True)
+    path = _unresolved_bound_path(
+        resolved_root, binding, "candidate oracle root path is invalid"
+    )
+    if not verify_access:
+        return path
+    path = path.resolve(strict=True)
     if not path.is_relative_to(resolved_root) or not path.is_dir():
         raise CandidateSandboxError("candidate oracle root path is invalid")
     return path
 
 
 def _bound_path(
-    root: Path, binding: dict[str, JsonValue], *, verify_digest: bool = True
+    root: Path,
+    binding: dict[str, JsonValue],
+    *,
+    verify_digest: bool = True,
+    verify_access: bool = True,
 ) -> Path:
-    path = resolve_evidence_path(root, string_value(binding, "path"))
+    if verify_access:
+        path = resolve_evidence_path(root, string_value(binding, "path"))
+    else:
+        path = _unresolved_bound_path(
+            root.resolve(strict=True),
+            binding,
+            "candidate sandbox artifact path is invalid",
+        )
     if verify_digest and sha256_file(path) != sha256_value(binding, "sha256"):
         raise CandidateSandboxError("candidate sandbox artifact differs")
     return path
+
+
+def _unresolved_bound_path(
+    root: Path, binding: dict[str, JsonValue], message: str
+) -> Path:
+    value = string_value(binding, "path")
+    relative = Path(value)
+    if (
+        relative.is_absolute()
+        or "\\" in value
+        or value != relative.as_posix()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise CandidateSandboxError(message)
+    return root / relative
