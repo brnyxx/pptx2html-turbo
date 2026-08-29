@@ -9,6 +9,7 @@ rather than going unnoticed.
 from __future__ import annotations
 
 import tempfile
+import tracemalloc
 import unittest
 import zipfile
 from dataclasses import dataclass
@@ -129,12 +130,15 @@ def _load_cases() -> tuple[SharedCase, ...]:
     return tuple(cases)
 
 
-def _write_package(path: Path, case: SharedCase) -> None:
+def _write_package(
+    path: Path, case: SharedCase, worksheet_rows: str | None = None
+) -> None:
     attributes = (
         f'Id="rId1" Type="{WORKSHEET_TYPE}" Target="{case.relationship_target}"'
     )
     if case.relationship_target_mode is not None:
         attributes += f' TargetMode="{case.relationship_target_mode}"'
+    rows = worksheet_rows or f'<row r="1">{case.worksheet_cells}</row>'
     with zipfile.ZipFile(path, "w") as archive:
         if case.styles is not None:
             archive.writestr(
@@ -158,8 +162,9 @@ def _write_package(path: Path, case: SharedCase) -> None:
         )
         archive.writestr(
             "xl/worksheets/sheet1.xml",
-            f'<worksheet xmlns="{MAIN}"><sheetData><row r="1">'
-            f"{case.worksheet_cells}</row></sheetData></worksheet>",
+            f'<worksheet xmlns="{MAIN}"><sheetData>'
+            f"{rows}"
+            f"</sheetData></worksheet>",
         )
 
 
@@ -224,6 +229,10 @@ class PortableSpreadsheetSemanticsTests(unittest.TestCase):
             "iso_date_cell_midnight",
             "iso_date_cell_with_time",
             "unreproducible_currency_format_is_unattributable",
+            "omitted_cell_references_mixed_with_explicit_coordinates",
+            "coordinate_non_ascii_digit",
+            "self_closing_unknown_cell_type",
+            "nested_self_closing_cell",
         ):
             self.assertIn(required, names)
 
@@ -246,6 +255,54 @@ class PortableSpreadsheetSemanticsTests(unittest.TestCase):
             cell = _item(cells, 0)
             # The stored value is 0.5; the displayed value must not be "0.5".
             self.assertEqual(_text(cell, "display"), "50.00%")
+
+    def test_omitted_rows_and_cells_infer_deterministic_coordinates(self) -> None:
+        case = next(
+            item
+            for item in _load_cases()
+            if item.name == "omitted_cell_references_mixed_with_explicit_coordinates"
+        )
+        rows = (
+            f"<row>{case.worksheet_cells}</row>"
+            '<row><c t="str"><v>A2</v></c><c t="str"><v>B2</v></c></row>'
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "omitted-references.xlsx"
+            _write_package(path, case, rows)
+
+            value = extract_xlsx_semantics(path)
+
+            worksheets = value["worksheets"]
+            if not isinstance(worksheets, list):
+                self.fail("worksheets must be a list")
+            cells = _item(worksheets, 0)["cells"]
+            if not isinstance(cells, list):
+                self.fail("cells must be a list")
+            self.assertEqual(
+                tuple(_text(_item(cells, index), "address") for index in range(len(cells))),
+                ("A1", "B1", "C1", "D1", "G1", "H1", "A2", "B2"),
+            )
+
+    def test_many_empty_cells_have_bounded_memory_use(self) -> None:
+        case = next(item for item in _load_cases() if item.name == "boolean_true")
+        rows = "".join(
+            f'<row r="{row}"><c r="A{row}"/></row>' for row in range(1, 50_001)
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "empty-cells.xlsx"
+            _write_package(path, case, rows)
+            tracemalloc.start()
+            try:
+                value = extract_xlsx_semantics(path)
+                _, peak = tracemalloc.get_traced_memory()
+            finally:
+                tracemalloc.stop()
+
+        worksheets = value["worksheets"]
+        if not isinstance(worksheets, list):
+            self.fail("worksheets must be a list")
+        self.assertEqual(_item(worksheets, 0)["cells"], [])
+        self.assertLess(peak, 8 * 1024 * 1024)
 
 
 if __name__ == "__main__":

@@ -55,10 +55,41 @@
       "worksheet_cells": "<c r=\"A0\"><v>7</v></c>"
     },
     {
+      "name": "coordinate_non_ascii_digit",
+      "outcome": "refuse",
+      "reason": "A1 row numbers use ASCII digits only.",
+      "worksheet_cells": "<c r=\"A١\"><v>7</v></c>"
+    },
+    {
+      "name": "omitted_cell_references_mixed_with_explicit_coordinates",
+      "outcome": "accept",
+      "worksheet_cells": "<c t=\"str\"><v>A</v></c><c t=\"str\"><v>B</v></c><c r=\"C1\" t=\"str\"><v>C</v></c><c t=\"str\"><v>D</v></c><c r=\"G1\" t=\"str\"><v>G</v></c><c t=\"str\"><v>H</v></c>",
+      "expected": [
+        { "address": "A1", "display": "A" },
+        { "address": "B1", "display": "B" },
+        { "address": "C1", "display": "C" },
+        { "address": "D1", "display": "D" },
+        { "address": "G1", "display": "G" },
+        { "address": "H1", "display": "H" }
+      ]
+    },
+    {
       "name": "unknown_cell_type",
       "outcome": "refuse",
       "reason": "An unrecognized cell type must not be silently treated as a number.",
       "worksheet_cells": "<c r=\"A1\" t=\"zzz\"><v>7</v></c>"
+    },
+    {
+      "name": "self_closing_unknown_cell_type",
+      "outcome": "refuse",
+      "reason": "A self-closing cell must validate its type before being skipped as empty.",
+      "worksheet_cells": "<c r=\"A1\" t=\"zzz\"/>"
+    },
+    {
+      "name": "nested_self_closing_cell",
+      "outcome": "refuse",
+      "reason": "A self-closing cell nested inside an active cell must not bypass nesting validation.",
+      "worksheet_cells": "<c r=\"A1\"><c r=\"B1\"/></c>"
     },
     {
       "name": "shared_string_index_out_of_range",

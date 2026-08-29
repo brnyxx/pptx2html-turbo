@@ -45,7 +45,64 @@ fn malformed_or_untrusted_workbook_identity_fails_closed() {
     );
     assert!(parse_xlsx_semantics(&malformed_coordinate).is_err());
 
+    let inconsistent_coordinates = workbook_fixture(
+        "<sst/>",
+        &[(
+            "sheet1.xml",
+            r#"<worksheet><sheetData><row r="2"><c r="A1"><v>7</v></c></row></sheetData></worksheet>"#,
+        )],
+    );
+    assert!(parse_xlsx_semantics(&inconsistent_coordinates).is_err());
+
     assert!(parse_xlsx_semantics(b"not an XLSX package").is_err());
+}
+
+#[test]
+fn self_closing_cells_use_normal_cell_validation() {
+    let invalid_kind = workbook_fixture(
+        "<sst/>",
+        &[(
+            "sheet1.xml",
+            r#"<worksheet><sheetData><row r="1"><c r="A1" t="zzz"/></row></sheetData></worksheet>"#,
+        )],
+    );
+    assert!(parse_xlsx_semantics(&invalid_kind).is_err());
+
+    let nested_cell = workbook_fixture(
+        "<sst/>",
+        &[(
+            "sheet1.xml",
+            r#"<worksheet><sheetData><row r="1"><c r="A1"><c r="B1"/></c></row></sheetData></worksheet>"#,
+        )],
+    );
+    assert!(parse_xlsx_semantics(&nested_cell).is_err());
+}
+
+#[test]
+fn infers_omitted_row_and_cell_references() {
+    let data = workbook_fixture(
+        "<sst/>",
+        &[(
+            "sheet1.xml",
+            r#"<worksheet><sheetData><row><c t="str"><v>A</v></c><c t="str"><v>B</v></c><c r="C1" t="str"><v>C</v></c><c t="str"><v>D</v></c><c r="G1" t="str"><v>G</v></c><c t="str"><v>H</v></c></row><row><c t="str"><v>A2</v></c><c t="str"><v>B2</v></c></row></sheetData></worksheet>"#,
+        )],
+    );
+
+    let semantics = parse_xlsx_semantics(&data).expect("infer omitted references");
+
+    assert_eq!(
+        semantics.cells,
+        vec![
+            cell("First & <sheet>", "A1", "A"),
+            cell("First & <sheet>", "B1", "B"),
+            cell("First & <sheet>", "C1", "C"),
+            cell("First & <sheet>", "D1", "D"),
+            cell("First & <sheet>", "G1", "G"),
+            cell("First & <sheet>", "H1", "H"),
+            cell("First & <sheet>", "A2", "A2"),
+            cell("First & <sheet>", "B2", "B2"),
+        ]
+    );
 }
 
 #[test]
