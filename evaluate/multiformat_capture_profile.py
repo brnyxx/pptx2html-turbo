@@ -68,7 +68,7 @@ def load_capture_profile(
     if role == "candidate":
         candidate_lock = read_strict_object(candidate_lock_path)
         if (
-            integer_value(candidate_lock, "schema_version") != 1
+            integer_value(candidate_lock, "schema_version") not in {1, 2}
             or string_value(candidate_lock, "status") != "locked"
             or "reference_profile" in candidate_lock
         ):

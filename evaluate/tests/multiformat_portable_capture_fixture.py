@@ -278,10 +278,26 @@ class PortableCaptureFixture:
                 )
         for file in self.files:
             html = object_value(file, "html")
-            records.append(self._record(self.root / str(html["path"]), "capture-html"))
+            records.append(
+                self._record(
+                    self.root / str(html["path"]),
+                    (
+                        "capture-candidate-html"
+                        if self.role == "candidate"
+                        else "capture-html"
+                    ),
+                )
+            )
         if self.determinism is not None:
             records.append(
-                self._record(self.determinism, "capture-determinism-manifest")
+                self._record(
+                    self.determinism,
+                    (
+                        "capture-candidate-determinism"
+                        if self.role == "candidate"
+                        else "capture-determinism-manifest"
+                    ),
+                )
             )
         records.sort(key=lambda item: str(item["path"]))
         path = self.root / f"{self.role}-portable-receipt.json"

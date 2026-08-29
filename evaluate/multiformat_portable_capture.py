@@ -93,6 +93,7 @@ def _capture_artifacts(
     evidence_root: Path,
 ) -> set[tuple[str, str, str]]:
     root = evidence_root.resolve(strict=True)
+    candidate = string_value(values, "role") == "candidate"
     expected = {
         _path_record(root, runtime_path, "capture-runtime-identity"),
         _path_record(root, execution_path, "capture-execution-log"),
@@ -101,13 +102,23 @@ def _capture_artifacts(
         expected.add(_binding_record(unit, "png", "capture-unit-png"))
         expected.add(_binding_record(unit, "inventory", "capture-unit-inventory"))
     for file in object_list(values, "files", "capture.portable.files"):
-        expected.add(_binding_record(file, "html", "capture-html"))
+        expected.add(
+            _binding_record(
+                file,
+                "html",
+                "capture-candidate-html" if candidate else "capture-html",
+            )
+        )
     if "determinism_manifest" in values:
         expected.add(
             _binding_record(
                 values,
                 "determinism_manifest",
-                "capture-determinism-manifest",
+                (
+                    "capture-candidate-determinism"
+                    if candidate
+                    else "capture-determinism-manifest"
+                ),
             )
         )
     return expected

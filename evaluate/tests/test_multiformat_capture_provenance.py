@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 from evaluate.multiformat_capture_manifest import validate_capture_manifest
+from evaluate.multiformat_capture_profile import load_capture_profile
 from evaluate.multiformat_capture_provenance import (
     validate_portable_capture_provenance,
 )
@@ -50,6 +51,28 @@ class MultiFormatCaptureProvenanceTests(unittest.TestCase):
             validated = validate_capture_manifest(*fixture.validate_arguments())
 
             self.assertEqual(set(validated.files), {"source"})
+
+    def test_schema_2_candidate_runtime_lock_is_admitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidate_lock = root / "candidate-runtime-lock.json"
+            candidate_lock.write_text(
+                json.dumps({"schema_version": 2, "status": "locked"}),
+                encoding="utf-8",
+            )
+            fixture = ReceiptFixture(
+                root,
+                candidate_runtime_lock=candidate_lock,
+            )
+
+            profile = load_capture_profile(
+                fixture.lock,
+                fixture.trust.lock_sha256,
+                root,
+                "candidate",
+            )
+
+            self.assertEqual(profile.candidate_lock_path, candidate_lock.resolve())
 
     def test_portable_receipt_binds_units_runtime_and_execution(self) -> None:
         for field in ("png", "inventory", "runtime_identity", "execution_log"):
