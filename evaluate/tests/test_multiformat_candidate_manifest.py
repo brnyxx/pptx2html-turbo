@@ -3,6 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from PIL import Image
+
+from evaluate.multiformat_candidate_determinism import (
+    _inventory_equivalent,
+    _visually_equivalent,
+)
 from evaluate.multiformat_candidate_manifest import (
     CandidateManifestError,
     write_candidate_manifests,
@@ -20,6 +26,58 @@ from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 
 class MultiFormatCandidateManifestTests(unittest.TestCase):
+    def test_native_determinism_allows_only_bounded_rendering_jitter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            left_inventory = root / "left.json"
+            right_inventory = root / "right.json"
+            left_inventory.write_text(
+                json.dumps(
+                    {
+                        "objects": [
+                            {
+                                "box": [10.0, 20.0, 30.0, 40.0],
+                                "baseline": 42.0,
+                                "value": "stable",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            right_inventory.write_text(
+                json.dumps(
+                    {
+                        "objects": [
+                            {
+                                "box": [12.0, 18.0, 30.0, 40.0],
+                                "baseline": 40.0,
+                                "value": "stable",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            left_png = root / "left.png"
+            right_png = root / "right.png"
+            left = Image.new("RGB", (256, 256), "white")
+            right = Image.new("RGB", (256, 256), "white")
+            for image, offset in ((left, 0), (right, 1)):
+                for x in range(80, 176):
+                    for y in range(80 + offset, 176 + offset):
+                        image.putpixel((x, y), (0, 0, 0))
+            left.save(left_png)
+            right.save(right_png)
+
+            self.assertTrue(_inventory_equivalent(left_inventory, right_inventory))
+            self.assertTrue(_visually_equivalent(left_png, right_png))
+
+            right_value = json.loads(right_inventory.read_text(encoding="utf-8"))
+            right_value["objects"][0]["value"] = "changed"
+            right_inventory.write_text(json.dumps(right_value), encoding="utf-8")
+            self.assertFalse(_inventory_equivalent(left_inventory, right_inventory))
+
     def test_writes_self_validating_capture_and_independent_determinism_runs(
         self,
     ) -> None:

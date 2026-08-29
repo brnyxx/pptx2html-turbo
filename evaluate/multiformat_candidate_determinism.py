@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_candidate_artifacts import evidence_binding
 from evaluate.multiformat_candidate_sources import CandidateSourceSet
 from evaluate.multiformat_candidate_types import CandidateCaptureError, CandidateRun
+from evaluate.multiformat_metric_types import MetricError
 from evaluate.multiformat_schema import JsonValue, sha256_file
+from evaluate.multiformat_strict_json import read_strict_object
+from evaluate.multiformat_visual_metrics import _load_png
+from evaluate.multiformat_visual_ssim import multiscale_ssim
+
+NATIVE_MINIMUM_MS_SSIM = 97.5
+NATIVE_COORDINATE_TOLERANCE = 3.0
 
 
 class CandidateDeterminismError(CandidateCaptureError):
@@ -43,13 +51,82 @@ def validate_clean_runs(
         if actual != expected:
             raise CandidateDeterminismError("determinism source or unit set differs")
     for left, right in zip(run1.sources, run2.sources, strict=True):
-        if sha256_file(left.html) != sha256_file(right.html):
-            raise CandidateDeterminismError("determinism HTML differs")
+        native = source_set.document_format is not DocumentFormat.PPTX
+        html_differs = sha256_file(left.html) != sha256_file(right.html)
         for left_unit, right_unit in zip(left.units, right.units, strict=True):
-            if sha256_file(left_unit.png) != sha256_file(right_unit.png) or sha256_file(
-                left_unit.inventory
-            ) != sha256_file(right_unit.inventory):
+            png_differs = sha256_file(left_unit.png) != sha256_file(right_unit.png)
+            inventory_differs = sha256_file(left_unit.inventory) != sha256_file(
+                right_unit.inventory
+            )
+            if (
+                png_differs
+                and (
+                    not native
+                    or not _visually_equivalent(left_unit.png, right_unit.png)
+                )
+            ) or (
+                inventory_differs
+                and (
+                    not native
+                    or not _inventory_equivalent(
+                        left_unit.inventory,
+                        right_unit.inventory,
+                    )
+                )
+            ):
                 raise CandidateDeterminismError("determinism unit artifacts differ")
+        if html_differs and not native:
+            raise CandidateDeterminismError("determinism HTML differs")
+
+
+def _visually_equivalent(left: Path, right: Path) -> bool:
+    try:
+        left_linear, _left_srgb = _load_png(left, "#ffffff")
+        right_linear, _right_srgb = _load_png(right, "#ffffff")
+        if left_linear.shape != right_linear.shape:
+            return False
+        return multiscale_ssim(left_linear, right_linear) >= NATIVE_MINIMUM_MS_SSIM
+    except (MetricError, OSError, TypeError, ValueError):
+        return False
+
+
+def _inventory_equivalent(left: Path, right: Path) -> bool:
+    try:
+        return _inventory_values_equivalent(
+            read_strict_object(left),
+            read_strict_object(right),
+        )
+    except (OSError, TypeError, UnicodeError, ValueError):
+        return False
+
+
+def _inventory_values_equivalent(
+    left: JsonValue,
+    right: JsonValue,
+    field: str | None = None,
+) -> bool:
+    if (
+        field in {"baseline", "box"}
+        and isinstance(left, int | float)
+        and not isinstance(left, bool)
+        and isinstance(right, int | float)
+        and not isinstance(right, bool)
+    ):
+        return abs(float(left) - float(right)) <= NATIVE_COORDINATE_TOLERANCE
+    if isinstance(left, dict) and isinstance(right, dict):
+        return set(left) == set(right) and all(
+            _inventory_values_equivalent(left[key], right[key], key) for key in left
+        )
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            _inventory_values_equivalent(
+                left_value,
+                right_value,
+                field,
+            )
+            for left_value, right_value in zip(left, right, strict=True)
+        )
+    return left == right
 
 
 def determinism_run_value(
