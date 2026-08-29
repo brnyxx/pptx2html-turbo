@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
+from PIL import Image
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
@@ -199,25 +200,9 @@ def capture_html_units(
                 raise CandidateCaptureError(
                     f"unit count mismatch: expected {len(unit_ids)}, got {len(units)}"
                 )
-            if aggregate_paged_units:
-                _validate_aggregate_unit(units[0])
-                page.set_viewport_size(_aggregate_viewport(units[0]))
-                page.evaluate(READINESS_SCRIPT)
-                units = unit_records(
-                    page.evaluate(
-                        DISCOVER_UNITS_SCRIPT,
-                        {
-                            "format": document_format.value,
-                            "aggregatePages": True,
-                        },
-                    )
-                )
-                if len(units) != 1:
-                    raise CandidateCaptureError(
-                        "aggregate unit changed after viewport expansion"
-                    )
-                _validate_aggregate_unit(units[0])
             for unit_id, unit in zip(unit_ids, units, strict=True):
+                if aggregate_paged_units:
+                    _validate_aggregate_unit(unit)
                 selector = (
                     record_string(unit, "selector")
                     if not aggregate_paged_units
@@ -250,18 +235,7 @@ def capture_html_units(
                 )
                 parse_inventory(inventory, unit_id)
                 if aggregate_paged_units:
-                    page.screenshot(
-                        path=png,
-                        animations="disabled",
-                        caret="hide",
-                        clip={
-                            "x": _record_number(unit, "x"),
-                            "y": _record_number(unit, "y"),
-                            "width": _record_number(unit, "width"),
-                            "height": _record_number(unit, "height"),
-                        },
-                        scale="device",
-                    )
+                    _capture_aggregate_png(page, unit, selectors, png)
                 else:
                     page.locator(selector).screenshot(
                         path=png,
@@ -396,6 +370,51 @@ def _aggregate_viewport(unit: dict[str, JsonValue]) -> dict[str, int]:
     if width <= 0 or height <= 0 or width * height > MAX_AGGREGATE_PIXELS:
         raise CandidateCaptureError("aggregate viewport exceeds limit")
     return {"width": width, "height": height}
+
+
+def _capture_aggregate_png(
+    page: object,
+    unit: dict[str, JsonValue],
+    selectors: list[str] | None,
+    output: Path,
+) -> None:
+    pages = unit.get("pages")
+    if not isinstance(pages, list) or selectors is None or len(pages) != len(selectors):
+        raise CandidateCaptureError("aggregate page inventory is invalid")
+    width = round(_record_number(unit, "width"))
+    height = round(_record_number(unit, "height"))
+    origin_x = _record_number(unit, "x")
+    origin_y = _record_number(unit, "y")
+    canvas = Image.new("RGB", (width, height), (255, 255, 255))
+    with tempfile.TemporaryDirectory(prefix=".aggregate-pages-") as temp_dir:
+        temporary = Path(temp_dir)
+        for ordinal, (selector, geometry) in enumerate(
+            zip(selectors, pages, strict=True), start=1
+        ):
+            if not isinstance(geometry, dict):
+                raise CandidateCaptureError("aggregate page geometry is invalid")
+            page_png = temporary / f"page-{ordinal}.png"
+            page.locator(selector).screenshot(
+                path=page_png,
+                animations="disabled",
+                caret="hide",
+                scale="device",
+            )
+            expected = (
+                round(_record_number(geometry, "width")),
+                round(_record_number(geometry, "height")),
+            )
+            with Image.open(page_png) as image:
+                if image.format != "PNG" or image.size != expected:
+                    raise CandidateCaptureError(
+                        f"aggregate page dimension mismatch: expected {expected}, got {image.size}"
+                    )
+                offset = (
+                    round(_record_number(geometry, "x") - origin_x),
+                    round(_record_number(geometry, "y") - origin_y),
+                )
+                canvas.paste(image.convert("RGB"), offset)
+    canvas.save(output, format="PNG")
 
 
 __all__ = [
