@@ -13,6 +13,7 @@ from evaluate.multiformat_candidate_process import (
     CandidateProcessError,
     run_bounded_process,
 )
+from evaluate.multiformat_candidate_sandbox import ACTIVE_SANDBOX_ENV
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_schema import JsonValue
@@ -188,7 +189,7 @@ def _validate_diagnostics(
         and "NATIVE_BACKEND_OPAQUE" not in codes
     ):
         raise CandidateConversionError("native runtime diagnostics are missing")
-    if codes & {
+    if not os.environ.get(ACTIVE_SANDBOX_ENV) and codes & {
         "NATIVE_NETWORK_ISOLATION_DISABLED",
         "PROCESS_ISOLATION_DISABLED",
         "PROCESS_ISOLATION_UNAVAILABLE",

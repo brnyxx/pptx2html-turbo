@@ -7,16 +7,35 @@ import time
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 from evaluate.multiformat_candidate_conversion import (
     CandidateConversionError,
     _validate_diagnostics,
     run_conversion,
 )
+from evaluate.multiformat_candidate_sandbox import ACTIVE_SANDBOX_ENV
 from evaluate.multiformat_corpus_types import DocumentFormat
 
 
 class MultiFormatCandidateConversionTests(unittest.TestCase):
+    def test_outer_sandbox_owns_native_runtime_isolation(self) -> None:
+        diagnostics = [
+            {"code": "NATIVE_BACKEND_OPAQUE"},
+            {"code": "NATIVE_NETWORK_ISOLATION_DISABLED"},
+        ]
+        with self.assertRaisesRegex(
+            CandidateConversionError,
+            "isolation diagnostics",
+        ):
+            _validate_diagnostics(diagnostics, DocumentFormat.DOCX)
+
+        with mock.patch.dict(
+            "os.environ",
+            {ACTIVE_SANDBOX_ENV: "a" * 64},
+        ):
+            _validate_diagnostics(diagnostics, DocumentFormat.DOCX)
+
     def test_truncated_spreadsheet_scan_cannot_back_candidate_evidence(self) -> None:
         with self.assertRaisesRegex(CandidateConversionError, "scan truncated"):
             _validate_diagnostics(
