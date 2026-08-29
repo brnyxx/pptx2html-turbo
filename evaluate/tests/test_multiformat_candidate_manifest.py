@@ -74,6 +74,11 @@ class MultiFormatCandidateManifestTests(unittest.TestCase):
             self.assertTrue(_visually_equivalent(left_png, right_png))
 
             right_value = json.loads(right_inventory.read_text(encoding="utf-8"))
+            right_value["objects"][0]["box"][1] = 71.0
+            right_inventory.write_text(json.dumps(right_value), encoding="utf-8")
+            self.assertFalse(_inventory_equivalent(left_inventory, right_inventory))
+
+            right_value["objects"][0]["box"][1] = 18.0
             right_value["objects"][0]["value"] = "changed"
             right_inventory.write_text(json.dumps(right_value), encoding="utf-8")
             self.assertFalse(_inventory_equivalent(left_inventory, right_inventory))
