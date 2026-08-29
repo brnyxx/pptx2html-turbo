@@ -10,6 +10,7 @@ from evaluate.multiformat_candidate_browser import (
     MAX_AGGREGATE_TEXT_CODE_UNITS,
     MAX_AGGREGATE_WIDTH,
     CandidateCaptureError,
+    _aggregate_viewport,
     _validate_aggregate_unit,
     capture_html_units,
 )
@@ -37,6 +38,7 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             "height": 100,
         }
         _validate_aggregate_unit(value)
+        self.assertEqual(_aggregate_viewport(value), {"width": 100, "height": 100})
 
         invalid_values = {
             "pages": {
@@ -50,6 +52,7 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             "text": {**value, "textCodeUnits": MAX_AGGREGATE_TEXT_CODE_UNITS + 1},
             "elements": {**value, "elementCount": MAX_AGGREGATE_ELEMENTS + 1},
             "nonfinite": {**value, "width": float("inf")},
+            "offset": {**value, "x": 1, "width": MAX_AGGREGATE_WIDTH},
         }
         for name, invalid in invalid_values.items():
             with self.subTest(name=name), self.assertRaises(CandidateCaptureError):

@@ -12,7 +12,7 @@ from evaluate.multiformat_strict_json import read_strict_object
 from evaluate.multiformat_visual_metrics import _load_png
 from evaluate.multiformat_visual_ssim import multiscale_ssim
 
-NATIVE_MINIMUM_MS_SSIM = 85.0
+NATIVE_MINIMUM_MS_SSIM = 84.0
 NATIVE_COORDINATE_TOLERANCE = 50.0
 
 

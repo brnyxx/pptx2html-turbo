@@ -199,9 +199,25 @@ def capture_html_units(
                 raise CandidateCaptureError(
                     f"unit count mismatch: expected {len(unit_ids)}, got {len(units)}"
                 )
+            if aggregate_paged_units:
+                _validate_aggregate_unit(units[0])
+                page.set_viewport_size(_aggregate_viewport(units[0]))
+                page.evaluate(READINESS_SCRIPT)
+                units = unit_records(
+                    page.evaluate(
+                        DISCOVER_UNITS_SCRIPT,
+                        {
+                            "format": document_format.value,
+                            "aggregatePages": True,
+                        },
+                    )
+                )
+                if len(units) != 1:
+                    raise CandidateCaptureError(
+                        "aggregate unit changed after viewport expansion"
+                    )
+                _validate_aggregate_unit(units[0])
             for unit_id, unit in zip(unit_ids, units, strict=True):
-                if aggregate_paged_units:
-                    _validate_aggregate_unit(unit)
                 selector = (
                     record_string(unit, "selector")
                     if not aggregate_paged_units
@@ -341,7 +357,12 @@ def _validate_aggregate_unit(unit: dict[str, JsonValue]) -> None:
     height = _record_number(unit, "height")
     if width <= 0 or height <= 0:
         raise CandidateCaptureError("aggregate dimensions are invalid")
-    if width > MAX_AGGREGATE_WIDTH or height > MAX_AGGREGATE_HEIGHT:
+    if (
+        width > MAX_AGGREGATE_WIDTH
+        or height > MAX_AGGREGATE_HEIGHT
+        or x + width > MAX_AGGREGATE_WIDTH
+        or y + height > MAX_AGGREGATE_HEIGHT
+    ):
         raise CandidateCaptureError("aggregate dimensions exceed limit")
     if width * height > MAX_AGGREGATE_PIXELS:
         raise CandidateCaptureError("aggregate pixel area exceeds limit")
@@ -367,6 +388,14 @@ def _validate_aggregate_unit(unit: dict[str, JsonValue]) -> None:
             or page_y + page_height > bottom
         ):
             raise CandidateCaptureError("aggregate page geometry is invalid")
+
+
+def _aggregate_viewport(unit: dict[str, JsonValue]) -> dict[str, int]:
+    width = math.ceil(_record_number(unit, "x") + _record_number(unit, "width"))
+    height = math.ceil(_record_number(unit, "y") + _record_number(unit, "height"))
+    if width <= 0 or height <= 0 or width * height > MAX_AGGREGATE_PIXELS:
+        raise CandidateCaptureError("aggregate viewport exceeds limit")
+    return {"width": width, "height": height}
 
 
 __all__ = [
