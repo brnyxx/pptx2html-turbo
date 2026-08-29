@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from evaluate.multiformat_candidate_browser_checks import aggregate_geometry
 from evaluate.multiformat_inventory import parse_inventory
 from evaluate.multiformat_office_oracle_batch import (
     OfficeOracleBatchFile,
@@ -37,6 +38,81 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
             self.assertEqual(first.cells[0].coordinate, "A1")
             self.assertEqual(second.cells[0].coordinate, "A2")
             self.assertEqual(first.cells[0].box.width, 100)
+
+    def test_aggregate_inventory_offsets_each_physical_page(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = self._spreadsheet_source(root)
+
+            paths = write_office_oracle_inventories(
+                source,
+                ["xlsx-unit-1"],
+                root / "inventories",
+                aggregate_pages=True,
+                aggregate_geometry=aggregate_geometry(((200, 200), (200, 200))),
+            )
+
+            self.assertEqual(len(paths), 1)
+            inventory = parse_inventory(paths[0], "xlsx-unit-1")
+            self.assertEqual(
+                [(cell.coordinate, cell.order) for cell in inventory.cells],
+                [("A1", 1), ("A2", 2)],
+            )
+            self.assertEqual(inventory.cells[0].box.y, 10)
+            self.assertEqual(inventory.cells[1].box.y, 210)
+            self.assertEqual(inventory.cells[1].baseline, 230)
+
+    def test_aggregate_inventory_has_global_text_occurrences_and_order(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = self._spreadsheet_source(
+                root,
+                document_format="docx",
+                page_values=("Repeated", "Repeated"),
+            )
+
+            paths = write_office_oracle_inventories(
+                source,
+                ["docx-unit-1"],
+                root / "inventories",
+                aggregate_pages=True,
+                aggregate_geometry=aggregate_geometry(((200, 200), (200, 200))),
+            )
+
+            inventory = parse_inventory(paths[0], "docx-unit-1")
+            self.assertEqual([text.order for text in inventory.texts], [1, 2])
+            self.assertTrue(inventory.texts[0].identity.endswith("|1"))
+            self.assertTrue(inventory.texts[1].identity.endswith("|2"))
+            self.assertEqual(inventory.texts[1].box.y, 210)
+            self.assertEqual(inventory.texts[1].baseline, 230)
+
+    def test_aggregate_inventory_rejects_nonfinite_geometry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = self._spreadsheet_source(root)
+            geometry = aggregate_geometry(((200, 200), (200, 200)))
+            invalid = geometry.__class__(
+                geometry.width,
+                geometry.height,
+                float("nan"),
+                geometry.scaled_width,
+                geometry.scaled_height,
+                geometry.pages,
+            )
+
+            with self.assertRaisesRegex(
+                OfficeOracleInventoryError,
+                "aggregate geometry",
+            ):
+                write_office_oracle_inventories(
+                    source,
+                    ["xlsx-unit-1"],
+                    root / "inventories",
+                    aggregate_pages=True,
+                    aggregate_geometry=invalid,
+                )
 
     def test_unattributed_cells_are_surfaced_in_every_inventory(self) -> None:
         """An attribution refusal must reach the inventory as evidence.
@@ -106,6 +182,8 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
         root: Path,
         *,
         unattributed: bool = False,
+        document_format: str = "xlsx",
+        page_values: tuple[str, str] = ("Alpha", "Beta"),
     ) -> OfficeOracleBatchFile:
         semantic = root / "semantic.json"
         worksheet: dict[str, object] = {
@@ -130,7 +208,7 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
         )
         layout = root / "layout.xml"
         layout.write_text(
-            "<doc>" + _page("Alpha") + _page("Beta") + "</doc>",
+            "<doc>" + "".join(_page(value) for value in page_values) + "</doc>",
             encoding="utf-8",
         )
         pdf = root / "reference.pdf"
@@ -142,7 +220,7 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
             units.append(OfficeOracleBatchUnit(png, 200, 200))
         return OfficeOracleBatchFile(
             "source",
-            "xlsx",
+            document_format,
             "0" * 64,
             pdf,
             semantic,
@@ -153,8 +231,8 @@ class MultiFormatOfficeOracleInventoryTests(unittest.TestCase):
 
 def _page(value: str) -> str:
     return (
-        '<page width="200" height="200"><flow><block>'
-        '<line xMin="10" yMin="10" xMax="110" yMax="30">'
-        f'<word xMin="10" yMin="10" xMax="110" yMax="30">{value}</word>'
+        '<page width="100" height="100"><flow><block>'
+        '<line xMin="5" yMin="5" xMax="55" yMax="15">'
+        f'<word xMin="5" yMin="5" xMax="55" yMax="15">{value}</word>'
         "</line></block></flow></page>"
     )

@@ -5,16 +5,27 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
+from PIL import Image
+
 from evaluate.multiformat_candidate_artifacts import (
     evidence_binding,
     write_canonical_json,
 )
-from evaluate.multiformat_candidate_sources import CandidateSourceSet
+from evaluate.multiformat_candidate_browser_checks import (
+    AggregateGeometry,
+    aggregate_geometry,
+    canonical_office_page_dimension,
+)
+from evaluate.multiformat_candidate_sources import (
+    CandidateSourceSet,
+    CandidateUnitSpec,
+)
 from evaluate.multiformat_capture_manifest import validate_capture_manifest
 from evaluate.multiformat_inventory import parse_inventory
 from evaluate.multiformat_metric_links import load_metric_spec
 from evaluate.multiformat_office_oracle_batch import OfficeOracleBatchFile
 from evaluate.multiformat_office_oracle_inventory import write_office_oracle_inventories
+from evaluate.multiformat_office_oracle_layout import LayoutPage, layout_pages
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptVerification,
     verify_portable_receipt,
@@ -30,6 +41,11 @@ class PortableReferenceManifestError(ValueError):
 
 
 ReceiptExecutor = Callable[[Path, Path, Path], None]
+
+MAX_AGGREGATE_PAGES = 128
+MAX_AGGREGATE_WIDTH = 8_192
+MAX_AGGREGATE_HEIGHT = 262_143
+MAX_AGGREGATE_PIXELS = 256_000_000
 
 
 def write_portable_reference_manifests(
@@ -49,13 +65,38 @@ def write_portable_reference_manifests(
         batch = by_id.get(source.source_id)
         if batch is None or batch.source_sha256 != source.source_sha256:
             raise PortableReferenceManifestError("portable batch source set differs")
+        aggregate_pages = _aggregate_pages(
+            source.track,
+            source_set.document_format.value,
+            source.units,
+        )
+        canonical_geometry = (
+            _reference_aggregate_geometry(batch) if aggregate_pages else None
+        )
+        aggregate_png = (
+            _write_aggregate_png(
+                batch,
+                root / "images" / source.source_id / "aggregate.png",
+                canonical_geometry,
+            )
+            if aggregate_pages
+            else None
+        )
         inventories = write_office_oracle_inventories(
             batch,
             [unit.unit_id for unit in source.units],
             root / "inventories" / source.source_id,
+            aggregate_pages=aggregate_pages,
+            aggregate_geometry=canonical_geometry,
         )
         signed.extend((path, "capture-unit-inventory") for path in inventories)
-        signed.extend((unit.png, "capture-unit-png") for unit in batch.units)
+        if aggregate_png is None:
+            signed.extend((unit.png, "capture-unit-png") for unit in batch.units)
+            pngs = [unit.png for unit in batch.units]
+        else:
+            signed.append((aggregate_png, "capture-unit-png"))
+            signed.extend((unit.png, "capture-page-png") for unit in batch.units)
+            pngs = [aggregate_png]
         signed.extend(
             [
                 (batch.pdf, "reference-pdf"),
@@ -63,9 +104,7 @@ def write_portable_reference_manifests(
                 (batch.semantic, "semantic"),
             ]
         )
-        for spec, unit, inventory in zip(
-            source.units, batch.units, inventories, strict=True
-        ):
+        for spec, png, inventory in zip(source.units, pngs, inventories, strict=True):
             parsed = parse_inventory(inventory, spec.unit_id)
             # A portable reference with unattributable cells cannot back a
             # content claim, so it must not reach the signed manifest.
@@ -79,7 +118,7 @@ def write_portable_reference_manifests(
                     "source_id": source.source_id,
                     "source_sha256": source.source_sha256,
                     "ordinal": spec.ordinal,
-                    "png": evidence_binding(trust.evidence_root, unit.png),
+                    "png": evidence_binding(trust.evidence_root, png),
                     "inventory": evidence_binding(trust.evidence_root, inventory),
                 }
             )
@@ -200,6 +239,90 @@ def write_portable_reference_manifests(
         by_role["portable-lock"],
     )
     return capture
+
+
+def _aggregate_pages(
+    track: str,
+    document_format: str,
+    units: tuple[CandidateUnitSpec, ...],
+) -> bool:
+    return (
+        track == "conformance"
+        and document_format not in {"ppt", "pptx"}
+        and len(units) == 1
+    )
+
+
+def _write_aggregate_png(
+    source: OfficeOracleBatchFile,
+    output: Path,
+    geometry: AggregateGeometry | None = None,
+) -> Path:
+    if not source.units or len(source.units) > MAX_AGGREGATE_PAGES:
+        raise PortableReferenceManifestError("aggregate page count exceeds limit")
+    pages = layout_pages(source.layout)
+    if len(pages) != len(source.units):
+        raise PortableReferenceManifestError("aggregate page set differs")
+    dimensions = _canonical_page_dimensions(pages)
+    if any(width <= 0 or height <= 0 for width, height in dimensions):
+        raise PortableReferenceManifestError("aggregate dimensions are invalid")
+    width = max(width for width, _ in dimensions)
+    height = sum(height for _, height in dimensions)
+    if (
+        width > MAX_AGGREGATE_WIDTH
+        or height > MAX_AGGREGATE_HEIGHT
+        or width * height > MAX_AGGREGATE_PIXELS
+    ):
+        raise PortableReferenceManifestError("aggregate dimensions exceed limit")
+    geometry = geometry or aggregate_geometry(dimensions)
+    if geometry.width != width or geometry.height != height:
+        raise PortableReferenceManifestError("aggregate geometry differs")
+    output.parent.mkdir(parents=True, exist_ok=False)
+    canvas = Image.new(
+        "RGB",
+        (geometry.scaled_width, geometry.scaled_height),
+        (255, 255, 255),
+    )
+    try:
+        for unit, page_geometry in zip(source.units, geometry.pages, strict=True):
+            with Image.open(unit.png) as image:
+                if image.format != "PNG" or image.size != (unit.width, unit.height):
+                    raise PortableReferenceManifestError(
+                        "aggregate page dimension mismatch"
+                    )
+                resized = image.convert("RGB").resize(
+                    (
+                        page_geometry.scaled_width,
+                        page_geometry.scaled_height,
+                    ),
+                    Image.Resampling.LANCZOS,
+                )
+                canvas.paste(resized, (0, page_geometry.scaled_top))
+        canvas.save(output, format="PNG")
+    except Exception:
+        output.unlink(missing_ok=True)
+        raise
+    return output
+
+
+def _reference_aggregate_geometry(source: OfficeOracleBatchFile) -> AggregateGeometry:
+    pages = layout_pages(source.layout)
+    if not pages or len(pages) != len(source.units):
+        raise PortableReferenceManifestError("aggregate page set differs")
+    try:
+        return aggregate_geometry(_canonical_page_dimensions(pages))
+    except ValueError as error:
+        raise PortableReferenceManifestError(str(error)) from error
+
+
+def _canonical_page_dimensions(pages: list[LayoutPage]) -> list[tuple[int, int]]:
+    return [
+        (
+            canonical_office_page_dimension(page.width),
+            canonical_office_page_dimension(page.height),
+        )
+        for page in pages
+    ]
 
 
 def validate_portable_publication(

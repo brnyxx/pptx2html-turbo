@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from evaluate.multiformat_candidate_browser_checks import aggregate_geometry
 from evaluate.multiformat_candidate_browser import (
     MAX_AGGREGATE_ELEMENTS,
     MAX_AGGREGATE_HEIGHT,
@@ -10,7 +11,6 @@ from evaluate.multiformat_candidate_browser import (
     MAX_AGGREGATE_TEXT_CODE_UNITS,
     MAX_AGGREGATE_WIDTH,
     CandidateCaptureError,
-    _aggregate_viewport,
     _validate_aggregate_unit,
     capture_html_units,
 )
@@ -20,6 +20,15 @@ from evaluate.multiformat_visual_metrics import png_dimensions
 
 
 class MultiFormatCandidateBrowserTests(unittest.TestCase):
+    def test_aggregate_geometry_uses_cumulative_scaled_boundaries(self) -> None:
+        geometry = aggregate_geometry(((1000, 1001), (900, 1002), (800, 1003)))
+
+        self.assertEqual(geometry.scaled_width, 384)
+        self.assertEqual(geometry.pages[0].scaled_top, 0)
+        self.assertEqual(geometry.pages[-1].scaled_bottom, geometry.scaled_height)
+        for left, right in zip(geometry.pages, geometry.pages[1:]):
+            self.assertEqual(left.scaled_bottom, right.scaled_top)
+
     def test_aggregate_resource_limits_fail_closed(self) -> None:
         page = {
             "x": 0,
@@ -38,7 +47,6 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             "height": 100,
         }
         _validate_aggregate_unit(value)
-        self.assertEqual(_aggregate_viewport(value), {"width": 100, "height": 100})
 
         invalid_values = {
             "pages": {

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from PIL import Image
 
 from evaluate.multiformat_candidate_sources import (
     CandidateSource,
@@ -28,6 +29,7 @@ from evaluate.multiformat_portable_receipt import (
 )
 from evaluate.multiformat_portable_receipt_executor import execute_receipt_request
 from evaluate.multiformat_portable_reference_manifest import (
+    _aggregate_pages,
     write_portable_reference_manifests,
 )
 from evaluate.multiformat_schema import sha256_file
@@ -99,6 +101,21 @@ class SandboxReceiptFixture(ReceiptFixture):
 
 
 class PortableReferenceManifestTests(unittest.TestCase):
+    def test_aggregation_policy_leaves_presentations_blind_and_multi_unit_sources_scoped(
+        self,
+    ) -> None:
+        unit = (CandidateUnitSpec("unit-1", 1),)
+        self.assertTrue(_aggregate_pages("conformance", "docx", unit))
+        self.assertFalse(_aggregate_pages("blind", "docx", unit))
+        self.assertFalse(_aggregate_pages("conformance", "pptx", unit))
+        self.assertFalse(
+            _aggregate_pages(
+                "conformance",
+                "docx",
+                (CandidateUnitSpec("unit-1", 1), CandidateUnitSpec("unit-2", 2)),
+            )
+        )
+
     def test_signs_verifies_and_rejects_wrong_private_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
@@ -116,8 +133,10 @@ class PortableReferenceManifestTests(unittest.TestCase):
             sources = CandidateSourceSet(DocumentFormat.DOCX, (source,))
             raw = fixture.root / "raw"
             raw.mkdir()
-            png = raw / "page-1.png"
-            write_png(png, 200, 200, (1, 2, 3))
+            first_png = raw / "page-1.png"
+            second_png = raw / "page-2.png"
+            write_png(first_png, 200, 200, (1, 2, 3))
+            write_png(second_png, 150, 100, (4, 5, 6))
             pdf, semantic, layout = (
                 raw / "reference.pdf",
                 raw / "semantic.json",
@@ -126,7 +145,8 @@ class PortableReferenceManifestTests(unittest.TestCase):
             pdf.write_bytes(b"pdf")
             semantic.write_text("{}")
             layout.write_text(
-                '<doc><page width="200" height="200"><line><word xMin="1" yMin="1" xMax="2" yMax="2">x</word></line></page></doc>'
+                '<doc><page width="100" height="100"><line><word xMin="0.5" yMin="0.5" xMax="1" yMax="1">x</word></line></page>'
+                '<page width="75" height="50"><line><word xMin="0.5" yMin="0.5" xMax="1" yMax="1">y</word></line></page></doc>'
             )
             batch = OfficeOracleBatchFile(
                 "source",
@@ -135,7 +155,10 @@ class PortableReferenceManifestTests(unittest.TestCase):
                 pdf,
                 semantic,
                 layout,
-                (OfficeOracleBatchUnit(png, 200, 200),),
+                (
+                    OfficeOracleBatchUnit(first_png, 200, 200),
+                    OfficeOracleBatchUnit(second_png, 150, 100),
+                ),
             )
             published = fixture.root / "published"
             published.mkdir()
@@ -167,6 +190,48 @@ class PortableReferenceManifestTests(unittest.TestCase):
                     batch_id="batch-1",
                     execute=execute,
                 )
+            capture_value = json.loads(capture.read_text(encoding="utf-8"))
+            self.assertEqual(len(capture_value["units"]), 1)
+            aggregate_png = fixture.root / capture_value["units"][0]["png"]["path"]
+            with Image.open(aggregate_png) as image:
+                self.assertEqual(image.mode, "RGB")
+                self.assertEqual(image.size, (200, 300))
+                self.assertEqual(image.getpixel((0, 0)), (1, 2, 3))
+                self.assertEqual(image.getpixel((0, 200)), (4, 5, 6))
+                self.assertEqual(image.getpixel((175, 200)), (255, 255, 255))
+            inventory_path = (
+                fixture.root / capture_value["units"][0]["inventory"]["path"]
+            )
+            inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+            self.assertEqual([item["order"] for item in inventory["texts"]], [1, 2])
+            self.assertEqual(inventory["texts"][1]["box"][1], 201)
+            receipt_value = json.loads(
+                (published / "portable-receipt.json").read_text(encoding="utf-8")
+            )
+            signed = {
+                (item["path"], item["role"]) for item in receipt_value["artifacts"]
+            }
+            self.assertIn(
+                (
+                    aggregate_png.relative_to(fixture.root).as_posix(),
+                    "capture-unit-png",
+                ),
+                signed,
+            )
+            self.assertIn(
+                (
+                    first_png.relative_to(fixture.root).as_posix(),
+                    "capture-page-png",
+                ),
+                signed,
+            )
+            self.assertIn(
+                (
+                    second_png.relative_to(fixture.root).as_posix(),
+                    "capture-page-png",
+                ),
+                signed,
+            )
             identity = verify_portable_receipt(
                 published / "portable-receipt.json",
                 PortableReceiptVerification(fixture.trust),

@@ -19,7 +19,9 @@ from evaluate.multiformat_candidate_browser_network import (
 )
 from evaluate.multiformat_candidate_dom import inventory_value
 from evaluate.multiformat_candidate_browser_checks import (
+    AggregateGeometry,
     TARGET_PRESENTATION_SIZE,
+    aggregate_geometry,
     browser_version_matches,
     record_string,
     require_presentation_dimensions,
@@ -43,10 +45,10 @@ from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_inventory import parse_inventory
 from evaluate.multiformat_schema import JsonValue
 
-MAX_AGGREGATE_PAGES = 256
+MAX_AGGREGATE_PAGES = 128
 MAX_AGGREGATE_WIDTH = 8_192
-MAX_AGGREGATE_HEIGHT = 131_071
-MAX_AGGREGATE_PIXELS = 128_000_000
+MAX_AGGREGATE_HEIGHT = 262_143
+MAX_AGGREGATE_PIXELS = 256_000_000
 MAX_AGGREGATE_TEXT_CODE_UNITS = 2_000_000
 MAX_AGGREGATE_ELEMENTS = 100_000
 
@@ -201,8 +203,12 @@ def capture_html_units(
                     f"unit count mismatch: expected {len(unit_ids)}, got {len(units)}"
                 )
             for unit_id, unit in zip(unit_ids, units, strict=True):
+                canonical_geometry: AggregateGeometry | None = None
                 if aggregate_paged_units:
-                    _validate_aggregate_unit(unit)
+                    canonical_geometry = _aggregate_unit_geometry(unit)
+                aggregate_scale = (
+                    canonical_geometry.scale if canonical_geometry is not None else 1.0
+                )
                 selector = (
                     record_string(unit, "selector")
                     if not aggregate_paged_units
@@ -231,11 +237,23 @@ def capture_html_units(
                 png = output_dir / f"{unit_id}.png"
                 _write_json(
                     inventory,
-                    inventory_value(unit_id, raw, document_format, device_scale),
+                    inventory_value(
+                        unit_id,
+                        raw,
+                        document_format,
+                        device_scale * aggregate_scale,
+                    ),
                 )
                 parse_inventory(inventory, unit_id)
                 if aggregate_paged_units:
-                    _capture_aggregate_png(page, unit, selectors, png)
+                    if canonical_geometry is None:
+                        raise CandidateCaptureError("aggregate geometry is unavailable")
+                    _capture_aggregate_png(
+                        page,
+                        selectors,
+                        png,
+                        canonical_geometry,
+                    )
                 else:
                     page.locator(selector).screenshot(
                         path=png,
@@ -243,12 +261,17 @@ def capture_html_units(
                         caret="hide",
                         scale="css" if presentation else "device",
                     )
-                validate_png(
-                    png,
-                    presentation,
-                    unit,
-                    device_scale,
-                )
+                if aggregate_paged_units:
+                    if canonical_geometry is None:
+                        raise CandidateCaptureError("aggregate geometry is unavailable")
+                    _validate_aggregate_png(png, canonical_geometry)
+                else:
+                    validate_png(
+                        png,
+                        presentation,
+                        unit,
+                        device_scale,
+                    )
                 captured.append(CapturedUnit(unit_id, png, inventory))
             if external_requests:
                 raise CandidateCaptureError(
@@ -309,6 +332,10 @@ def _record_count(values: dict[str, JsonValue], field: str) -> int:
 
 
 def _validate_aggregate_unit(unit: dict[str, JsonValue]) -> None:
+    _ = _aggregate_unit_geometry(unit)
+
+
+def _aggregate_unit_geometry(unit: dict[str, JsonValue]) -> AggregateGeometry:
     page_count = _record_count(unit, "pageCount")
     text_code_units = _record_count(unit, "textCodeUnits")
     element_count = _record_count(unit, "elementCount")
@@ -341,8 +368,8 @@ def _validate_aggregate_unit(unit: dict[str, JsonValue]) -> None:
     if width * height > MAX_AGGREGATE_PIXELS:
         raise CandidateCaptureError("aggregate pixel area exceeds limit")
 
-    right = x + width
-    bottom = y + height
+    dimensions: list[tuple[int, int]] = []
+    expected_y = y
     for page in pages:
         if not isinstance(page, dict):
             raise CandidateCaptureError("aggregate page geometry is invalid")
@@ -350,49 +377,52 @@ def _validate_aggregate_unit(unit: dict[str, JsonValue]) -> None:
         page_y = _record_number(page, "y")
         page_width = _record_number(page, "width")
         page_height = _record_number(page, "height")
+        canonical_width = round(page_width)
+        canonical_height = round(page_height)
         if (
             page_width <= 0
             or page_height <= 0
+            or abs(page_width - canonical_width) > 1e-6
+            or abs(page_height - canonical_height) > 1e-6
             or page_width > MAX_AGGREGATE_WIDTH
             or page_height > MAX_AGGREGATE_HEIGHT
             or page_width * page_height > MAX_AGGREGATE_PIXELS
-            or page_x < x
-            or page_y < y
-            or page_x + page_width > right
-            or page_y + page_height > bottom
+            or abs(page_x - x) > 1e-6
+            or abs(page_y - expected_y) > 1e-6
         ):
             raise CandidateCaptureError("aggregate page geometry is invalid")
-
-
-def _aggregate_viewport(unit: dict[str, JsonValue]) -> dict[str, int]:
-    width = math.ceil(_record_number(unit, "x") + _record_number(unit, "width"))
-    height = math.ceil(_record_number(unit, "y") + _record_number(unit, "height"))
-    if width <= 0 or height <= 0 or width * height > MAX_AGGREGATE_PIXELS:
-        raise CandidateCaptureError("aggregate viewport exceeds limit")
-    return {"width": width, "height": height}
+        dimensions.append((canonical_width, canonical_height))
+        expected_y += canonical_height
+    if (
+        abs(width - max(page_width for page_width, _ in dimensions)) > 1e-6
+        or abs(height - sum(page_height for _, page_height in dimensions)) > 1e-6
+        or abs(expected_y - (y + height)) > 1e-6
+    ):
+        raise CandidateCaptureError("aggregate page geometry is invalid")
+    try:
+        return aggregate_geometry(dimensions)
+    except ValueError as error:
+        raise CandidateCaptureError(str(error)) from error
 
 
 def _capture_aggregate_png(
     page: object,
-    unit: dict[str, JsonValue],
     selectors: list[str] | None,
     output: Path,
+    geometry: AggregateGeometry,
 ) -> None:
-    pages = unit.get("pages")
-    if not isinstance(pages, list) or selectors is None or len(pages) != len(selectors):
+    if selectors is None or len(geometry.pages) != len(selectors):
         raise CandidateCaptureError("aggregate page inventory is invalid")
-    width = round(_record_number(unit, "width"))
-    height = round(_record_number(unit, "height"))
-    origin_x = _record_number(unit, "x")
-    origin_y = _record_number(unit, "y")
-    canvas = Image.new("RGB", (width, height), (255, 255, 255))
+    canvas = Image.new(
+        "RGB",
+        (geometry.scaled_width, geometry.scaled_height),
+        (255, 255, 255),
+    )
     with tempfile.TemporaryDirectory(prefix=".aggregate-pages-") as temp_dir:
         temporary = Path(temp_dir)
-        for ordinal, (selector, geometry) in enumerate(
-            zip(selectors, pages, strict=True), start=1
+        for ordinal, (selector, page_geometry) in enumerate(
+            zip(selectors, geometry.pages, strict=True), start=1
         ):
-            if not isinstance(geometry, dict):
-                raise CandidateCaptureError("aggregate page geometry is invalid")
             page_png = temporary / f"page-{ordinal}.png"
             page.locator(selector).screenshot(
                 path=page_png,
@@ -401,20 +431,32 @@ def _capture_aggregate_png(
                 scale="device",
             )
             expected = (
-                round(_record_number(geometry, "width")),
-                round(_record_number(geometry, "height")),
+                page_geometry.width,
+                page_geometry.height,
             )
             with Image.open(page_png) as image:
                 if image.format != "PNG" or image.size != expected:
                     raise CandidateCaptureError(
                         f"aggregate page dimension mismatch: expected {expected}, got {image.size}"
                     )
-                offset = (
-                    round(_record_number(geometry, "x") - origin_x),
-                    round(_record_number(geometry, "y") - origin_y),
+                resized = image.convert("RGB").resize(
+                    (
+                        page_geometry.scaled_width,
+                        page_geometry.scaled_height,
+                    ),
+                    Image.Resampling.LANCZOS,
                 )
-                canvas.paste(image.convert("RGB"), offset)
+                canvas.paste(resized, (0, page_geometry.scaled_top))
     canvas.save(output, format="PNG")
+
+
+def _validate_aggregate_png(path: Path, geometry: AggregateGeometry) -> None:
+    expected = (geometry.scaled_width, geometry.scaled_height)
+    with Image.open(path) as image:
+        if image.format != "PNG" or image.size != expected:
+            raise CandidateCaptureError(
+                f"aggregate PNG dimension mismatch: expected {expected}, got {image.size}"
+            )
 
 
 __all__ = [
