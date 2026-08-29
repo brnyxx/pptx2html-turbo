@@ -91,6 +91,42 @@ class MultiFormatCandidateManifestTests(unittest.TestCase):
             right_inventory.write_text(json.dumps(right_value), encoding="utf-8")
             self.assertFalse(_inventory_equivalent(left_inventory, right_inventory))
 
+    def test_native_inventory_bounds_text_fragmentation_and_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            left = root / "left.json"
+            right = root / "right.json"
+            stable = "Aspose.Words支持DOC，DOCX，RTF，HTML，OpenDocument，PDF，XPS，EPUB等格式。"
+            left.write_text(
+                json.dumps({"texts": [{"value": stable}], "objects": []}),
+                encoding="utf-8",
+            )
+            right.write_text(
+                json.dumps(
+                    {
+                        "texts": [
+                            {"value": stable[:18]},
+                            {"value": " " + stable[18:36]},
+                            {"value": stable[36:]},
+                        ],
+                        "objects": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertTrue(_inventory_equivalent(left, right))
+
+            right.write_text(
+                json.dumps(
+                    {
+                        "texts": [{"value": stable[:-4]}],
+                        "objects": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertFalse(_inventory_equivalent(left, right))
+
     def test_pptx_determinism_allows_only_visual_png_variation(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

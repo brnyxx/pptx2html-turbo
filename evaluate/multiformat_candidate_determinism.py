@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
+import unicodedata
 
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_candidate_artifacts import evidence_binding
@@ -14,6 +16,7 @@ from evaluate.multiformat_visual_ssim import multiscale_ssim
 
 NATIVE_MINIMUM_MS_SSIM = 84.0
 NATIVE_COORDINATE_TOLERANCE = 50.0
+NATIVE_TEXT_CHARACTER_OVERLAP = 0.98
 
 
 class CandidateDeterminismError(CandidateCaptureError):
@@ -110,8 +113,13 @@ def _inventory_values_equivalent(
     ):
         return abs(float(left) - float(right)) <= NATIVE_COORDINATE_TOLERANCE
     if isinstance(left, dict) and isinstance(right, dict):
-        return set(left) == set(right) and all(
-            _inventory_values_equivalent(left[key], right[key], key) for key in left
+        if set(left) != set(right):
+            return False
+        return all(
+            _text_items_equivalent(left[key], right[key])
+            if key == "texts"
+            else _inventory_values_equivalent(left[key], right[key], key)
+            for key in left
         )
     if isinstance(left, list) and isinstance(right, list):
         return len(left) == len(right) and all(
@@ -123,6 +131,36 @@ def _inventory_values_equivalent(
             for left_value, right_value in zip(left, right, strict=True)
         )
     return left == right
+
+
+def _text_items_equivalent(left: JsonValue, right: JsonValue) -> bool:
+    left_text = _inventory_text(left)
+    right_text = _inventory_text(right)
+    if left_text is None or right_text is None:
+        return False
+    if not left_text and not right_text:
+        return True
+    if not left_text or not right_text:
+        return False
+    overlap = sum((Counter(left_text) & Counter(right_text)).values())
+    return (
+        overlap / max(len(left_text), len(right_text)) >= NATIVE_TEXT_CHARACTER_OVERLAP
+    )
+
+
+def _inventory_text(value: JsonValue) -> str | None:
+    if not isinstance(value, list):
+        return None
+    parts: list[str] = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("value"), str):
+            return None
+        parts.append(item["value"])
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFC", "".join(parts))
+        if not character.isspace()
+    )
 
 
 def determinism_run_value(
