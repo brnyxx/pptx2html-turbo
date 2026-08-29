@@ -28,6 +28,7 @@ fn rejects_active_remote_and_temporary_content() {
     for html in [
         r#"<script>alert(1)</script>"#,
         r#"<img src="https://example.test/image.png"/>"#,
+        r#"<a href="file:///tmp/secret">secret</a>"#,
         r#"<title>/tmp/document2html-1/poppler/other</title>"#,
     ] {
         // Given
@@ -39,6 +40,14 @@ fn rejects_active_remote_and_temporary_content() {
         // Then
         assert!(result.is_err(), "{html:?} should be rejected");
     }
+}
+
+#[test]
+fn permits_escaped_file_uri_as_document_text() {
+    let html = r#"<p>Content-Location: file:///htmlDoc.html</p>"#;
+
+    validate_safe_html(html, Path::new("/tmp/document2html-1"))
+        .expect("escaped document text is inert");
 }
 
 #[test]
