@@ -18,6 +18,7 @@ from evaluate.multiformat_candidate_browser_network import (
 from evaluate.multiformat_candidate_dom import inventory_value
 from evaluate.multiformat_candidate_browser_checks import (
     TARGET_PRESENTATION_SIZE,
+    browser_version_matches,
     record_string,
     require_presentation_dimensions,
     unit_records,
@@ -93,9 +94,9 @@ def capture_html_units(
                 ],
                 env=browser_environment,
             )
-            if (
-                expected_browser_version is not None
-                and browser.version != expected_browser_version.rsplit(" ", 1)[-1]
+            if expected_browser_version is not None and not browser_version_matches(
+                expected_browser_version,
+                browser.version,
             ):
                 raise CandidateCaptureError(
                     f"Chromium version mismatch: {browser.version}"

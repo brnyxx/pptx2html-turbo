@@ -9,6 +9,7 @@ from typing import cast
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Request, Route, sync_playwright
 
+from evaluate.multiformat_candidate_browser_checks import browser_version_matches
 from evaluate.multiformat_candidate_browser_network import route_request
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 
@@ -51,7 +52,7 @@ def inspect_security_html(
                 ],
                 env=environment,
             )
-            if browser.version != browser_version:
+            if not browser_version_matches(browser_version, browser.version):
                 raise CandidateCaptureError("security Chromium version mismatch")
             context = browser.new_context(
                 locale="en-US",

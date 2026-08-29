@@ -10,6 +10,10 @@ from evaluate.multiformat_schema import JsonValue
 TARGET_PRESENTATION_SIZE = (960, 540)
 
 
+def browser_version_matches(locked: str, actual: str) -> bool:
+    return actual == locked.rsplit(" ", 1)[-1]
+
+
 def unit_records(value: JsonValue) -> list[dict[str, JsonValue]]:
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
         raise CandidateCaptureError("unit discovery returned an invalid record")
