@@ -31,7 +31,9 @@ use std::path::{Path, PathBuf};
 
 /// East-Asian families that documents commonly request but that the
 /// LibreOffice macOS bundle does not provide. Each is redirected to the
-/// resolved substitute family.
+/// resolved substitute family. MingLiU and PMingLiU are intentionally absent:
+/// CoreText resolves those legacy names consistently, while replacing them
+/// changes pagination in frozen native-unit evidence.
 pub(crate) const SUBSTITUTED_FAMILIES: &[&str] = &[
     "Batang",
     "BatangChe",
@@ -54,7 +56,6 @@ pub(crate) const SUBSTITUTED_FAMILIES: &[&str] = &[
     "Meiryo UI",
     "Microsoft JhengHei",
     "Microsoft YaHei",
-    "MingLiU",
     "NSimSun",
     "Noto Sans CJK HK",
     "Noto Sans CJK JP",
@@ -65,7 +66,6 @@ pub(crate) const SUBSTITUTED_FAMILIES: &[&str] = &[
     "Noto Serif CJK KR",
     "Noto Serif CJK SC",
     "Noto Serif CJK TC",
-    "PMingLiU",
     "SimHei",
     "SimSun",
     "Source Han Sans",

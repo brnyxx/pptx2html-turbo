@@ -146,6 +146,12 @@ fn substituted_families_are_sorted_and_unique() {
 }
 
 #[test]
+fn consistently_resolved_legacy_families_are_not_replaced() {
+    assert!(!SUBSTITUTED_FAMILIES.contains(&"MingLiU"));
+    assert!(!SUBSTITUTED_FAMILIES.contains(&"PMingLiU"));
+}
+
+#[test]
 fn substitute_selection_binds_the_identity_of_the_first_present_candidate() {
     // Given
     let candidates = [

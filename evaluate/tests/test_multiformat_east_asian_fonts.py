@@ -115,6 +115,12 @@ class EastAsianFontPolicyTests(unittest.TestCase):
                 continue
             self.assertIn(f"<value>{family}</value>", registry)
 
+    def test_consistently_resolved_legacy_families_are_not_replaced(self) -> None:
+        policy = load_policy()
+
+        self.assertNotIn("MingLiU", policy.substituted_families)
+        self.assertNotIn("PMingLiU", policy.substituted_families)
+
     def test_registry_escapes_markup_in_family_names(self) -> None:
         # Given a policy whose family name carries XML metacharacters.
         policy = EastAsianFontPolicy(
