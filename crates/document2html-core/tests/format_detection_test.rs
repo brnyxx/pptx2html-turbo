@@ -155,6 +155,42 @@ fn explicit_format_hint_disambiguates_compound_files() {
 }
 
 #[test]
+fn detects_compact_compound_file_only_with_end_of_chain_fat_tail() {
+    let compact = compact_cfb_with_end_of_chain_fat_tail();
+
+    let detected = detect_format(&DocumentInput::with_format(
+        &compact.data,
+        None,
+        DocumentFormat::Doc,
+    ))
+    .expect("compact CFBF with an ENDOFCHAIN FAT tail should validate");
+    assert_eq!(detected, DocumentFormat::Doc);
+
+    let mut allocated_tail = compact.data.clone();
+    allocated_tail[compact.first_trailing_fat_entry..compact.first_trailing_fat_entry + 4]
+        .copy_from_slice(&0_u32.to_le_bytes());
+    assert!(
+        detect_format(&DocumentInput::with_format(
+            &allocated_tail,
+            None,
+            DocumentFormat::Doc,
+        ))
+        .is_err()
+    );
+
+    let mut truncated_allocated_sector = compact.data;
+    truncated_allocated_sector.truncate(truncated_allocated_sector.len() - compact.sector_size);
+    assert!(
+        detect_format(&DocumentInput::with_format(
+            &truncated_allocated_sector,
+            None,
+            DocumentFormat::Doc,
+        ))
+        .is_err()
+    );
+}
+
+#[test]
 fn rejects_explicit_format_hint_that_conflicts_with_signature() {
     // Given
     let pdf = minimal_pdf();
@@ -215,6 +251,55 @@ fn build_cfb_package() -> Vec<u8> {
     let cursor = Cursor::new(Vec::new());
     let compound = cfb::CompoundFile::create(cursor).expect("create compound file");
     compound.into_inner().into_inner()
+}
+
+struct CompactCfbFixture {
+    data: Vec<u8>,
+    sector_size: usize,
+    first_trailing_fat_entry: usize,
+}
+
+fn compact_cfb_with_end_of_chain_fat_tail() -> CompactCfbFixture {
+    let cursor = Cursor::new(Vec::new());
+    let mut compound = cfb::CompoundFile::create_with_version(cfb::Version::V3, cursor)
+        .expect("create compound file");
+    let mut stream = compound
+        .create_stream("/WordDocument")
+        .expect("create WordDocument stream");
+    stream
+        .write_all(&vec![0; 4097])
+        .expect("write WordDocument stream");
+    drop(stream);
+    let mut full = compound.into_inner().into_inner();
+    let sector_shift = u16::from_le_bytes(full[30..32].try_into().expect("sector shift"));
+    let sector_size = 1_usize << sector_shift;
+    let full_sector_count = full.len() / sector_size - 1;
+    let fat_sector =
+        u32::from_le_bytes(full[76..80].try_into().expect("FAT sector entry")) as usize;
+    let fat_offset = (fat_sector + 1) * sector_size;
+    let fat_entry_capacity = sector_size / 4;
+    let physical_sector_count = (0..full_sector_count)
+        .filter(|entry| {
+            u32::from_le_bytes(
+                full[fat_offset + entry * 4..fat_offset + (entry + 1) * 4]
+                    .try_into()
+                    .expect("FAT entry"),
+            ) != u32::MAX
+        })
+        .max()
+        .expect("CFBF must contain allocated sectors")
+        + 1;
+    for entry in physical_sector_count..fat_entry_capacity {
+        full[fat_offset + entry * 4..fat_offset + (entry + 1) * 4]
+            .copy_from_slice(&0xffff_fffe_u32.to_le_bytes());
+    }
+    full.truncate((physical_sector_count + 1) * sector_size);
+
+    CompactCfbFixture {
+        data: full,
+        sector_size,
+        first_trailing_fat_entry: fat_offset + physical_sector_count * 4,
+    }
 }
 
 fn minimal_pdf() -> Vec<u8> {
