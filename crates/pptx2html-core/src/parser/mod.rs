@@ -37,7 +37,7 @@ pub(crate) use presentation_extension_parser::diagnostics as presentation_extens
 pub(crate) use preserved_parser::collect_package_diagnostics;
 
 use std::collections::HashMap;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
 use log::{info, warn};
@@ -58,6 +58,12 @@ struct SlideRef {
 
 /// SAX-based streaming parser for PPTX (ZIP + OOXML) packages.
 pub struct PptxParser;
+
+const MAX_XML_PART_BYTES: u64 = 16 * 1024 * 1024;
+
+fn is_xml_part(name: &str) -> bool {
+    name == "[Content_Types].xml" || name.ends_with(".xml") || name.ends_with(".rels")
+}
 
 impl PptxParser {
     /// Parse PPTX from file path.
@@ -81,6 +87,7 @@ impl PptxParser {
     )> {
         let cursor = Cursor::new(data);
         let mut archive = ZipArchive::new(cursor)?;
+        Self::validate_package_xml(&mut archive)?;
 
         let content_types = Self::read_entry(&mut archive, "[Content_Types].xml")
             .map(|xml| picture_bullet_parser::ContentTypes::parse(&xml))
@@ -361,6 +368,40 @@ impl PptxParser {
             slide_timings,
             presentation_extensions,
         ))
+    }
+
+    fn validate_package_xml<R: Read + Seek>(archive: &mut ZipArchive<R>) -> PptxResult<()> {
+        for index in 0..archive.len() {
+            let mut part = archive.by_index(index)?;
+            if part.is_dir() || !is_xml_part(part.name()) {
+                continue;
+            }
+            if part.size() > MAX_XML_PART_BYTES {
+                return Err(PptxError::UnsupportedFormat(format!(
+                    "XML part exceeds 16 MiB: {}",
+                    part.name()
+                )));
+            }
+            let mut xml = Vec::with_capacity(part.size() as usize);
+            part.read_to_end(&mut xml)?;
+            let mut reader = Reader::from_reader(xml.as_slice());
+            let mut buffer = Vec::new();
+            loop {
+                match reader.read_event_into(&mut buffer) {
+                    Ok(Event::DocType(_)) => {
+                        return Err(PptxError::UnsupportedFormat(format!(
+                            "XML document type declarations are forbidden: {}",
+                            part.name()
+                        )));
+                    }
+                    Ok(Event::Eof) => break,
+                    Ok(_) => {}
+                    Err(error) => return Err(PptxError::Xml(error)),
+                }
+                buffer.clear();
+            }
+        }
+        Ok(())
     }
 
     /// Read a ZIP entry
@@ -981,6 +1022,46 @@ mod tests {
         let err = PptxParser::parse_bytes(&bytes).expect_err("encrypted pptx should fail");
         assert!(
             matches!(err, PptxError::UnsupportedFormat(msg) if msg == "password-protected PPTX")
+        );
+    }
+
+    #[test]
+    fn parse_bytes_rejects_doctype_in_unreferenced_xml_part() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("security/entity.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"<!DOCTYPE root [<!ENTITY x "expanded">]><root>&x;</root>"#)
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let err = PptxParser::parse_bytes(&bytes).expect_err("DOCTYPE should fail");
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg)
+                    if msg == "XML document type declarations are forbidden: security/entity.xml"
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn parse_bytes_rejects_oversized_unreferenced_xml_part() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("security/oversized.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&vec![b' '; MAX_XML_PART_BYTES as usize + 1])
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let err = PptxParser::parse_bytes(&bytes).expect_err("oversized XML should fail");
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg)
+                    if msg == "XML part exceeds 16 MiB: security/oversized.xml"
+            ),
+            "{err}"
         );
     }
 
