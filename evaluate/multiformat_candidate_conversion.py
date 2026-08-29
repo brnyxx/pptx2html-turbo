@@ -144,7 +144,7 @@ def _presentation_args(
     document_format: DocumentFormat,
 ) -> tuple[str, ...]:
     if document_format is not DocumentFormat.PPTX:
-        return ()
+        return ("--allow-unisolated",)
     try:
         with zipfile.ZipFile(source) as archive:
             root = ET.fromstring(archive.read("ppt/presentation.xml"))

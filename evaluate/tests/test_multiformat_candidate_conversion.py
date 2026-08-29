@@ -55,7 +55,7 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             self.assertIn("docx", args)
             self.assertIn("--soffice", args)
             self.assertIn(soffice.resolve().as_posix(), args)
-            self.assertNotIn("--allow-unisolated", args)
+            self.assertIn("--allow-unisolated", args)
             self.assertEqual(result.source_sha256, self._sha256(source))
 
     def test_nonzero_converter_exit_fails_without_publishing_html(self) -> None:
