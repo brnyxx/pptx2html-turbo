@@ -152,7 +152,7 @@ def _presentation_args(
             "{http://schemas.openxmlformats.org/presentationml/2006/main}sldSz"
         )
         if size is None:
-            raise CandidateConversionError("PPTX slide size is missing")
+            return ()
         width = int(size.attrib["cx"])
         height = int(size.attrib["cy"])
     except (
@@ -161,10 +161,10 @@ def _presentation_args(
         ValueError,
         ET.ParseError,
         zipfile.BadZipFile,
-    ) as error:
-        raise CandidateConversionError("invalid PPTX slide geometry") from error
+    ):
+        return ()
     if width <= 0 or height <= 0:
-        raise CandidateConversionError("invalid PPTX slide geometry")
+        return ()
     css_width = width * 96 / 914_400
     scale = 960 / css_width
     return "--presentation-scale", f"{scale:.12g}"

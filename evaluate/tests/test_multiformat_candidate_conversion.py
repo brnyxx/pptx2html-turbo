@@ -129,6 +129,29 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             scale = float(args[args.index("--presentation-scale") + 1])
             self.assertAlmostEqual(scale, 1.0, places=6)
 
+    def test_malformed_pptx_is_rejected_by_the_converter_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.pptx"
+            source.write_bytes(b"not a ZIP package")
+            converter = self._converter(root, exit_code=7)
+            tool = self._tool(root, "tool")
+
+            with self.assertRaisesRegex(
+                CandidateConversionError,
+                "exit code 7",
+            ):
+                run_conversion(
+                    converter,
+                    source,
+                    DocumentFormat.PPTX,
+                    root / "run",
+                    soffice=tool,
+                    pdftohtml=tool,
+                    pdfinfo=tool,
+                    timeout_seconds=30,
+                )
+
     def test_kills_converter_when_a_log_crosses_the_bound(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
