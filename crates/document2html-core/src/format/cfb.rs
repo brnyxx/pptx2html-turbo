@@ -4,9 +4,10 @@ use crate::{DocumentError, DocumentResult};
 
 const MAX_STREAM_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_TOTAL_STREAM_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_COMPACT_VALIDATION_BYTES: usize = 64 * 1024 * 1024;
 
 const CFBF_HEADER_LEN: usize = 512;
+const V3_SECTOR_SIZE: usize = 512;
+const V3_FAT_ENTRY_CAPACITY: usize = V3_SECTOR_SIZE / 4;
 const DIFAT_OFFSET: usize = 76;
 const DIFAT_ENTRIES: usize = 109;
 const FREESECT: u32 = 0xffff_ffff;
@@ -82,22 +83,19 @@ fn is_compact_fat_error(error: &std::io::Error, data: &[u8]) -> bool {
     error.to_string()
         == format!(
             "Malformed FAT (FAT has {} entries, but file has only {} sectors)",
-            header.fat_entry_capacity, header.physical_sector_count
+            V3_FAT_ENTRY_CAPACITY, header.physical_sector_count
         )
 }
 
 fn compact_fat_validation_reader(data: &[u8]) -> Option<CompactFatReader> {
-    let header = compact_fat_header(data)?;
-    let padded_len = header
-        .sector_size
-        .checked_mul(header.fat_entry_capacity.checked_add(1)?)?;
-    if padded_len > MAX_COMPACT_VALIDATION_BYTES {
-        return None;
-    }
+    compact_fat_header(data)?;
     Some(CompactFatReader {
         data: data.to_vec(),
         position: 0,
-        logical_len: u64::try_from(padded_len).ok()?,
+        logical_len: u64::try_from(
+            V3_SECTOR_SIZE.checked_mul(V3_FAT_ENTRY_CAPACITY.checked_add(1)?)?,
+        )
+        .ok()?,
     })
 }
 
@@ -146,10 +144,8 @@ impl Seek for CompactFatReader {
 }
 
 struct CompactFatHeader {
-    sector_size: usize,
     physical_sector_count: usize,
-    fat_entry_capacity: usize,
-    fat_sector_ids: Vec<usize>,
+    fat_sector_id: usize,
 }
 
 fn compact_fat_header(data: &[u8]) -> Option<CompactFatHeader> {
@@ -164,111 +160,66 @@ fn compact_fat_header_base(data: &[u8]) -> Option<CompactFatHeader> {
     if data.len() < CFBF_HEADER_LEN || data.get(..8)? != cfbf_magic() {
         return None;
     }
-    let version = read_u16(data, 26)?;
-    let sector_size = match (version, read_u16(data, 30)?) {
-        (3, 9) => 512,
-        (4, 12) => 4096,
-        _ => return None,
-    };
-    if read_u16(data, 28)? != 0xfffe
+    if read_u16(data, 26)? != 3
+        || read_u16(data, 28)? != 0xfffe
+        || read_u16(data, 30)? != 9
         || read_u16(data, 32)? != 6
         || read_u32(data, 56)? != 4096
-        || (version == 3 && read_u32(data, 40)? != 0)
-        || !data.len().is_multiple_of(sector_size)
-        || data.len() < sector_size
+        || read_u32(data, 40)? != 0
+        || !data.len().is_multiple_of(V3_SECTOR_SIZE)
+        || data.len() < V3_SECTOR_SIZE
     {
         return None;
     }
 
-    let physical_sector_count = data.len() / sector_size - 1;
-    let num_fat_sectors = usize::try_from(read_u32(data, 44)?).ok()?;
-    if num_fat_sectors == 0 || num_fat_sectors > DIFAT_ENTRIES {
+    let physical_sector_count = data.len() / V3_SECTOR_SIZE - 1;
+    if read_u32(data, 44)? != 1 || physical_sector_count >= V3_FAT_ENTRY_CAPACITY {
         return None;
     }
     let first_difat_sector = read_u32(data, 68)?;
-    if read_u32(data, 72)? != 0
-        || (first_difat_sector != ENDOFCHAIN && first_difat_sector != FREESECT)
-    {
+    if read_u32(data, 72)? != 0 || first_difat_sector != ENDOFCHAIN {
         return None;
     }
 
-    let mut fat_sector_ids = Vec::with_capacity(num_fat_sectors);
-    for index in 0..DIFAT_ENTRIES {
-        let sector_id = read_u32(data, DIFAT_OFFSET + index * 4)?;
-        if index < num_fat_sectors {
-            let sector_id = usize::try_from(sector_id).ok()?;
-            if sector_id >= physical_sector_count || fat_sector_ids.contains(&sector_id) {
-                return None;
-            }
-            fat_sector_ids.push(sector_id);
-        } else if sector_id != FREESECT {
+    let fat_sector_id = usize::try_from(read_u32(data, DIFAT_OFFSET)?).ok()?;
+    if fat_sector_id >= physical_sector_count {
+        return None;
+    }
+    for index in 1..DIFAT_ENTRIES {
+        if read_u32(data, DIFAT_OFFSET + index * 4)? != FREESECT {
             return None;
         }
     }
 
-    let entries_per_fat_sector = sector_size / 4;
-    let fat_entry_capacity = num_fat_sectors.checked_mul(entries_per_fat_sector)?;
-    if physical_sector_count >= fat_entry_capacity {
-        return None;
-    }
     for fat_entry_index in 0..physical_sector_count {
-        let fat_sector_id = fat_sector_ids[fat_entry_index / entries_per_fat_sector];
-        let value = fat_entry(
-            data,
-            sector_size,
-            fat_sector_id,
-            fat_entry_index % entries_per_fat_sector,
-        )?;
+        let value = fat_entry(data, fat_sector_id, fat_entry_index)?;
         if value <= 0xffff_fffa && usize::try_from(value).ok()? >= physical_sector_count {
             return None;
         }
     }
-    for &fat_sector_id in &fat_sector_ids {
-        if fat_entry(data, sector_size, fat_sector_id, fat_sector_id)? != FATSECT {
-            return None;
-        }
+    if fat_entry(data, fat_sector_id, fat_sector_id)? != FATSECT {
+        return None;
     }
 
     Some(CompactFatHeader {
-        sector_size,
         physical_sector_count,
-        fat_entry_capacity,
-        fat_sector_ids,
+        fat_sector_id,
     })
 }
 
 fn compact_tail_value(data: &[u8], header: &CompactFatHeader) -> Option<u32> {
-    let entries_per_fat_sector = header.sector_size / 4;
     let first = header.physical_sector_count;
-    let first_fat_sector = header.fat_sector_ids[first / entries_per_fat_sector];
-    let expected = fat_entry(
-        data,
-        header.sector_size,
-        first_fat_sector,
-        first % entries_per_fat_sector,
-    )?;
-    for fat_entry_index in first + 1..header.fat_entry_capacity {
-        let fat_sector_id = header.fat_sector_ids[fat_entry_index / entries_per_fat_sector];
-        if fat_entry(
-            data,
-            header.sector_size,
-            fat_sector_id,
-            fat_entry_index % entries_per_fat_sector,
-        )? != expected
-        {
+    let expected = fat_entry(data, header.fat_sector_id, first)?;
+    for fat_entry_index in first + 1..V3_FAT_ENTRY_CAPACITY {
+        if fat_entry(data, header.fat_sector_id, fat_entry_index)? != expected {
             return None;
         }
     }
     Some(expected)
 }
 
-fn fat_entry(
-    data: &[u8],
-    sector_size: usize,
-    fat_sector_id: usize,
-    entry_index: usize,
-) -> Option<u32> {
-    let sector_offset = fat_sector_id.checked_add(1)?.checked_mul(sector_size)?;
+fn fat_entry(data: &[u8], fat_sector_id: usize, entry_index: usize) -> Option<u32> {
+    let sector_offset = fat_sector_id.checked_add(1)?.checked_mul(V3_SECTOR_SIZE)?;
     read_u32(
         data,
         sector_offset.checked_add(entry_index.checked_mul(4)?)?,

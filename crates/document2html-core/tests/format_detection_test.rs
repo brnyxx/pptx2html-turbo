@@ -158,6 +158,16 @@ fn explicit_format_hint_disambiguates_compound_files() {
 fn detects_compact_compound_file_only_with_end_of_chain_fat_tail() {
     let compact = compact_cfb_with_end_of_chain_fat_tail();
 
+    let error = cfb::CompoundFile::open(Cursor::new(&compact.data))
+        .expect_err("rust-cfb should reject the compact FAT");
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "Malformed FAT (FAT has 128 entries, but file has only {} sectors)",
+            compact.physical_sector_count
+        )
+    );
+
     let detected = detect_format(&DocumentInput::with_format(
         &compact.data,
         None,
@@ -165,6 +175,20 @@ fn detects_compact_compound_file_only_with_end_of_chain_fat_tail() {
     ))
     .expect("compact CFBF with an ENDOFCHAIN FAT tail should validate");
     assert_eq!(detected, DocumentFormat::Doc);
+
+    let mut logical_only_directory = compact.data.clone();
+    logical_only_directory[48..52]
+        .copy_from_slice(&(compact.physical_sector_count as u32).to_le_bytes());
+    let error = detect_format(&DocumentInput::with_format(
+        &logical_only_directory,
+        None,
+        DocumentFormat::Doc,
+    ))
+    .expect_err("logical-only directory sector should fail physical reads");
+    assert!(matches!(
+        error,
+        DocumentError::Io(ref error) if error.kind() == std::io::ErrorKind::UnexpectedEof
+    ));
 
     let mut allocated_tail = compact.data.clone();
     allocated_tail[compact.first_trailing_fat_entry..compact.first_trailing_fat_entry + 4]
@@ -256,6 +280,7 @@ fn build_cfb_package() -> Vec<u8> {
 struct CompactCfbFixture {
     data: Vec<u8>,
     sector_size: usize,
+    physical_sector_count: usize,
     first_trailing_fat_entry: usize,
 }
 
@@ -298,6 +323,7 @@ fn compact_cfb_with_end_of_chain_fat_tail() -> CompactCfbFixture {
     CompactCfbFixture {
         data: full,
         sector_size,
+        physical_sector_count,
         first_trailing_fat_entry: fat_offset + physical_sector_count * 4,
     }
 }
