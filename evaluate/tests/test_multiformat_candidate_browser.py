@@ -3,7 +3,14 @@ import unittest
 from pathlib import Path
 
 from evaluate.multiformat_candidate_browser import (
+    MAX_AGGREGATE_ELEMENTS,
+    MAX_AGGREGATE_HEIGHT,
+    MAX_AGGREGATE_PAGES,
+    MAX_AGGREGATE_PIXELS,
+    MAX_AGGREGATE_TEXT_CODE_UNITS,
+    MAX_AGGREGATE_WIDTH,
     CandidateCaptureError,
+    _validate_aggregate_unit,
     capture_html_units,
 )
 from evaluate.multiformat_corpus_types import DocumentFormat
@@ -12,7 +19,43 @@ from evaluate.multiformat_visual_metrics import png_dimensions
 
 
 class MultiFormatCandidateBrowserTests(unittest.TestCase):
-    def test_paged_html_captures_complete_units_and_semantic_inventory(self) -> None:
+    def test_aggregate_resource_limits_fail_closed(self) -> None:
+        page = {
+            "x": 0,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+        }
+        value = {
+            "pages": [page],
+            "pageCount": 1,
+            "textCodeUnits": MAX_AGGREGATE_TEXT_CODE_UNITS,
+            "elementCount": MAX_AGGREGATE_ELEMENTS,
+            "x": 0,
+            "y": 0,
+            "width": 100,
+            "height": 100,
+        }
+        _validate_aggregate_unit(value)
+
+        invalid_values = {
+            "pages": {
+                **value,
+                "pages": [page] * (MAX_AGGREGATE_PAGES + 1),
+                "pageCount": MAX_AGGREGATE_PAGES + 1,
+            },
+            "width": {**value, "width": MAX_AGGREGATE_WIDTH + 1},
+            "height": {**value, "height": MAX_AGGREGATE_HEIGHT + 1},
+            "pixels": {**value, "width": MAX_AGGREGATE_PIXELS, "height": 2},
+            "text": {**value, "textCodeUnits": MAX_AGGREGATE_TEXT_CODE_UNITS + 1},
+            "elements": {**value, "elementCount": MAX_AGGREGATE_ELEMENTS + 1},
+            "nonfinite": {**value, "width": float("inf")},
+        }
+        for name, invalid in invalid_values.items():
+            with self.subTest(name=name), self.assertRaises(CandidateCaptureError):
+                _validate_aggregate_unit(invalid)
+
+    def test_paged_html_captures_semantic_inventory(self) -> None:
         html = """
         <html><body>
           <div id="page1-div" style="position:relative;width:300px;height:200px;background:#fff">
@@ -21,33 +64,81 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             <img alt="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" style="position:absolute;left:80px;top:20px;width:20px;height:20px">
             <svg style="position:absolute;left:120px;top:20px;width:20px;height:20px"><rect width="20" height="20"/></svg>
           </div>
-          <div id="page2-div" style="position:relative;width:300px;height:200px;background:#fff">
-            <div data-cell-coordinate="A1" data-worksheet="Sheet1" style="position:absolute;left:5px;top:5px">42</div>
-          </div>
         </body></html>
         """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = capture_html_units(
+                html,
+                DocumentFormat.DOCX,
+                ("unit-1",),
+                Path(temp_dir),
+                source_track="blind",
+                aggregate_paged_units=False,
+            )
+
+            inventory = parse_inventory(result.units[0].inventory, "unit-1")
+            self.assertIn("Hello", [item.value for item in inventory.texts])
+            self.assertIn("Link", [item.value for item in inventory.texts])
+            self.assertEqual(
+                {item.object_type for item in inventory.objects},
+                {"image", "link", "svg"},
+            )
+
+    def test_blind_paged_html_keeps_one_unit_per_page(self) -> None:
+        pages = "".join(
+            f'<div id="page{ordinal}-div" '
+            'style="position:relative;width:300px;height:200px;background:#fff">'
+            f'<span style="position:absolute;left:10px;top:10px">Page {ordinal}</span>'
+            "</div>"
+            for ordinal in range(1, 7)
+        )
+        html = f"<html><body>{pages}</body></html>"
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir)
 
             result = capture_html_units(
                 html,
                 DocumentFormat.DOCX,
-                ("unit-1", "unit-2"),
+                tuple(f"unit-{ordinal}" for ordinal in range(1, 7)),
                 output,
+                source_track="blind",
+                aggregate_paged_units=False,
             )
 
-            self.assertEqual(len(result.units), 2)
+            self.assertEqual(len(result.units), 6)
             self.assertEqual(png_dimensions(result.units[0].png), (300, 200))
-            first = parse_inventory(result.units[0].inventory, "unit-1")
-            second = parse_inventory(result.units[1].inventory, "unit-2")
-            self.assertIn("Hello", [item.value for item in first.texts])
-            self.assertIn("Link", [item.value for item in first.texts])
-            self.assertEqual(
-                {item.object_type for item in first.objects},
-                {"image", "link", "svg"},
-            )
-            self.assertIn("42", [item.value for item in second.texts])
+            for ordinal, unit in enumerate(result.units, start=1):
+                inventory = parse_inventory(unit.inventory, f"unit-{ordinal}")
+                self.assertEqual(
+                    [item.value for item in inventory.texts], [f"Page {ordinal}"]
+                )
             self.assertEqual(result.external_requests, ())
+
+    def test_conformance_paged_html_aggregates_all_pages_into_one_unit(self) -> None:
+        pages = "".join(
+            f'<div id="page{ordinal}-div" '
+            'style="position:relative;width:300px;height:200px;background:#fff">'
+            f'<span style="position:absolute;left:10px;top:10px">Page {ordinal}</span>'
+            "</div>"
+            for ordinal in range(1, 7)
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = capture_html_units(
+                f"<html><body>{pages}</body></html>",
+                DocumentFormat.DOC,
+                ("document-unit",),
+                Path(temp_dir),
+                source_track="conformance",
+                aggregate_paged_units=True,
+            )
+
+            self.assertEqual(len(result.units), 1)
+            self.assertEqual(png_dimensions(result.units[0].png), (300, 1200))
+            inventory = parse_inventory(result.units[0].inventory, "document-unit")
+            self.assertEqual(
+                [item.value for item in inventory.texts],
+                [f"Page {ordinal}" for ordinal in range(1, 7)],
+            )
 
     def test_spreadsheet_capture_requires_explicit_cell_coordinates(self) -> None:
         html = """
@@ -64,6 +155,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 DocumentFormat.XLSX,
                 ("sheet-unit-1",),
                 Path(temp_dir),
+                source_track="conformance",
+                aggregate_paged_units=True,
             )
 
             inventory = parse_inventory(
@@ -90,6 +183,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 DocumentFormat.PPTX,
                 ("slide-1",),
                 Path(temp_dir),
+                source_track="conformance",
+                aggregate_paged_units=False,
                 expected_browser_version="Google Chrome for Testing 151.0.7922.34",
             )
 
@@ -113,6 +208,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 DocumentFormat.PPTX,
                 ("slide-1",),
                 Path(temp_dir),
+                source_track="conformance",
+                aggregate_paged_units=False,
             )
 
             self.assertEqual(png_dimensions(result.units[0].png), (960, 540))
@@ -136,6 +233,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 DocumentFormat.PPTX,
                 ("visible-slide-1", "visible-slide-2"),
                 Path(temp_dir),
+                source_track="conformance",
+                aggregate_paged_units=False,
             )
 
             self.assertEqual(len(result.units), 2)
@@ -156,6 +255,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 DocumentFormat.PPT,
                 ("slide-page-1",),
                 Path(temp_dir),
+                source_track="conformance",
+                aggregate_paged_units=False,
             )
 
             self.assertEqual(png_dimensions(result.units[0].png), (960, 540))
@@ -175,6 +276,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 DocumentFormat.PPTX,
                 ("slide-1",),
                 Path(temp_dir),
+                source_track="conformance",
+                aggregate_paged_units=False,
             )
 
             inventory = parse_inventory(result.units[0].inventory, "slide-1")
@@ -199,4 +302,6 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                     DocumentFormat.PDF,
                     ("unit-1",),
                     Path(temp_dir),
+                    source_track="conformance",
+                    aggregate_paged_units=True,
                 )

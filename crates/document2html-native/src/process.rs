@@ -9,7 +9,7 @@ use crate::{NativeError, NativeResult};
 
 mod output_limit;
 mod spec;
-use output_limit::enforce_output_limit;
+use output_limit::{enforce_final_output_limit, enforce_live_output_limit};
 pub(crate) use spec::CommandSpec;
 
 const OBSERVATION_INTERVAL: Duration = Duration::from_millis(25);
@@ -78,7 +78,9 @@ impl SystemCommandRunner {
                         seconds: limits.timeout.as_secs(),
                     });
                 }
-                if let Err(error) = enforce_output_limit(monitored_root, limits.max_output_bytes) {
+                if let Err(error) =
+                    enforce_live_output_limit(monitored_root, limits.max_output_bytes)
+                {
                     terminate(&mut child);
                     return Err(error);
                 }
@@ -96,7 +98,7 @@ impl SystemCommandRunner {
         join_reader(stderr_reader)?;
         let status = execution?;
         drain_events(&receiver, &mut captured, limits, &mut child)?;
-        enforce_output_limit(monitored_root, limits.max_output_bytes)?;
+        enforce_final_output_limit(monitored_root, limits.max_output_bytes)?;
         if !status.success() {
             return Err(NativeError::ProcessFailed {
                 executable: spec.executable.clone(),

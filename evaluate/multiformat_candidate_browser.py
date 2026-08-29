@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -41,6 +42,13 @@ from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_inventory import parse_inventory
 from evaluate.multiformat_schema import JsonValue
 
+MAX_AGGREGATE_PAGES = 256
+MAX_AGGREGATE_WIDTH = 8_192
+MAX_AGGREGATE_HEIGHT = 32_767
+MAX_AGGREGATE_PIXELS = 64_000_000
+MAX_AGGREGATE_TEXT_CODE_UNITS = 2_000_000
+MAX_AGGREGATE_ELEMENTS = 100_000
+
 
 def capture_html_units(
     html: str,
@@ -48,12 +56,20 @@ def capture_html_units(
     unit_ids: tuple[str, ...],
     output_dir: Path,
     *,
+    source_track: str,
+    aggregate_paged_units: bool,
     expected_browser_version: str | None = None,
     executable_path: Path | None = None,
     font_config: Path | None = None,
 ) -> BrowserCaptureResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     presentation = document_format in {DocumentFormat.PPT, DocumentFormat.PPTX}
+    if source_track not in {"conformance", "blind"}:
+        raise CandidateCaptureError(f"invalid source track: {source_track}")
+    if aggregate_paged_units and (
+        source_track != "conformance" or presentation or len(unit_ids) != 1
+    ):
+        raise CandidateCaptureError("invalid paged-unit aggregation policy")
     device_scale = 1.0
     external_requests: list[str] = []
     browser_failures: list[str] = []
@@ -171,14 +187,31 @@ def capture_html_units(
             if browser_failures:
                 raise CandidateCaptureError(browser_failures[0])
             units = unit_records(
-                page.evaluate(DISCOVER_UNITS_SCRIPT, document_format.value)
+                page.evaluate(
+                    DISCOVER_UNITS_SCRIPT,
+                    {
+                        "format": document_format.value,
+                        "aggregatePages": aggregate_paged_units,
+                    },
+                )
             )
             if len(units) != len(unit_ids):
                 raise CandidateCaptureError(
                     f"unit count mismatch: expected {len(unit_ids)}, got {len(units)}"
                 )
             for unit_id, unit in zip(unit_ids, units, strict=True):
-                selector = record_string(unit, "selector")
+                if aggregate_paged_units:
+                    _validate_aggregate_unit(unit)
+                selector = (
+                    record_string(unit, "selector")
+                    if not aggregate_paged_units
+                    else None
+                )
+                selectors = (
+                    _record_strings(unit, "selectors")
+                    if aggregate_paged_units
+                    else None
+                )
                 if presentation:
                     require_presentation_dimensions(unit)
                 raw = cast(
@@ -187,6 +220,7 @@ def capture_html_units(
                         EXTRACT_DOM_SCRIPT,
                         {
                             "selector": selector,
+                            "selectors": selectors,
                             "spreadsheet": document_format
                             in {DocumentFormat.XLS, DocumentFormat.XLSX},
                         },
@@ -199,12 +233,26 @@ def capture_html_units(
                     inventory_value(unit_id, raw, document_format, device_scale),
                 )
                 parse_inventory(inventory, unit_id)
-                page.locator(selector).screenshot(
-                    path=png,
-                    animations="disabled",
-                    caret="hide",
-                    scale="css" if presentation else "device",
-                )
+                if aggregate_paged_units:
+                    page.screenshot(
+                        path=png,
+                        animations="disabled",
+                        caret="hide",
+                        clip={
+                            "x": _record_number(unit, "x"),
+                            "y": _record_number(unit, "y"),
+                            "width": _record_number(unit, "width"),
+                            "height": _record_number(unit, "height"),
+                        },
+                        scale="device",
+                    )
+                else:
+                    page.locator(selector).screenshot(
+                        path=png,
+                        animations="disabled",
+                        caret="hide",
+                        scale="css" if presentation else "device",
+                    )
                 validate_png(
                     png,
                     presentation,
@@ -238,6 +286,87 @@ def _write_json(path: Path, value: JsonValue) -> None:
         json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _record_strings(values: dict[str, JsonValue], field: str) -> list[str]:
+    value = values.get(field)
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(not isinstance(item, str) or not item for item in value)
+    ):
+        raise CandidateCaptureError(f"invalid unit {field}")
+    return value
+
+
+def _record_number(values: dict[str, JsonValue], field: str) -> float:
+    value = values.get(field)
+    if (
+        not isinstance(value, int | float)
+        or isinstance(value, bool)
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        raise CandidateCaptureError(f"invalid unit {field}")
+    return float(value)
+
+
+def _record_count(values: dict[str, JsonValue], field: str) -> int:
+    value = values.get(field)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise CandidateCaptureError(f"invalid unit {field}")
+    return value
+
+
+def _validate_aggregate_unit(unit: dict[str, JsonValue]) -> None:
+    page_count = _record_count(unit, "pageCount")
+    text_code_units = _record_count(unit, "textCodeUnits")
+    element_count = _record_count(unit, "elementCount")
+    pages = unit.get("pages")
+    if (
+        page_count == 0
+        or page_count > MAX_AGGREGATE_PAGES
+        or not isinstance(pages, list)
+        or len(pages) != page_count
+    ):
+        raise CandidateCaptureError("aggregate page count exceeds limit")
+    if text_code_units > MAX_AGGREGATE_TEXT_CODE_UNITS:
+        raise CandidateCaptureError("aggregate text work exceeds limit")
+    if element_count > MAX_AGGREGATE_ELEMENTS:
+        raise CandidateCaptureError("aggregate element work exceeds limit")
+
+    x = _record_number(unit, "x")
+    y = _record_number(unit, "y")
+    width = _record_number(unit, "width")
+    height = _record_number(unit, "height")
+    if width <= 0 or height <= 0:
+        raise CandidateCaptureError("aggregate dimensions are invalid")
+    if width > MAX_AGGREGATE_WIDTH or height > MAX_AGGREGATE_HEIGHT:
+        raise CandidateCaptureError("aggregate dimensions exceed limit")
+    if width * height > MAX_AGGREGATE_PIXELS:
+        raise CandidateCaptureError("aggregate pixel area exceeds limit")
+
+    right = x + width
+    bottom = y + height
+    for page in pages:
+        if not isinstance(page, dict):
+            raise CandidateCaptureError("aggregate page geometry is invalid")
+        page_x = _record_number(page, "x")
+        page_y = _record_number(page, "y")
+        page_width = _record_number(page, "width")
+        page_height = _record_number(page, "height")
+        if (
+            page_width <= 0
+            or page_height <= 0
+            or page_width > MAX_AGGREGATE_WIDTH
+            or page_height > MAX_AGGREGATE_HEIGHT
+            or page_width * page_height > MAX_AGGREGATE_PIXELS
+            or page_x < x
+            or page_y < y
+            or page_x + page_width > right
+            or page_y + page_height > bottom
+        ):
+            raise CandidateCaptureError("aggregate page geometry is invalid")
 
 
 __all__ = [

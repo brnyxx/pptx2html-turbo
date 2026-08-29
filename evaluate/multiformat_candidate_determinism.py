@@ -59,11 +59,7 @@ def validate_clean_runs(
                 right_unit.inventory
             )
             if (
-                png_differs
-                and (
-                    not native
-                    or not _visually_equivalent(left_unit.png, right_unit.png)
-                )
+                png_differs and not _visually_equivalent(left_unit.png, right_unit.png)
             ) or (
                 inventory_differs
                 and (

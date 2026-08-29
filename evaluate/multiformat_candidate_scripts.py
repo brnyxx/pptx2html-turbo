@@ -61,13 +61,13 @@ NORMALIZE_PRESENTATION_SCRIPT = """
 """
 
 DISCOVER_UNITS_SCRIPT = """
-format => {
+({format, aggregatePages}) => {
   const corePresentation = format === "pptx";
   const nodes = corePresentation
     ? [...document.querySelectorAll(".slide")]
     : [...document.querySelectorAll('div[id^="page"][id$="-div"]')];
   let previousSlide = 0;
-  return nodes.map((node, index) => {
+  const units = nodes.map((node, index) => {
     const ordinal = index + 1;
     if (corePresentation) {
       const match = /^slide-([1-9][0-9]*)$/.exec(node.id);
@@ -79,10 +79,29 @@ format => {
     }
     return {
       selector: `#${CSS.escape(node.id)}`,
+      x: node.getBoundingClientRect().x,
+      y: node.getBoundingClientRect().y,
       width: node.getBoundingClientRect().width,
       height: node.getBoundingClientRect().height,
     };
   });
+  if (!aggregatePages) return units;
+  if (corePresentation || !units.length) throw new Error("invalid paged-unit aggregation");
+  const left = Math.min(...units.map(unit => unit.x));
+  const top = Math.min(...units.map(unit => unit.y));
+  const right = Math.max(...units.map(unit => unit.x + unit.width));
+  const bottom = Math.max(...units.map(unit => unit.y + unit.height));
+  return [{
+    selectors: units.map(unit => unit.selector),
+    pages: units.map(({x, y, width, height}) => ({x, y, width, height})),
+    pageCount: units.length,
+    textCodeUnits: nodes.reduce((total, node) => total + (node.textContent || "").length, 0),
+    elementCount: nodes.reduce((total, node) => total + node.querySelectorAll("*").length + 1, 0),
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  }];
 }
 """
 
@@ -94,11 +113,23 @@ EXTERNAL_RESOURCES_SCRIPT = """
 """
 
 EXTRACT_DOM_SCRIPT = """
-({selector, spreadsheet}) => {
-  const root = document.querySelector(selector);
-  if (!root) throw new Error(`missing unit ${selector}`);
-  const rootRect = root.getBoundingClientRect();
-  const scaleY = root.offsetHeight > 0 ? rootRect.height / root.offsetHeight : 1;
+({selector, selectors, spreadsheet}) => {
+  const roots = selectors
+    ? selectors.map(value => document.querySelector(value))
+    : [document.querySelector(selector)];
+  if (roots.some(root => !root)) throw new Error("missing unit root");
+  const rootRects = roots.map(root => root.getBoundingClientRect());
+  const rootRect = {
+    left: Math.min(...rootRects.map(rect => rect.left)),
+    top: Math.min(...rootRects.map(rect => rect.top)),
+    right: Math.max(...rootRects.map(rect => rect.right)),
+    bottom: Math.max(...rootRects.map(rect => rect.bottom)),
+  };
+  rootRect.width = rootRect.right - rootRect.left;
+  rootRect.height = rootRect.bottom - rootRect.top;
+  const root = roots[0];
+  const rootBounds = root.getBoundingClientRect();
+  const scaleY = root.offsetHeight > 0 ? rootBounds.height / root.offsetHeight : 1;
   const normalized = value => value.normalize("NFC").replace(/\\s+/g, " ").trim();
   const intersects = rect => rect.right > rootRect.left && rect.left < rootRect.right
     && rect.bottom > rootRect.top && rect.top < rootRect.bottom;
@@ -140,7 +171,7 @@ EXTRACT_DOM_SCRIPT = """
   const cellSelector = "[data-cell-coordinate][data-worksheet]";
   const cells = [];
   if (spreadsheet) {
-    [...root.querySelectorAll(cellSelector)].forEach((element, index) => {
+    roots.flatMap(root => [...root.querySelectorAll(cellSelector)]).forEach((element, index) => {
       if (!visible(element)) return;
       const coordinate = element.dataset.cellCoordinate || "";
       const worksheet = normalized(element.dataset.worksheet || "");
@@ -159,42 +190,44 @@ EXTRACT_DOM_SCRIPT = """
     });
   }
   const texts = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node;
   let textOrder = 0;
-  while ((node = walker.nextNode())) {
-    const parent = node.parentElement;
-    if (!parent || ["SCRIPT", "STYLE", "NOSCRIPT"].includes(parent.tagName)) continue;
-    if (spreadsheet && parent.closest(cellSelector)) continue;
-    if (!visible(parent)) continue;
-    const content = node.nodeValue || "";
-    const fragments = [];
-    for (let offset = 0; offset < content.length; offset++) {
-      const range = document.createRange();
-      range.setStart(node, offset);
-      range.setEnd(node, offset + 1);
-      const rect = range.getBoundingClientRect();
-      if (!(rect.width > 0 && rect.height > 0 && intersects(rect))) continue;
-      const current = fragments[fragments.length - 1];
-      if (current && Math.abs(current.rects[0].top - rect.top) < 1) {
-        current.value += content[offset];
-        current.rects.push(rect);
-      } else {
-        fragments.push({value: content[offset], rects: [rect]});
+  roots.forEach(root => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const parent = node.parentElement;
+      if (!parent || ["SCRIPT", "STYLE", "NOSCRIPT"].includes(parent.tagName)) continue;
+      if (spreadsheet && parent.closest(cellSelector)) continue;
+      if (!visible(parent)) continue;
+      const content = node.nodeValue || "";
+      const fragments = [];
+      for (let offset = 0; offset < content.length; offset++) {
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.setEnd(node, offset + 1);
+        const rect = range.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0 && intersects(rect))) continue;
+        const current = fragments[fragments.length - 1];
+        if (current && Math.abs(current.rects[0].top - rect.top) < 1) {
+          current.value += content[offset];
+          current.rects.push(rect);
+        } else {
+          fragments.push({value: content[offset], rects: [rect]});
+        }
       }
-    }
-    fragments.forEach(fragment => {
-      const value = normalized(fragment.value);
-      if (!value) return;
-      const last = fragment.rects[fragment.rects.length - 1];
-      texts.push({
-        value,
-        box: union(fragment.rects),
-        baseline: textBaseline(parent, value, last),
-        order: textOrder++,
+      fragments.forEach(fragment => {
+        const value = normalized(fragment.value);
+        if (!value) return;
+        const last = fragment.rects[fragment.rects.length - 1];
+        texts.push({
+          value,
+          box: union(fragment.rects),
+          baseline: textBaseline(parent, value, last),
+          order: textOrder++,
+        });
       });
-    });
-  }
+    }
+  });
   const objects = [];
   const addObject = (element, type, semantic) => {
     if (!semantic || !visible(element)) return;
@@ -203,13 +236,13 @@ EXTRACT_DOM_SCRIPT = """
         && rect.height >= rootRect.height * 0.9) return;
     objects.push({type, semantic, box: relativeBox(rect)});
   };
-  [...root.querySelectorAll("img")].forEach(element =>
+  roots.flatMap(root => [...root.querySelectorAll("img")]).forEach(element =>
     addObject(element, "image", element.currentSrc || element.src || element.alt));
-  [...root.querySelectorAll("svg")].forEach(element =>
+  roots.flatMap(root => [...root.querySelectorAll("svg")]).forEach(element =>
     addObject(element, "svg", element.outerHTML));
-  [...root.querySelectorAll("a[href]")].forEach(element =>
+  roots.flatMap(root => [...root.querySelectorAll("a[href]")]).forEach(element =>
     addObject(element, "link", element.getAttribute("href")));
-  [...root.querySelectorAll('input,button,select,textarea,[role="button"]')].forEach(element => {
+  roots.flatMap(root => [...root.querySelectorAll('input,button,select,textarea,[role="button"]')]).forEach(element => {
     const label = normalized(element.innerText || element.value
       || element.getAttribute("aria-label") || element.getAttribute("role") || element.tagName);
     addObject(element, "control", `${element.tagName.toLowerCase()}:${label}`);

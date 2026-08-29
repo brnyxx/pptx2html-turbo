@@ -1,7 +1,56 @@
+use std::fs;
+use std::io::ErrorKind;
 use std::time::Duration;
 
+use super::output_limit::{OutputScan, directory_size_with_hook, enforce_live_output_limit};
 use super::{CommandSpec, ProcessLimits, SystemCommandRunner};
+use crate::NativeError;
 use crate::workspace::TemporaryWorkspace;
+
+#[test]
+fn live_scan_ignores_a_descendant_removed_after_opening_the_root() {
+    // Given
+    let workspace = TemporaryWorkspace::create().expect("create workspace");
+    let disappearing = workspace.root().join("disappearing");
+    fs::create_dir(&disappearing).expect("create disappearing descendant");
+
+    // When
+    let size = directory_size_with_hook(workspace.root(), OutputScan::Live, |path| {
+        if path == disappearing {
+            fs::remove_dir(path).expect("remove disappearing descendant");
+        }
+    })
+    .expect("live scan should tolerate a missing descendant");
+
+    // Then
+    assert_eq!(size, 0);
+}
+
+#[test]
+fn final_scan_and_missing_root_remain_strict() {
+    // Given
+    let workspace = TemporaryWorkspace::create().expect("create workspace");
+    let disappearing = workspace.root().join("disappearing");
+    fs::create_dir(&disappearing).expect("create disappearing descendant");
+
+    // When
+    let final_error = directory_size_with_hook(workspace.root(), OutputScan::Final, |path| {
+        if path == disappearing {
+            fs::remove_dir(path).expect("remove disappearing descendant");
+        }
+    })
+    .expect_err("final scan must reject a missing descendant");
+    let missing_root_error = enforce_live_output_limit(&workspace.root().join("missing"), 1024)
+        .expect_err("live scan must reject a missing monitored root");
+
+    // Then
+    assert_not_found(final_error);
+    assert_not_found(missing_root_error);
+}
+
+fn assert_not_found(error: NativeError) {
+    assert!(matches!(error, NativeError::Io(source) if source.kind() == ErrorKind::NotFound));
+}
 
 #[test]
 #[cfg(unix)]
