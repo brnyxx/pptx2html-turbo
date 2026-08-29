@@ -37,7 +37,7 @@ def materialize_candidate_runtime(
     )
     runtime = CandidateRuntimePaths(
         runtime_artifacts["converter_binary"],
-        runtime_artifacts["soffice_binary"],
+        preflight.runtime.soffice,
         runtime_artifacts["pdftohtml_binary"],
         runtime_artifacts["pdfinfo_binary"],
         preflight.runtime.chromium,

@@ -3,12 +3,18 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from evaluate.multiformat_candidate_artifacts import (
     CandidateArtifactError,
     materialize_runtime_artifacts,
 )
-from evaluate.multiformat_candidate_types import CandidateRuntimeSnapshotError
+from evaluate.multiformat_candidate_capture import materialize_candidate_runtime
+from evaluate.multiformat_candidate_types import (
+    CandidateRuntimePaths,
+    CandidateRuntimeSnapshotError,
+)
 from evaluate.multiformat_evaluator_portable_wave_files import PORTABLE_WAVE_TEST_FILES
 from evaluate.multiformat_portable_package_inventory import (
     bind_package_executable_with_inventory,
@@ -16,6 +22,55 @@ from evaluate.multiformat_portable_package_inventory import (
 
 
 class CandidateRuntimeArtifactTests(unittest.TestCase):
+    def test_runtime_executes_the_sandbox_bound_office_and_browser_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            locked_soffice = root / "locked-soffice"
+            locked_chromium = root / "locked-chromium"
+            supplied = CandidateRuntimePaths(
+                root / "converter",
+                locked_soffice,
+                root / "pdftohtml",
+                root / "pdfinfo",
+                locked_chromium,
+                root / "receipt-signer",
+                root / "fonts.conf",
+                "test",
+                30,
+            )
+            snapshots = {
+                "converter_binary": root / "copied-converter",
+                "soffice_binary": root / "copied-soffice",
+                "pdftohtml_binary": root / "copied-pdftohtml",
+                "pdfinfo_binary": root / "copied-pdfinfo",
+                "receipt_signer_binary": root / "copied-receipt-signer",
+                "font_config": root / "copied-fonts.conf",
+            }
+            preflight = SimpleNamespace(
+                runtime_artifacts={},
+                runtime=supplied,
+                runtime_profile=SimpleNamespace(candidate_runtime_lock={}),
+                project_revision="a" * 40,
+            )
+
+            with (
+                mock.patch(
+                    "evaluate.multiformat_candidate_capture.materialize_runtime_artifacts",
+                    return_value=snapshots,
+                ),
+                mock.patch(
+                    "evaluate.multiformat_candidate_capture.validate_candidate_runtime"
+                ),
+            ):
+                runtime, _artifacts = materialize_candidate_runtime(
+                    preflight,
+                    root,
+                    root / "output",
+                )
+
+            self.assertEqual(runtime.soffice, locked_soffice)
+            self.assertEqual(runtime.chromium, locked_chromium)
+
     def test_candidate_artifact_regressions_are_portable_wave_bound(self) -> None:
         # Given/When: the portable evaluator closure is inspected.
         path = "evaluate/tests/test_multiformat_candidate_artifacts.py"
