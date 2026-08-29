@@ -38,6 +38,58 @@ fn detects_each_ooxml_family_from_package_content() {
 }
 
 #[test]
+fn rejects_doctype_in_unreferenced_ooxml_part() {
+    let package = build_ooxml_package_with_extra(
+        DocumentFormat::Docx,
+        Some((
+            "security/entity.xml",
+            br#"<!DOCTYPE root [<!ENTITY x "expanded">]><root>&x;</root>"#,
+        )),
+    );
+
+    let error = detect_format(&DocumentInput::detect(&package, None))
+        .expect_err("OOXML document type declarations should fail");
+
+    assert!(matches!(error, DocumentError::UnsupportedFormat));
+}
+
+#[test]
+fn rejects_oversized_unreferenced_ooxml_part() {
+    let oversized = vec![b' '; 16 * 1024 * 1024 + 1];
+    let package = build_ooxml_package_with_extra(
+        DocumentFormat::Xlsx,
+        Some(("security/oversized.xml", &oversized)),
+    );
+
+    let error = detect_format(&DocumentInput::detect(&package, None))
+        .expect_err("oversized OOXML should fail");
+
+    assert!(matches!(
+        error,
+        DocumentError::PackageMetadataTooLarge { part, limit }
+            if part == "security/oversized.xml" && limit == 16 * 1024 * 1024
+    ));
+}
+
+#[test]
+fn rejects_oversized_binary_ooxml_part() {
+    let oversized = vec![0_u8; 16 * 1024 * 1024 + 1];
+    let package = build_ooxml_package_with_extra(
+        DocumentFormat::Docx,
+        Some(("security/bomb.bin", &oversized)),
+    );
+
+    let error = detect_format(&DocumentInput::detect(&package, None))
+        .expect_err("oversized binary OOXML part should fail");
+
+    assert!(matches!(
+        error,
+        DocumentError::PackageMetadataTooLarge { part, limit }
+            if part == "security/bomb.bin" && limit == 16 * 1024 * 1024
+    ));
+}
+
+#[test]
 fn rejects_filename_that_conflicts_with_conclusive_signature() {
     // Given
     let input = DocumentInput::detect(b"%PDF-1.7\n", Some("report.docx"));
@@ -128,6 +180,10 @@ fn rejects_unknown_bytes_instead_of_trusting_extension() {
 }
 
 fn build_ooxml_package(format: DocumentFormat) -> Vec<u8> {
+    build_ooxml_package_with_extra(format, None)
+}
+
+fn build_ooxml_package_with_extra(format: DocumentFormat, extra: Option<(&str, &[u8])>) -> Vec<u8> {
     let (part_name, content_type, target) = match format {
         DocumentFormat::Docx => (
             "/word/document.xml",
@@ -176,5 +232,9 @@ fn build_ooxml_package(format: DocumentFormat) -> Vec<u8> {
     .expect("write root relationships");
     zip.start_file(target, options).expect("start main part");
     zip.write_all(b"<root/>").expect("write main part");
+    if let Some((name, data)) = extra {
+        zip.start_file(name, options).expect("start extra part");
+        zip.write_all(data).expect("write extra part");
+    }
     zip.finish().expect("finish OOXML package").into_inner()
 }

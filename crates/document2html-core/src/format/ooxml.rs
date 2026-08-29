@@ -2,7 +2,7 @@ use std::io::{Cursor, Read};
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::ResolveResult;
-use quick_xml::reader::NsReader;
+use quick_xml::reader::{NsReader, Reader};
 use zip::ZipArchive;
 
 use crate::{DocumentError, DocumentFormat, DocumentResult};
@@ -15,9 +15,11 @@ const OFFICE_DOCUMENT_RELATIONSHIP: &str =
 const STRICT_OFFICE_DOCUMENT_RELATIONSHIP: &str =
     "http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument";
 const MAX_PACKAGE_METADATA_BYTES: u64 = 1_048_576;
+const MAX_PACKAGE_PART_BYTES: u64 = 16 * 1024 * 1024;
 
 pub(super) fn detect_ooxml_format(data: &[u8]) -> DocumentResult<DocumentFormat> {
     let mut archive = ZipArchive::new(Cursor::new(data))?;
+    validate_xml_parts(&mut archive)?;
     let content_types = read_text_entry(&mut archive, "[Content_Types].xml")?;
     let relationships = read_text_entry(&mut archive, "_rels/.rels")?;
     let content_format = parse_content_types(&content_types)?;
@@ -30,6 +32,42 @@ pub(super) fn detect_ooxml_format(data: &[u8]) -> DocumentResult<DocumentFormat>
         .by_name(main_part)
         .map_err(|_| DocumentError::MissingPackagePart(main_part.to_owned()))?;
     Ok(content_format)
+}
+
+fn validate_xml_parts(archive: &mut ZipArchive<Cursor<&[u8]>>) -> DocumentResult<()> {
+    for index in 0..archive.len() {
+        let mut part = archive.by_index(index)?;
+        let name = part.name().to_owned();
+        if part.is_dir() {
+            continue;
+        }
+        if part.size() > MAX_PACKAGE_PART_BYTES {
+            return Err(DocumentError::PackageMetadataTooLarge {
+                part: name,
+                limit: MAX_PACKAGE_PART_BYTES,
+            });
+        }
+        if !is_xml_part(&name) {
+            continue;
+        }
+        let mut xml = Vec::with_capacity(part.size() as usize);
+        part.read_to_end(&mut xml)?;
+        let mut reader = Reader::from_reader(xml.as_slice());
+        let mut buffer = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buffer)? {
+                Event::DocType(_) => return Err(DocumentError::UnsupportedFormat),
+                Event::Eof => break,
+                _ => {}
+            }
+            buffer.clear();
+        }
+    }
+    Ok(())
+}
+
+fn is_xml_part(name: &str) -> bool {
+    name == "[Content_Types].xml" || name.ends_with(".xml") || name.ends_with(".rels")
 }
 
 fn read_text_entry(
