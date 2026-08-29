@@ -75,8 +75,16 @@ def inspect_security_html(
                 cast(
                     bool,
                     page.evaluate(
-                        """() => Boolean(document.querySelector(
-                        'object,embed,iframe,applet,script'))"""
+                        """() => {
+                        if (document.querySelector('object,embed,iframe,applet')) {
+                          return true;
+                        }
+                        return [...document.scripts].some(script => {
+                          const type = script.type.trim().toLowerCase();
+                          return !type || type === 'module'
+                            || /^(?:text|application)\\/(?:java|ecma)script$/.test(type);
+                        });
+                        }"""
                     ),
                 )
                 or signals

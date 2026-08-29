@@ -245,6 +245,14 @@ class CandidateSecurityTests(unittest.TestCase):
             )
             self.assertTrue(facts.active_content_executed)
             self.assertTrue(facts.external_requests)
+            inert = inspect_security_html(
+                '<script type="application/json">{"diagnostics":[]}</script>',
+                chromium=executable,
+                browser_version=version,
+                font_config=font_config,
+            )
+            self.assertFalse(inert.active_content_executed)
+            self.assertEqual(inert.external_requests, ())
 
             contract, corpus, evaluator, runtime, sources = self._fixture(root)
 
