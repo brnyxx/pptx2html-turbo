@@ -42,9 +42,6 @@ pub(super) fn parse_workbook(
             _ => {}
         }
     }
-    if sheets.is_empty() {
-        return Err(DocumentError::UnsupportedFormat);
-    }
     Ok(sheets)
 }
 

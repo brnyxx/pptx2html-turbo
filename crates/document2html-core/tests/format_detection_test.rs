@@ -9,7 +9,8 @@ const CFBF_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 #[test]
 fn detects_pdf_from_signature_without_filename() {
     // Given
-    let input = DocumentInput::detect(b"%PDF-1.7\n", None);
+    let pdf = minimal_pdf();
+    let input = DocumentInput::detect(&pdf, None);
 
     // When
     let format = detect_format(&input).expect("PDF signature should be detected");
@@ -92,7 +93,8 @@ fn rejects_oversized_binary_ooxml_part() {
 #[test]
 fn rejects_filename_that_conflicts_with_conclusive_signature() {
     // Given
-    let input = DocumentInput::detect(b"%PDF-1.7\n", Some("report.docx"));
+    let pdf = minimal_pdf();
+    let input = DocumentInput::detect(&pdf, Some("report.docx"));
 
     // When
     let error = detect_format(&input).expect_err("conflicting extension should fail");
@@ -110,7 +112,8 @@ fn rejects_filename_that_conflicts_with_conclusive_signature() {
 #[test]
 fn requires_a_hint_to_disambiguate_legacy_compound_files() {
     // Given
-    let input = DocumentInput::detect(&CFBF_MAGIC, None);
+    let package = build_cfb_package();
+    let input = DocumentInput::detect(&package, None);
 
     // When
     let error = detect_format(&input).expect_err("CFBF without a hint should be ambiguous");
@@ -127,7 +130,8 @@ fn legacy_filename_extension_disambiguates_compound_files() {
         ("report.ppt", DocumentFormat::Ppt),
     ] {
         // Given
-        let input = DocumentInput::detect(&CFBF_MAGIC, Some(source_name));
+        let package = build_cfb_package();
+        let input = DocumentInput::detect(&package, Some(source_name));
 
         // When
         let detected = detect_format(&input).expect("legacy extension should disambiguate CFBF");
@@ -140,7 +144,8 @@ fn legacy_filename_extension_disambiguates_compound_files() {
 #[test]
 fn explicit_format_hint_disambiguates_compound_files() {
     // Given
-    let input = DocumentInput::with_format(&CFBF_MAGIC, None, DocumentFormat::Doc);
+    let package = build_cfb_package();
+    let input = DocumentInput::with_format(&package, None, DocumentFormat::Doc);
 
     // When
     let detected = detect_format(&input).expect("explicit CFBF hint should be accepted");
@@ -152,7 +157,8 @@ fn explicit_format_hint_disambiguates_compound_files() {
 #[test]
 fn rejects_explicit_format_hint_that_conflicts_with_signature() {
     // Given
-    let input = DocumentInput::with_format(b"%PDF-1.7\n", Some("report.pdf"), DocumentFormat::Docx);
+    let pdf = minimal_pdf();
+    let input = DocumentInput::with_format(&pdf, Some("report.pdf"), DocumentFormat::Docx);
 
     // When
     let error = detect_format(&input).expect_err("conflicting explicit hint should fail");
@@ -179,8 +185,54 @@ fn rejects_unknown_bytes_instead_of_trusting_extension() {
     assert!(matches!(error, DocumentError::UnsupportedFormat));
 }
 
+#[test]
+fn rejects_misdirected_pdf_xref_and_encryption() {
+    let malformed = String::from_utf8(minimal_pdf())
+        .expect("ASCII fixture")
+        .replace("startxref\n45", "startxref\n46")
+        .into_bytes();
+    let mut encrypted = minimal_pdf();
+    encrypted.extend_from_slice(b"/Encrypt 4 0 R");
+
+    assert!(detect_format(&DocumentInput::detect(&malformed, None)).is_err());
+    assert!(detect_format(&DocumentInput::detect(&encrypted, None)).is_err());
+}
+
+#[test]
+fn rejects_truncated_compound_file_with_a_legacy_hint() {
+    let input = DocumentInput::with_format(&CFBF_MAGIC, None, DocumentFormat::Doc);
+
+    let error = detect_format(&input).expect_err("truncated CFBF should fail validation");
+
+    assert!(matches!(error, DocumentError::Io(_)));
+}
+
 fn build_ooxml_package(format: DocumentFormat) -> Vec<u8> {
     build_ooxml_package_with_extra(format, None)
+}
+
+fn build_cfb_package() -> Vec<u8> {
+    let cursor = Cursor::new(Vec::new());
+    let compound = cfb::CompoundFile::create(cursor).expect("create compound file");
+    compound.into_inner().into_inner()
+}
+
+fn minimal_pdf() -> Vec<u8> {
+    b"%PDF-1.7
+1 0 obj
+<< /Type /Catalog >>
+endobj
+xref
+0 2
+0000000000 65535 f\x20
+0000000009 00000 n\x20
+trailer
+<< /Size 2 /Root 1 0 R >>
+startxref
+45
+%%EOF
+"
+    .to_vec()
 }
 
 fn build_ooxml_package_with_extra(format: DocumentFormat, extra: Option<(&str, &[u8])>) -> Vec<u8> {

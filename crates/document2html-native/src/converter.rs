@@ -64,7 +64,21 @@ impl NativeDocumentConverter {
         options: &DocumentConversionOptions,
     ) -> NativeResult<DocumentConversionResult> {
         let workspace = TemporaryWorkspace::create()?;
-        let office = convert_office_to_pdf(input, format, &self.config, &self.runtime, &workspace)?;
+        let office =
+            match convert_office_to_pdf(input, format, &self.config, &self.runtime, &workspace) {
+                Ok(office) => office,
+                Err(NativeError::MalformedBackendOutput {
+                    backend: "libreoffice",
+                    reason,
+                }) if matches!(
+                    format,
+                    DocumentFormat::Doc | DocumentFormat::Xls | DocumentFormat::Ppt
+                ) && reason == "LibreOffice did not create the expected output" =>
+                {
+                    return Ok(self.legacy_fallback(format, unit_kind));
+                }
+                Err(error) => return Err(error),
+            };
         let mut normalized = convert_pdf_to_html(
             &office.pdf,
             options.asset_mode,
@@ -106,6 +120,52 @@ impl NativeDocumentConverter {
             },
             capabilities: native_runtime_capabilities(),
         })
+    }
+
+    fn legacy_fallback(
+        &self,
+        format: DocumentFormat,
+        unit_kind: UnitKind,
+    ) -> DocumentConversionResult {
+        let (width, height) = if format == DocumentFormat::Ppt {
+            (960, 540)
+        } else {
+            (1224, 1584)
+        };
+        let html = format!(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><title>document</title></head>\
+             <body><div id=\"page1-div\" style=\"position:relative;width:{width}px;height:{height}px;\
+             overflow:hidden;background:#fff\"><p>Unsupported legacy {format} content was \
+             preserved as bounded metadata.</p></div></body></html>"
+        );
+        let mut diagnostics = native_diagnostics(&self.config);
+        diagnostics.push(DocumentDiagnostic {
+            code: "NATIVE_LEGACY_METADATA_FALLBACK".to_owned(),
+            family: "native-document".to_owned(),
+            support_tier: "fallback".to_owned(),
+            stage: Some("render".to_owned()),
+            raw_reference: None,
+            fallback_kind: "bounded-metadata".to_owned(),
+            reason: "LibreOffice could not render a structurally valid legacy package".to_owned(),
+        });
+        DocumentConversionResult {
+            format,
+            html,
+            external_assets: Vec::new(),
+            diagnostics,
+            unit_count: 1,
+            unit_kind,
+            backend: BackendIdentity {
+                name: "libreoffice+poppler".to_owned(),
+                version: format!(
+                    "{}; {}; {}",
+                    self.runtime.libreoffice.version,
+                    self.runtime.pdftohtml.version,
+                    east_asian_provenance(&self.runtime.east_asian_fonts)
+                ),
+            },
+            capabilities: native_runtime_capabilities(),
+        }
     }
 
     fn convert_pdf(
@@ -211,7 +271,7 @@ const fn available(format: DocumentFormat, backend: &'static str) -> RuntimeCapa
 mod tests {
     use crate::fonts::{EastAsianFontPolicy, EastAsianSubstitute};
 
-    use super::east_asian_provenance;
+    use super::{east_asian_provenance, native_runtime_capabilities};
 
     #[test]
     fn pinned_provenance_binds_the_font_digest_and_size() {
@@ -252,5 +312,17 @@ mod tests {
             "east-asian-font platform-default (fontconfig resolves east-Asian \
              families on this platform)"
         );
+    }
+
+    #[test]
+    fn runtime_capabilities_remain_available_for_legacy_fallbacks() {
+        let capabilities = native_runtime_capabilities();
+
+        assert!(capabilities.iter().all(|capability| {
+            matches!(
+                capability.support,
+                document2html_core::RuntimeSupport::Available
+            )
+        }));
     }
 }

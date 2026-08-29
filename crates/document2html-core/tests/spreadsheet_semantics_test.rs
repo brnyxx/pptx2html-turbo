@@ -48,6 +48,15 @@ fn malformed_or_untrusted_workbook_identity_fails_closed() {
     assert!(parse_xlsx_semantics(b"not an XLSX package").is_err());
 }
 
+#[test]
+fn empty_workbook_has_no_attributable_cells() {
+    let data = workbook_fixture("<sst/>", &[]);
+
+    let semantics = parse_xlsx_semantics(&data).expect("empty workbook should remain renderable");
+
+    assert!(semantics.cells.is_empty());
+}
+
 fn cell(worksheet: &str, coordinate: &str, displayed_value: &str) -> SpreadsheetCell {
     SpreadsheetCell {
         worksheet: worksheet.to_owned(),

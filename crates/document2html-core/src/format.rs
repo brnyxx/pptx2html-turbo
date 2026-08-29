@@ -2,8 +2,12 @@ use std::fmt;
 
 use crate::{DocumentError, DocumentResult};
 
+mod cfb;
 mod ooxml;
+use cfb::validate_cfb;
 use ooxml::detect_ooxml_format;
+use pdf::validate_pdf;
+mod pdf;
 
 const CFBF_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
@@ -102,8 +106,10 @@ pub fn detect_format(input: &DocumentInput<'_>) -> DocumentResult<DocumentFormat
     }
 
     let detected = if input.data.starts_with(b"%PDF-") {
+        validate_pdf(input.data)?;
         Some(DocumentFormat::Pdf)
     } else if input.data.starts_with(&CFBF_MAGIC) {
+        validate_cfb(input.data)?;
         let hint = input.format_hint.or(source_hint);
         return hint
             .filter(|format| format.is_legacy())
