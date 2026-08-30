@@ -1,5 +1,6 @@
 use crate::xlsx_xml::{
-    calc_pr_name, is_workbook_name, parse_end_tag, parse_start_tag, tag_end, validate_xml_text,
+    calc_pr_name, element_namespace, is_workbook_name, parse_end_tag, parse_start_tag, tag_end,
+    validate_xml_text,
 };
 use crate::{NativeError, NativeResult};
 
@@ -11,6 +12,8 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
     let mut stack = Vec::new();
     let mut position = 0_usize;
     let mut root_name = None;
+    let mut root_namespace = None;
+    let mut root_namespaces = Vec::new();
     let mut root_end = None;
     let mut calc_range = None;
     let mut calc_depth = None;
@@ -87,7 +90,9 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
                 root_end = Some(position);
             }
         } else {
-            let (name, self_closing) = parse_start_tag(&text[position + 1..end])?;
+            let start_tag = parse_start_tag(&text[position + 1..end])?;
+            let name = start_tag.name;
+            let self_closing = start_tag.self_closing;
             if calc_depth.is_some() {
                 return malformed("xl/workbook.xml calcPr contains markup");
             }
@@ -96,12 +101,22 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
                     return malformed("xl/workbook.xml must have one non-empty workbook root");
                 }
                 root_name = Some(name.clone());
+                root_namespace = element_namespace(&name, "workbook", &start_tag.namespaces, &[])
+                    .map(str::to_owned);
+                root_namespaces = start_tag.namespaces.clone();
             } else if root_end.is_some() {
                 return malformed("xl/workbook.xml has content after its root element");
             }
 
             if let Some(root) = root_name.as_deref() {
-                if name == calc_pr_name(root) {
+                let is_calc_pr = root_namespace.as_deref().map_or_else(
+                    || name == calc_pr_name(root),
+                    |namespace| {
+                        element_namespace(&name, "calcPr", &start_tag.namespaces, &root_namespaces)
+                            == Some(namespace)
+                    },
+                );
+                if is_calc_pr {
                     if calc_range.is_some() {
                         return malformed("xl/workbook.xml has duplicate calcPr elements");
                     }
@@ -137,7 +152,7 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
         "<{} calcMode=\"manual\" calcOnSave=\"0\" forceFullCalc=\"0\" fullCalcOnLoad=\"0\"/>",
         calc_pr_name(&root)
     );
-    let (start, end) = calc_range.unwrap_or_else(|| (root_end, root_end));
+    let (start, end) = calc_range.unwrap_or((root_end, root_end));
     let mut frozen = Vec::with_capacity(workbook.len().saturating_add(calc.len()));
     frozen.extend_from_slice(&workbook[..start]);
     frozen.extend_from_slice(calc.as_bytes());

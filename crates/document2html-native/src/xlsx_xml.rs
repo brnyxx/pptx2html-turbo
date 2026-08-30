@@ -1,5 +1,11 @@
 use crate::{NativeError, NativeResult};
 
+pub(super) struct StartTag {
+    pub(super) name: String,
+    pub(super) self_closing: bool,
+    pub(super) namespaces: Vec<(String, String)>,
+}
+
 pub(super) fn tag_end(text: &str, start: usize) -> NativeResult<usize> {
     let mut quote = None;
     for (offset, byte) in text.as_bytes()[start + 1..].iter().copied().enumerate() {
@@ -17,12 +23,13 @@ pub(super) fn tag_end(text: &str, start: usize) -> NativeResult<usize> {
     malformed("xl/workbook.xml has an unterminated tag")
 }
 
-pub(super) fn parse_start_tag(content: &str) -> NativeResult<(String, bool)> {
+pub(super) fn parse_start_tag(content: &str) -> NativeResult<StartTag> {
     let bytes = content.as_bytes();
     let name_end = xml_name_end(bytes, 0)?;
     let name = content[..name_end].to_owned();
     let mut position = name_end;
     let mut self_closing = false;
+    let mut namespaces = Vec::new();
     while position < bytes.len() {
         skip_xml_whitespace(bytes, &mut position);
         if position == bytes.len() {
@@ -37,7 +44,9 @@ pub(super) fn parse_start_tag(content: &str) -> NativeResult<(String, bool)> {
             self_closing = true;
             break;
         }
+        let attribute_start = position;
         position = xml_name_end(bytes, position)?;
+        let attribute_name = &content[attribute_start..position];
         skip_xml_whitespace(bytes, &mut position);
         if bytes.get(position) != Some(&b'=') {
             return malformed("xl/workbook.xml has an invalid attribute");
@@ -65,9 +74,28 @@ pub(super) fn parse_start_tag(content: &str) -> NativeResult<(String, bool)> {
         if position == bytes.len() && bytes[position - 1] != quote {
             return malformed("xl/workbook.xml has an unterminated attribute");
         }
-        validate_xml_text(&content[value_start..position - 1])?;
+        let value = &content[value_start..position - 1];
+        validate_xml_text(value)?;
+        let namespace_prefix = if attribute_name == "xmlns" {
+            Some("")
+        } else {
+            attribute_name.strip_prefix("xmlns:")
+        };
+        if let Some(prefix) = namespace_prefix {
+            if !prefix.is_empty() && !valid_xml_prefix(prefix) {
+                return malformed("xl/workbook.xml has an invalid namespace declaration");
+            }
+            if namespaces.iter().any(|(declared, _)| declared == prefix) {
+                return malformed("xl/workbook.xml has a duplicate namespace declaration");
+            }
+            namespaces.push((prefix.to_owned(), decode_xml_text(value)?));
+        }
     }
-    Ok((name, self_closing))
+    Ok(StartTag {
+        name,
+        self_closing,
+        namespaces,
+    })
 }
 
 pub(super) fn parse_end_tag(content: &str) -> NativeResult<String> {
@@ -109,22 +137,51 @@ pub(super) fn validate_xml_text(text: &str) -> NativeResult<()> {
             return malformed("xl/workbook.xml has an unterminated entity reference");
         };
         let entity = &entity_tail[..semicolon];
-        if !matches!(entity, "amp" | "lt" | "gt" | "apos" | "quot") {
-            let numeric = entity
-                .strip_prefix("#x")
-                .and_then(|value| u32::from_str_radix(value, 16).ok())
-                .or_else(|| {
-                    entity
-                        .strip_prefix('#')
-                        .and_then(|value| value.parse().ok())
-                });
-            if !numeric.is_some_and(valid_xml_scalar) {
-                return malformed("xl/workbook.xml has an invalid entity reference");
-            }
+        if entity_character(entity).is_none() {
+            return malformed("xl/workbook.xml has an invalid entity reference");
         }
         remainder = &entity_tail[semicolon + 1..];
     }
     Ok(())
+}
+
+fn decode_xml_text(text: &str) -> NativeResult<String> {
+    let mut decoded = String::with_capacity(text.len());
+    let mut remainder = text;
+    while let Some(ampersand) = remainder.find('&') {
+        decoded.push_str(&remainder[..ampersand]);
+        let entity_tail = &remainder[ampersand + 1..];
+        let Some(semicolon) = entity_tail.find(';') else {
+            return malformed("xl/workbook.xml has an unterminated entity reference");
+        };
+        let Some(character) = entity_character(&entity_tail[..semicolon]) else {
+            return malformed("xl/workbook.xml has an invalid entity reference");
+        };
+        decoded.push(character);
+        remainder = &entity_tail[semicolon + 1..];
+    }
+    decoded.push_str(remainder);
+    Ok(decoded)
+}
+
+fn entity_character(entity: &str) -> Option<char> {
+    match entity {
+        "amp" => Some('&'),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "apos" => Some('\''),
+        "quot" => Some('"'),
+        _ => entity
+            .strip_prefix("#x")
+            .and_then(|value| u32::from_str_radix(value, 16).ok())
+            .or_else(|| {
+                entity
+                    .strip_prefix('#')
+                    .and_then(|value| value.parse().ok())
+            })
+            .filter(|value| valid_xml_scalar(*value))
+            .and_then(char::from_u32),
+    }
 }
 
 fn valid_xml_scalar(value: u32) -> bool {
@@ -139,6 +196,25 @@ pub(super) fn calc_pr_name(workbook_name: &str) -> String {
     workbook_name
         .strip_suffix("workbook")
         .map_or_else(|| "calcPr".to_owned(), |prefix| format!("{prefix}calcPr"))
+}
+
+pub(super) fn element_namespace<'a>(
+    name: &str,
+    local_name: &str,
+    declared: &'a [(String, String)],
+    inherited: &'a [(String, String)],
+) -> Option<&'a str> {
+    let (prefix, local) = name.rsplit_once(':').unwrap_or(("", name));
+    if local != local_name || (!prefix.is_empty() && !valid_xml_prefix(prefix)) {
+        return None;
+    }
+    declared
+        .iter()
+        .rev()
+        .chain(inherited.iter().rev())
+        .find_map(|(declared_prefix, namespace)| {
+            (declared_prefix == prefix).then_some(namespace.as_str())
+        })
 }
 
 fn valid_xml_prefix(prefix: &str) -> bool {

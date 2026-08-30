@@ -42,6 +42,22 @@ fn freezes_existing_calc_pr_without_changing_cached_formula_values_or_other_entr
 }
 
 #[test]
+fn freezes_calc_pr_with_a_different_prefix_for_the_workbook_namespace() {
+    // Given
+    let workbook = br#"<x:workbook xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:s="http:&#x2F;&#x2F;schemas.openxmlformats.org/spreadsheetml/2006/main"><x:sheets/><s:calcPr calcId="1" calcMode="auto"/></x:workbook>"#;
+    let source = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let frozen = freeze_archive(&source).expect("freeze namespace-equivalent calcPr");
+
+    // Then
+    let frozen_workbook = archive_entry(&frozen, "xl/workbook.xml");
+    assert_eq!(frozen_workbook.matches("calcPr").count(), 1);
+    assert!(!frozen_workbook.contains("calcId=\"1\""));
+    assert!(frozen_workbook.contains("<x:calcPr calcMode=\"manual\""));
+}
+
+#[test]
 fn injects_calc_pr_when_workbook_has_none() {
     // Given
     let source = xlsx_archive(&[("xl/workbook.xml", WORKBOOK_WITHOUT_CALC_PR)]);
