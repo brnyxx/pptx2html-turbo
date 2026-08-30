@@ -110,12 +110,10 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             for ordinal in range(1, page_count + 1)
         )
         html = f"<html><body>{pages}</body></html>"
-        instrumented_isolation = ISOLATE_DISCOVERED_UNIT_SCRIPT.replace(
-            "({token, index}) => {",
+        instrumented_isolation = (
             """payload => {
   const keys = Object.keys(payload).sort().join(",");
   if (keys !== "index,token") throw new Error(`unexpected isolation payload: ${keys}`);
-  const {token, index} = payload;
   if (window.__candidateQuerySelectorCalls === undefined) {
     const querySelector = document.querySelector.bind(document);
     window.__candidateQuerySelectorCalls = 0;
@@ -126,10 +124,11 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
   } else if (window.__candidateQuerySelectorCalls !== 1) {
     throw new Error(`nonconstant per-unit selector lookup: ${window.__candidateQuerySelectorCalls}`);
   }
-  window.__candidateQuerySelectorCalls = 0;""",
-            1,
+  window.__candidateQuerySelectorCalls = 0;
+  return ("""
+            + ISOLATE_DISCOVERED_UNIT_SCRIPT
+            + ")(payload);\n}"
         )
-        self.assertNotEqual(instrumented_isolation, ISOLATE_DISCOVERED_UNIT_SCRIPT)
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir)
 
