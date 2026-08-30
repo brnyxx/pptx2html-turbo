@@ -1,12 +1,11 @@
 {
   "schema_version": 1,
   "platform": "darwin",
-  "rationale": "LibreOffice bundles no CJK font and its macOS backend has no fontconfig; CoreText CTFontCreateForString picks a different host face per process, so a named-but-unresolvable east-Asian family must be pinned by the documented LibreOffice font replacement table. MingLiU and PMingLiU remain native-resolved because this host resolves those legacy names consistently and replacing them changes frozen native pagination.",
+  "rationale": "LibreOffice bundles no CJK font and its macOS backend has no fontconfig; CoreText CTFontCreateForString picks a different host face per process, so a named-but-unresolvable east-Asian family must be pinned by the documented LibreOffice font replacement table. Dotum, MingLiU, and PMingLiU remain native-resolved because this host resolves those legacy names consistently and replacing them changes frozen native pagination.",
   "substituted_families": [
     "Batang",
     "BatangChe",
     "DFKai-SB",
-    "Dotum",
     "DotumChe",
     "FangSong",
     "Gulim",

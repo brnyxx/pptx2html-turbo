@@ -147,6 +147,7 @@ fn substituted_families_are_sorted_and_unique() {
 
 #[test]
 fn consistently_resolved_legacy_families_are_not_replaced() {
+    assert!(!SUBSTITUTED_FAMILIES.contains(&"Dotum"));
     assert!(!SUBSTITUTED_FAMILIES.contains(&"MingLiU"));
     assert!(!SUBSTITUTED_FAMILIES.contains(&"PMingLiU"));
 }

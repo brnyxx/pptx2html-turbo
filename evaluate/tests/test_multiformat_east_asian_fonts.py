@@ -118,6 +118,7 @@ class EastAsianFontPolicyTests(unittest.TestCase):
     def test_consistently_resolved_legacy_families_are_not_replaced(self) -> None:
         policy = load_policy()
 
+        self.assertNotIn("Dotum", policy.substituted_families)
         self.assertNotIn("MingLiU", policy.substituted_families)
         self.assertNotIn("PMingLiU", policy.substituted_families)
 

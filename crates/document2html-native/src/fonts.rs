@@ -31,14 +31,13 @@ use std::path::{Path, PathBuf};
 
 /// East-Asian families that documents commonly request but that the
 /// LibreOffice macOS bundle does not provide. Each is redirected to the
-/// resolved substitute family. MingLiU and PMingLiU are intentionally absent:
-/// CoreText resolves those legacy names consistently, while replacing them
-/// changes pagination in frozen native-unit evidence.
+/// resolved substitute family. Dotum, MingLiU, and PMingLiU are intentionally
+/// absent: CoreText resolves those legacy names consistently, while replacing
+/// them changes pagination in frozen native-unit evidence.
 pub(crate) const SUBSTITUTED_FAMILIES: &[&str] = &[
     "Batang",
     "BatangChe",
     "DFKai-SB",
-    "Dotum",
     "DotumChe",
     "FangSong",
     "Gulim",
