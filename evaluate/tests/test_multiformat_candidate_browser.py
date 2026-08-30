@@ -21,6 +21,274 @@ from evaluate.multiformat_candidate_scripts import ISOLATE_DISCOVERED_UNIT_SCRIP
 from evaluate.multiformat_visual_metrics import png_dimensions
 
 
+def _instrument_discovered_unit_isolation(isolation_script: str) -> str:
+    return (
+        """payload => {
+  const keys = Object.keys(payload).sort().join(",");
+  if (keys !== "index,token") throw new Error(`unexpected isolation payload: ${keys}`);
+  const state = window.__multiformatCandidateUnitIsolationState;
+  if (!state) throw new Error("missing isolation state");
+  if (!state.__candidateAccessProbe) {
+    const probe = {state: 0, length: 0, index: 0};
+    const rawNodes = state.nodes;
+    const rawDisplays = state.displays;
+    const instrumentedByRaw = new WeakMap();
+    const rawByInstrumented = new WeakMap();
+    const instrumentNode = node => {
+      let instrumented = instrumentedByRaw.get(node);
+      if (!instrumented) {
+        instrumented = new Proxy(node, {
+          get(target, property) {
+            if (property !== "style") {
+              throw new Error(`isolation attempted node access: ${String(property)}`);
+            }
+            return Reflect.get(target, property, target);
+          },
+          defineProperty() {
+            throw new Error("isolation attempted node mutation");
+          },
+          deleteProperty() {
+            throw new Error("isolation attempted node mutation");
+          },
+          getOwnPropertyDescriptor() {
+            throw new Error("isolation attempted node introspection");
+          },
+          getPrototypeOf() {
+            throw new Error("isolation attempted node introspection");
+          },
+          has() {
+            throw new Error("isolation attempted node search");
+          },
+          ownKeys() {
+            throw new Error("isolation attempted node enumeration");
+          },
+          preventExtensions() {
+            throw new Error("isolation attempted node mutation");
+          },
+          set() {
+            throw new Error("isolation attempted node mutation");
+          },
+          setPrototypeOf() {
+            throw new Error("isolation attempted node mutation");
+          },
+        });
+        instrumentedByRaw.set(node, instrumented);
+        rawByInstrumented.set(instrumented, node);
+      }
+      return instrumented;
+    };
+    const instrumentedNodes = new Proxy(rawNodes, {
+      get(target, property, receiver) {
+        const isIndex = typeof property === "string" && /^(?:0|[1-9]\\d*)$/.test(property);
+        if (property === "length") {
+          probe.length += 1;
+          return Reflect.get(target, property, receiver);
+        }
+        if (!isIndex) {
+          throw new Error(`isolation attempted node collection access: ${String(property)}`);
+        }
+        probe.index += 1;
+        return instrumentNode(Reflect.get(target, property, receiver));
+      },
+      defineProperty() {
+        throw new Error("isolation attempted node collection mutation");
+      },
+      deleteProperty() {
+        throw new Error("isolation attempted node collection mutation");
+      },
+      getOwnPropertyDescriptor() {
+        throw new Error("isolation attempted node collection introspection");
+      },
+      getPrototypeOf() {
+        throw new Error("isolation attempted node collection introspection");
+      },
+      has() {
+        throw new Error("isolation attempted node collection search");
+      },
+      ownKeys() {
+        throw new Error("isolation attempted node enumeration");
+      },
+      set() {
+        throw new Error("isolation attempted node collection mutation");
+      },
+    });
+    const displayCapability = new Proxy(Object.create(null), {
+      get(_target, property) {
+        if (property !== "get") {
+          throw new Error(`isolation attempted display access: ${String(property)}`);
+        }
+        return node => {
+          const rawNode = rawByInstrumented.get(node);
+          if (!rawNode) throw new Error("isolation used an uninstrumented node");
+          return rawDisplays.get(rawNode);
+        };
+      },
+      defineProperty() {
+        throw new Error("isolation attempted display mutation");
+      },
+      deleteProperty() {
+        throw new Error("isolation attempted display mutation");
+      },
+      getOwnPropertyDescriptor() {
+        throw new Error("isolation attempted display introspection");
+      },
+      getPrototypeOf() {
+        throw new Error("isolation attempted display introspection");
+      },
+      has() {
+        throw new Error("isolation attempted display search");
+      },
+      ownKeys() {
+        throw new Error("isolation attempted display enumeration");
+      },
+      preventExtensions() {
+        throw new Error("isolation attempted display mutation");
+      },
+      set() {
+        throw new Error("isolation attempted display mutation");
+      },
+      setPrototypeOf() {
+        throw new Error("isolation attempted display mutation");
+      },
+    });
+    const stateCapability = new Proxy(Object.create(null), {
+      get(_target, property) {
+        probe.state += 1;
+        if (property === "token") return state.token;
+        if (property === "nodes") return instrumentedNodes;
+        if (property === "displays") return displayCapability;
+        if (property === "active") return state.active ? instrumentNode(state.active) : null;
+        throw new Error(`isolation attempted state access: ${String(property)}`);
+      },
+      set(_target, property, value) {
+        probe.state += 1;
+        if (property !== "active") {
+          throw new Error(`isolation attempted state mutation: ${String(property)}`);
+        }
+        const rawNode = rawByInstrumented.get(value);
+        if (!rawNode) throw new Error("isolation assigned an uninstrumented node");
+        state.active = rawNode;
+        return true;
+      },
+      defineProperty() {
+        throw new Error("isolation attempted state mutation");
+      },
+      deleteProperty() {
+        throw new Error("isolation attempted state mutation");
+      },
+      getOwnPropertyDescriptor() {
+        throw new Error("isolation attempted state introspection");
+      },
+      getPrototypeOf() {
+        throw new Error("isolation attempted state introspection");
+      },
+      has() {
+        throw new Error("isolation attempted state search");
+      },
+      ownKeys() {
+        throw new Error("isolation attempted state enumeration");
+      },
+      preventExtensions() {
+        throw new Error("isolation attempted state mutation");
+      },
+      setPrototypeOf() {
+        throw new Error("isolation attempted state mutation");
+      },
+    });
+    Object.defineProperty(state, "__candidateAccessProbe", {
+      configurable: false,
+      enumerable: true,
+      value: probe,
+      writable: false,
+    });
+    state.__candidateIsolationCapability = stateCapability;
+  }
+  const probe = state.__candidateAccessProbe;
+  probe.state = 0;
+  probe.length = 0;
+  probe.index = 0;
+  const blocked = [
+    [Document.prototype, "createNodeIterator"],
+    [Document.prototype, "createTreeWalker"],
+    [Document.prototype, "evaluate"],
+    [Document.prototype, "getElementById"],
+    [Document.prototype, "getElementsByClassName"],
+    [Document.prototype, "getElementsByName"],
+    [Document.prototype, "getElementsByTagName"],
+    [Document.prototype, "getElementsByTagNameNS"],
+    [Document.prototype, "querySelector"],
+    [Document.prototype, "querySelectorAll"],
+    [DocumentFragment.prototype, "querySelector"],
+    [DocumentFragment.prototype, "querySelectorAll"],
+    [Element.prototype, "getElementsByClassName"],
+    [Element.prototype, "getElementsByTagName"],
+    [Element.prototype, "getElementsByTagNameNS"],
+    [Element.prototype, "querySelector"],
+    [Element.prototype, "querySelectorAll"],
+  ];
+  const originals = blocked.map(([owner, name]) => {
+    const descriptor = Object.getOwnPropertyDescriptor(owner, name);
+    if (!descriptor || typeof descriptor.value !== "function") {
+      throw new Error(`missing DOM scan descriptor: ${name}`);
+    }
+    return [owner, name, descriptor];
+  });
+  try {
+    originals.forEach(([owner, name, descriptor]) => {
+      Object.defineProperty(owner, name, {
+        ...descriptor,
+        value: () => { throw new Error(`isolation attempted DOM scan: ${name}`); },
+      });
+    });
+    const runtime = globalThis;
+    const documentCapability = new Proxy(Object.create(null), {
+      get(_target, property) {
+        throw new Error(`isolation attempted document access: ${String(property)}`);
+      },
+    });
+    const windowCapability = new Proxy(Object.create(null), {
+      get(_target, property) {
+        if (property !== "__multiformatCandidateUnitIsolationState") {
+          throw new Error(`isolation attempted window access: ${String(property)}`);
+        }
+        return state.__candidateIsolationCapability;
+      },
+    });
+    const invokeIsolated = new Function(
+      "payload",
+      "window",
+      "document",
+      "globalThis",
+      "self",
+      "top",
+      "parent",
+      "frames",
+      `"use strict"; return ("""
+        + isolation_script
+        + """)(payload);`,
+    );
+    invokeIsolated(
+      payload,
+      windowCapability,
+      documentCapability,
+      windowCapability,
+      windowCapability,
+      windowCapability,
+      windowCapability,
+      windowCapability,
+    );
+  } finally {
+    originals.forEach(([owner, name, descriptor]) => {
+      Object.defineProperty(owner, name, descriptor);
+    });
+  }
+  if ((probe.state !== 6 && probe.state !== 8) || probe.length !== 1 || probe.index !== 1) {
+    throw new Error(`nonconstant isolation-state/DOM collection access: state=${probe.state}, length=${probe.length}, index=${probe.index}`);
+  }
+}"""
+    )
+
+
 class MultiFormatCandidateBrowserTests(unittest.TestCase):
     def test_aggregate_geometry_uses_cumulative_scaled_boundaries(self) -> None:
         geometry = aggregate_geometry(((1000, 1001), (900, 1002), (800, 1003)))
@@ -97,7 +365,42 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 {"image", "link", "svg"},
             )
 
-    def test_blind_paged_html_isolates_hundreds_of_pages_without_changing_evidence(
+    def test_blind_paged_html_rejects_isolation_script_lexical_state_alias(
+        self,
+    ) -> None:
+        html = """
+        <html><body>
+          <div id="page1-div" style="position:relative;width:300px;height:200px">
+            <span>Page 1</span>
+          </div>
+        </body></html>
+        """
+        lexically_exposed_isolation = """({index}) => {
+  const leaked = [runtime, state];
+  const active = leaked[1].nodes[index];
+  if (!active || !leaked[0].document) {
+    throw new Error("missing leaked isolation alias");
+  }
+  active.style.setProperty("display", "block", "important");
+}"""
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            patch(
+                "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
+                _instrument_discovered_unit_isolation(lexically_exposed_isolation),
+            ),
+            self.assertRaisesRegex(CandidateCaptureError, "runtime is not defined"),
+        ):
+            capture_html_units(
+                html,
+                DocumentFormat.DOCX,
+                ("unit-1",),
+                Path(temp_dir),
+                source_track="blind",
+                aggregate_paged_units=False,
+            )
+
+    def test_blind_paged_html_uses_constant_isolation_state_access_without_changing_evidence(
         self,
     ) -> None:
         page_count = 300
@@ -110,142 +413,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             for ordinal in range(1, page_count + 1)
         )
         html = f"<html><body>{pages}</body></html>"
-        instrumented_isolation = (
-            """payload => {
-  const keys = Object.keys(payload).sort().join(",");
-  if (keys !== "index,token") throw new Error(`unexpected isolation payload: ${keys}`);
-  const state = window.__multiformatCandidateUnitIsolationState;
-  if (!state) throw new Error("missing isolation state");
-  if (!state.__candidateAccessProbe) {
-    const probe = {length: 0, index: 0};
-    const rawNodes = state.nodes;
-    const rawDisplays = state.displays;
-    const instrumentedByRaw = new WeakMap();
-    const rawByInstrumented = new WeakMap();
-    const instrumentNode = node => {
-      let instrumented = instrumentedByRaw.get(node);
-      if (!instrumented) {
-        instrumented = new Proxy(node, {
-          get(target, property) {
-            if (property !== "style") {
-              throw new Error(`isolation attempted node access: ${String(property)}`);
-            }
-            return Reflect.get(target, property, target);
-          },
-        });
-        instrumentedByRaw.set(node, instrumented);
-        rawByInstrumented.set(instrumented, node);
-      }
-      return instrumented;
-    };
-    const instrumentedNodes = new Proxy(rawNodes, {
-      get(target, property, receiver) {
-        const isIndex = typeof property === "string" && /^(?:0|[1-9]\\d*)$/.test(property);
-        if (property === "length") {
-          probe.length += 1;
-          return Reflect.get(target, property, receiver);
-        }
-        if (!isIndex) {
-          throw new Error(`isolation attempted node collection access: ${String(property)}`);
-        }
-        probe.index += 1;
-        return instrumentNode(Reflect.get(target, property, receiver));
-      },
-      defineProperty() {
-        throw new Error("isolation attempted node collection mutation");
-      },
-      deleteProperty() {
-        throw new Error("isolation attempted node collection mutation");
-      },
-      getOwnPropertyDescriptor() {
-        throw new Error("isolation attempted node collection introspection");
-      },
-      getPrototypeOf() {
-        throw new Error("isolation attempted node collection introspection");
-      },
-      has() {
-        throw new Error("isolation attempted node collection search");
-      },
-      ownKeys() {
-        throw new Error("isolation attempted node enumeration");
-      },
-      set() {
-        throw new Error("isolation attempted node collection mutation");
-      },
-    });
-    Object.defineProperty(state, "nodes", {
-      configurable: false,
-      enumerable: true,
-      get: () => instrumentedNodes,
-      set: () => { throw new Error("isolation attempted node collection replacement"); },
-    });
-    state.displays = {
-      get(node) {
-        const rawNode = rawByInstrumented.get(node);
-        if (!rawNode) throw new Error("isolation used an uninstrumented node");
-        return rawDisplays.get(rawNode);
-      },
-    };
-    state.__candidateAccessProbe = probe;
-  }
-  const probe = state.__candidateAccessProbe;
-  probe.length = 0;
-  probe.index = 0;
-  const blocked = [
-    [Document.prototype, "createNodeIterator"],
-    [Document.prototype, "createTreeWalker"],
-    [Document.prototype, "evaluate"],
-    [Document.prototype, "getElementById"],
-    [Document.prototype, "getElementsByClassName"],
-    [Document.prototype, "getElementsByName"],
-    [Document.prototype, "getElementsByTagName"],
-    [Document.prototype, "getElementsByTagNameNS"],
-    [Document.prototype, "querySelector"],
-    [Document.prototype, "querySelectorAll"],
-    [DocumentFragment.prototype, "querySelector"],
-    [DocumentFragment.prototype, "querySelectorAll"],
-    [Element.prototype, "getElementsByClassName"],
-    [Element.prototype, "getElementsByTagName"],
-    [Element.prototype, "getElementsByTagNameNS"],
-    [Element.prototype, "querySelector"],
-    [Element.prototype, "querySelectorAll"],
-  ];
-  const originals = blocked.map(([owner, name]) => owner[name]);
-  blocked.forEach(([owner, name]) => {
-    owner[name] = () => { throw new Error(`isolation attempted DOM scan: ${name}`); };
-  });
-  try {
-    const runtime = globalThis;
-    {
-      const document = new Proxy(runtime.document, {
-        get(_target, property) {
-          throw new Error(`isolation attempted document access: ${String(property)}`);
-        },
-      });
-      const window = new Proxy(runtime, {
-        get(target, property) {
-          if (property !== "__multiformatCandidateUnitIsolationState") {
-            throw new Error(`isolation attempted window access: ${String(property)}`);
-          }
-          return Reflect.get(target, property, target);
-        },
-      });
-      const globalThis = window;
-      const self = window;
-      const top = window;
-      const parent = window;
-      const frames = window;
-      ("""
-            + ISOLATE_DISCOVERED_UNIT_SCRIPT
-            + ")(payload);\n"
-            + """    }
-  } finally {
-    blocked.forEach(([owner, name], index) => { owner[name] = originals[index]; });
-  }
-  if (probe.length !== 1 || probe.index !== 1) {
-    throw new Error(`nonconstant node access: length=${probe.length}, index=${probe.index}`);
-  }
-}"""
+        instrumented_isolation = _instrument_discovered_unit_isolation(
+            ISOLATE_DISCOVERED_UNIT_SCRIPT
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir)
