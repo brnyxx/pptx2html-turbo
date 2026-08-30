@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::Parser;
 use document2html_core::{
@@ -17,6 +18,8 @@ mod output;
 pub(crate) use diagnostics::json_string;
 use diagnostics::{diagnostics_json, report_diagnostics};
 use output::{ensure_distinct_paths, write_assets, write_text};
+
+const MAX_STAGE_TIMEOUT_SECONDS: u64 = 3_600;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -67,6 +70,10 @@ struct Cli {
     /// Override the pdfinfo executable path
     #[arg(long, value_name = "PATH")]
     pdfinfo: Option<PathBuf>,
+
+    /// Maximum duration in seconds for each native conversion stage
+    #[arg(long, default_value_t = 120, value_parser = parse_positive_timeout_seconds)]
+    stage_timeout_seconds: u64,
 
     /// Uniform PPTX scale used by deterministic presentation capture
     #[arg(long, value_parser = parse_positive_scale)]
@@ -175,6 +182,7 @@ fn native_config(cli: &Cli) -> NativeBackendConfig {
         soffice_path: cli.soffice.clone(),
         pdftohtml_path: cli.pdftohtml.clone(),
         pdfinfo_path: cli.pdfinfo.clone(),
+        stage_timeout: Duration::from_secs(cli.stage_timeout_seconds),
         process_isolation: if cli.allow_unisolated {
             ProcessIsolation::AllowUnisolated
         } else {
@@ -205,6 +213,19 @@ fn parse_positive_scale(value: &str) -> Result<f64, String> {
         Ok(scale)
     } else {
         Err("presentation scale must be finite and greater than zero".to_owned())
+    }
+}
+
+fn parse_positive_timeout_seconds(value: &str) -> Result<u64, String> {
+    let timeout_seconds = value
+        .parse::<u64>()
+        .map_err(|_| "stage timeout seconds must be a positive integer".to_owned())?;
+    if (1..=MAX_STAGE_TIMEOUT_SECONDS).contains(&timeout_seconds) {
+        Ok(timeout_seconds)
+    } else {
+        Err(format!(
+            "stage timeout seconds must be between 1 and {MAX_STAGE_TIMEOUT_SECONDS}"
+        ))
     }
 }
 

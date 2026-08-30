@@ -20,6 +20,7 @@ from evaluate.multiformat_schema import JsonValue
 
 MAX_HTML_BYTES = 64 * 1024 * 1024
 MAX_LOG_BYTES = 8 * 1024 * 1024
+MAX_STAGE_TIMEOUT_SECONDS = 3_600
 
 
 class CandidateConversionError(CandidateCaptureError):
@@ -44,8 +45,9 @@ def run_conversion(
     soffice: Path,
     pdftohtml: Path,
     pdfinfo: Path,
-    timeout_seconds: float,
+    timeout_seconds: int,
 ) -> ConversionResult:
+    stage_timeout_seconds = _stage_timeout_seconds(timeout_seconds)
     if output_dir.exists() and any(output_dir.iterdir()):
         raise CandidateConversionError(f"nonempty conversion output: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -72,6 +74,8 @@ def run_conversion(
         _executable(pdftohtml),
         "--pdfinfo",
         _executable(pdfinfo),
+        "--stage-timeout-seconds",
+        str(stage_timeout_seconds),
     )
     stdout_path = output_dir / "stdout.log"
     stderr_path = output_dir / "stderr.log"
@@ -95,7 +99,7 @@ def run_conversion(
             environment,
             stdout_path,
             stderr_path,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=stage_timeout_seconds,
             max_log_bytes=MAX_LOG_BYTES,
         )
     except CandidateProcessError as error:
@@ -138,6 +142,17 @@ def _executable(path: Path) -> str:
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
         raise CandidateConversionError(f"not executable: {path}")
     return resolved.as_posix()
+
+
+def _stage_timeout_seconds(timeout_seconds: int) -> int:
+    if (
+        type(timeout_seconds) is not int
+        or not 0 < timeout_seconds <= MAX_STAGE_TIMEOUT_SECONDS
+    ):
+        raise CandidateConversionError(
+            f"timeout seconds must be an integer from 1 to {MAX_STAGE_TIMEOUT_SECONDS}"
+        )
+    return timeout_seconds
 
 
 def _presentation_args(

@@ -11,6 +11,7 @@ from unittest import mock
 
 from evaluate.multiformat_candidate_conversion import (
     CandidateConversionError,
+    _stage_timeout_seconds,
     _validate_diagnostics,
     run_conversion,
 )
@@ -64,7 +65,7 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
                 soffice=soffice,
                 pdftohtml=pdftohtml,
                 pdfinfo=pdfinfo,
-                timeout_seconds=30,
+                timeout_seconds=600,
             )
 
             self.assertIn("page1-div", result.html)
@@ -75,7 +76,30 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             self.assertIn("--soffice", args)
             self.assertIn(soffice.resolve().as_posix(), args)
             self.assertIn("--allow-unisolated", args)
+            self.assertEqual(
+                args[args.index("--stage-timeout-seconds") + 1],
+                "600",
+            )
             self.assertEqual(result.source_sha256, self._sha256(source))
+
+    def test_rejects_out_of_range_or_noninteger_stage_timeout(self) -> None:
+        root = Path("unused")
+        self.assertEqual(_stage_timeout_seconds(3_600), 3_600)
+        for invalid in [0, -1, 0.5, 3_601]:
+            with self.assertRaisesRegex(
+                CandidateConversionError,
+                "integer from 1 to 3600",
+            ):
+                run_conversion(
+                    root / "converter",
+                    root / "source.docx",
+                    DocumentFormat.DOCX,
+                    root / "run",
+                    soffice=root / "soffice",
+                    pdftohtml=root / "pdftohtml",
+                    pdfinfo=root / "pdfinfo",
+                    timeout_seconds=invalid,
+                )
 
     def test_nonzero_converter_exit_fails_without_publishing_html(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -224,9 +248,9 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
                     soffice=tool,
                     pdftohtml=tool,
                     pdfinfo=tool,
-                    timeout_seconds=0.2,
+                    timeout_seconds=1,
                 )
-            self.assertLess(time.monotonic() - started, 1.0)
+            self.assertLess(time.monotonic() - started, 2.0)
 
     @classmethod
     def _converter(cls, root: Path, *, exit_code: int) -> Path:
