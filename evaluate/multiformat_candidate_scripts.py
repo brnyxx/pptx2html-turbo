@@ -105,28 +105,43 @@ DISCOVER_UNITS_SCRIPT = """
 }
 """
 
-ISOLATE_DISCOVERED_UNIT_SCRIPT = """
-({selectors, selector}) => {
-  if (!Array.isArray(selectors) || !selectors.length || !selectors.includes(selector)) {
+INITIALIZE_DISCOVERED_UNIT_ISOLATION_SCRIPT = """
+({selectors, token}) => {
+  if (!Array.isArray(selectors) || !selectors.length || !token) {
     throw new Error("invalid discovered unit selectors");
   }
+  const stateKey = "__multiformatCandidateUnitIsolationState";
+  if (window[stateKey]) throw new Error("discovered unit isolation already initialized");
   const nodes = selectors.map(value => document.querySelector(value));
   if (nodes.some(node => !node)) throw new Error("missing discovered unit root");
-  const stateKey = "__multiformatCandidateUnitDisplayState";
-  const displays = window[stateKey] || (window[stateKey] = new WeakMap());
+  const displays = new WeakMap();
   nodes.forEach(node => {
-    if (!displays.has(node)) {
-      displays.set(node, {
-        value: node.style.getPropertyValue("display"),
-        priority: node.style.getPropertyPriority("display"),
-      });
-    }
+    displays.set(node, {
+      value: node.style.getPropertyValue("display"),
+      priority: node.style.getPropertyPriority("display"),
+    });
     node.style.setProperty("display", "none", "important");
   });
-  const active = nodes[selectors.indexOf(selector)];
-  const display = displays.get(active);
+  window[stateKey] = {token, nodes, displays, active: null};
+}
+"""
+
+ISOLATE_DISCOVERED_UNIT_SCRIPT = """
+({token, index}) => {
+  const state = window.__multiformatCandidateUnitIsolationState;
+  if (!state || state.token !== token || !Number.isInteger(index)
+      || index < 0 || index >= state.nodes.length) {
+    throw new Error("invalid discovered unit isolation transition");
+  }
+  const active = state.nodes[index];
+  if (!active) throw new Error("missing discovered unit root");
+  if (state.active && state.active !== active) {
+    state.active.style.setProperty("display", "none", "important");
+  }
+  const display = state.displays.get(active);
   if (!display) throw new Error("missing discovered unit display state");
   active.style.setProperty("display", display.value, display.priority);
+  state.active = active;
 }
 """
 

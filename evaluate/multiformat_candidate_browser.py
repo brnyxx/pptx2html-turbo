@@ -32,6 +32,7 @@ from evaluate.multiformat_candidate_scripts import (
     DISCOVER_UNITS_SCRIPT,
     EXTERNAL_RESOURCES_SCRIPT,
     EXTRACT_DOM_SCRIPT,
+    INITIALIZE_DISCOVERED_UNIT_ISOLATION_SCRIPT,
     ISOLATE_DISCOVERED_UNIT_SCRIPT,
     NORMALIZE_PRESENTATION_SCRIPT,
     READINESS_SCRIPT,
@@ -208,6 +209,17 @@ def capture_html_units(
                 if not aggregate_paged_units
                 else []
             )
+            isolation_token = hashlib.sha256(
+                "\0".join(discovered_selectors).encode("utf-8")
+            ).hexdigest()
+            if not aggregate_paged_units:
+                page.evaluate(
+                    INITIALIZE_DISCOVERED_UNIT_ISOLATION_SCRIPT,
+                    {
+                        "selectors": discovered_selectors,
+                        "token": isolation_token,
+                    },
+                )
             for index, (unit_id, unit) in enumerate(
                 zip(unit_ids, units, strict=True)
             ):
@@ -233,8 +245,8 @@ def capture_html_units(
                     page.evaluate(
                         ISOLATE_DISCOVERED_UNIT_SCRIPT,
                         {
-                            "selector": selector,
-                            "selectors": discovered_selectors,
+                            "token": isolation_token,
+                            "index": index,
                         },
                     )
                 raw = cast(

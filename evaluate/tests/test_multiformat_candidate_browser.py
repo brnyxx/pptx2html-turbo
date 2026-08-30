@@ -140,8 +140,11 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch(
-                "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
+                "evaluate.multiformat_candidate_browser.INITIALIZE_DISCOVERED_UNIT_ISOLATION_SCRIPT",
                 '() => { throw new Error("aggregate capture must not isolate"); }',
+            ), patch(
+                "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
+                '() => { throw new Error("aggregate capture must not transition"); }',
             ):
                 result = capture_html_units(
                     f"<html><body>{pages}</body></html>",
