@@ -193,9 +193,14 @@ pub(super) fn is_workbook_name(name: &str) -> bool {
 }
 
 pub(super) fn calc_pr_name(workbook_name: &str) -> String {
-    workbook_name
-        .strip_suffix("workbook")
-        .map_or_else(|| "calcPr".to_owned(), |prefix| format!("{prefix}calcPr"))
+    workbook_child_name(workbook_name, "calcPr")
+}
+
+pub(super) fn workbook_child_name(workbook_name: &str, child_name: &str) -> String {
+    workbook_name.strip_suffix("workbook").map_or_else(
+        || child_name.to_owned(),
+        |prefix| format!("{prefix}{child_name}"),
+    )
 }
 
 pub(super) fn element_namespace<'a>(

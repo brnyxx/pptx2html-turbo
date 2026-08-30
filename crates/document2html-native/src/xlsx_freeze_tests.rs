@@ -74,6 +74,23 @@ fn injects_calc_pr_when_workbook_has_none() {
 }
 
 #[test]
+fn injects_calc_pr_before_schema_following_workbook_children() {
+    // Given
+    let workbook = br#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/><extLst><ext uri="urn:example"/></extLst></workbook>"#;
+    let source = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let frozen = freeze_archive(&source).expect("freeze workbook with extension list");
+
+    // Then
+    let frozen_workbook = archive_entry(&frozen, "xl/workbook.xml");
+    let calc = frozen_workbook.find("<calcPr").expect("find calcPr");
+    let extensions = frozen_workbook.find("<extLst").expect("find extLst");
+    assert!(calc < extensions);
+    assert!(frozen_workbook.contains("<ext uri=\"urn:example\"/>"));
+}
+
+#[test]
 fn preserves_valid_xml_entities_when_freezing_workbook_calculation() {
     // Given
     let workbook = br#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:ext="urn:example:x&amp;y"><sheets/></workbook>"#;

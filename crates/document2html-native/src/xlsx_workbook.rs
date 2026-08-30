@@ -1,10 +1,21 @@
 use crate::xlsx_xml::{
     calc_pr_name, element_namespace, is_workbook_name, parse_end_tag, parse_start_tag, tag_end,
-    validate_xml_text,
+    validate_xml_text, workbook_child_name,
 };
 use crate::{NativeError, NativeResult};
 
 const MAX_XML_DEPTH: usize = 128;
+const CALC_PR_FOLLOWING_CHILDREN: [&str; 9] = [
+    "oleSize",
+    "customWorkbookViews",
+    "pivotCaches",
+    "smartTagPr",
+    "smartTagTypes",
+    "webPublishing",
+    "fileRecoveryPr",
+    "webPublishObjects",
+    "extLst",
+];
 
 pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u8>> {
     let text = std::str::from_utf8(workbook)
@@ -16,6 +27,7 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
     let mut root_namespaces = Vec::new();
     let mut root_end = None;
     let mut calc_range = None;
+    let mut calc_insertion = None;
     let mut calc_depth = None;
 
     while position < text.len() {
@@ -109,14 +121,32 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
             }
 
             if let Some(root) = root_name.as_deref() {
-                let is_calc_pr = root_namespace.as_deref().map_or_else(
-                    || name == calc_pr_name(root),
-                    |namespace| {
-                        element_namespace(&name, "calcPr", &start_tag.namespaces, &root_namespaces)
-                            == Some(namespace)
-                    },
-                );
-                if is_calc_pr {
+                let matches_workbook_child = |local_name: &str| {
+                    root_namespace.as_deref().map_or_else(
+                        || name == workbook_child_name(root, local_name),
+                        |namespace| {
+                            element_namespace(
+                                &name,
+                                local_name,
+                                &start_tag.namespaces,
+                                &root_namespaces,
+                            ) == Some(namespace)
+                        },
+                    )
+                };
+                if stack.len() == 1
+                    && calc_range.is_none()
+                    && calc_insertion.is_none()
+                    && CALC_PR_FOLLOWING_CHILDREN
+                        .iter()
+                        .any(|local_name| matches_workbook_child(local_name))
+                {
+                    calc_insertion = Some(position);
+                }
+                if matches_workbook_child("calcPr") {
+                    if calc_insertion.is_some() {
+                        return malformed("xl/workbook.xml calcPr is out of schema order");
+                    }
                     if calc_range.is_some() {
                         return malformed("xl/workbook.xml has duplicate calcPr elements");
                     }
@@ -152,7 +182,8 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
         "<{} calcMode=\"manual\" calcOnSave=\"0\" forceFullCalc=\"0\" fullCalcOnLoad=\"0\"/>",
         calc_pr_name(&root)
     );
-    let (start, end) = calc_range.unwrap_or((root_end, root_end));
+    let insertion = calc_insertion.unwrap_or(root_end);
+    let (start, end) = calc_range.unwrap_or((insertion, insertion));
     let mut frozen = Vec::with_capacity(workbook.len().saturating_add(calc.len()));
     frozen.extend_from_slice(&workbook[..start]);
     frozen.extend_from_slice(calc.as_bytes());
