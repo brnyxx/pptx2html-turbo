@@ -34,6 +34,10 @@ isolated LibreOffice profile, bounded temporary workspace, process timeout,
 log/output limits, deterministic asset names, and strict remote-network
 blocking where a supported launcher is available.
 
+For legacy XLS inputs, the native adapter first creates a bounded XLSX snapshot
+that preserves cached formula values and disables workbook recalculation before
+PDF rendering.
+
 ```bash
 cargo run -p pptx2html-cli --bin document2html -- report.docx -o report.html
 cargo run -p pptx2html-cli --bin document2html -- workbook.xls --no-embed
