@@ -15,6 +15,7 @@ mod sha256;
 mod spreadsheet_html;
 mod stage;
 mod workspace;
+mod xlsx_freeze;
 mod xlsx_workbook;
 mod xlsx_xml;
 
