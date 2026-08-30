@@ -17,6 +17,7 @@ from evaluate.multiformat_candidate_browser import (
 )
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_inventory import parse_inventory
+from evaluate.multiformat_candidate_scripts import ISOLATE_DISCOVERED_UNIT_SCRIPT
 from evaluate.multiformat_visual_metrics import png_dimensions
 
 
@@ -109,17 +110,41 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             for ordinal in range(1, page_count + 1)
         )
         html = f"<html><body>{pages}</body></html>"
+        instrumented_isolation = ISOLATE_DISCOVERED_UNIT_SCRIPT.replace(
+            "({token, index}) => {",
+            """payload => {
+  const keys = Object.keys(payload).sort().join(",");
+  if (keys !== "index,token") throw new Error(`unexpected isolation payload: ${keys}`);
+  const {token, index} = payload;
+  if (window.__candidateQuerySelectorCalls === undefined) {
+    const querySelector = document.querySelector.bind(document);
+    window.__candidateQuerySelectorCalls = 0;
+    document.querySelector = (...args) => {
+      window.__candidateQuerySelectorCalls += 1;
+      return querySelector(...args);
+    };
+  } else if (window.__candidateQuerySelectorCalls !== 1) {
+    throw new Error(`nonconstant per-unit selector lookup: ${window.__candidateQuerySelectorCalls}`);
+  }
+  window.__candidateQuerySelectorCalls = 0;""",
+            1,
+        )
+        self.assertNotEqual(instrumented_isolation, ISOLATE_DISCOVERED_UNIT_SCRIPT)
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir)
 
-            result = capture_html_units(
-                html,
-                DocumentFormat.DOCX,
-                tuple(f"unit-{ordinal}" for ordinal in range(1, page_count + 1)),
-                output,
-                source_track="blind",
-                aggregate_paged_units=False,
-            )
+            with patch(
+                "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
+                instrumented_isolation,
+            ):
+                result = capture_html_units(
+                    html,
+                    DocumentFormat.DOCX,
+                    tuple(f"unit-{ordinal}" for ordinal in range(1, page_count + 1)),
+                    output,
+                    source_track="blind",
+                    aggregate_paged_units=False,
+                )
 
             self.assertEqual(len(result.units), page_count)
             for ordinal, unit in enumerate(result.units, start=1):
@@ -139,12 +164,15 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             for ordinal in range(1, 7)
         )
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch(
-                "evaluate.multiformat_candidate_browser.INITIALIZE_DISCOVERED_UNIT_ISOLATION_SCRIPT",
-                '() => { throw new Error("aggregate capture must not isolate"); }',
-            ), patch(
-                "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
-                '() => { throw new Error("aggregate capture must not transition"); }',
+            with (
+                patch(
+                    "evaluate.multiformat_candidate_browser.INITIALIZE_DISCOVERED_UNIT_ISOLATION_SCRIPT",
+                    '() => { throw new Error("aggregate capture must not isolate"); }',
+                ),
+                patch(
+                    "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
+                    '() => { throw new Error("aggregate capture must not transition"); }',
+                ),
             ):
                 result = capture_html_units(
                     f"<html><body>{pages}</body></html>",
