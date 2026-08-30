@@ -15,6 +15,8 @@ mod sha256;
 mod spreadsheet_html;
 mod stage;
 mod workspace;
+mod xlsx_workbook;
+mod xlsx_xml;
 
 pub use config::{IsolationLauncher, NativeBackendConfig, ProcessIsolation};
 pub use converter::NativeDocumentConverter;
