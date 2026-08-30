@@ -13,6 +13,51 @@ from evaluate.multiformat_candidate_browser_checks import browser_version_matche
 from evaluate.multiformat_candidate_browser_network import route_request
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 
+_ACTIVE_CONTENT_PREDICATE = r"""root => {
+  const roots = [root];
+  const javascriptType = /^(?:application\/(?:ecmascript|javascript|x-ecmascript|x-javascript)|text\/(?:ecmascript|javascript(?:1\.[0-5])?|jscript|livescript|x-ecmascript|x-javascript))$/;
+  const svgAnimations = ["animate", "animatecolor", "animatemotion", "animatetransform", "set"];
+  const urlAttributes = ["href", "src", "action", "formaction", "xlink:href"];
+  for (const current of roots) {
+    if (current.querySelector("object,embed,iframe,applet")) return true;
+    for (const element of current.querySelectorAll("*")) {
+      if (element.localName === "template") roots.push(element.content);
+      if (element.shadowRoot) roots.push(element.shadowRoot);
+      if (element.namespaceURI === "http://www.w3.org/2000/svg"
+          && svgAnimations.includes(element.localName.toLowerCase())) {
+        return true;
+      }
+      if (element.localName === "script") {
+        const type = (element.getAttribute("type") || "").trim().toLowerCase();
+        if (!type || type === "module" || type === "importmap"
+            || type === "speculationrules" || javascriptType.test(type)) {
+          return true;
+        }
+      }
+      for (const attribute of element.attributes) {
+        const name = attribute.name.toLowerCase();
+        if (name.startsWith("on") && name in element) return true;
+        if (urlAttributes.includes(name)) {
+          try {
+            if (new URL(attribute.value, element.baseURI).protocol === "javascript:") {
+              return true;
+            }
+          } catch (error) {
+            if (!(error instanceof TypeError)) throw error;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}"""
+_ACTIVE_CONTENT_FROM_HTML = (
+    "html => ("
+    + _ACTIVE_CONTENT_PREDICATE
+    + ")(new DOMParser().parseFromString(html, 'text/html'))"
+)
+_ACTIVE_CONTENT_FROM_DOCUMENT = "() => (" + _ACTIVE_CONTENT_PREDICATE + ")(document)"
+
 
 @dataclass(frozen=True, slots=True)
 class SecurityBrowserFacts:
@@ -70,23 +115,11 @@ def inspect_security_html(
             signals: list[str] = []
             page.on("popup", lambda _popup: signals.append("popup"))
             page.on("download", lambda _download: signals.append("download"))
+            active = bool(cast(bool, page.evaluate(_ACTIVE_CONTENT_FROM_HTML, html)))
             page.goto(url, wait_until="domcontentloaded")
             active = bool(
-                cast(
-                    bool,
-                    page.evaluate(
-                        """() => {
-                        if (document.querySelector('object,embed,iframe,applet')) {
-                          return true;
-                        }
-                        return [...document.scripts].some(script => {
-                          const type = script.type.trim().toLowerCase();
-                          return !type || type === 'module'
-                            || /^(?:text|application)\\/(?:java|ecma)script$/.test(type);
-                        });
-                        }"""
-                    ),
-                )
+                active
+                or cast(bool, page.evaluate(_ACTIVE_CONTENT_FROM_DOCUMENT))
                 or signals
             )
             context.close()

@@ -114,23 +114,149 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             """payload => {
   const keys = Object.keys(payload).sort().join(",");
   if (keys !== "index,token") throw new Error(`unexpected isolation payload: ${keys}`);
-  if (window.__candidateQuerySelectorCalls === undefined) {
-    const querySelector = document.querySelector.bind(document);
-    window.__candidateQuerySelectorCalls = 0;
-    document.querySelector = (...args) => {
-      window.__candidateQuerySelectorCalls += 1;
-      return querySelector(...args);
+  const state = window.__multiformatCandidateUnitIsolationState;
+  if (!state) throw new Error("missing isolation state");
+  if (!state.__candidateAccessProbe) {
+    const probe = {length: 0, index: 0};
+    const rawNodes = state.nodes;
+    const rawDisplays = state.displays;
+    const instrumentedByRaw = new WeakMap();
+    const rawByInstrumented = new WeakMap();
+    const instrumentNode = node => {
+      let instrumented = instrumentedByRaw.get(node);
+      if (!instrumented) {
+        instrumented = new Proxy(node, {
+          get(target, property) {
+            if (property !== "style") {
+              throw new Error(`isolation attempted node access: ${String(property)}`);
+            }
+            return Reflect.get(target, property, target);
+          },
+        });
+        instrumentedByRaw.set(node, instrumented);
+        rawByInstrumented.set(instrumented, node);
+      }
+      return instrumented;
     };
-  } else if (window.__candidateQuerySelectorCalls !== 1) {
-    throw new Error(`nonconstant per-unit selector lookup: ${window.__candidateQuerySelectorCalls}`);
+    const instrumentedNodes = new Proxy(rawNodes, {
+      get(target, property, receiver) {
+        const isIndex = typeof property === "string" && /^(?:0|[1-9]\\d*)$/.test(property);
+        if (property === "length") {
+          probe.length += 1;
+          return Reflect.get(target, property, receiver);
+        }
+        if (!isIndex) {
+          throw new Error(`isolation attempted node collection access: ${String(property)}`);
+        }
+        probe.index += 1;
+        return instrumentNode(Reflect.get(target, property, receiver));
+      },
+      defineProperty() {
+        throw new Error("isolation attempted node collection mutation");
+      },
+      deleteProperty() {
+        throw new Error("isolation attempted node collection mutation");
+      },
+      getOwnPropertyDescriptor() {
+        throw new Error("isolation attempted node collection introspection");
+      },
+      getPrototypeOf() {
+        throw new Error("isolation attempted node collection introspection");
+      },
+      has() {
+        throw new Error("isolation attempted node collection search");
+      },
+      ownKeys() {
+        throw new Error("isolation attempted node enumeration");
+      },
+      set() {
+        throw new Error("isolation attempted node collection mutation");
+      },
+    });
+    Object.defineProperty(state, "nodes", {
+      configurable: false,
+      enumerable: true,
+      get: () => instrumentedNodes,
+      set: () => { throw new Error("isolation attempted node collection replacement"); },
+    });
+    state.displays = {
+      get(node) {
+        const rawNode = rawByInstrumented.get(node);
+        if (!rawNode) throw new Error("isolation used an uninstrumented node");
+        return rawDisplays.get(rawNode);
+      },
+    };
+    state.__candidateAccessProbe = probe;
   }
-  window.__candidateQuerySelectorCalls = 0;
-  return ("""
+  const probe = state.__candidateAccessProbe;
+  probe.length = 0;
+  probe.index = 0;
+  const blocked = [
+    [Document.prototype, "createNodeIterator"],
+    [Document.prototype, "createTreeWalker"],
+    [Document.prototype, "evaluate"],
+    [Document.prototype, "getElementById"],
+    [Document.prototype, "getElementsByClassName"],
+    [Document.prototype, "getElementsByName"],
+    [Document.prototype, "getElementsByTagName"],
+    [Document.prototype, "getElementsByTagNameNS"],
+    [Document.prototype, "querySelector"],
+    [Document.prototype, "querySelectorAll"],
+    [DocumentFragment.prototype, "querySelector"],
+    [DocumentFragment.prototype, "querySelectorAll"],
+    [Element.prototype, "getElementsByClassName"],
+    [Element.prototype, "getElementsByTagName"],
+    [Element.prototype, "getElementsByTagNameNS"],
+    [Element.prototype, "querySelector"],
+    [Element.prototype, "querySelectorAll"],
+  ];
+  const originals = blocked.map(([owner, name]) => owner[name]);
+  blocked.forEach(([owner, name]) => {
+    owner[name] = () => { throw new Error(`isolation attempted DOM scan: ${name}`); };
+  });
+  try {
+    const runtime = globalThis;
+    {
+      const document = new Proxy(runtime.document, {
+        get(_target, property) {
+          throw new Error(`isolation attempted document access: ${String(property)}`);
+        },
+      });
+      const window = new Proxy(runtime, {
+        get(target, property) {
+          if (property !== "__multiformatCandidateUnitIsolationState") {
+            throw new Error(`isolation attempted window access: ${String(property)}`);
+          }
+          return Reflect.get(target, property, target);
+        },
+      });
+      const globalThis = window;
+      const self = window;
+      const top = window;
+      const parent = window;
+      const frames = window;
+      ("""
             + ISOLATE_DISCOVERED_UNIT_SCRIPT
-            + ")(payload);\n}"
+            + ")(payload);\n"
+            + """    }
+  } finally {
+    blocked.forEach(([owner, name], index) => { owner[name] = originals[index]; });
+  }
+  if (probe.length !== 1 || probe.index !== 1) {
+    throw new Error(`nonconstant node access: length=${probe.length}, index=${probe.index}`);
+  }
+}"""
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir)
+            baseline = capture_html_units(
+                html,
+                DocumentFormat.DOCX,
+                tuple(f"unit-{ordinal}" for ordinal in range(1, page_count + 1)),
+                output / "baseline",
+                source_track="blind",
+                aggregate_paged_units=False,
+            )
 
             with patch(
                 "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
@@ -140,19 +266,26 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                     html,
                     DocumentFormat.DOCX,
                     tuple(f"unit-{ordinal}" for ordinal in range(1, page_count + 1)),
-                    output,
+                    output / "instrumented",
                     source_track="blind",
                     aggregate_paged_units=False,
                 )
 
             self.assertEqual(len(result.units), page_count)
-            for ordinal, unit in enumerate(result.units, start=1):
+            for ordinal, (baseline_unit, unit) in enumerate(
+                zip(baseline.units, result.units, strict=True), start=1
+            ):
+                self.assertEqual(
+                    baseline_unit.inventory.read_bytes(), unit.inventory.read_bytes()
+                )
+                self.assertEqual(baseline_unit.png.read_bytes(), unit.png.read_bytes())
                 self.assertEqual(png_dimensions(unit.png), (300, 200))
                 inventory = parse_inventory(unit.inventory, f"unit-{ordinal}")
                 self.assertEqual(
                     [item.value for item in inventory.texts], [f"Page {ordinal}"]
                 )
             self.assertEqual(result.external_requests, ())
+            self.assertEqual(baseline.external_requests, ())
 
     def test_conformance_paged_html_aggregates_all_pages_into_one_unit(self) -> None:
         pages = "".join(

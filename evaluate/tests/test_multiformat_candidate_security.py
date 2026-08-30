@@ -253,6 +253,68 @@ class CandidateSecurityTests(unittest.TestCase):
             )
             self.assertFalse(inert.active_content_executed)
             self.assertEqual(inert.external_requests, ())
+            self_removing = inspect_security_html(
+                "<script>document.currentScript.remove()</script>",
+                chromium=executable,
+                browser_version=version,
+                font_config=font_config,
+            )
+            self.assertTrue(self_removing.active_content_executed)
+            for script_type in (
+                "application/x-javascript",
+                "text/javascript1.5",
+                "text/jscript",
+            ):
+                legacy_script = inspect_security_html(
+                    f'<script type="{script_type}">document.currentScript.remove()</script>',
+                    chromium=executable,
+                    browser_version=version,
+                    font_config=font_config,
+                )
+                self.assertTrue(legacy_script.active_content_executed)
+            shadow_event = inspect_security_html(
+                '<div><template shadowrootmode="closed">'
+                '<svg onload="this.remove()"></svg>'
+                "</template></div>",
+                chromium=executable,
+                browser_version=version,
+                font_config=font_config,
+            )
+            self.assertTrue(shadow_event.active_content_executed)
+            normalized_javascript_url = inspect_security_html(
+                '<a href="java&#10;script:void(0)">run</a>',
+                chromium=executable,
+                browser_version=version,
+                font_config=font_config,
+            )
+            self.assertTrue(normalized_javascript_url.active_content_executed)
+            animated_javascript_url = inspect_security_html(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                '<a href="#"><text>run</text>'
+                '<animate attributeName="href" values="javascript:void(0)" '
+                'dur="10s" fill="freeze"/>'
+                "</a></svg>",
+                chromium=executable,
+                browser_version=version,
+                font_config=font_config,
+            )
+            self.assertTrue(animated_javascript_url.active_content_executed)
+            legacy_svg_animation = inspect_security_html(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                '<animateColor attributeName="fill" values="red;blue" dur="1s"/>'
+                "</svg>",
+                chromium=executable,
+                browser_version=version,
+                font_config=font_config,
+            )
+            self.assertTrue(legacy_svg_animation.active_content_executed)
+            inert_custom_attribute = inspect_security_html(
+                '<div once="value">safe</div>',
+                chromium=executable,
+                browser_version=version,
+                font_config=font_config,
+            )
+            self.assertFalse(inert_custom_attribute.active_content_executed)
 
             contract, corpus, evaluator, runtime, sources = self._fixture(root)
 
