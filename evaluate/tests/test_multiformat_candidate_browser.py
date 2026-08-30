@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from evaluate.multiformat_candidate_browser_checks import aggregate_geometry
 from evaluate.multiformat_candidate_browser import (
@@ -95,13 +96,17 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
                 {"image", "link", "svg"},
             )
 
-    def test_blind_paged_html_keeps_one_unit_per_page(self) -> None:
+    def test_blind_paged_html_isolates_hundreds_of_pages_without_changing_evidence(
+        self,
+    ) -> None:
+        page_count = 300
         pages = "".join(
             f'<div id="page{ordinal}-div" '
-            'style="position:relative;width:300px;height:200px;background:#fff">'
+            'style="position:relative;display:block !important;width:300px;'
+            'height:200px;background:#fff">'
             f'<span style="position:absolute;left:10px;top:10px">Page {ordinal}</span>'
             "</div>"
-            for ordinal in range(1, 7)
+            for ordinal in range(1, page_count + 1)
         )
         html = f"<html><body>{pages}</body></html>"
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -110,15 +115,15 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             result = capture_html_units(
                 html,
                 DocumentFormat.DOCX,
-                tuple(f"unit-{ordinal}" for ordinal in range(1, 7)),
+                tuple(f"unit-{ordinal}" for ordinal in range(1, page_count + 1)),
                 output,
                 source_track="blind",
                 aggregate_paged_units=False,
             )
 
-            self.assertEqual(len(result.units), 6)
-            self.assertEqual(png_dimensions(result.units[0].png), (300, 200))
+            self.assertEqual(len(result.units), page_count)
             for ordinal, unit in enumerate(result.units, start=1):
+                self.assertEqual(png_dimensions(unit.png), (300, 200))
                 inventory = parse_inventory(unit.inventory, f"unit-{ordinal}")
                 self.assertEqual(
                     [item.value for item in inventory.texts], [f"Page {ordinal}"]
@@ -134,14 +139,18 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             for ordinal in range(1, 7)
         )
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = capture_html_units(
-                f"<html><body>{pages}</body></html>",
-                DocumentFormat.DOC,
-                ("document-unit",),
-                Path(temp_dir),
-                source_track="conformance",
-                aggregate_paged_units=True,
-            )
+            with patch(
+                "evaluate.multiformat_candidate_browser.ISOLATE_DISCOVERED_UNIT_SCRIPT",
+                '() => { throw new Error("aggregate capture must not isolate"); }',
+            ):
+                result = capture_html_units(
+                    f"<html><body>{pages}</body></html>",
+                    DocumentFormat.DOC,
+                    ("document-unit",),
+                    Path(temp_dir),
+                    source_track="conformance",
+                    aggregate_paged_units=True,
+                )
 
             self.assertEqual(len(result.units), 1)
             self.assertEqual(png_dimensions(result.units[0].png), (300, 1200))

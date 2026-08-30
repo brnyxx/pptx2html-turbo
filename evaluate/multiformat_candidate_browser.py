@@ -32,6 +32,7 @@ from evaluate.multiformat_candidate_scripts import (
     DISCOVER_UNITS_SCRIPT,
     EXTERNAL_RESOURCES_SCRIPT,
     EXTRACT_DOM_SCRIPT,
+    ISOLATE_DISCOVERED_UNIT_SCRIPT,
     NORMALIZE_PRESENTATION_SCRIPT,
     READINESS_SCRIPT,
     STATIC_STYLE,
@@ -202,7 +203,14 @@ def capture_html_units(
                 raise CandidateCaptureError(
                     f"unit count mismatch: expected {len(unit_ids)}, got {len(units)}"
                 )
-            for unit_id, unit in zip(unit_ids, units, strict=True):
+            discovered_selectors = (
+                [record_string(unit, "selector") for unit in units]
+                if not aggregate_paged_units
+                else []
+            )
+            for index, (unit_id, unit) in enumerate(
+                zip(unit_ids, units, strict=True)
+            ):
                 canonical_geometry: AggregateGeometry | None = None
                 if aggregate_paged_units:
                     canonical_geometry = _aggregate_unit_geometry(unit)
@@ -210,7 +218,7 @@ def capture_html_units(
                     canonical_geometry.scale if canonical_geometry is not None else 1.0
                 )
                 selector = (
-                    record_string(unit, "selector")
+                    discovered_selectors[index]
                     if not aggregate_paged_units
                     else None
                 )
@@ -221,6 +229,14 @@ def capture_html_units(
                 )
                 if presentation:
                     require_presentation_dimensions(unit)
+                if not aggregate_paged_units:
+                    page.evaluate(
+                        ISOLATE_DISCOVERED_UNIT_SCRIPT,
+                        {
+                            "selector": selector,
+                            "selectors": discovered_selectors,
+                        },
+                    )
                 raw = cast(
                     dict[str, JsonValue],
                     page.evaluate(

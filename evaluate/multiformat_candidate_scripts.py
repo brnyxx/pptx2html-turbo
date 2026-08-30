@@ -105,6 +105,31 @@ DISCOVER_UNITS_SCRIPT = """
 }
 """
 
+ISOLATE_DISCOVERED_UNIT_SCRIPT = """
+({selectors, selector}) => {
+  if (!Array.isArray(selectors) || !selectors.length || !selectors.includes(selector)) {
+    throw new Error("invalid discovered unit selectors");
+  }
+  const nodes = selectors.map(value => document.querySelector(value));
+  if (nodes.some(node => !node)) throw new Error("missing discovered unit root");
+  const stateKey = "__multiformatCandidateUnitDisplayState";
+  const displays = window[stateKey] || (window[stateKey] = new WeakMap());
+  nodes.forEach(node => {
+    if (!displays.has(node)) {
+      displays.set(node, {
+        value: node.style.getPropertyValue("display"),
+        priority: node.style.getPropertyPriority("display"),
+      });
+    }
+    node.style.setProperty("display", "none", "important");
+  });
+  const active = nodes[selectors.indexOf(selector)];
+  const display = displays.get(active);
+  if (!display) throw new Error("missing discovered unit display state");
+  active.style.setProperty("display", display.value, display.priority);
+}
+"""
+
 EXTERNAL_RESOURCES_SCRIPT = """
 () => [...document.querySelectorAll(
   "img[src],link[href],script[src],source[src],video[src],audio[src],iframe[src],object[data],embed[src]"
