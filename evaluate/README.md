@@ -563,7 +563,7 @@ for format in $FORMATS; do
   lock="$outer/locks/$format.json"
   corpus="$READY_ROOT/corpora/$format/manifest.json"
   bound_contract="$outer/artifacts/contract"
-  bound_evaluator="$outer/artifacts/evaluator"
+  bound_evaluator="$WAVE/evidence/evaluator-manifest.json"
   bound_converter="$outer/artifacts/converter"
   bound_soffice="$LOCKED_SOFFICE"
   bound_pdftohtml="$LOCKED_PDFTOHTML"
@@ -697,7 +697,7 @@ for format in $FORMATS; do
   lock="$outer/locks/$format.json"
   corpus="$READY_ROOT/corpora/$format/manifest.json"
   bound_contract="$outer/artifacts/contract"
-  bound_evaluator="$outer/artifacts/evaluator"
+  bound_evaluator="$WAVE/evidence/evaluator-manifest.json"
   bound_converter="$outer/artifacts/converter"
   bound_soffice="$LOCKED_SOFFICE"
   bound_pdftohtml="$LOCKED_PDFTOHTML"
@@ -807,7 +807,7 @@ for format in $FORMATS; do
   lock="$outer/locks/$format.json"
   corpus="$READY_ROOT/corpora/$format/manifest.json"
   bound_contract="$outer/artifacts/contract"
-  bound_evaluator="$outer/artifacts/evaluator"
+  bound_evaluator="$WAVE/evidence/evaluator-manifest.json"
 
   "$PYTHON" -m evaluate.assemble_multiformat_metrics \
     --project-root "$PROJECT_ROOT" \
