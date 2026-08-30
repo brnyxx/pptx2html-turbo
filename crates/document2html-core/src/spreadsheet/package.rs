@@ -7,6 +7,15 @@ use super::attribute;
 use crate::{DocumentError, DocumentResult};
 
 const WORKSHEET_REL_SUFFIX: &str = "/relationships/worksheet";
+const CHARTSHEET_REL_SUFFIX: &str = "/relationships/chartsheet";
+const WORKSHEET_PREFIX: &str = "xl/worksheets/";
+const CHARTSHEET_PREFIX: &str = "xl/chartsheets/";
+
+enum SheetRelationship {
+    Worksheet(String),
+    Chartsheet,
+    Other,
+}
 
 pub(super) struct SheetPart {
     pub(super) name: String,
@@ -17,7 +26,7 @@ pub(super) fn parse_workbook(
     workbook: &str,
     relationships: &str,
 ) -> DocumentResult<Vec<SheetPart>> {
-    let targets = parse_relationships(relationships)?;
+    let relationships = parse_relationships(relationships)?;
     let mut reader = Reader::from_str(workbook);
     let mut sheets = Vec::new();
     loop {
@@ -30,13 +39,17 @@ pub(super) fn parse_workbook(
                     .ok_or(DocumentError::UnsupportedFormat)?;
                 let relationship =
                     attribute(&element, b"id")?.ok_or(DocumentError::UnsupportedFormat)?;
-                let target = targets
+                let target = relationships
                     .get(&relationship)
                     .ok_or(DocumentError::UnsupportedFormat)?;
-                sheets.push(SheetPart {
-                    name,
-                    path: worksheet_path(target)?,
-                });
+                match target {
+                    SheetRelationship::Worksheet(path) => sheets.push(SheetPart {
+                        name,
+                        path: path.clone(),
+                    }),
+                    SheetRelationship::Chartsheet => {}
+                    SheetRelationship::Other => return Err(DocumentError::UnsupportedFormat),
+                }
             }
             Event::Eof => break,
             _ => {}
@@ -45,25 +58,37 @@ pub(super) fn parse_workbook(
     Ok(sheets)
 }
 
-fn parse_relationships(xml: &str) -> DocumentResult<HashMap<String, String>> {
+fn parse_relationships(xml: &str) -> DocumentResult<HashMap<String, SheetRelationship>> {
     let mut reader = Reader::from_str(xml);
-    let mut targets = HashMap::new();
+    let mut relationships = HashMap::new();
     loop {
         match reader.read_event()? {
             Event::Empty(element) | Event::Start(element)
                 if element.local_name().as_ref() == b"Relationship" =>
             {
-                let kind = attribute(&element, b"Type")?.unwrap_or_default();
-                if !kind.ends_with(WORKSHEET_REL_SUFFIX) {
-                    continue;
-                }
-                if attribute(&element, b"TargetMode")?.is_some() {
-                    return Err(DocumentError::UnsupportedFormat);
-                }
                 let id = attribute(&element, b"Id")?.ok_or(DocumentError::UnsupportedFormat)?;
-                let target =
-                    attribute(&element, b"Target")?.ok_or(DocumentError::UnsupportedFormat)?;
-                if targets.insert(id, target).is_some() {
+                let kind = attribute(&element, b"Type")?.unwrap_or_default();
+                let relationship = if kind.ends_with(WORKSHEET_REL_SUFFIX) {
+                    let target_mode = attribute(&element, b"TargetMode")?;
+                    let target =
+                        attribute(&element, b"Target")?.ok_or(DocumentError::UnsupportedFormat)?;
+                    if target_mode.is_some() {
+                        return Err(DocumentError::UnsupportedFormat);
+                    }
+                    SheetRelationship::Worksheet(sheet_path(&target, WORKSHEET_PREFIX)?)
+                } else if kind.ends_with(CHARTSHEET_REL_SUFFIX) {
+                    let target_mode = attribute(&element, b"TargetMode")?;
+                    let target =
+                        attribute(&element, b"Target")?.ok_or(DocumentError::UnsupportedFormat)?;
+                    if target_mode.is_some() {
+                        return Err(DocumentError::UnsupportedFormat);
+                    }
+                    sheet_path(&target, CHARTSHEET_PREFIX)?;
+                    SheetRelationship::Chartsheet
+                } else {
+                    SheetRelationship::Other
+                };
+                if relationships.insert(id, relationship).is_some() {
                     return Err(DocumentError::UnsupportedFormat);
                 }
             }
@@ -71,10 +96,10 @@ fn parse_relationships(xml: &str) -> DocumentResult<HashMap<String, String>> {
             _ => {}
         }
     }
-    Ok(targets)
+    Ok(relationships)
 }
 
-fn worksheet_path(target: &str) -> DocumentResult<String> {
+fn sheet_path(target: &str, prefix: &str) -> DocumentResult<String> {
     let target = target.trim_start_matches('/');
     let path = if target.starts_with("xl/") {
         target.to_owned()
@@ -84,7 +109,7 @@ fn worksheet_path(target: &str) -> DocumentResult<String> {
     if path
         .split('/')
         .any(|segment| segment.is_empty() || segment == "..")
-        || !path.starts_with("xl/worksheets/")
+        || !path.starts_with(prefix)
         || !path.ends_with(".xml")
     {
         return Err(DocumentError::UnsupportedFormat);

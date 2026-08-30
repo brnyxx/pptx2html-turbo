@@ -114,6 +114,49 @@ fn empty_workbook_has_no_attributable_cells() {
     assert!(semantics.cells.is_empty());
 }
 
+#[test]
+fn chartsheets_are_skipped_without_weakening_sheet_identity_validation() {
+    let data = workbook_with_relationships(
+        r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Chart1" sheetId="1" r:id="rId1"/><sheet name="Sheet1" sheetId="2" r:id="rId2"/></sheets></workbook>"#,
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet" Target="chartsheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+        &[
+            ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
+            (
+                "xl/worksheets/sheet1.xml",
+                r#"<worksheet><sheetData><row r="1"><c r="A1"><v>7</v></c></row></sheetData></worksheet>"#,
+            ),
+        ],
+    );
+
+    let semantics = parse_xlsx_semantics(&data).expect("chartsheet must be skipped");
+
+    assert_eq!(semantics.cells, vec![cell("Sheet1", "A1", "7")]);
+}
+
+#[test]
+fn chartsheet_only_workbook_has_no_cell_semantics() {
+    let data = workbook_with_relationships(
+        r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Chart1" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet" Target="chartsheets/sheet1.xml"/></Relationships>"#,
+        &[("xl/chartsheets/sheet1.xml", "<chartsheet/>")],
+    );
+
+    let semantics = parse_xlsx_semantics(&data).expect("chartsheet-only workbook should convert");
+
+    assert!(semantics.cells.is_empty());
+}
+
+#[test]
+fn sheet_bound_to_unrelated_relationship_is_refused() {
+    let data = workbook_with_relationships(
+        r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rIdTheme"/></sheets></workbook>"#,
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdTheme" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/></Relationships>"#,
+        &[],
+    );
+
+    assert!(parse_xlsx_semantics(&data).is_err());
+}
+
 fn cell(worksheet: &str, coordinate: &str, displayed_value: &str) -> SpreadsheetCell {
     SpreadsheetCell {
         worksheet: worksheet.to_owned(),
@@ -148,6 +191,34 @@ fn workbook_fixture(shared_strings: &str, sheets: &[(&str, &str)]) -> Vec<u8> {
             &format!("xl/worksheets/{name}"),
             (*xml).to_owned(),
         );
+    }
+    zip.finish().expect("finish fixture").into_inner()
+}
+
+fn workbook_with_relationships(
+    workbook: &str,
+    relationships: &str,
+    parts: &[(&str, &str)],
+) -> Vec<u8> {
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default();
+    entry(&mut zip, options, "[Content_Types].xml", content_types());
+    entry(&mut zip, options, "_rels/.rels", root_relationships());
+    entry(&mut zip, options, "xl/workbook.xml", workbook.to_owned());
+    entry(
+        &mut zip,
+        options,
+        "xl/_rels/workbook.xml.rels",
+        relationships.to_owned(),
+    );
+    entry(
+        &mut zip,
+        options,
+        "xl/sharedStrings.xml",
+        "<sst/>".to_owned(),
+    );
+    for (name, xml) in parts {
+        entry(&mut zip, options, name, (*xml).to_owned());
     }
     zip.finish().expect("finish fixture").into_inner()
 }

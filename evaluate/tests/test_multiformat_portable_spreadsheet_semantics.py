@@ -28,6 +28,7 @@ MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 DOC_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 WORKSHEET_TYPE = f"{DOC_REL}/worksheet"
+CHARTSHEET_TYPE = f"{DOC_REL}/chartsheet"
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,7 +169,92 @@ def _write_package(
         )
 
 
+def _write_relationship_package(
+    path: Path, sheets: str, relationships: str, parts: dict[str, str]
+) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            "xl/workbook.xml",
+            f'<workbook xmlns="{MAIN}" xmlns:r="{DOC_REL}"><sheets>{sheets}'
+            "</sheets></workbook>",
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            f'<Relationships xmlns="{PKG_REL}">{relationships}</Relationships>',
+        )
+        archive.writestr(
+            "xl/sharedStrings.xml",
+            f'<sst xmlns="{MAIN}"><si><t>Shared</t></si></sst>',
+        )
+        for name, value in parts.items():
+            archive.writestr(name, value)
+
+
 class PortableSpreadsheetSemanticsTests(unittest.TestCase):
+    def test_chartsheet_is_skipped_before_the_following_worksheet(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "chartsheet.xlsx"
+            _write_relationship_package(
+                path,
+                '<sheet name="Chart1" sheetId="1" r:id="rId1"/>'
+                '<sheet name="Sheet1" sheetId="2" r:id="rId2"/>',
+                f'<Relationship Id="rId1" Type="{CHARTSHEET_TYPE}" '
+                'Target="chartsheets/sheet1.xml"/>'
+                f'<Relationship Id="rId2" Type="{WORKSHEET_TYPE}" '
+                'Target="worksheets/sheet1.xml"/>',
+                {
+                    "xl/chartsheets/sheet1.xml": "<chartsheet/>",
+                    "xl/worksheets/sheet1.xml": (
+                        '<worksheet xmlns="'
+                        + MAIN
+                        + '"><sheetData><row r="1"><c r="A1"><v>7</v></c>'
+                        "</row></sheetData></worksheet>"
+                    ),
+                },
+            )
+
+            value = extract_xlsx_semantics(path)
+
+        worksheets = value["worksheets"]
+        if not isinstance(worksheets, list):
+            self.fail("worksheets must be a list")
+        self.assertEqual(len(worksheets), 1)
+        worksheet = _item(worksheets, 0)
+        self.assertEqual(_text(worksheet, "name"), "Sheet1")
+        cells = worksheet["cells"]
+        if not isinstance(cells, list):
+            self.fail("cells must be a list")
+        self.assertEqual(_text(_item(cells, 0), "display"), "7")
+
+    def test_chartsheet_only_workbook_has_no_cell_semantics(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "chartsheet-only.xlsx"
+            _write_relationship_package(
+                path,
+                '<sheet name="Chart1" sheetId="1" r:id="rId1"/>',
+                f'<Relationship Id="rId1" Type="{CHARTSHEET_TYPE}" '
+                'Target="chartsheets/sheet1.xml"/>',
+                {"xl/chartsheets/sheet1.xml": "<chartsheet/>"},
+            )
+
+            value = extract_xlsx_semantics(path)
+
+        self.assertEqual(value["worksheets"], [])
+
+    def test_sheet_bound_to_unrelated_relationship_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "unrelated-relationship.xlsx"
+            _write_relationship_package(
+                path,
+                '<sheet name="Sheet1" sheetId="1" r:id="rIdTheme"/>',
+                f'<Relationship Id="rIdTheme" Type="{DOC_REL}/theme" '
+                'Target="theme/theme1.xml"/>',
+                {},
+            )
+
+            with self.assertRaises(SpreadsheetSemanticError):
+                _ = extract_xlsx_semantics(path)
+
     def test_shared_cases_match_the_rust_core(self) -> None:
         cases = _load_cases()
         # Guard against a silently truncated or unparsed fixture.

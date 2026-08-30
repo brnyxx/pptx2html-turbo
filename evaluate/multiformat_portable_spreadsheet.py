@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import zipfile
 from collections.abc import Iterator
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -19,7 +21,9 @@ MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 DOC_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 WORKSHEET_REL_SUFFIX = "/relationships/worksheet"
+CHARTSHEET_REL_SUFFIX = "/relationships/chartsheet"
 WORKSHEET_PREFIX = "xl/worksheets/"
+CHARTSHEET_PREFIX = "xl/chartsheets/"
 _MAX_COLUMN = 16_384
 _MAX_ROW = 1_048_576
 # Cell types whose <v> text is displayed verbatim, matching the Rust core.
@@ -28,6 +32,18 @@ _VERBATIM_KINDS = frozenset({"str", "e"})
 
 class SpreadsheetSemanticError(ValueError):
     pass
+
+
+class _SheetRelationshipKind(Enum):
+    WORKSHEET = "worksheet"
+    CHARTSHEET = "chartsheet"
+    OTHER = "other"
+
+
+@dataclass(frozen=True, slots=True)
+class _SheetRelationship:
+    kind: _SheetRelationshipKind
+    path: str | None = None
 
 
 class _SafeXmlStream:
@@ -60,9 +76,13 @@ def extract_xlsx_semantics(path: Path) -> dict[str, JsonValue]:
                 target = relationships.get(relation)
                 if not name or target is None:
                     raise SpreadsheetSemanticError("XLSX worksheet identity is invalid")
+                if target.kind is _SheetRelationshipKind.CHARTSHEET:
+                    continue
+                if target.kind is not _SheetRelationshipKind.WORKSHEET or target.path is None:
+                    raise SpreadsheetSemanticError("XLSX worksheet identity is invalid")
                 cells: list[JsonValue] = []
                 unattributed: list[JsonValue] = []
-                for cell, diagnostic in _worksheet_cells(archive, target, shared, styles):
+                for cell, diagnostic in _worksheet_cells(archive, target.path, shared, styles):
                     if cell is not None:
                         cells.append(cell)
                     if diagnostic is not None:
@@ -76,8 +96,6 @@ def extract_xlsx_semantics(path: Path) -> dict[str, JsonValue]:
                         "unattributed_cells": unattributed,
                     }
                 )
-            if not worksheets:
-                raise SpreadsheetSemanticError("XLSX workbook has no worksheets")
             return {"worksheets": worksheets}
     except SpreadsheetSemanticError:
         raise
@@ -99,28 +117,44 @@ def _xml(archive: zipfile.ZipFile, name: str) -> ElementTree.Element:
     return ElementTree.fromstring(value)
 
 
-def _relationships(archive: zipfile.ZipFile) -> dict[str, str]:
+def _relationships(archive: zipfile.ZipFile) -> dict[str, _SheetRelationship]:
     root = _xml(archive, "xl/_rels/workbook.xml.rels")
-    result: dict[str, str] = {}
+    result: dict[str, _SheetRelationship] = {}
     for item in root.findall(f"{{{PKG_REL}}}Relationship"):
         kind = item.attrib.get("Type", "")
-        if not kind.endswith(WORKSHEET_REL_SUFFIX):
-            continue
-        # An external target names a resource outside the package and must
-        # never be dereferenced, so refuse instead of attempting a read.
-        if item.attrib.get("TargetMode") is not None:
-            raise SpreadsheetSemanticError("XLSX relationship is external")
-        identity, target = item.attrib.get("Id", ""), item.attrib.get("Target", "")
-        if not identity or not target:
+        identity = item.attrib.get("Id", "")
+        if not identity:
             raise SpreadsheetSemanticError("XLSX relationship is unsafe")
         if identity in result:
             raise SpreadsheetSemanticError("XLSX relationship id is duplicated")
-        result[identity] = _worksheet_path(target)
+        if kind.endswith(WORKSHEET_REL_SUFFIX):
+            result[identity] = _sheet_relationship(
+                item, WORKSHEET_PREFIX, _SheetRelationshipKind.WORKSHEET
+            )
+        elif kind.endswith(CHARTSHEET_REL_SUFFIX):
+            result[identity] = _sheet_relationship(
+                item, CHARTSHEET_PREFIX, _SheetRelationshipKind.CHARTSHEET
+            )
+        else:
+            result[identity] = _SheetRelationship(_SheetRelationshipKind.OTHER)
     return result
 
 
-def _worksheet_path(target: str) -> str:
-    """Mirrors the Rust core's worksheet target resolution.
+def _sheet_relationship(
+    item: ElementTree.Element, prefix: str, kind: _SheetRelationshipKind
+) -> _SheetRelationship:
+    # An external target names a resource outside the package and must never
+    # be dereferenced or accepted as a sheet identity.
+    if item.attrib.get("TargetMode") is not None:
+        raise SpreadsheetSemanticError("XLSX relationship is external")
+    target = item.attrib.get("Target", "")
+    if not target:
+        raise SpreadsheetSemanticError("XLSX relationship is unsafe")
+    return _SheetRelationship(kind, _sheet_path(target, prefix))
+
+
+def _sheet_path(target: str, prefix: str) -> str:
+    """Mirrors the Rust core's sheet target resolution.
 
     Traversal segments are rejected outright rather than normalized away, so a
     target cannot be laundered into an in-package path.
@@ -130,7 +164,7 @@ def _worksheet_path(target: str) -> str:
     segments = path.split("/")
     if (
         any(not segment or segment == ".." for segment in segments)
-        or not path.startswith(WORKSHEET_PREFIX)
+        or not path.startswith(prefix)
         or not path.endswith(".xml")
     ):
         raise SpreadsheetSemanticError("XLSX relationship is unsafe")
