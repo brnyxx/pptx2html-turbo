@@ -18,6 +18,7 @@ mod workspace;
 mod xlsx_freeze;
 mod xlsx_workbook;
 mod xlsx_xml;
+mod xlsx_zip;
 
 pub use config::{IsolationLauncher, NativeBackendConfig, ProcessIsolation};
 pub use converter::NativeDocumentConverter;

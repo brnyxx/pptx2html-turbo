@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use zip::{ZipArchive, ZipWriter};
@@ -7,12 +7,10 @@ use zip::{ZipArchive, ZipWriter};
 use crate::config::NativeBackendConfig;
 use crate::workspace::TemporaryWorkspace;
 use crate::xlsx_workbook::freeze_workbook_calculation;
+use crate::xlsx_zip::{declared_archive_entries, read_bounded_entry};
 use crate::{NativeError, NativeResult};
 
-const MAX_ARCHIVE_ENTRIES: usize = 16_384;
-const MAX_EOCD_SIZE: usize = 22 + u16::MAX as usize;
 const WORKBOOK_PART: &str = "xl/workbook.xml";
-const ZIP_EOCD_SIGNATURE: &[u8; 4] = b"PK\x05\x06";
 
 pub(crate) fn freeze_xlsx_snapshot(
     converted: &Path,
@@ -47,9 +45,6 @@ fn freeze_xlsx_archive(
     source.seek(SeekFrom::Start(0))?;
     let mut archive = ZipArchive::new(source)
         .map_err(|_| malformed_error("converted XLSX is not a valid ZIP archive"))?;
-    if declared_entries > MAX_ARCHIVE_ENTRIES {
-        return malformed("converted XLSX has too many archive entries");
-    }
     if declared_entries != archive.len() {
         return malformed("converted XLSX has duplicate archive entries");
     }
@@ -71,7 +66,26 @@ fn freeze_xlsx_archive(
         if !entry.is_file() || entry.is_symlink() {
             return malformed("converted XLSX has a non-regular archive entry");
         }
-        total_uncompressed = total_uncompressed.checked_add(entry.size()).ok_or(
+        let remaining = max_output_bytes.checked_sub(total_uncompressed).ok_or(
+            NativeError::ResourceLimitExceeded {
+                resource: "output",
+                limit: max_output_bytes,
+            },
+        )?;
+        let options = entry.options();
+        let content = read_bounded_entry(&mut entry, remaining)?;
+        let output = if name == WORKBOOK_PART {
+            workbook_entries += 1;
+            freeze_workbook_calculation(&content)?
+        } else {
+            content
+        };
+        let output_size =
+            u64::try_from(output.len()).map_err(|_| NativeError::ResourceLimitExceeded {
+                resource: "output",
+                limit: max_output_bytes,
+            })?;
+        total_uncompressed = total_uncompressed.checked_add(output_size).ok_or(
             NativeError::ResourceLimitExceeded {
                 resource: "output",
                 limit: max_output_bytes,
@@ -83,39 +97,10 @@ fn freeze_xlsx_archive(
                 limit: max_output_bytes,
             });
         }
-
-        if name == WORKBOOK_PART {
-            workbook_entries += 1;
-            let workbook = read_bounded_entry(&mut entry, max_output_bytes)?;
-            let frozen_workbook = freeze_workbook_calculation(&workbook)?;
-            let frozen_size = u64::try_from(frozen_workbook.len()).map_err(|_| {
-                NativeError::ResourceLimitExceeded {
-                    resource: "output",
-                    limit: max_output_bytes,
-                }
-            })?;
-            total_uncompressed = total_uncompressed
-                .checked_sub(entry.size())
-                .and_then(|total| total.checked_add(frozen_size))
-                .ok_or(NativeError::ResourceLimitExceeded {
-                    resource: "output",
-                    limit: max_output_bytes,
-                })?;
-            if total_uncompressed > max_output_bytes {
-                return Err(NativeError::ResourceLimitExceeded {
-                    resource: "output",
-                    limit: max_output_bytes,
-                });
-            }
-            writer
-                .start_file(name, entry.options())
-                .map_err(|_| malformed_error("could not create frozen workbook part"))?;
-            writer.write_all(&frozen_workbook)?;
-        } else {
-            writer
-                .raw_copy_file(entry)
-                .map_err(|_| malformed_error("could not preserve converted XLSX entry"))?;
-        }
+        writer
+            .start_file(name, options)
+            .map_err(|_| malformed_error("could not create frozen XLSX entry"))?;
+        writer.write_all(&output)?;
     }
 
     if workbook_entries != 1 {
@@ -131,64 +116,6 @@ fn freeze_xlsx_archive(
         });
     }
     Ok(())
-}
-
-fn declared_archive_entries(source: &mut File, length: u64) -> NativeResult<usize> {
-    let tail_length = length.min(MAX_EOCD_SIZE as u64);
-    let tail_capacity = usize::try_from(tail_length)
-        .map_err(|_| malformed_error("converted XLSX ZIP metadata is too large"))?;
-    let mut tail = vec![0_u8; tail_capacity];
-    source.seek(SeekFrom::Start(length - tail_length))?;
-    source.read_exact(&mut tail)?;
-
-    let Some(eocd) = tail
-        .windows(ZIP_EOCD_SIGNATURE.len())
-        .enumerate()
-        .rev()
-        .find_map(|(offset, signature)| {
-            if signature != ZIP_EOCD_SIGNATURE || tail.len().saturating_sub(offset) < 22 {
-                return None;
-            }
-            let comment_length = u16::from_le_bytes([tail[offset + 20], tail[offset + 21]]);
-            (offset + 22 + usize::from(comment_length) == tail.len()).then_some(offset)
-        })
-    else {
-        return malformed("converted XLSX has no valid ZIP end record");
-    };
-
-    let disk = u16::from_le_bytes([tail[eocd + 4], tail[eocd + 5]]);
-    let directory_disk = u16::from_le_bytes([tail[eocd + 6], tail[eocd + 7]]);
-    let disk_entries = u16::from_le_bytes([tail[eocd + 8], tail[eocd + 9]]);
-    let total_entries = u16::from_le_bytes([tail[eocd + 10], tail[eocd + 11]]);
-    if disk != 0 || directory_disk != 0 || disk_entries != total_entries {
-        return malformed("converted XLSX uses an unsupported multi-disk ZIP archive");
-    }
-    if total_entries == u16::MAX {
-        return malformed("converted XLSX ZIP64 entry count exceeds the supported limit");
-    }
-    Ok(usize::from(total_entries))
-}
-
-fn read_bounded_entry(entry: &mut zip::read::ZipFile<'_>, limit: u64) -> NativeResult<Vec<u8>> {
-    if entry.size() > limit {
-        return Err(NativeError::ResourceLimitExceeded {
-            resource: "output",
-            limit,
-        });
-    }
-    let capacity =
-        usize::try_from(entry.size()).map_err(|_| NativeError::ResourceLimitExceeded {
-            resource: "output",
-            limit,
-        })?;
-    let mut content = Vec::with_capacity(capacity);
-    entry
-        .take(entry.size().saturating_add(1))
-        .read_to_end(&mut content)?;
-    if content.len() != capacity {
-        return malformed("converted XLSX entry has an invalid declared size");
-    }
-    Ok(content)
 }
 
 fn safe_archive_path(path: &str) -> bool {

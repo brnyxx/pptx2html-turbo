@@ -1,4 +1,8 @@
+use std::collections::HashSet;
+
 use crate::{NativeError, NativeResult};
+
+const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 
 pub(super) struct StartTag {
     pub(super) name: String,
@@ -23,13 +27,17 @@ pub(super) fn tag_end(text: &str, start: usize) -> NativeResult<usize> {
     malformed("xl/workbook.xml has an unterminated tag")
 }
 
-pub(super) fn parse_start_tag(content: &str) -> NativeResult<StartTag> {
+pub(super) fn parse_start_tag(
+    content: &str,
+    inherited_namespaces: &[(String, String)],
+) -> NativeResult<StartTag> {
     let bytes = content.as_bytes();
     let name_end = xml_name_end(bytes, 0)?;
     let name = content[..name_end].to_owned();
     let mut position = name_end;
     let mut self_closing = false;
     let mut namespaces = Vec::new();
+    let mut attribute_names = HashSet::new();
     while position < bytes.len() {
         skip_xml_whitespace(bytes, &mut position);
         if position == bytes.len() {
@@ -47,6 +55,9 @@ pub(super) fn parse_start_tag(content: &str) -> NativeResult<StartTag> {
         let attribute_start = position;
         position = xml_name_end(bytes, position)?;
         let attribute_name = &content[attribute_start..position];
+        if !attribute_names.insert(attribute_name) {
+            return malformed("xl/workbook.xml has a duplicate attribute");
+        }
         skip_xml_whitespace(bytes, &mut position);
         if bytes.get(position) != Some(&b'=') {
             return malformed("xl/workbook.xml has an invalid attribute");
@@ -91,6 +102,8 @@ pub(super) fn parse_start_tag(content: &str) -> NativeResult<StartTag> {
             namespaces.push((prefix.to_owned(), decode_xml_text(value)?));
         }
     }
+    validate_element_prefix(&name, &namespaces, inherited_namespaces)?;
+    validate_expanded_attributes(&attribute_names, &namespaces, inherited_namespaces)?;
     Ok(StartTag {
         name,
         self_closing,
@@ -130,6 +143,7 @@ fn skip_xml_whitespace(bytes: &[u8], position: &mut usize) {
 }
 
 pub(super) fn validate_xml_text(text: &str) -> NativeResult<()> {
+    validate_xml_characters(text)?;
     let mut remainder = text;
     while let Some(ampersand) = remainder.find('&') {
         let entity_tail = &remainder[ampersand + 1..];
@@ -143,6 +157,73 @@ pub(super) fn validate_xml_text(text: &str) -> NativeResult<()> {
         remainder = &entity_tail[semicolon + 1..];
     }
     Ok(())
+}
+
+pub(super) fn validate_xml_characters(text: &str) -> NativeResult<()> {
+    if text
+        .chars()
+        .any(|character| !valid_xml_scalar(character as u32))
+    {
+        return malformed("xl/workbook.xml has an invalid XML character");
+    }
+    Ok(())
+}
+
+fn validate_expanded_attributes(
+    names: &HashSet<&str>,
+    declared: &[(String, String)],
+    inherited: &[(String, String)],
+) -> NativeResult<()> {
+    let mut expanded = HashSet::new();
+    for name in names {
+        if *name == "xmlns" || name.starts_with("xmlns:") {
+            continue;
+        }
+        let (namespace, local_name) = match name.rsplit_once(':') {
+            None => ("", *name),
+            Some(("xml", local_name)) => (XML_NAMESPACE, local_name),
+            Some((prefix, local_name)) => {
+                let Some(namespace) = resolved_namespace(prefix, declared, inherited) else {
+                    return malformed("xl/workbook.xml has an unbound attribute prefix");
+                };
+                (namespace, local_name)
+            }
+        };
+        if !expanded.insert((namespace, local_name)) {
+            return malformed("xl/workbook.xml has a duplicate attribute");
+        }
+    }
+    Ok(())
+}
+
+fn validate_element_prefix(
+    name: &str,
+    declared: &[(String, String)],
+    inherited: &[(String, String)],
+) -> NativeResult<()> {
+    if let Some((prefix, _)) = name.rsplit_once(':')
+        && resolved_namespace(prefix, declared, inherited).is_none()
+    {
+        return malformed("xl/workbook.xml has an unbound element prefix");
+    }
+    Ok(())
+}
+
+fn resolved_namespace<'a>(
+    prefix: &str,
+    declared: &'a [(String, String)],
+    inherited: &'a [(String, String)],
+) -> Option<&'a str> {
+    if prefix == "xml" {
+        return Some(XML_NAMESPACE);
+    }
+    declared
+        .iter()
+        .rev()
+        .chain(inherited.iter().rev())
+        .find_map(|(declared_prefix, namespace)| {
+            (declared_prefix == prefix && !namespace.is_empty()).then_some(namespace.as_str())
+        })
 }
 
 fn decode_xml_text(text: &str) -> NativeResult<String> {
@@ -218,7 +299,7 @@ pub(super) fn element_namespace<'a>(
         .rev()
         .chain(inherited.iter().rev())
         .find_map(|(declared_prefix, namespace)| {
-            (declared_prefix == prefix).then_some(namespace.as_str())
+            (declared_prefix == prefix && !namespace.is_empty()).then_some(namespace.as_str())
         })
 }
 

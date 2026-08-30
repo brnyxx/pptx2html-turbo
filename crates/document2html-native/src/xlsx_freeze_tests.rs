@@ -119,6 +119,143 @@ fn rejects_malformed_workbook() {
 }
 
 #[test]
+fn rejects_foreign_workbook_namespace() {
+    // Given
+    let workbook =
+        br#"<x:workbook xmlns:x="urn:foreign"><x:sheets/><x:calcPr calcMode="auto"/></x:workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("foreign workbook namespace must fail");
+
+    // Then
+    assert_malformed_reason(
+        error,
+        "xl/workbook.xml has an unsupported workbook namespace",
+    );
+}
+
+#[test]
+fn rejects_unbound_workbook_prefix() {
+    // Given
+    let workbook = br#"<x:workbook><x:sheets/></x:workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("unbound workbook prefix must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has an unbound element prefix");
+}
+
+#[test]
+fn rejects_missing_workbook_namespace() {
+    // Given
+    let workbook = br#"<workbook><sheets/></workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("missing workbook namespace must fail");
+
+    // Then
+    assert_malformed_reason(
+        error,
+        "xl/workbook.xml has no SpreadsheetML workbook namespace",
+    );
+}
+
+#[test]
+fn rejects_duplicate_xml_attributes() {
+    // Given
+    let workbook = br#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/><calcPr calcMode="auto" calcMode="manual"/></workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("duplicate XML attribute must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has a duplicate attribute");
+}
+
+#[test]
+fn rejects_duplicate_expanded_xml_attributes() {
+    // Given
+    let workbook = br#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:a="urn:duplicate" xmlns:b="urn:duplicate" a:value="1" b:value="2"><sheets/></workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("duplicate expanded attribute must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has a duplicate attribute");
+}
+
+#[test]
+fn rejects_duplicate_expanded_attributes_with_inherited_namespace() {
+    // Given
+    let workbook = br#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:a="urn:duplicate"><sheets xmlns:b="urn:duplicate" a:value="1" b:value="2"/></workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("inherited duplicate attribute must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has a duplicate attribute");
+}
+
+#[test]
+fn rejects_unbound_xml_attribute_prefix() {
+    // Given
+    let workbook = br#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets rogue:value="1"/></workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("unbound attribute prefix must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has an unbound attribute prefix");
+}
+
+#[test]
+fn rejects_unbound_xml_element_prefix() {
+    // Given
+    let workbook = br#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><rogue:unknown/></workbook>"#;
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("unbound element prefix must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has an unbound element prefix");
+}
+
+#[test]
+fn rejects_forbidden_raw_xml_characters() {
+    // Given
+    let workbook = b"<workbook xmlns=\"urn:example:\x01\"><sheets/></workbook>";
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("forbidden XML character must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has an invalid XML character");
+}
+
+#[test]
+fn rejects_forbidden_xml_characters_in_comments() {
+    // Given
+    let workbook = b"<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><!--\x01--><sheets/></workbook>";
+    let archive = xlsx_archive(&[("xl/workbook.xml", workbook)]);
+
+    // When
+    let error = freeze_archive(&archive).expect_err("forbidden comment character must fail");
+
+    // Then
+    assert_malformed_reason(error, "xl/workbook.xml has an invalid XML character");
+}
+
+#[test]
 fn rejects_duplicate_archive_parts() {
     // Given
     let mut duplicate = xlsx_archive(&[
@@ -135,6 +272,47 @@ fn rejects_duplicate_archive_parts() {
         duplicate_error,
         "converted XLSX has duplicate archive entries",
     );
+}
+
+#[test]
+fn rejects_eocd_count_smaller_than_central_directory() {
+    // Given
+    let mut archive = xlsx_archive(&[
+        ("xl/workbook.xml", WORKBOOK_WITHOUT_CALC_PR),
+        ("xl/extra.bin", b"unlisted central directory entry"),
+    ]);
+    let eocd = archive
+        .windows(4)
+        .rposition(|signature| signature == b"PK\x05\x06")
+        .expect("find ZIP end record");
+    archive[eocd + 8..eocd + 10].copy_from_slice(&1_u16.to_le_bytes());
+    archive[eocd + 10..eocd + 12].copy_from_slice(&1_u16.to_le_bytes());
+
+    // When
+    let error = freeze_archive(&archive).expect_err("truncated entry count must fail");
+
+    // Then
+    assert_malformed_reason(
+        error,
+        "converted XLSX central directory entry count is invalid",
+    );
+}
+
+#[test]
+fn rejects_non_workbook_entry_with_invalid_crc() {
+    // Given
+    let content = vec![b'x'; 8_192];
+    let mut archive = xlsx_archive(&[
+        ("xl/workbook.xml", WORKBOOK_WITHOUT_CALC_PR),
+        ("xl/extra.bin", &content),
+    ]);
+    corrupt_archive_entry_crc(&mut archive, b"xl/extra.bin");
+
+    // When
+    let error = freeze_archive(&archive).expect_err("invalid entry CRC must fail");
+
+    // Then
+    assert_malformed_reason(error, "converted XLSX has an unreadable archive entry");
 }
 
 #[test]
@@ -178,6 +356,25 @@ fn replace_archive_name(archive: &mut [u8], original: &[u8], replacement: &[u8])
     assert_eq!(offsets.len(), 2);
     for offset in offsets {
         archive[offset..offset + replacement.len()].copy_from_slice(replacement);
+    }
+}
+
+fn corrupt_archive_entry_crc(archive: &mut [u8], name: &[u8]) {
+    let offsets = archive
+        .windows(name.len())
+        .enumerate()
+        .filter_map(|(offset, candidate)| (candidate == name).then_some(offset))
+        .collect::<Vec<_>>();
+    assert_eq!(offsets.len(), 2);
+    for name_offset in offsets {
+        let crc_offset = if archive[name_offset - 30..name_offset - 26] == *b"PK\x03\x04" {
+            name_offset - 16
+        } else if archive[name_offset - 46..name_offset - 42] == *b"PK\x01\x02" {
+            name_offset - 30
+        } else {
+            panic!("archive entry name does not follow a ZIP header");
+        };
+        archive[crc_offset] ^= 0xff;
     }
 }
 

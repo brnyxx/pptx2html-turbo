@@ -1,10 +1,11 @@
 use crate::xlsx_xml::{
     calc_pr_name, element_namespace, is_workbook_name, parse_end_tag, parse_start_tag, tag_end,
-    validate_xml_text, workbook_child_name,
+    validate_xml_characters, validate_xml_text, workbook_child_name,
 };
 use crate::{NativeError, NativeResult};
 
 const MAX_XML_DEPTH: usize = 128;
+const SPREADSHEETML_NAMESPACE: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const CALC_PR_FOLLOWING_CHILDREN: [&str; 9] = [
     "oleSize",
     "customWorkbookViews",
@@ -25,6 +26,7 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
     let mut root_name = None;
     let mut root_namespace = None;
     let mut root_namespaces = Vec::new();
+    let mut namespace_stack: Vec<Vec<(String, String)>> = Vec::new();
     let mut root_end = None;
     let mut calc_range = None;
     let mut calc_insertion = None;
@@ -55,6 +57,7 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
             let Some(end) = text[position + 4..].find("-->") else {
                 return malformed("xl/workbook.xml has an unterminated comment");
             };
+            validate_xml_characters(&text[position + 4..position + 4 + end])?;
             position += end + 7;
             continue;
         }
@@ -65,6 +68,7 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
             let Some(end) = text[position + 9..].find("]]>") else {
                 return malformed("xl/workbook.xml has an unterminated CDATA section");
             };
+            validate_xml_characters(&text[position + 9..position + 9 + end])?;
             position += end + 12;
             continue;
         }
@@ -75,6 +79,7 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
             let Some(end) = text[position + 2..].find("?>") else {
                 return malformed("xl/workbook.xml has an unterminated processing instruction");
             };
+            validate_xml_characters(&text[position + 2..position + 2 + end])?;
             position += end + 4;
             continue;
         }
@@ -91,6 +96,9 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
             if open != name {
                 return malformed("xl/workbook.xml has mismatched element tags");
             }
+            if namespace_stack.pop().is_none() {
+                return malformed("xl/workbook.xml namespace state is invalid");
+            }
             if calc_depth == Some(stack.len() + 1) {
                 calc_depth = None;
                 let Some((start, _)) = calc_range else {
@@ -102,7 +110,8 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
                 root_end = Some(position);
             }
         } else {
-            let start_tag = parse_start_tag(&text[position + 1..end])?;
+            let inherited_namespaces = namespace_stack.last().map_or(&[][..], Vec::as_slice);
+            let start_tag = parse_start_tag(&text[position + 1..end], inherited_namespaces)?;
             let name = start_tag.name;
             let self_closing = start_tag.self_closing;
             if calc_depth.is_some() {
@@ -113,8 +122,19 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
                     return malformed("xl/workbook.xml must have one non-empty workbook root");
                 }
                 root_name = Some(name.clone());
-                root_namespace = element_namespace(&name, "workbook", &start_tag.namespaces, &[])
-                    .map(str::to_owned);
+                let Some(namespace) =
+                    element_namespace(&name, "workbook", &start_tag.namespaces, &[])
+                else {
+                    return if name.contains(':') {
+                        malformed("xl/workbook.xml has an unbound workbook prefix")
+                    } else {
+                        malformed("xl/workbook.xml has no SpreadsheetML workbook namespace")
+                    };
+                };
+                if namespace != SPREADSHEETML_NAMESPACE {
+                    return malformed("xl/workbook.xml has an unsupported workbook namespace");
+                }
+                root_namespace = Some(namespace.to_owned());
                 root_namespaces = start_tag.namespaces.clone();
             } else if root_end.is_some() {
                 return malformed("xl/workbook.xml has content after its root element");
@@ -163,13 +183,18 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
                 if stack.len() == MAX_XML_DEPTH {
                     return malformed("xl/workbook.xml nesting exceeds the supported limit");
                 }
+                namespace_stack.push(merged_namespaces(
+                    inherited_namespaces,
+                    &start_tag.namespaces,
+                ));
                 stack.push(name);
             }
         }
         position = end + 1;
     }
 
-    if !stack.is_empty() || root_name.is_none() || root_end.is_none() {
+    if !stack.is_empty() || !namespace_stack.is_empty() || root_name.is_none() || root_end.is_none()
+    {
         return malformed("xl/workbook.xml has malformed element structure");
     }
     let Some(root) = root_name else {
@@ -189,6 +214,25 @@ pub(crate) fn freeze_workbook_calculation(workbook: &[u8]) -> NativeResult<Vec<u
     frozen.extend_from_slice(calc.as_bytes());
     frozen.extend_from_slice(&workbook[end..]);
     Ok(frozen)
+}
+
+fn merged_namespaces(
+    inherited: &[(String, String)],
+    declared: &[(String, String)],
+) -> Vec<(String, String)> {
+    let mut merged = inherited.to_vec();
+    for (prefix, namespace) in declared {
+        if let Some((_, inherited_namespace)) = merged
+            .iter_mut()
+            .rev()
+            .find(|(inherited_prefix, _)| inherited_prefix == prefix)
+        {
+            *inherited_namespace = namespace.clone();
+        } else {
+            merged.push((prefix.clone(), namespace.clone()));
+        }
+    }
+    merged
 }
 
 fn malformed<T>(reason: &str) -> NativeResult<T> {
