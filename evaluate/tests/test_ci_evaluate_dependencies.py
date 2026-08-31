@@ -149,6 +149,29 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
             all(re.fullmatch(r"[0-9a-f]{40}", revision) for revision in action_revisions)
         )
 
+    def test_all_workflow_actions_are_sha_pinned(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        unpinned: dict[str, list[str]] = {}
+
+        for workflow in sorted((root / ".github" / "workflows").glob("*.yml")):
+            source = workflow.read_text(encoding="utf-8")
+            action_references = re.findall(
+                r"^\s*(?:-\s*)?uses:\s+([^\s#]+)", source, re.MULTILINE
+            )
+            invalid = [
+                reference
+                for reference in action_references
+                if not reference.startswith("./")
+                and not re.fullmatch(
+                    r"[^@]+@[0-9a-f]{40}",
+                    reference,
+                )
+            ]
+            if invalid:
+                unpinned[workflow.name] = invalid
+
+        self.assertEqual({}, unpinned)
+
     def test_workflows_install_pinned_wasm_pack_idempotently(self) -> None:
         # Given
         root = Path(__file__).resolve().parents[2]
