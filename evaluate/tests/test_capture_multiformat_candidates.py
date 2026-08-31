@@ -22,6 +22,8 @@ class CaptureMultiFormatCandidatesTests(unittest.TestCase):
     def test_two_clean_runs_publish_self_validating_candidate_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = prepare_pipeline_fixture(Path(temp_dir), PROJECT_ROOT)
+            converter_alias = Path(temp_dir) / "converter-alias"
+            converter_alias.hardlink_to(fixture.converter)
 
             result = capture_candidate_evidence(
                 PROJECT_ROOT,
@@ -49,14 +51,14 @@ class CaptureMultiFormatCandidatesTests(unittest.TestCase):
             capture = json.loads(result.capture.read_text(encoding="utf-8"))
             determinism = json.loads(result.determinism.read_text(encoding="utf-8"))
             runtime = json.loads(result.runtime_identity.read_text(encoding="utf-8"))
-            chromium_snapshot = (
-                fixture.evidence_root / runtime["artifacts"]["chromium_binary"]["path"]
+            converter_snapshot = (
+                fixture.evidence_root / runtime["artifacts"]["converter_binary"]["path"]
             )
-            self.assertGreater(fixture.chromium.stat().st_nlink, 1)
-            self.assertEqual(chromium_snapshot.stat().st_nlink, 1)
+            self.assertGreater(fixture.converter.stat().st_nlink, 1)
+            self.assertEqual(converter_snapshot.stat().st_nlink, 1)
             self.assertNotEqual(
-                (chromium_snapshot.stat().st_dev, chromium_snapshot.stat().st_ino),
-                (fixture.chromium.stat().st_dev, fixture.chromium.stat().st_ino),
+                (converter_snapshot.stat().st_dev, converter_snapshot.stat().st_ino),
+                (fixture.converter.stat().st_dev, fixture.converter.stat().st_ino),
             )
             self.assertEqual(capture["status"], "READY")
             self.assertEqual(len(capture["units"]), 7)

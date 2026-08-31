@@ -35,14 +35,21 @@ def serve(root: Path) -> Iterator[str]:
         thread.join()
 
 
-def assemble_site(root: Path, site: Path) -> None:
+def assemble_site(root: Path, site: Path) -> str:
     package = root / "crates" / "pptx2html-wasm" / "pkg"
+    package_metadata = json.loads(
+        (package / "package.json").read_text(encoding="utf-8")
+    )
+    package_version = package_metadata["version"]
+    if not isinstance(package_version, str):
+        raise ValueError("package version must be a string")
+    expected_title = f"pptx-to-html Package Browser Smoke · v{package_version}"
     package_site = site / "pkg"
     package_site.mkdir()
     (site / "index.html").write_text(
-        """<!DOCTYPE html>
+        f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>pptx-to-html Demo · v2.0.1</title></head>
+<head><meta charset="UTF-8"><title>{expected_title}</title></head>
 <body><iframe id="output" title="Converted presentation"></iframe></body>
 </html>
 """,
@@ -58,6 +65,7 @@ def assemble_site(root: Path, site: Path) -> None:
         "pptx2html_wasm_bg.wasm",
     ):
         copy2(package / file_name, package_site)
+    return expected_title
 
 
 def main() -> None:
@@ -90,7 +98,7 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="pptx-package-browser-") as temporary:
         site = Path(temporary)
-        assemble_site(root, site)
+        expected_title = assemble_site(root, site)
         with serve(site) as base_url, sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
@@ -134,7 +142,7 @@ def main() -> None:
         )
     if browser_errors:
         raise AssertionError(f"browser errors: {browser_errors}")
-    if result["title"] != "pptx-to-html Demo · v2.0.1":
+    if result["title"] != expected_title:
         raise AssertionError(f"unexpected demo title: {result['title']}")
     if result["startsWithDoctype"] is not True:
         raise AssertionError("facade output does not start with HTML doctype")

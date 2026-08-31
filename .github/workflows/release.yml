@@ -5,7 +5,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,11 +20,11 @@ jobs:
     name: Validate Workspace
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           components: rustfmt
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
       - name: Check release tag against workspace version
         run: |
           chmod +x scripts/read_release_version.sh
@@ -44,24 +44,29 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: pptx2html
+            document_artifact: document2html
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: pptx2html
+            document_artifact: document2html
           - target: x86_64-apple-darwin
             os: macos-latest
             artifact: pptx2html
+            document_artifact: document2html
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: pptx2html
+            document_artifact: document2html
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             artifact: pptx2html.exe
+            document_artifact: document2html.exe
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
 
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -78,16 +83,17 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../pptx2html-${{ matrix.target }}.tar.gz ${{ matrix.artifact }}
+          tar czf ../../../pptx2html-${{ matrix.target }}.tar.gz \
+            ${{ matrix.artifact }} ${{ matrix.document_artifact }}
 
       - name: Package (windows)
         if: runner.os == 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../pptx2html-${{ matrix.target }}.zip ${{ matrix.artifact }}
+          7z a ../../../pptx2html-${{ matrix.target }}.zip ${{ matrix.artifact }} ${{ matrix.document_artifact }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pptx2html-${{ matrix.target }}
           path: pptx2html-${{ matrix.target }}.*
@@ -96,19 +102,20 @@ jobs:
     name: Validate Bindings
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '20'
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
       - name: Install maturin
-        run: python -m pip install maturin
+        run: |
+          python -m pip install --require-hashes --only-binary :all: -r .github/requirements-release.txt
       - name: Install wasm-pack
         run: |
           if ! wasm-pack --version 2>/dev/null | grep -qx 'wasm-pack 0.14.0'; then
@@ -119,22 +126,25 @@ jobs:
           chmod +x scripts/read_release_version.sh
           VERSION=$(bash scripts/read_release_version.sh "${{ github.ref_name }}")
           echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
-      - name: Build Python wheel
-        run: python -m maturin build --manifest-path crates/pptx2html-py/Cargo.toml --features extension-module --interpreter python --out dist
-      - name: Install wheel and run runtime smoke tests
+      - name: Build Python wheels
         run: |
-          python -m pip install dist/*.whl
+          python -m maturin build --release --manifest-path crates/pptx2html-py/Cargo.toml --features extension-module --interpreter python --out dist/pptx2html
+          python -m maturin build --release --manifest-path crates/document2html-py/Cargo.toml --features extension-module --interpreter python --out dist/document2html
+      - name: Install wheels and run runtime smoke tests
+        run: |
+          python -m pip install dist/pptx2html/*.whl dist/document2html/*.whl
           python -m unittest discover -s crates/pptx2html-py/tests -v
+          python -m unittest discover -s crates/document2html-py/tests -v
       - name: Prepare validated WASM package
         run: bash scripts/prepare_wasm_release_package.sh "$PACKAGE_VERSION"
 
-  release:
-    name: Create Release
+  validate-release:
+    name: Validate Release Evidence
     needs: [validate-workspace, build, validate-bindings]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
       - name: Install evaluate test dependencies
@@ -143,7 +153,7 @@ jobs:
         run: python -m playwright install --with-deps chromium
       - name: Install PDF tooling
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: artifacts
       - name: Run evaluate helper tests
@@ -156,8 +166,24 @@ jobs:
         run: |
           python evaluate/powerpoint_evidence.py summary --golden-set-dir evaluate/golden_set --output-dir evaluate/powerpoint_golden --output-json artifacts/evaluate/powerpoint-evidence-summary.json
           python evaluate/powerpoint_evidence.py gate --family text-layout --golden-set-dir evaluate/golden_set --output-dir evaluate/powerpoint_golden --output-json artifacts/evaluate/powerpoint-evidence-text-layout-gate.json || true
+      - name: Upload release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-evidence
+          path: artifacts/evaluate
+
+  release:
+    name: Create Release
+    needs: validate-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: artifacts
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           generate_release_notes: true
           files: artifacts/**/*

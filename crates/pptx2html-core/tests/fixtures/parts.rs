@@ -193,20 +193,20 @@ fn valid_xml_document(bytes: &[u8]) -> bool {
         let Ok((namespace, event)) = reader.read_resolved_event_into(&mut buffer) else {
             return false;
         };
-        match &event {
+        let invalid_resolution = match &event {
             Event::Start(element) | Event::Empty(element) => {
-                if invalid_namespace_resolution(namespace)
+                invalid_namespace_resolution(namespace)
                     || element.attributes().any(|attribute| match attribute {
                         Ok(attribute) => {
                             invalid_namespace_resolution(reader.resolve_attribute(attribute.key).0)
                         }
                         Err(_) => true,
                     })
-                {
-                    return false;
-                }
             }
-            _ => {}
+            _ => false,
+        };
+        if invalid_resolution {
+            return false;
         }
         if matches!(event, Event::Eof) {
             return true;

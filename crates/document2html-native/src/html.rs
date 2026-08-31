@@ -21,7 +21,7 @@ pub(crate) fn normalize_poppler_html(
 ) -> NativeResult<NormalizedHtml> {
     let mut files = read_output_inventory(output_dir, html_path)?;
     let html_bytes = fs::read(html_path)?;
-    let html = String::from_utf8(html_bytes).map_err(|_| malformed("HTML is not UTF-8"))?;
+    let html = String::from_utf8_lossy(&html_bytes).into_owned();
     let mut html = normalize_generated_metadata(&html, workspace_root)?;
     validate_safe_html(&html, workspace_root)?;
     let page_count = count_page_containers(&html)?;

@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -174,6 +175,57 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
         self.assertGreaterEqual(browser_index, 0)
         self.assertLess(chromium_index, browser_index)
         self.assertLess(package_index, browser_index)
+
+    def test_release_packages_and_validates_universal_surfaces(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (root / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("document_artifact: document2html", source)
+        self.assertIn("document_artifact: document2html.exe", source)
+        self.assertEqual(source.count("${{ matrix.document_artifact }}"), 2)
+        self.assertIn(
+            "7z a ../../../pptx2html-${{ matrix.target }}.zip "
+            "${{ matrix.artifact }} ${{ matrix.document_artifact }}",
+            source,
+        )
+        self.assertIn("permissions:\n  contents: read", source)
+        self.assertRegex(
+            source,
+            r"release:\n(?:.*\n)*?    permissions:\n      contents: write",
+        )
+        self.assertIsNone(
+            re.search(r"^\s*- uses: [^\s]+@(?:v\d+|stable)\s*$", source, re.MULTILINE)
+        )
+        action_revisions = re.findall(r"^\s*- uses: [^\s]+@([^\s#]+)", source, re.MULTILINE)
+        self.assertTrue(action_revisions)
+        self.assertTrue(
+            all(re.fullmatch(r"[0-9a-f]{40}", revision) for revision in action_revisions)
+        )
+        self.assertIn(
+            "python -m pip install --require-hashes --only-binary :all: "
+            "-r .github/requirements-release.txt",
+            source,
+        )
+        self.assertIn(
+            "--manifest-path crates/document2html-py/Cargo.toml",
+            source,
+        )
+        self.assertEqual(source.count("python -m maturin build --release"), 2)
+        self.assertIn("dist/document2html/*.whl", source)
+        release_job = source.split("\n  release:\n", maxsplit=1)[1]
+        self.assertIn("needs: validate-release", release_job)
+        self.assertNotRegex(release_job, re.compile(r"^\s+-?\s*run:", re.MULTILINE))
+
+    def test_browser_package_smoke_uses_generated_package_version(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (
+            root / "crates" / "pptx2html-wasm" / "tests" / "package_browser_smoke.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('package_metadata["version"]', source)
+        self.assertIsNone(re.search(r"v\d+\.\d+\.\d+", source))
 
 
 if __name__ == "__main__":

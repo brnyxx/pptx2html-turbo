@@ -1,47 +1,50 @@
-# v2.0.1 Release Notes Draft
+# v2.1.0 Release Notes Draft
 
 See [`README.md`](./README.md) for the release-note workflow in this directory.
 See [`pre-release-checklist.md`](./pre-release-checklist.md) before creating the tag.
 
 ## Suggested Title
 
-`v2.0.1`
+`v2.1.0`
 
 ## Summary
 
-v2.0.1 gives the browser package a descriptive primary name and a simpler entrypoint while preserving the v2.0.0 conversion engine and every published low-level export.
+v2.1.0 adds a format-neutral document engine and bounded native conversion for DOCX, DOC, XLSX, XLS, PPT, and PDF while preserving every existing PPTX API.
 
 ## Highlights
 
-- Publish `@briank-dev/pptx-to-html` as the primary browser package.
-- Keep `@briank-dev/pptx2html-turbo` on the same version and API during migration.
-- Add `pptxToHtml(input, moduleOrPath?)` with lazy WASM initialization and direct `Blob`, `ArrayBuffer`, or `Uint8Array` input.
-- Share the first initialization attempt and its success or failure across concurrent calls, then retry initialization on a later call after failure.
-- Preserve the default initializer and all existing low-level named exports.
-- Validate facade entrypoints and both npm tarballs before publication.
+- Add the `document2html` CLI alongside the existing `pptx2html` binary in every GitHub release archive.
+- Add `document2html-core`, a native LibreOffice/Poppler adapter, a Python module, and browser format detection with explicit backend capability reporting.
+- Preserve the pure-Rust PPTX renderer and all existing Rust, Python, and npm/WASM PPTX APIs.
+- Add deterministic legacy XLS calculation freezing and bounded spreadsheet display-value attribution.
+- Add a fail-closed seven-format evaluation pipeline with immutable conformance, blind, and security corpora.
+- Keep both npm package names on the same v2.1.0 browser build.
 
 ## Compatibility
 
-This patch release is additive. Existing imports from `@briank-dev/pptx2html-turbo` and direct `init`/`convert` usage remain supported.
+This minor release is additive. Existing imports from `@briank-dev/pptx-to-html` and `@briank-dev/pptx2html-turbo`, direct WASM exports, the `pptx2html` CLI, and the existing Python module remain supported.
+
+Native conversion of DOCX, DOC, XLSX, XLS, and PPT requires LibreOffice and Poppler. PDF conversion requires Poppler. Browser WASM detects all seven formats but converts only PPTX; native-only requests fail with an explicit backend-unavailable error.
 
 ## Validation
 
-- Rust workspace formatting, Clippy, tests, and release builds must pass from the tagged tree.
-- Python evaluation tests and the exactness contract must pass.
+- Rust workspace formatting, Clippy, checks, tests, and release builds must pass from the tagged tree.
+- Both Python wheels must install in a clean environment and pass their installed-module runtime smokes.
 - Both npm package names must pass package-root import, real two-slide conversion, package contract, and `npm publish --dry-run`.
-- The GitHub Pages demo must expose the v2.0.1 release and primary npm package.
+- The exactness contract and the seven-format portable evidence boundary must be reproducible from the release tree.
+- The GitHub Pages demo must expose the v2.1.0 release and primary npm package.
 
-The v2.0.0 evidence boundary remains unchanged. This patch release does not add a PowerPoint-native strict pixel-equality claim.
+This release does not add a Microsoft Office pixel-accuracy, PowerPoint pixel-match, byte-identical-output, or PPTX exact-tier claim.
 
 ## Publication Scope
 
-- GitHub Release with validated CLI artifacts.
-- Primary npm package `@briank-dev/pptx-to-html@2.0.1`.
-- Legacy npm package `@briank-dev/pptx2html-turbo@2.0.1`.
+- GitHub Release archives containing both CLI binaries.
+- Primary npm package `@briank-dev/pptx-to-html@2.1.0`.
+- Legacy npm package `@briank-dev/pptx2html-turbo@2.1.0`.
 - GitHub Pages WASM demo from `main`.
-- The repository does not currently define crates.io or PyPI publication jobs.
+- Rust crates, both Python bindings, and the universal WASM crate remain source distributions; the repository does not define crates.io or PyPI publication jobs.
 
 ## Publish Status
 
-- Target tag: `v2.0.1`.
+- Target tag: `v2.1.0`.
 - Tag and publish remain pending the final human approval required by [`pre-release-checklist.md`](./pre-release-checklist.md).

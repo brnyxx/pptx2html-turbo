@@ -126,9 +126,9 @@ See [Universal document conversion](docs/UNIVERSAL_DOCUMENTS.md).
 
 ```bash
 # npm (WASM — browser)
-npm install @briank-dev/pptx-to-html@2.0.1
+npm install @briank-dev/pptx-to-html@2.1.0
 
-# CLI (from a checked-out v2.0.1 source tree)
+# CLI (from a checked-out v2.1.0 source tree)
 cargo install --path crates/pptx2html-cli
 
 # Python (requires maturin)
@@ -167,12 +167,12 @@ document.getElementById('output').srcdoc = html;
 Converted output is active, untrusted HTML. Keep `allow-same-origin` out of
 the iframe sandbox.
 
-The Rust crates and Python binding are source distributions in v2.0.1; this release does not publish them to crates.io or PyPI.
+The Rust crates and Python bindings are source distributions in v2.1.0; this release does not publish them to crates.io or PyPI.
 Rust library consumers can depend on the release tag directly:
 
 ```toml
 [dependencies]
-pptx2html-core = { git = "https://github.com/brnyxx/pptx2html-turbo", tag = "v2.0.1" }
+pptx2html-core = { git = "https://github.com/brnyxx/pptx2html-turbo", tag = "v2.1.0" }
 ```
 
 ## Usage

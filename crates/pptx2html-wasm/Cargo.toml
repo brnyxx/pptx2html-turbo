@@ -1,6 +1,6 @@
 [package]
 name = "pptx2html-wasm"
-version = "2.0.2"
+version = "2.1.0"
 edition = "2024"
 description = "WASM bindings for pptx2html — convert PPTX to HTML in the browser"
 license = "MIT"

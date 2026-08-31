@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "document2html-core"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "cfb",
  "pptx2html-core",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "document2html-native"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "base64",
  "document2html-core",
@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "document2html-py"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "document2html-core",
  "document2html-native",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "document2html-wasm"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "document2html-core",
  "wasm-bindgen",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-cli"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "clap",
  "document2html-core",
@@ -706,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-core"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "base64",
  "criterion",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-py"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "pptx2html-core",
  "pyo3",
@@ -729,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-wasm"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "pptx2html-core",
  "wasm-bindgen",

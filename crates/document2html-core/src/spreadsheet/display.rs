@@ -1,11 +1,10 @@
 //! Turns a stored cell value plus its number format into visible text.
 //!
-//! Formatting is deliberately narrow: percentages and ISO dates are the only
-//! transformations reproduced. An unreproducible format never fails the
+//! Formatting is deliberately bounded. An unreproducible format never fails
 //! conversion; it yields [`Display::Unattributable`] so the cell is excluded
 //! from coordinate attribution while the document still converts.
 
-use super::number::{DecimalFormat, NumberFormat};
+use super::number::{DecimalFormat, NumberFormat, ScientificFormat};
 
 /// Outcome of rendering a stored value for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,8 +27,10 @@ pub(super) fn formatted_value(raw: &str, format: &NumberFormat) -> Display {
         NumberFormat::General => Display::Trusted(raw.to_owned()),
         NumberFormat::Decimal(spec) => decimal(raw, spec),
         NumberFormat::Percent { decimals } => percent(raw, *decimals),
+        NumberFormat::Scientific(spec) => scientific(raw, spec),
         NumberFormat::IsoDate => serial_to_iso(raw, false),
         NumberFormat::IsoDateTime => serial_to_iso(raw, true),
+        NumberFormat::Time { padded_hour } => time(raw, *padded_hour),
         NumberFormat::Unsupported => Display::Unattributable,
     }
 }
@@ -43,7 +44,7 @@ fn decimal(raw: &str, spec: &DecimalFormat) -> Display {
         return Display::Unattributable;
     }
     let negative = value.is_sign_negative() && value != 0.0;
-    let rendered = format!("{:.*}", spec.decimals, value.abs());
+    let rendered = format!("{:.*}", spec.maximum_decimals, value.abs());
     let (integer, fraction) = match rendered.split_once('.') {
         Some((integer, fraction)) => (integer, Some(fraction)),
         None => (rendered.as_str(), None),
@@ -54,8 +55,14 @@ fn decimal(raw: &str, spec: &DecimalFormat) -> Display {
         integer.to_owned()
     };
     if let Some(fraction) = fraction {
-        digits.push('.');
-        digits.push_str(fraction);
+        let mut keep = fraction.len();
+        while keep > spec.minimum_decimals && fraction.as_bytes()[keep - 1] == b'0' {
+            keep -= 1;
+        }
+        if keep > 0 {
+            digits.push('.');
+            digits.push_str(&fraction[..keep]);
+        }
     }
     let body = format!("{}{digits}{}", spec.prefix, spec.suffix);
     Display::Trusted(match (negative, spec.parenthesized_negative) {
@@ -82,6 +89,57 @@ fn percent(raw: &str, decimals: usize) -> Display {
         return Display::Unattributable;
     };
     Display::Trusted(format!("{:.*}%", decimals, value * 100.0))
+}
+
+fn scientific(raw: &str, spec: &ScientificFormat) -> Display {
+    let Ok(value) = raw.parse::<f64>() else {
+        return Display::Unattributable;
+    };
+    if !value.is_finite() {
+        return Display::Unattributable;
+    }
+    let rendered = format!("{:.*e}", spec.decimals, value.abs());
+    let Some((mantissa, exponent)) = rendered.split_once('e') else {
+        return Display::Unattributable;
+    };
+    let Ok(exponent) = exponent.parse::<i32>() else {
+        return Display::Unattributable;
+    };
+    let marker = if spec.uppercase { 'E' } else { 'e' };
+    let exponent_sign = if exponent < 0 {
+        "-"
+    } else if spec.show_positive_sign {
+        "+"
+    } else {
+        ""
+    };
+    let exponent = exponent.unsigned_abs();
+    let sign = if value.is_sign_negative() && value != 0.0 {
+        "-"
+    } else {
+        ""
+    };
+    Display::Trusted(format!(
+        "{sign}{mantissa}{marker}{exponent_sign}{exponent:0width$}",
+        width = spec.exponent_digits
+    ))
+}
+
+fn time(raw: &str, padded_hour: bool) -> Display {
+    let Ok(serial) = raw.parse::<f64>() else {
+        return Display::Unattributable;
+    };
+    if !serial.is_finite() || serial < 0.0 {
+        return Display::Unattributable;
+    }
+    let seconds =
+        ((serial.fract() * SECONDS_PER_DAY as f64).round() as i64).rem_euclid(SECONDS_PER_DAY);
+    let (hour, minute, second) = (seconds / 3600, (seconds % 3600) / 60, seconds % 60);
+    Display::Trusted(if padded_hour {
+        format!("{hour:02}:{minute:02}:{second:02}")
+    } else {
+        format!("{hour}:{minute:02}:{second:02}")
+    })
 }
 
 /// Converts a 1900-system serial number into an ISO 8601 date or date-time.

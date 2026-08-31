@@ -11,6 +11,7 @@ differs from what a spreadsheet application shows.
 
 from __future__ import annotations
 
+import math
 from typing import Final
 from xml.etree import ElementTree
 
@@ -20,11 +21,14 @@ from evaluate.multiformat_portable_spreadsheet_numbers import (
     ISO_DATE,
     ISO_DATE_TIME,
     PERCENT,
+    SCIENTIFIC,
+    TIME,
     UNSUPPORTED,
     ResolvedFormat,
     builtin_format,
     classify_format_code,
     render_decimal,
+    render_scientific,
 )
 
 MAIN: Final = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -90,9 +94,33 @@ def formatted_value(raw: str, resolved: ResolvedFormat) -> str | object:
         except ValueError:
             return UNATTRIBUTABLE
         return f"{value * 100:.{resolved.decimals}f}%"
+    if resolved.kind == SCIENTIFIC:
+        try:
+            value = float(raw)
+        except ValueError:
+            return UNATTRIBUTABLE
+        if not math.isfinite(value):
+            return UNATTRIBUTABLE
+        return render_scientific(value, resolved)
     if resolved.kind in {ISO_DATE, ISO_DATE_TIME}:
         return _serial_to_iso(raw, resolved.kind == ISO_DATE_TIME)
+    if resolved.kind == TIME:
+        return _serial_to_time(raw, resolved.padded_hour)
     return UNATTRIBUTABLE
+
+
+def _serial_to_time(raw: str, padded_hour: bool) -> str | object:
+    try:
+        serial = float(raw)
+    except ValueError:
+        return UNATTRIBUTABLE
+    if not math.isfinite(serial) or serial < 0:
+        return UNATTRIBUTABLE
+    seconds = math.floor((serial % 1) * _SECONDS_PER_DAY + 0.5) % _SECONDS_PER_DAY
+    hour, remainder = divmod(seconds, 3600)
+    minute, second = divmod(remainder, 60)
+    hour_text = f"{hour:02d}" if padded_hour else str(hour)
+    return f"{hour_text}:{minute:02d}:{second:02d}"
 
 
 def _serial_to_iso(raw: str, with_time: bool) -> str | object:

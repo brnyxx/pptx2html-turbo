@@ -110,6 +110,10 @@ class MultiFormatPublicPoolCandidateTests(unittest.TestCase):
         excluded = (
             "test-data/slideshow/2100a8d44da546f97ab7795c500a58bed6cb655d.ppt",
             (
+                "test-data/slideshow/"
+                "60f557c0a46bcb0068b1c3e15589dac383307bc8.ppt"
+            ),
+            (
                 "tika-parsers/tika-parsers-standard/"
                 "tika-parsers-standard-modules/tika-parser-microsoft-module/"
                 "src/test/resources/test-documents/pictures.ppt"

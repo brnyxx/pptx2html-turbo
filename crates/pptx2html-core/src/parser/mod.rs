@@ -87,7 +87,7 @@ impl PptxParser {
     )> {
         let cursor = Cursor::new(data);
         let mut archive = ZipArchive::new(cursor)?;
-        Self::validate_package_xml(&mut archive)?;
+        Self::validate_package_xml_safety(&mut archive)?;
 
         let content_types = Self::read_entry(&mut archive, "[Content_Types].xml")
             .map(|xml| picture_bullet_parser::ContentTypes::parse(&xml))
@@ -370,7 +370,7 @@ impl PptxParser {
         ))
     }
 
-    fn validate_package_xml<R: Read + Seek>(archive: &mut ZipArchive<R>) -> PptxResult<()> {
+    fn validate_package_xml_safety<R: Read + Seek>(archive: &mut ZipArchive<R>) -> PptxResult<()> {
         for index in 0..archive.len() {
             let mut part = archive.by_index(index)?;
             if part.is_dir() || !is_xml_part(part.name()) {
@@ -384,21 +384,14 @@ impl PptxParser {
             }
             let mut xml = Vec::with_capacity(part.size() as usize);
             part.read_to_end(&mut xml)?;
-            let mut reader = Reader::from_reader(xml.as_slice());
-            let mut buffer = Vec::new();
-            loop {
-                match reader.read_event_into(&mut buffer) {
-                    Ok(Event::DocType(_)) => {
-                        return Err(PptxError::UnsupportedFormat(format!(
-                            "XML document type declarations are forbidden: {}",
-                            part.name()
-                        )));
-                    }
-                    Ok(Event::Eof) => break,
-                    Ok(_) => {}
-                    Err(error) => return Err(PptxError::Xml(error)),
-                }
-                buffer.clear();
+            if xml
+                .windows(b"<!DOCTYPE".len())
+                .any(|window| window == b"<!DOCTYPE")
+            {
+                return Err(PptxError::UnsupportedFormat(format!(
+                    "XML document type declarations are forbidden: {}",
+                    part.name()
+                )));
             }
         }
         Ok(())
@@ -1040,6 +1033,26 @@ mod tests {
                 err,
                 PptxError::UnsupportedFormat(ref msg)
                     if msg == "XML document type declarations are forbidden: security/entity.xml"
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn parse_bytes_rejects_doctype_hidden_after_malformed_xml() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("security/malformed.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"<root attr="unterminated<!DOCTYPE root>"#)
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let err = PptxParser::parse_bytes(&bytes).expect_err("hidden DOCTYPE should fail");
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg)
+                    if msg == "XML document type declarations are forbidden: security/malformed.xml"
             ),
             "{err}"
         );

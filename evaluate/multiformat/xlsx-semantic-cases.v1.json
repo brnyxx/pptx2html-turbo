@@ -297,15 +297,168 @@
       ]
     },
     {
-      "name": "optional_fraction_placeholder_is_unattributable",
+      "name": "custom_general_alias",
       "outcome": "accept",
-      "reason": "'#' and '?' suppress or pad trailing zeros, which is not reproduced, so the cell must not publish a guessed value.",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>3.1415926535</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"General\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "3.1415926535"
+        }
+      ]
+    },
+    {
+      "name": "custom_locale_date_with_text_section",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>21916</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"[$-409]dd\\-mm\\-yyyy;@\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1960-01-01"
+        }
+      ]
+    },
+    {
+      "name": "custom_datetime_with_escaped_space",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>21916.000011574073</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"ddmmmyy\\ hh:mm:ss\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1960-01-01T00:00:01"
+        }
+      ]
+    },
+    {
+      "name": "custom_time_with_text_section",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>0.000011574074074074073</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"h:mm:ss;@\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "0:00:01"
+        }
+      ]
+    },
+    {
+      "name": "optional_fraction_placeholder_trims_zeros",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>3.1415926535</v></c><c r=\"B1\" s=\"1\"><v>1.5</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"#.###\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "3.142"
+        },
+        {
+          "address": "B1",
+          "display": "1.5"
+        }
+      ]
+    },
+    {
+      "name": "escaped_literal_prefix_with_optional_fraction",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>3.1415926535</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"\\T#.####\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "T3.1416"
+        }
+      ]
+    },
+    {
+      "name": "scientific_two_decimals_two_exponent_digits",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>15042699</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.00E+00\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1.50E+07"
+        }
+      ]
+    },
+    {
+      "name": "scientific_three_decimals_one_exponent_digit",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>15042699</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.000E+0\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "1.504E+7"
+        }
+      ]
+    },
+    {
+      "name": "escaped_accounting_parentheses",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>-15042699</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"#,##0;\\(#,##0\\)\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "(15,042,699)"
+        }
+      ]
+    },
+    {
+      "name": "custom_locale_datetime_with_text_section",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>41655.6666666667</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"yyyy/mm/dd\\ hh:mm;@\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [
+        {
+          "address": "A1",
+          "display": "2014-01-16T16:00:00"
+        }
+      ]
+    },
+    {
+      "name": "excessive_fraction_precision_is_unattributable",
+      "outcome": "accept",
       "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>1.5</v></c>",
-      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.###\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"0.00000000000000000000000000000000000000000000000000000000000000000\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
       "expected": [],
       "unattributed": [
         {
           "address": "A1"
+        }
+      ]
+    },
+    {
+      "name": "trailing_scale_comma_is_unattributable",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>12000</v></c><c r=\"B1\" s=\"2\"><v>12200000</v></c>",
+      "styles": "<numFmts count=\"2\"><numFmt numFmtId=\"164\" formatCode=\"#,\"/><numFmt numFmtId=\"165\" formatCode=\"#.0,\"/></numFmts><cellXfs count=\"3\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/><xf numFmtId=\"165\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [],
+      "unattributed": [
+        {
+          "address": "A1"
+        },
+        {
+          "address": "B1"
+        }
+      ]
+    },
+    {
+      "name": "conditional_number_format_is_unattributable",
+      "outcome": "accept",
+      "worksheet_cells": "<c r=\"A1\" s=\"1\"><v>100</v></c><c r=\"B1\" s=\"1\"><v>50</v></c>",
+      "styles": "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"[=100]0\"/></numFmts><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"164\" applyNumberFormat=\"1\"/></cellXfs>",
+      "expected": [],
+      "unattributed": [
+        {
+          "address": "A1"
+        },
+        {
+          "address": "B1"
         }
       ]
     },

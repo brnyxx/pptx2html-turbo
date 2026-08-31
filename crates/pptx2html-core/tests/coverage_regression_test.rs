@@ -7094,7 +7094,7 @@ fn parses_presentation_default_text_style_font_and_color_variants_through_public
   <p:sldMasterIdLst><p:sldMasterId r:id="rIdMaster"/></p:sldMasterIdLst>
   <p:sldIdLst>
     <p:sldId id="256" r:id="rIdSlide1"/>
-    <p:sldId id="257" r:id="rIdSlide2" show="false"/>
+    <p:sldId id="257" r:id="rIdSlide2"/>
   </p:sldIdLst>
   <p:sldSz cx="9144000" cy="6858000"/>
   <p:defaultTextStyle>
@@ -7182,7 +7182,10 @@ fn parses_presentation_default_text_style_font_and_color_variants_through_public
         ("ppt/slideMasters/slideMaster1.xml", master_xml.to_string()),
         ("ppt/theme/theme1.xml", theme_xml.to_string()),
         ("ppt/slides/slide1.xml", slide_xml.to_string()),
-        ("ppt/slides/slide2.xml", slide_xml.to_string()),
+        (
+            "ppt/slides/slide2.xml",
+            slide_xml.replacen("<p:sld ", "<p:sld show=\"false\" ", 1),
+        ),
     ]);
 
     let presentation = parse_pptx(&pptx);
