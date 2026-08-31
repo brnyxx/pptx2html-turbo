@@ -1,3 +1,4 @@
+import hashlib
 import re
 import unittest
 from pathlib import Path
@@ -100,7 +101,9 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
             source,
         )
         self.assertEqual(source.count("NODE_AUTH_TOKEN:"), 2)
-        self.assertEqual(source.count("npm publish --access public"), 2)
+        self.assertEqual(
+            source.count("npm publish --ignore-scripts --access public"), 2
+        )
         self.assertEqual(source.count('npm view "$PACKAGE_ID" version'), 2)
         cleanup_index = source.index(
             "rm -rf crates/pptx2html-wasm/pkg-legacy"
@@ -127,6 +130,16 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
         self.assertNotIn("cargo install", publish_job)
         self.assertNotIn("actions/checkout@", publish_job)
         self.assertEqual(publish_job.count("NODE_AUTH_TOKEN:"), 2)
+        validator = root / "scripts" / "validate_npm_release_artifact.mjs"
+        validator_sha256 = hashlib.sha256(validator.read_bytes()).hexdigest()
+        self.assertIn(f"VALIDATOR_SHA256: '{validator_sha256}'", source)
+        validator_index = publish_job.index(
+            "node scripts/validate_npm_release_artifact.mjs"
+        )
+        setup_node_index = publish_job.index("actions/setup-node@")
+        publish_index = publish_job.index("Publish primary package to npm")
+        self.assertLess(setup_node_index, validator_index)
+        self.assertLess(validator_index, publish_index)
 
         action_revisions = re.findall(
             r"^\s*- uses: [^\s]+@([^\s#]+)", source, re.MULTILINE

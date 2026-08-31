@@ -29,6 +29,7 @@ env:
   PACKAGE_HOMEPAGE: 'https://github.com/brnyxx/pptx2html-turbo'
   PACKAGE_BUGS_URL: 'https://github.com/brnyxx/pptx2html-turbo/issues'
   PACKAGE_DESCRIPTION: 'Convert PPTX slides to high-fidelity HTML in the browser — pure Rust/WASM, zero dependencies'
+  VALIDATOR_SHA256: '9ce1ed01b1c2c7d2d9a882a07907eac3be033ca574381ab09f9ebdbb71a53a45'
 
 jobs:
   validate:
@@ -155,16 +156,17 @@ jobs:
       - name: Publish primary package to npm (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         working-directory: crates/pptx2html-wasm/pkg
-        run: npm publish --dry-run --access public
+        run: npm publish --dry-run --ignore-scripts --access public
       - name: Publish legacy package to npm (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         working-directory: crates/pptx2html-wasm/pkg-legacy
-        run: npm publish --dry-run --access public
+        run: npm publish --dry-run --ignore-scripts --access public
       - name: Archive packages
         run: |
           tar -czf npm-packages.tar.gz \
             crates/pptx2html-wasm/pkg \
-            crates/pptx2html-wasm/pkg-legacy
+            crates/pptx2html-wasm/pkg-legacy \
+            scripts/validate_npm_release_artifact.mjs
           sha256sum npm-packages.tar.gz > npm-packages.tar.gz.sha256
       - name: Upload packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -198,6 +200,13 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+      - name: Validate extracted package boundary
+        run: |
+          echo "$VALIDATOR_SHA256  scripts/validate_npm_release_artifact.mjs" | sha256sum --check
+          node scripts/validate_npm_release_artifact.mjs \
+            "$PACKAGE_VERSION" \
+            "$PACKAGE_NAME" \
+            "$LEGACY_PACKAGE_NAME"
       - name: Publish primary package to npm
         working-directory: crates/pptx2html-wasm/pkg
         run: |
@@ -205,7 +214,7 @@ jobs:
           if npm view "$PACKAGE_ID" version >/dev/null 2>&1; then
             echo "$PACKAGE_ID is already published; skipping"
           else
-            npm publish --access public
+            npm publish --ignore-scripts --access public
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -216,7 +225,7 @@ jobs:
           if npm view "$PACKAGE_ID" version >/dev/null 2>&1; then
             echo "$PACKAGE_ID is already published; skipping"
           else
-            npm publish --access public
+            npm publish --ignore-scripts --access public
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
