@@ -1563,6 +1563,7 @@ const diagPanel = document.getElementById('diagPanel');
 const diagSummary = document.getElementById('diagSummary');
 const diagList = document.getElementById('diagList');
 const platenTitle = document.getElementById('platenTitle');
+const MAX_PPTX_BYTES = 64 * 1024 * 1024;
 let currentBuffer = null;
 let currentInfo = null;
 let currentDiagnostics = [];
@@ -1852,6 +1853,11 @@ async function handleFile(file) {
   if (!file.name.toLowerCase().endsWith('.pptx')) {
     setProgress(null);
     setStatus('That is not a .pptx file. Choose a PowerPoint presentation and try again.', 'error');
+    return;
+  }
+  if (file.size > MAX_PPTX_BYTES) {
+    setProgress(null);
+    setStatus('That presentation is larger than the 64 MiB browser limit.', 'error');
     return;
   }
   setStatus('Reading ' + file.name + '…', 'info');

@@ -27,7 +27,7 @@ npm install @briank-dev/pptx-to-html
 ## Usage
 
 The convenience API initializes WASM on first use and accepts a browser `File`/`Blob`,
-`ArrayBuffer`, or `Uint8Array`.
+`ArrayBuffer`, or `Uint8Array`. Inputs larger than 64 MiB are rejected before conversion.
 
 ```html
 <iframe id="output" sandbox="allow-scripts" title="Converted slide output"></iframe>

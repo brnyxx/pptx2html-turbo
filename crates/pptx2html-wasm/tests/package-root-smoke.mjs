@@ -63,6 +63,19 @@ const script = `
     () => pptxToHtml('not PPTX bytes'),
     /Blob, ArrayBuffer, or Uint8Array/,
   );
+  class OversizedBlob extends Blob {
+    get size() {
+      return 64 * 1024 * 1024 + 1;
+    }
+
+    arrayBuffer() {
+      throw new Error('oversized Blob must not be read');
+    }
+  }
+  await assert.rejects(
+    () => pptxToHtml(new OversizedBlob()),
+    /64 MiB/,
+  );
 
   const invalidData = new Uint8Array([0, 1, 2, 3]);
   assert.throws(() => convert(invalidData), /invalid|zip|PPTX|archive/i);

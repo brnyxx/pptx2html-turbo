@@ -110,6 +110,32 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
         )
         self.assertLess(cleanup_index, copy_index)
 
+    def test_npm_publish_job_is_isolated_and_actions_are_sha_pinned(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (root / ".github" / "workflows" / "publish-npm.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("permissions:\n  contents: read", source)
+        self.assertNotIn("id-token: write", source)
+        self.assertIn("\n  validate:\n", source)
+        self.assertIn("\n  build-packages:\n", source)
+        publish_job = source.split("\n  publish:\n", maxsplit=1)[1]
+        self.assertIn("needs: build-packages", publish_job)
+        self.assertIn("actions/download-artifact@", publish_job)
+        self.assertNotIn("pip install", publish_job)
+        self.assertNotIn("cargo install", publish_job)
+        self.assertNotIn("actions/checkout@", publish_job)
+        self.assertEqual(publish_job.count("NODE_AUTH_TOKEN:"), 2)
+
+        action_revisions = re.findall(
+            r"^\s*- uses: [^\s]+@([^\s#]+)", source, re.MULTILINE
+        )
+        self.assertTrue(action_revisions)
+        self.assertTrue(
+            all(re.fullmatch(r"[0-9a-f]{40}", revision) for revision in action_revisions)
+        )
+
     def test_workflows_install_pinned_wasm_pack_idempotently(self) -> None:
         # Given
         root = Path(__file__).resolve().parents[2]

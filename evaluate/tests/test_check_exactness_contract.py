@@ -209,6 +209,19 @@ class CheckExactnessContractTests(unittest.TestCase):
             payload["missing_checks"],
         )
 
+    def test_publication_job_must_depend_on_its_gate_job(self) -> None:
+        with self._overlay() as root:
+            workflow = root / ".github/workflows/publish-npm.yml"
+            source = workflow.read_text()
+            source = source.replace("    needs: build-packages\n", "", 1)
+            workflow.write_text(source)
+            payload = check_exactness_contract(root, verify_generated=False)
+
+        self.assertIn(
+            "WORKFLOW_GATE_ORDER_INVALID:.github/workflows/publish-npm.yml",
+            payload["missing_checks"],
+        )
+
     def test_non_manifest_status_table_drift_is_rejected(self) -> None:
         with self._overlay() as root:
             supported = root / "SUPPORTED_FEATURES.md"

@@ -182,7 +182,11 @@ pub fn convert_with_options(
 ///
 /// ```js
 /// const result = convert_with_metadata(data);
-/// document.body.innerHTML = result.html;
+/// const output = document.createElement('iframe');
+/// output.setAttribute('sandbox', 'allow-scripts');
+/// output.title = 'Converted slide output';
+/// output.srcdoc = result.html;
+/// document.body.appendChild(output);
 /// const unresolved = JSON.parse(result.unresolvedElements);
 /// ```
 #[wasm_bindgen]

@@ -27,7 +27,7 @@ npm install @briank-dev/pptx-to-html
 ## 사용법
 
 편의 API는 첫 호출 시 WASM을 초기화하며 브라우저 `File`/`Blob`, `ArrayBuffer`, `Uint8Array`를
-모두 받습니다.
+모두 받습니다. 64 MiB보다 큰 입력은 변환 전에 거부합니다.
 
 ```html
 <iframe id="output" sandbox="allow-scripts" title="Converted slide output"></iframe>

@@ -326,6 +326,11 @@ resolution chain, preset geometry catalog, placeholder types, and slide inherita
 <details>
 <summary><b>Preservation and security bounds</b></summary>
 
+The package parser rejects inputs larger than 64 MiB, archives with more than 8,192 entries,
+more than 256 MiB of declared uncompressed data, more than 64 MiB of cumulative XML, or an
+individual XML part larger than 16 MiB. The browser demo and npm convenience API apply the
+64 MiB input limit before reading a `Blob` into memory.
+
 The Rust core preserves ordered slide transition/timing XML and approximately executes a
 bounded interaction-driven subset: cut/fade transitions and click/with-previous/after-previous
 appear, disappear, or fade effects on resolved slide shapes, including finite start-condition
