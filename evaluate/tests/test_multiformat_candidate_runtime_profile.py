@@ -87,7 +87,8 @@ class CandidateRuntimeProfileTests(unittest.TestCase):
                 profile.font_bundle, (fixture.root / "locked/fonts").resolve()
             )
             self.assertEqual(
-                profile.receipt_executor, (fixture.root / "locked/executor").resolve()
+                profile.receipt_executor,
+                (fixture.root / "locked/receipt-signer").resolve(),
             )
             self.assertEqual(
                 profile.receipt_public_key,
@@ -161,7 +162,7 @@ class CandidateRuntimeProfileTests(unittest.TestCase):
                     sandbox_attestation=fixture.root / "locked/attestation.json",
                     sandbox_public_key=fixture.root / "locked/public-key",
                     openssl=fixture.root / "locked/soffice",
-                    receipt_signer=fixture.root / "locked/executor",
+                    receipt_signer=fixture.root / "locked/receipt-signer",
                     timeout_seconds=30,
                     require_clean_worktree=False,
                     require_release_binary=False,

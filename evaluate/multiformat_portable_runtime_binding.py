@@ -88,7 +88,6 @@ def bind_portable_runtime(
         "canonicalizer": inputs.canonicalizer,
         "configuration": inputs.configuration,
         "browser-lock": inputs.browser_lock,
-        "converter": inputs.converter,
         "receipt-signer": inputs.receipt_signer,
         "candidate-sandbox-public-key": inputs.candidate_sandbox_public_key,
         "executor": inputs.executor,
@@ -100,6 +99,11 @@ def bind_portable_runtime(
         name: lock_io.bind_file(path, root, artifacts / name)
         for name, path in flat.items()
     }
+    converter_destination = artifacts / "release/converter"
+    converter_destination.parent.mkdir()
+    paths["converter"] = lock_io.bind_file(
+        inputs.converter, root, converter_destination
+    )
     poppler = _bind_native_or_flat(
         (
             inputs.pdftoppm,

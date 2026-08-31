@@ -238,6 +238,10 @@ class CandidateRuntimeLockMaterializerTests(unittest.TestCase):
                     candidate_sandbox_public_key=candidate.sandbox_public_key,
                 )
                 self.assertEqual(len(materialize_portable_locks(portable)), 1)
+                bound_converter = portable.output_dir / "artifacts/release/converter"
+                self.assertEqual(
+                    bound_converter.read_bytes(), candidate.converter.read_bytes()
+                )
 
     def _fixture(self, root: Path) -> CandidateRuntimeLockInputs:
         return candidate_runtime_lock_inputs(root)

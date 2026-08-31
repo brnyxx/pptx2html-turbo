@@ -126,6 +126,7 @@ def resolve_candidate_runtime_profile(
         if string_value(browser_lock, "chromium") != browser_version:
             raise CandidateRuntimeProfileError("candidate Chromium versions differ")
         signer = object_value(lock, "signer")
+        candidate_sandbox = object_value(lock, "candidate_sandbox")
         sandbox = object_value(lock, "sandbox")
         tools = object_value(lock, "tools")
         return CandidateRuntimeProfile(
@@ -136,7 +137,9 @@ def resolve_candidate_runtime_profile(
             sandbox_verifier,
             _bound_path(object_value(lock, "font_bundle"), evidence_root),
             _bound_path(chromium_binding, evidence_root),
-            _bound_path(object_value(signer, "executor"), evidence_root),
+            _bound_path(
+                object_value(candidate_sandbox, "receipt_signer"), evidence_root
+            ),
             _bound_path(object_value(signer, "public_key"), evidence_root),
             _bound_path(
                 object_value(object_value(lock, "runtime"), "attestation"),
