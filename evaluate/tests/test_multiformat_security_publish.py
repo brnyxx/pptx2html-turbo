@@ -25,7 +25,7 @@ class MultiFormatSecurityPublishTests(unittest.TestCase):
 
             with (
                 mock.patch(
-                    "evaluate.multiformat_security_publish._unlink_owned_file",
+                    "evaluate.multiformat_snapshot_publish._unlink_owned_file",
                     side_effect=OSError("cleanup"),
                 ),
                 self.assertRaisesRegex(PrimaryWriterError, "primary") as raised,
@@ -37,6 +37,10 @@ class MultiFormatSecurityPublishTests(unittest.TestCase):
 
             self.assertTrue(
                 any("cleanup" in note for note in raised.exception.__notes__)
+            )
+            self.assertIn(
+                "security snapshot cleanup failed: cleanup",
+                raised.exception.__notes__,
             )
             self.assertFalse(destination.exists())
 
@@ -126,6 +130,34 @@ class MultiFormatSecurityPublishTests(unittest.TestCase):
             )
             self.assertEqual(tuple(root.glob(".security.stage-*")), ())
             self.assertFalse(self._lock(root).exists())
+
+    def test_security_snapshot_lock_path_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            destination = root / "security"
+            lock = self._lock(root)
+            lock.write_bytes(b"other")
+
+            with self.assertRaises(SecurityPublishError) as raised:
+                publish_security_snapshot(destination, lambda staging: None)
+
+            self.assertIs(raised.exception.failure, SecurityPublishFailure.LOCKED)
+            self.assertEqual(raised.exception.path, lock.resolve())
+            self.assertEqual(lock.read_bytes(), b"other")
+            self.assertFalse(destination.exists())
+
+    def test_security_publisher_acquires_the_legacy_cooperative_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "security"
+            with mock.patch(
+                "evaluate.multiformat_security_publish.publish_snapshot"
+            ) as publisher:
+                publish_security_snapshot(destination, lambda staging: None)
+
+            self.assertEqual(
+                publisher.call_args.kwargs["lock_namespace"],
+                "security-sources",
+            )
 
     def test_substituted_lock_is_not_unlinked(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2,16 +2,40 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 from evaluate.multiformat_candidate_fonts import prepare_font_environment
 from evaluate.multiformat_revision import current_project_revision
-from evaluate.multiformat_schema import sha256_file
+from evaluate.multiformat_schema import JsonValue, sha256_file
 from evaluate.tests.multiformat_attestation_fixture import (
     create_test_verifier,
     verifier_lock,
     write_receipt_signer,
 )
+
+
+def rust_toolchain_lock_value() -> dict[str, JsonValue]:
+    cargo = Path(
+        subprocess.run(
+            ["rustup", "which", "cargo"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    ).resolve(strict=True)
+    rustc = Path(
+        subprocess.run(
+            ["rustup", "which", "rustc"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    ).resolve(strict=True)
+    return {
+        "cargo": {"path": cargo.as_posix(), "sha256": sha256_file(cargo)},
+        "rustc": {"path": rustc.as_posix(), "sha256": sha256_file(rustc)},
+    }
 
 
 def write_gate_oracle_lock(root: Path, project_root: Path) -> Path:
@@ -61,6 +85,7 @@ def write_gate_oracle_lock(root: Path, project_root: Path) -> Path:
             {
                 "schema_version": 1,
                 "status": "locked",
+                "rust_toolchain": rust_toolchain_lock_value(),
                 "office": {
                     "os": "Windows 11 23H2",
                     "channel": "test",

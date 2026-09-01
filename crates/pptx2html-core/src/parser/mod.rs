@@ -37,7 +37,7 @@ pub(crate) use presentation_extension_parser::diagnostics as presentation_extens
 pub(crate) use preserved_parser::collect_package_diagnostics;
 
 use std::collections::HashMap;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
 use log::{info, warn};
@@ -54,15 +54,41 @@ use crate::model::{
 #[derive(Debug, Clone)]
 struct SlideRef {
     rel_id: String,
-    hidden: bool,
 }
 
 /// SAX-based streaming parser for PPTX (ZIP + OOXML) packages.
 pub struct PptxParser;
 
+const MIB: u64 = 1024 * 1024;
+const MAX_PACKAGE_BYTES: u64 = 64 * MIB;
+const MAX_ARCHIVE_ENTRIES: usize = 8_192;
+const MAX_ARCHIVE_UNCOMPRESSED_BYTES: u64 = 256 * MIB;
+const MAX_ARCHIVE_XML_BYTES: u64 = 64 * MIB;
+const MAX_XML_PART_BYTES: u64 = 16 * MIB;
+
+#[derive(Clone, Copy)]
+struct PackageLimits {
+    max_entries: usize,
+    max_uncompressed_bytes: u64,
+    max_xml_bytes: u64,
+    max_xml_part_bytes: u64,
+}
+
+const DEFAULT_PACKAGE_LIMITS: PackageLimits = PackageLimits {
+    max_entries: MAX_ARCHIVE_ENTRIES,
+    max_uncompressed_bytes: MAX_ARCHIVE_UNCOMPRESSED_BYTES,
+    max_xml_bytes: MAX_ARCHIVE_XML_BYTES,
+    max_xml_part_bytes: MAX_XML_PART_BYTES,
+};
+
+fn is_xml_part(name: &str) -> bool {
+    name == "[Content_Types].xml" || name.ends_with(".xml") || name.ends_with(".rels")
+}
+
 impl PptxParser {
     /// Parse PPTX from file path.
     pub fn parse_file(path: &Path) -> PptxResult<Presentation> {
+        Self::validate_package_size(std::fs::metadata(path)?.len())?;
         let data = std::fs::read(path)?;
         Self::parse_bytes(&data)
     }
@@ -80,8 +106,10 @@ impl PptxParser {
         Vec<crate::model::timing::ParsedTimingInventory>,
         Vec<PresentationExtensionMetadata>,
     )> {
+        Self::validate_package_size(data.len() as u64)?;
         let cursor = Cursor::new(data);
         let mut archive = ZipArchive::new(cursor)?;
+        Self::validate_package_safety_with_limits(&mut archive, DEFAULT_PACKAGE_LIMITS)?;
 
         let content_types = Self::read_entry(&mut archive, "[Content_Types].xml")
             .map(|xml| picture_bullet_parser::ContentTypes::parse(&xml))
@@ -332,7 +360,6 @@ impl PptxParser {
                         &mut archive,
                     );
                     resolve_table_style_references(&mut slide.shapes, &table_styles);
-                    slide.hidden = slide_ref.hidden;
 
                     // Find which layout this slide references
                     let layout_ref = find_target_by_type(&slide_relationships, "slideLayout");
@@ -363,6 +390,92 @@ impl PptxParser {
             slide_timings,
             presentation_extensions,
         ))
+    }
+
+    fn validate_package_size(size: u64) -> PptxResult<()> {
+        if size > MAX_PACKAGE_BYTES {
+            return Err(PptxError::UnsupportedFormat(format!(
+                "PPTX package exceeds {}",
+                byte_limit_label(MAX_PACKAGE_BYTES)
+            )));
+        }
+        Ok(())
+    }
+
+    fn validate_package_safety_with_limits<R: Read + Seek>(
+        archive: &mut ZipArchive<R>,
+        limits: PackageLimits,
+    ) -> PptxResult<()> {
+        if archive.len() > limits.max_entries {
+            return Err(PptxError::UnsupportedFormat(format!(
+                "PPTX package contains more than {} ZIP entries",
+                limits.max_entries
+            )));
+        }
+
+        let mut total_uncompressed_bytes = 0_u64;
+        let mut total_xml_bytes = 0_u64;
+        for index in 0..archive.len() {
+            let part = archive.by_index(index)?;
+            if part.is_dir() {
+                continue;
+            }
+
+            total_uncompressed_bytes = total_uncompressed_bytes
+                .checked_add(part.size())
+                .ok_or_else(|| {
+                    PptxError::UnsupportedFormat(
+                        "PPTX package uncompressed size overflow".to_string(),
+                    )
+                })?;
+            if total_uncompressed_bytes > limits.max_uncompressed_bytes {
+                return Err(PptxError::UnsupportedFormat(format!(
+                    "PPTX package contains more than {} of uncompressed data",
+                    byte_limit_label(limits.max_uncompressed_bytes)
+                )));
+            }
+
+            if !is_xml_part(part.name()) {
+                continue;
+            }
+
+            total_xml_bytes = total_xml_bytes.checked_add(part.size()).ok_or_else(|| {
+                PptxError::UnsupportedFormat("PPTX package XML size overflow".to_string())
+            })?;
+            if total_xml_bytes > limits.max_xml_bytes {
+                return Err(PptxError::UnsupportedFormat(format!(
+                    "PPTX package contains more than {} of XML data",
+                    byte_limit_label(limits.max_xml_bytes)
+                )));
+            }
+
+            if part.size() > limits.max_xml_part_bytes {
+                return Err(PptxError::UnsupportedFormat(format!(
+                    "XML part exceeds {}: {}",
+                    byte_limit_label(limits.max_xml_part_bytes),
+                    part.name()
+                )));
+            }
+            let part_name = part.name().to_string();
+            let mut xml = Vec::with_capacity(part.size() as usize);
+            part.take(limits.max_xml_part_bytes.saturating_add(1))
+                .read_to_end(&mut xml)?;
+            if xml.len() as u64 > limits.max_xml_part_bytes {
+                return Err(PptxError::UnsupportedFormat(format!(
+                    "XML part exceeds {}: {part_name}",
+                    byte_limit_label(limits.max_xml_part_bytes)
+                )));
+            }
+            if xml
+                .windows(b"<!DOCTYPE".len())
+                .any(|window| window == b"<!DOCTYPE")
+            {
+                return Err(PptxError::UnsupportedFormat(format!(
+                    "XML document type declarations are forbidden: {part_name}"
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// Read a ZIP entry
@@ -477,19 +590,15 @@ impl PptxParser {
                         }
                         "sldId" => {
                             let mut rel_id: Option<String> = None;
-                            let mut hidden = false;
                             for attr in e.attributes().flatten() {
                                 let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
                                 if key.ends_with("id") && key.contains(':') {
                                     let val = String::from_utf8_lossy(&attr.value);
                                     rel_id = Some(val.to_string());
-                                } else if key == "show" {
-                                    let val = String::from_utf8_lossy(&attr.value);
-                                    hidden = val == "0" || val == "false";
                                 }
                             }
                             if let Some(rel_id) = rel_id {
-                                slide_refs.push(SlideRef { rel_id, hidden });
+                                slide_refs.push(SlideRef { rel_id });
                             }
                         }
                         // Empty lvlNpPr inside defaultTextStyle
@@ -687,6 +796,13 @@ impl PptxParser {
             }
         }
     }
+}
+
+fn byte_limit_label(bytes: u64) -> String {
+    if bytes.is_multiple_of(MIB) {
+        return format!("{} MiB", bytes / MIB);
+    }
+    format!("{bytes} bytes")
 }
 
 fn resolve_table_style_references(shapes: &mut [Shape], styles: &[TableStyle]) {
@@ -904,14 +1020,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_presentation_xml_reads_hidden_slides_and_default_text_style() {
+    fn parse_presentation_xml_reads_slide_refs_and_default_text_style() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
                 xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:sldIdLst>
     <p:sldId id="256" r:id="rId1"/>
-    <p:sldId id="257" r:id="rId2" show="0"/>
+    <p:sldId id="257" r:id="rId2"/>
   </p:sldIdLst>
   <p:sldSz cx="9144000" cy="6858000"/>
   <p:defaultTextStyle>
@@ -936,8 +1052,7 @@ mod tests {
         assert_eq!(slide_size.height.to_px(), Emu::parse_emu("6858000").to_px());
         assert_eq!(slide_refs.len(), 2);
         assert_eq!(slide_refs[0].rel_id, "rId1");
-        assert!(!slide_refs[0].hidden);
-        assert!(slide_refs[1].hidden);
+        assert_eq!(slide_refs[1].rel_id, "rId2");
 
         let style = default_text_style.expect("default text style should exist");
         let lvl1 = style.levels[0].as_ref().expect("level 1 defaults");
@@ -988,6 +1103,159 @@ mod tests {
         let err = PptxParser::parse_bytes(&bytes).expect_err("encrypted pptx should fail");
         assert!(
             matches!(err, PptxError::UnsupportedFormat(msg) if msg == "password-protected PPTX")
+        );
+    }
+
+    #[test]
+    fn parse_bytes_rejects_doctype_in_unreferenced_xml_part() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("security/entity.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"<!DOCTYPE root [<!ENTITY x "expanded">]><root>&x;</root>"#)
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let err = PptxParser::parse_bytes(&bytes).expect_err("DOCTYPE should fail");
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg)
+                    if msg == "XML document type declarations are forbidden: security/entity.xml"
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn parse_bytes_rejects_doctype_hidden_after_malformed_xml() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("security/malformed.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(br#"<root attr="unterminated<!DOCTYPE root>"#)
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let err = PptxParser::parse_bytes(&bytes).expect_err("hidden DOCTYPE should fail");
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg)
+                    if msg == "XML document type declarations are forbidden: security/malformed.xml"
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn parse_bytes_rejects_oversized_unreferenced_xml_part() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("security/oversized.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&vec![b' '; MAX_XML_PART_BYTES as usize + 1])
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let err = PptxParser::parse_bytes(&bytes).expect_err("oversized XML should fail");
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg)
+                    if msg == "XML part exceeds 16 MiB: security/oversized.xml"
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn package_size_limit_rejects_before_zip_parsing() {
+        let err = PptxParser::validate_package_size(MAX_PACKAGE_BYTES + 1)
+            .expect_err("oversized package should fail");
+
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg)
+                    if msg.contains("PPTX package exceeds")
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn archive_limits_reject_excessive_entry_count() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        for name in ["security/one.txt", "security/two.txt"] {
+            zip.start_file(name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(b"x").unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let limits = PackageLimits {
+            max_entries: 1,
+            ..DEFAULT_PACKAGE_LIMITS
+        };
+
+        let err = PptxParser::validate_package_safety_with_limits(&mut archive, limits)
+            .expect_err("excessive entry count should fail");
+
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg) if msg.contains("ZIP entries")
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn archive_limits_reject_total_uncompressed_bytes() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        for name in ["security/one.txt", "security/two.txt"] {
+            zip.start_file(name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(b"12345678").unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let limits = PackageLimits {
+            max_uncompressed_bytes: 15,
+            ..DEFAULT_PACKAGE_LIMITS
+        };
+
+        let err = PptxParser::validate_package_safety_with_limits(&mut archive, limits)
+            .expect_err("excessive expanded bytes should fail");
+
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg) if msg.contains("uncompressed data")
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn archive_limits_reject_cumulative_xml_bytes() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        for name in ["security/one.xml", "security/two.xml"] {
+            zip.start_file(name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(b"<root/>").unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let limits = PackageLimits {
+            max_xml_bytes: 13,
+            ..DEFAULT_PACKAGE_LIMITS
+        };
+
+        let err = PptxParser::validate_package_safety_with_limits(&mut archive, limits)
+            .expect_err("excessive cumulative XML should fail");
+
+        assert!(
+            matches!(
+                err,
+                PptxError::UnsupportedFormat(ref msg) if msg.contains("XML data")
+            ),
+            "{err}"
         );
     }
 

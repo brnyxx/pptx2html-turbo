@@ -4,11 +4,18 @@ use std::path::{Path, PathBuf};
 use document2html_core::{DocumentFormat, DocumentInput};
 
 use crate::config::NativeBackendConfig;
+use crate::fonts::EastAsianFontPolicy;
 use crate::process::CommandSpec;
 use crate::runtime::NativeRuntimeInfo;
 use crate::stage::run_stage;
 use crate::workspace::TemporaryWorkspace;
+use crate::xlsx_freeze::freeze_xlsx_snapshot;
 use crate::{NativeError, NativeResult};
+
+pub(crate) struct OfficeOutput {
+    pub(crate) pdf: PathBuf,
+    pub(crate) semantic_xlsx: Option<PathBuf>,
+}
 
 pub(crate) fn convert_office_to_pdf(
     input: &DocumentInput<'_>,
@@ -16,7 +23,7 @@ pub(crate) fn convert_office_to_pdf(
     config: &NativeBackendConfig,
     runtime: &NativeRuntimeInfo,
     workspace: &TemporaryWorkspace,
-) -> NativeResult<PathBuf> {
+) -> NativeResult<OfficeOutput> {
     if input.data.len() as u64 > config.max_input_bytes {
         return Err(NativeError::ResourceLimitExceeded {
             resource: "input",
@@ -28,8 +35,21 @@ pub(crate) fn convert_office_to_pdf(
         .join("input")
         .join(format!("input.{}", format.extension()));
     fs::write(&input_path, input.data)?;
-    let office_dir = workspace.root().join("office");
+    match &runtime.east_asian_fonts {
+        EastAsianFontPolicy::Pinned(substitute) => {
+            workspace.seed_font_substitution(&substitute.family)?;
+        }
+        EastAsianFontPolicy::PlatformDefault { .. } => {}
+    }
     let profile = file_uri(&workspace.root().join("profile"));
+    let semantic_xlsx = if format == DocumentFormat::Xls {
+        let converted = convert_xls_to_xlsx(&input_path, &profile, config, runtime, workspace)?;
+        Some(freeze_xlsx_snapshot(&converted, config, workspace)?)
+    } else {
+        None
+    };
+    let pdf_input = semantic_xlsx.as_deref().unwrap_or(&input_path);
+    let office_dir = workspace.root().join("office");
     let command = CommandSpec::new(&runtime.libreoffice.executable)
         .arg("--headless")
         .arg(format!("-env:UserInstallation={profile}"))
@@ -37,17 +57,39 @@ pub(crate) fn convert_office_to_pdf(
         .arg("pdf")
         .arg("--outdir")
         .arg(&office_dir)
-        .arg(&input_path)
+        .arg(pdf_input)
         .working_directory(workspace.root());
     run_stage(command, config, workspace.root(), &office_dir)?;
-    validate_office_output(&office_dir)
+    let pdf = validate_office_output(&office_dir, "pdf")?;
+    Ok(OfficeOutput { pdf, semantic_xlsx })
 }
 
-fn validate_office_output(office_dir: &Path) -> NativeResult<PathBuf> {
-    let expected = office_dir.join("input.pdf");
+fn convert_xls_to_xlsx(
+    input_path: &Path,
+    profile: &str,
+    config: &NativeBackendConfig,
+    runtime: &NativeRuntimeInfo,
+    workspace: &TemporaryWorkspace,
+) -> NativeResult<PathBuf> {
+    let output_dir = workspace.root().join("spreadsheet");
+    let command = CommandSpec::new(&runtime.libreoffice.executable)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation={profile}"))
+        .arg("--convert-to")
+        .arg("xlsx")
+        .arg("--outdir")
+        .arg(&output_dir)
+        .arg(input_path)
+        .working_directory(workspace.root());
+    run_stage(command, config, workspace.root(), &output_dir)?;
+    validate_office_output(&output_dir, "xlsx")
+}
+
+fn validate_office_output(office_dir: &Path, extension: &str) -> NativeResult<PathBuf> {
+    let expected = office_dir.join(format!("input.{extension}"));
     let mut entries = fs::read_dir(office_dir)?;
     let Some(entry) = entries.next().transpose()? else {
-        return malformed("LibreOffice did not create input.pdf");
+        return malformed("LibreOffice did not create the expected output");
     };
     if entries.next().transpose()?.is_some() || entry.path() != expected {
         return malformed("LibreOffice emitted an unexpected output inventory");
@@ -73,10 +115,14 @@ fn file_uri(path: &Path) -> String {
 }
 
 fn malformed<T>(reason: &str) -> NativeResult<T> {
-    Err(NativeError::MalformedBackendOutput {
+    Err(malformed_error(reason))
+}
+
+fn malformed_error(reason: &str) -> NativeError {
+    NativeError::MalformedBackendOutput {
         backend: "libreoffice",
         reason: reason.to_owned(),
-    })
+    }
 }
 
 #[cfg(test)]

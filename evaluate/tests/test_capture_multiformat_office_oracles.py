@@ -3,6 +3,8 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from evaluate.multiformat_scaffold_templates import office_lock_template
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "evaluate" / "capture_multiformat_office_oracles.ps1"
 MODULE_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "OfficeOracle.psm1"
@@ -30,12 +32,7 @@ class CaptureMultiFormatOfficeOraclesTests(unittest.TestCase):
         self.assertIn('"pdftotext"', script)
         self.assertIn("pdf_text = Get-NativeToolVersion", script)
         self.assertIn("Source hash does not match frozen input", script)
-        self.assertIn(
-            "office_oracle_verifier",
-            (PROJECT_ROOT / "evaluate" / "multiformat_scaffold_templates.py").read_text(
-                encoding="utf-8"
-            ),
-        )
+        self.assertIn("office_oracle_verifier", office_lock_template())
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is not installed")
     def test_powershell_files_parse_without_syntax_errors(self) -> None:

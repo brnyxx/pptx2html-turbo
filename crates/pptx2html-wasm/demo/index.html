@@ -1229,7 +1229,7 @@ input[type="file"] {
 
 <header class="topbar">
   <a class="wordmark" href="https://github.com/brnyxx/pptx2html-turbo">pptx2html<b>-turbo</b></a>
-  <a class="release mono" href="https://github.com/brnyxx/pptx2html-turbo/releases">v2.0.2</a>
+  <a class="release mono" href="https://github.com/brnyxx/pptx2html-turbo/releases">v2.1.0</a>
   <nav class="topnav" aria-label="Project links">
     <a href="#convert">Converter</a>
     <a href="#pipeline">Pipeline</a>
@@ -1536,7 +1536,7 @@ print(len(out.diagnostics))</span></pre>
 
 <footer class="site-foot">
   <div class="band-inner foot-inner">
-  <span class="mono">pptx2html-turbo v2.0.2 &middot; MIT</span>
+  <span class="mono">pptx2html-turbo v2.1.0 &middot; MIT</span>
   <nav aria-label="Footer links">
     <a href="https://github.com/brnyxx/pptx2html-turbo" target="_blank" rel="noopener noreferrer"><svg class="glyph glyph--brand" aria-hidden="true"><use href="#i-github"></use></svg>Repository</a>
     <a href="https://github.com/brnyxx/pptx2html-turbo/releases" target="_blank" rel="noopener noreferrer"><svg class="glyph" aria-hidden="true"><use href="#i-package"></use></svg>Releases</a>
@@ -1563,6 +1563,7 @@ const diagPanel = document.getElementById('diagPanel');
 const diagSummary = document.getElementById('diagSummary');
 const diagList = document.getElementById('diagList');
 const platenTitle = document.getElementById('platenTitle');
+const MAX_PPTX_BYTES = 64 * 1024 * 1024;
 let currentBuffer = null;
 let currentInfo = null;
 let currentDiagnostics = [];
@@ -1852,6 +1853,11 @@ async function handleFile(file) {
   if (!file.name.toLowerCase().endsWith('.pptx')) {
     setProgress(null);
     setStatus('That is not a .pptx file. Choose a PowerPoint presentation and try again.', 'error');
+    return;
+  }
+  if (file.size > MAX_PPTX_BYTES) {
+    setProgress(null);
+    setStatus('That presentation is larger than the 64 MiB browser limit.', 'error');
     return;
   }
   setStatus('Reading ' + file.name + '…', 'info');

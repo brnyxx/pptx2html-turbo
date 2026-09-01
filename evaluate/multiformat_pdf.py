@@ -34,7 +34,12 @@ def valid_pdf(path: Path) -> bool:
         return False
 
 
-def _valid_pdf_mapping(data: mmap.mmap, size: int) -> bool:
+def valid_pdf_bytes(value: bytes) -> bool:
+    size = len(value)
+    return 0 < size <= MAX_SOURCE_BYTES and _valid_pdf_mapping(value, size)
+
+
+def _valid_pdf_mapping(data: bytes | mmap.mmap, size: int) -> bool:
     if PDF_HEADER.match(data[:8]) is None:
         return False
     trailer_window = data[max(0, size - 4096) : size]
@@ -64,7 +69,7 @@ def _valid_pdf_mapping(data: mmap.mmap, size: int) -> bool:
 
 
 def _parse_xref(
-    data: mmap.mmap,
+    data: bytes | mmap.mmap,
     offset: int,
 ) -> tuple[dict[int, int], bytes] | None:
     section = bytes(data[offset : offset + MAX_XREF_BYTES])
@@ -103,7 +108,7 @@ def _parse_xref(
 
 
 def _read_object(
-    data: mmap.mmap,
+    data: bytes | mmap.mmap,
     offsets: dict[int, int],
     reference: int,
 ) -> bytes | None:
@@ -124,7 +129,7 @@ def _named_reference(value: bytes, name: bytes) -> int | None:
 
 
 def _page_count(
-    data: mmap.mmap,
+    data: bytes | mmap.mmap,
     offsets: dict[int, int],
     reference: int,
     visited: set[int],

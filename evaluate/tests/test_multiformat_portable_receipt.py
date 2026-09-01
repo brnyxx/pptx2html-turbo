@@ -14,9 +14,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from evaluate.jcs import canonicalize
 from evaluate.multiformat_portable_receipt import (
     PortableReceiptError,
-    PortableReceiptVerification,
+    verify_portable_receipt,
 )
 from evaluate.multiformat_schema import JsonValue
+from evaluate.tests.multiformat_json_mutation_fixture import set_json_path
 from evaluate.tests.multiformat_portable_receipt_fixture import ReceiptFixture
 
 
@@ -33,6 +34,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             digest = hashlib.sha256(payload_bytes).digest()
             signature = bytes.fromhex(_string(receipt, "signature"))
 
+            self.assertEqual(receipt["schema_version"], 2)
             self.assertEqual(identity.payload_sha256, digest.hex())
             self.assertEqual(
                 identity.artifacts[0].inode, fixture.artifact.stat().st_ino
@@ -47,7 +49,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as attacker_dir,
         ):
             trusted = ReceiptFixture(Path(trusted_dir))
-            attacker = ReceiptFixture(Path(attacker_dir), nonce=trusted.nonce)
+            attacker = ReceiptFixture(Path(attacker_dir))
             attacker.sign()
             trusted.receipt.write_bytes(attacker.receipt.read_bytes())
 
@@ -128,43 +130,45 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             ):
                 fixture.verify()
 
-    def test_unsigned_prior_receipt_cannot_influence_replay(self) -> None:
+    def test_exact_receipt_is_idempotent_and_copy_path_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = ReceiptFixture(Path(temp_dir))
             fixture.sign()
-            unsigned = fixture.root / "unsigned.json"
-            unsigned.write_text(json.dumps({"nonce": fixture.nonce}), encoding="utf-8")
-            verification = PortableReceiptVerification(
-                trust=fixture.trust,
-                prior_receipts=(unsigned,),
-            )
+            receipt_bytes = fixture.receipt.read_bytes()
 
-            with self.assertRaisesRegex(PortableReceiptError, "identity"):
-                fixture.verify(verification)
+            first = fixture.verify()
+            second = fixture.verify()
+            copied = fixture.root / "copied-receipt.json"
+            copied.write_bytes(receipt_bytes)
 
-    def test_cross_scope_identity_does_not_control_replay(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as first_dir,
-            tempfile.TemporaryDirectory() as second_dir,
-        ):
-            first = ReceiptFixture(Path(first_dir))
-            second = ReceiptFixture(Path(second_dir), nonce=first.nonce)
-            first.sign()
-            second.sign()
-            prior = second.verify()
-
-            identity = first.verify(first.verification((prior,)))
-
-            self.assertEqual(identity.nonce, first.nonce)
-
-    def test_same_scope_verified_nonce_replay_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fixture = ReceiptFixture(Path(temp_dir))
-            fixture.sign()
-            prior = fixture.verify()
-
+            self.assertEqual(first, second)
+            self.assertEqual(fixture.receipt.read_bytes(), receipt_bytes)
             with self.assertRaisesRegex(PortableReceiptError, "nonce"):
-                fixture.verify(fixture.verification((prior,)))
+                verify_portable_receipt(copied, fixture.verification())
+
+    def test_batch_and_artifact_variants_derive_distinct_valid_nonces(self) -> None:
+        for variant in ("batch", "artifacts"):
+            with (
+                self.subTest(variant=variant),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                fixture = ReceiptFixture(Path(temp_dir))
+                fixture.sign()
+                first = fixture.verify()
+                batch_id = "portable-batch-1"
+                if variant == "batch":
+                    batch_id = "portable-batch-2"
+                else:
+                    artifact = fixture._artifact("outputs/semantic.json", b"{}")
+                    fixture.artifacts.append(
+                        fixture._artifact_record(path=artifact, role="semantic")
+                    )
+                    fixture.artifacts.sort(key=lambda item: str(item["path"]))
+                fixture.sign(batch_id=batch_id)
+
+                second = fixture.verify()
+
+                self.assertNotEqual(second.nonce, first.nonce)
 
     def test_duplicate_noncanonical_malformed_and_signed_field_tamper_fail(
         self,
@@ -185,6 +189,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                     fixture.verify()
 
         for path, replacement in (
+            ("schema_version", 1),
             ("runtime.nonce", "0" * 64),
             ("runtime.executor_sha256", "0" * 64),
             ("runtime.reference_lock.sha256", "0" * 64),
@@ -194,7 +199,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
             ("runtime.evaluator_sha256", "0" * 64),
             ("runtime.project_revision", "0" * 40),
             ("runtime.reference_profile", "microsoft-office"),
-            ("runtime.platform.os", "Linux"),
+            ("runtime.platform.os", "Darwin"),
             ("runtime.canonicalizer.sha256", "0" * 64),
             ("artifacts.0.role", "other"),
         ):
@@ -202,7 +207,7 @@ class MultiFormatPortableReceiptTests(unittest.TestCase):
                 fixture = ReceiptFixture(Path(temp_dir))
                 fixture.sign()
                 value = fixture.read_receipt()
-                _set(value, path, replacement)
+                set_json_path(value, path, replacement)
                 fixture.receipt.write_bytes(canonicalize(value))
                 with self.assertRaises(PortableReceiptError):
                     fixture.verify()
@@ -242,21 +247,16 @@ def _mapping(value: dict[str, JsonValue], field: str) -> dict[str, JsonValue]:
     return result
 
 
-def _objects(value: dict[str, JsonValue], field: str) -> list[dict[str, JsonValue]]:
+def _objects(value: dict[str, JsonValue], field: str) -> list[JsonValue]:
+    """Narrows a JSON array while keeping the receipt's own list identity.
+
+    Callers mutate the result to build attack receipts, so returning a copy
+    would silently drop the edit.
+    """
     result = value[field]
-    if not isinstance(result, list) or not all(
-        isinstance(item, dict) for item in result
-    ):
+    if not isinstance(result, list):
         raise TypeError(field)
+    for item in result:
+        if not isinstance(item, dict):
+            raise TypeError(field)
     return result
-
-
-def _set(value: dict[str, JsonValue], path: str, replacement: JsonValue) -> None:
-    current: JsonValue = value
-    parts = path.split(".")
-    for part in parts[:-1]:
-        current = current[int(part)] if isinstance(current, list) else current[part]
-    if isinstance(current, list):
-        current[int(parts[-1])] = replacement
-    else:
-        current[parts[-1]] = replacement

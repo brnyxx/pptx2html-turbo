@@ -29,4 +29,6 @@ fn converts_legacy_xls_through_the_native_public_surface() {
     assert_eq!(result.unit_count, 1);
     assert!(result.html.contains("Universal"));
     assert!(result.html.contains("XLS"));
+    assert!(result.html.contains(r#"data-cell-coordinate="A1""#));
+    assert!(result.html.contains(r#"data-worksheet="Sheet1""#));
 }

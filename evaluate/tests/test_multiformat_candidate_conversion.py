@@ -7,15 +7,46 @@ import time
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 from evaluate.multiformat_candidate_conversion import (
     CandidateConversionError,
+    _stage_timeout_seconds,
+    _validate_diagnostics,
     run_conversion,
 )
+from evaluate.multiformat_candidate_sandbox import ACTIVE_SANDBOX_ENV
 from evaluate.multiformat_corpus_types import DocumentFormat
 
 
 class MultiFormatCandidateConversionTests(unittest.TestCase):
+    def test_outer_sandbox_owns_native_runtime_isolation(self) -> None:
+        diagnostics = [
+            {"code": "NATIVE_BACKEND_OPAQUE"},
+            {"code": "NATIVE_NETWORK_ISOLATION_DISABLED"},
+        ]
+        with self.assertRaisesRegex(
+            CandidateConversionError,
+            "isolation diagnostics",
+        ):
+            _validate_diagnostics(diagnostics, DocumentFormat.DOCX)
+
+        with mock.patch.dict(
+            "os.environ",
+            {ACTIVE_SANDBOX_ENV: "a" * 64},
+        ):
+            _validate_diagnostics(diagnostics, DocumentFormat.DOCX)
+
+    def test_truncated_spreadsheet_scan_cannot_back_candidate_evidence(self) -> None:
+        with self.assertRaisesRegex(CandidateConversionError, "scan truncated"):
+            _validate_diagnostics(
+                [
+                    {"code": "NATIVE_BACKEND_OPAQUE"},
+                    {"code": "SPREADSHEET_CELL_SCAN_TRUNCATED"},
+                ],
+                DocumentFormat.XLSX,
+            )
+
     def test_invokes_exact_converter_with_isolated_explicit_backends(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -34,7 +65,7 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
                 soffice=soffice,
                 pdftohtml=pdftohtml,
                 pdfinfo=pdfinfo,
-                timeout_seconds=30,
+                timeout_seconds=600,
             )
 
             self.assertIn("page1-div", result.html)
@@ -44,8 +75,31 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             self.assertIn("docx", args)
             self.assertIn("--soffice", args)
             self.assertIn(soffice.resolve().as_posix(), args)
-            self.assertNotIn("--allow-unisolated", args)
+            self.assertIn("--allow-unisolated", args)
+            self.assertEqual(
+                args[args.index("--stage-timeout-seconds") + 1],
+                "600",
+            )
             self.assertEqual(result.source_sha256, self._sha256(source))
+
+    def test_rejects_out_of_range_or_noninteger_stage_timeout(self) -> None:
+        root = Path("unused")
+        self.assertEqual(_stage_timeout_seconds(3_600), 3_600)
+        for invalid in [0, -1, 0.5, 3_601]:
+            with self.assertRaisesRegex(
+                CandidateConversionError,
+                "integer from 1 to 3600",
+            ):
+                run_conversion(
+                    root / "converter",
+                    root / "source.docx",
+                    DocumentFormat.DOCX,
+                    root / "run",
+                    soffice=root / "soffice",
+                    pdftohtml=root / "pdftohtml",
+                    pdfinfo=root / "pdfinfo",
+                    timeout_seconds=invalid,
+                )
 
     def test_nonzero_converter_exit_fails_without_publishing_html(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -94,7 +148,7 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             scale = float(args[args.index("--presentation-scale") + 1])
             self.assertAlmostEqual(scale, 0.75, places=6)
 
-    def test_pptx_capture_rejects_non_16_by_9_slide_geometry(self) -> None:
+    def test_pptx_capture_scales_four_by_three_slide_to_canonical_width(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "source.pptx"
@@ -102,9 +156,33 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
             converter = self._converter(root, exit_code=0)
             tool = self._tool(root, "tool")
 
+            result = run_conversion(
+                converter,
+                source,
+                DocumentFormat.PPTX,
+                root / "run",
+                soffice=tool,
+                pdftohtml=tool,
+                pdfinfo=tool,
+                timeout_seconds=30,
+            )
+
+            diagnostics = json.loads(result.diagnostics.read_text(encoding="utf-8"))
+            args = diagnostics[0]["args"]
+            scale = float(args[args.index("--presentation-scale") + 1])
+            self.assertAlmostEqual(scale, 1.0, places=6)
+
+    def test_malformed_pptx_is_rejected_by_the_converter_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.pptx"
+            source.write_bytes(b"not a ZIP package")
+            converter = self._converter(root, exit_code=7)
+            tool = self._tool(root, "tool")
+
             with self.assertRaisesRegex(
                 CandidateConversionError,
-                "16:9",
+                "exit code 7",
             ):
                 run_conversion(
                     converter,
@@ -170,9 +248,9 @@ class MultiFormatCandidateConversionTests(unittest.TestCase):
                     soffice=tool,
                     pdftohtml=tool,
                     pdfinfo=tool,
-                    timeout_seconds=0.2,
+                    timeout_seconds=1,
                 )
-            self.assertLess(time.monotonic() - started, 1.0)
+            self.assertLess(time.monotonic() - started, 2.0)
 
     @classmethod
     def _converter(cls, root: Path, *, exit_code: int) -> Path:

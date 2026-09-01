@@ -96,6 +96,13 @@ def compute_unit(
             not spreadsheet and (reference_inventory.cells or candidate_inventory.cells)
         ):
             raise MetricError("inventory.identity", unit_id)
+        # A cell whose display text could not be reproduced means the content
+        # metric would score an incomplete cell set. That is unprovable
+        # evidence, so it fails the gate instead of silently lowering recall.
+        if reference_inventory.unattributed_cells or (
+            candidate_inventory.unattributed_cells
+        ):
+            raise MetricError("inventory.unattributed_cells", unit_id)
         inventory = compare_inventories(
             reference_inventory,
             candidate_inventory,

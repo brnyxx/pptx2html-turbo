@@ -582,8 +582,9 @@ def _worker_validate(repo_root: Path, fixture_root: Path) -> int:
     return 0
 
 
-def _workflow_steps(content: str) -> dict[str, list[dict[str, str]]]:
+def _workflow_steps(content: str) -> tuple[dict[str, list[dict[str, str]]], dict[str, tuple[str, ...]]]:
     jobs: dict[str, list[dict[str, str]]] = {}
+    job_needs: dict[str, tuple[str, ...]] = {}
     current_job: str | None = None
     lines = content.splitlines()
     index = 0
@@ -592,15 +593,22 @@ def _workflow_steps(content: str) -> dict[str, list[dict[str, str]]]:
         if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line) and line.strip() != "steps:":
             current_job = line.strip()[:-1]
             jobs.setdefault(current_job, [])
+        needs_match = re.match(r"^    needs:\s*(.+)$", line) if current_job else None
+        if current_job and needs_match:
+            raw_needs = needs_match.group(1).strip()
+            if raw_needs.startswith("[") and raw_needs.endswith("]"):
+                job_needs[current_job] = tuple(item.strip().strip(" '\"") for item in raw_needs[1:-1].split(",") if item.strip())
+            else:
+                job_needs[current_job] = (raw_needs.strip(" '\""),)
         if current_job and re.match(
             r"^      - (?:name|uses|run|if|continue-on-error):", line
         ):
             step: dict[str, str] = {}
             while index < len(lines):
                 candidate = lines[index]
-                if index != 0 and re.match(
-                    r"^      - (?:name|uses|run|if|continue-on-error):", candidate
-                ) and step:
+                next_step = re.match(r"^      - (?:name|uses|run|if|continue-on-error):", candidate)
+                next_job = re.match(r"^  [A-Za-z0-9_-]+:\s*$", candidate)
+                if step and (next_step or next_job):
                     break
                 match = re.match(
                     r"^        (name|uses|run|if|continue-on-error):\s*(.*)$|"
@@ -623,20 +631,35 @@ def _workflow_steps(content: str) -> dict[str, list[dict[str, str]]]:
             jobs[current_job].append(step)
             continue
         index += 1
-    return jobs
+    return jobs, job_needs
 
 
 def _executable_commands(body: str) -> list[str]:
     return [line.strip() for line in body.splitlines() if line.strip() and not line.lstrip().startswith("#")]
 
 
+def _transitive_job_needs(job: str, job_needs: dict[str, tuple[str, ...]]) -> set[str]:
+    dependencies: set[str] = set()
+    pending = list(job_needs.get(job, ()))
+    while pending:
+        dependency = pending.pop()
+        if dependency in dependencies:
+            continue
+        dependencies.add(dependency)
+        pending.extend(job_needs.get(dependency, ()))
+    return dependencies
+
+
 def _workflow_check(relative: str, content: str, missing: list[str]) -> None:
-    jobs = _workflow_steps(content)
+    jobs, job_needs = _workflow_steps(content)
     found_discovery = found_exactness = False
     publication_seen = relative.endswith("ci.yml")
-    for steps in jobs.values():
-        discovery_index = exactness_index = None
-        publication_indices = []
+    gate_indices: dict[str, tuple[list[int], list[int]]] = {}
+    publication_indices: dict[str, list[int]] = {}
+    for job, steps in jobs.items():
+        discovery_indices: list[int] = []
+        exactness_indices: list[int] = []
+        job_publication_indices: list[int] = []
         for index, step in enumerate(steps):
             disabled = step.get("if", "").strip().lower() in {
                 "false",
@@ -657,7 +680,7 @@ def _workflow_check(relative: str, content: str, missing: list[str]) -> None:
                 )
                 for command in commands
             ):
-                discovery_index = index
+                discovery_indices.append(index)
                 found_discovery = True
             if not disabled and not non_blocking and any(
                 re.fullmatch(
@@ -667,13 +690,25 @@ def _workflow_check(relative: str, content: str, missing: list[str]) -> None:
                 )
                 for command in commands
             ):
-                exactness_index = index
+                exactness_indices.append(index)
                 found_exactness = True
             if step.get("uses", "").startswith("softprops/action-gh-release") or any(re.search(r"(?:^|\s)npm publish(?:\s|$)", command) for command in commands):
-                publication_indices.append(index)
-        if publication_indices:
+                job_publication_indices.append(index)
+        gate_indices[job] = (discovery_indices, exactness_indices)
+        publication_indices[job] = job_publication_indices
+
+    for job, job_publication_indices in publication_indices.items():
+        if job_publication_indices:
             publication_seen = True
-            if discovery_index is None or exactness_index is None or any(discovery_index > publish or exactness_index > publish for publish in publication_indices):
+            dependencies = _transitive_job_needs(job, job_needs)
+            dependency_has_discovery = any(gate_indices.get(dependency, ([], []))[0] for dependency in dependencies)
+            dependency_has_exactness = any(gate_indices.get(dependency, ([], []))[1] for dependency in dependencies)
+            discovery_indices, exactness_indices = gate_indices[job]
+            if any(
+                not (dependency_has_discovery or any(gate < publish for gate in discovery_indices))
+                or not (dependency_has_exactness or any(gate < publish for gate in exactness_indices))
+                for publish in job_publication_indices
+            ):
                 missing.append(f"WORKFLOW_GATE_ORDER_INVALID:{relative}")
     if not found_discovery:
         missing.append(f"WORKFLOW_EVALUATE_DISCOVERY_MISSING:{relative}")

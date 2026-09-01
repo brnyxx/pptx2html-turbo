@@ -70,6 +70,21 @@ class MultiFormatPortableReceiptTrustFlowTests(unittest.TestCase):
                     fixture.verify()
                 self.assertEqual(mutation.count, target_close)
 
+    def test_outer_sandbox_bindings_are_receipt_trust_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = ReceiptFixture(Path(temp_dir))
+            roles = {artifact.role for artifact in fixture.trust.lock_artifacts}
+            self.assertTrue(
+                {
+                    "candidate-sandbox:public-key",
+                    "candidate-sandbox:openssl",
+                    "candidate-sandbox:receipt-signer",
+                    "sandbox:executable",
+                    "sandbox:profile",
+                    "sandbox:host-artifact",
+                }.issubset(roles)
+            )
+
     def test_each_lock_bound_artifact_class_is_revalidated_after_context(self) -> None:
         attacks = (
             ("contract", "changed"),
@@ -112,6 +127,19 @@ class MultiFormatPortableReceiptTrustFlowTests(unittest.TestCase):
 
                 with self.assertRaises(PortableReceiptError):
                     fixture.verify()
+
+    def test_external_hardlink_alias_invalidates_trusted_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = ReceiptFixture(Path(temp_dir))
+            fixture.sign()
+            executor = next(
+                item for item in fixture.trust.lock_artifacts if item.role == "executor"
+            )
+            alias = fixture.root / "untracked-executor-alias"
+            os.link(fixture.root / executor.path, alias)
+
+            with self.assertRaises(PortableReceiptError):
+                fixture.verify()
 
     def test_source_exact_path_or_hardlink_cannot_be_signed_output(self) -> None:
         for attack in ("exact", "hardlink"):

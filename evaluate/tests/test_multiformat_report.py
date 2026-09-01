@@ -6,12 +6,26 @@ from pathlib import Path
 
 from evaluate.multiformat_metrics import validate_metrics_evidence
 from evaluate.multiformat_report import acceptance_failures, build_report
-from evaluate.multiformat_schema import JsonValue, read_object
-from evaluate.tests.multiformat_metrics_fixture import write_metrics
+from evaluate.multiformat_schema import (
+    JsonValue,
+    boolean_value,
+    integer_value,
+    number_value,
+    object_value,
+    read_object,
+)
+from evaluate.tests.multiformat_metrics_fixture import (
+    patched_reviewer_registry,
+    write_metrics,
+)
 from evaluate.tests.multiformat_small_corpus_fixture import ready_fixture
 
 
 class MultiFormatReportTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Fixture reviews are signed by test-only reviewers.
+        self.enterContext(patched_reviewer_registry())
+
     def test_report_is_assembled_only_from_recomputed_metric_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -34,13 +48,22 @@ class MultiFormatReportTests(unittest.TestCase):
                 self._binding("metrics.json", "5"),
             )
 
-            self.assertEqual(report["schema_version"], 2)
-            self.assertEqual(report["conformance"]["score"], 100.0)
-            self.assertEqual(report["blind"]["score"], 100.0)
-            self.assertEqual(report["blind"]["accepted_files"], 5)
-            self.assertEqual(report["security"]["passed"], 2)
-            self.assertTrue(report["quality"]["tests_passed"])
-            self.assertTrue(report["performance"]["within_limits"])
+            blind = object_value(report, "blind")
+            self.assertEqual(integer_value(report, "schema_version"), 2)
+            self.assertEqual(
+                number_value(object_value(report, "conformance"), "score"), 100.0
+            )
+            self.assertEqual(number_value(blind, "score"), 100.0)
+            self.assertEqual(integer_value(blind, "accepted_files"), 5)
+            self.assertEqual(
+                integer_value(object_value(report, "security"), "passed"), 2
+            )
+            self.assertTrue(
+                boolean_value(object_value(report, "quality"), "tests_passed")
+            )
+            self.assertTrue(
+                boolean_value(object_value(report, "performance"), "within_limits")
+            )
 
     def test_thresholds_use_retained_six_decimal_value_not_display_rounding(
         self,

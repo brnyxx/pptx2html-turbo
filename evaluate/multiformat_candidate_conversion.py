@@ -13,12 +13,14 @@ from evaluate.multiformat_candidate_process import (
     CandidateProcessError,
     run_bounded_process,
 )
+from evaluate.multiformat_candidate_sandbox import ACTIVE_SANDBOX_ENV
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 from evaluate.multiformat_corpus_types import DocumentFormat
 from evaluate.multiformat_schema import JsonValue
 
 MAX_HTML_BYTES = 64 * 1024 * 1024
 MAX_LOG_BYTES = 8 * 1024 * 1024
+MAX_STAGE_TIMEOUT_SECONDS = 3_600
 
 
 class CandidateConversionError(CandidateCaptureError):
@@ -43,8 +45,9 @@ def run_conversion(
     soffice: Path,
     pdftohtml: Path,
     pdfinfo: Path,
-    timeout_seconds: float,
+    timeout_seconds: int,
 ) -> ConversionResult:
+    stage_timeout_seconds = _stage_timeout_seconds(timeout_seconds)
     if output_dir.exists() and any(output_dir.iterdir()):
         raise CandidateConversionError(f"nonempty conversion output: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -71,6 +74,8 @@ def run_conversion(
         _executable(pdftohtml),
         "--pdfinfo",
         _executable(pdfinfo),
+        "--stage-timeout-seconds",
+        str(stage_timeout_seconds),
     )
     stdout_path = output_dir / "stdout.log"
     stderr_path = output_dir / "stderr.log"
@@ -94,7 +99,7 @@ def run_conversion(
             environment,
             stdout_path,
             stderr_path,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=stage_timeout_seconds,
             max_log_bytes=MAX_LOG_BYTES,
         )
     except CandidateProcessError as error:
@@ -139,12 +144,23 @@ def _executable(path: Path) -> str:
     return resolved.as_posix()
 
 
+def _stage_timeout_seconds(timeout_seconds: int) -> int:
+    if (
+        type(timeout_seconds) is not int
+        or not 0 < timeout_seconds <= MAX_STAGE_TIMEOUT_SECONDS
+    ):
+        raise CandidateConversionError(
+            f"timeout seconds must be an integer from 1 to {MAX_STAGE_TIMEOUT_SECONDS}"
+        )
+    return timeout_seconds
+
+
 def _presentation_args(
     source: Path,
     document_format: DocumentFormat,
 ) -> tuple[str, ...]:
     if document_format is not DocumentFormat.PPTX:
-        return ()
+        return ("--allow-unisolated",)
     try:
         with zipfile.ZipFile(source) as archive:
             root = ET.fromstring(archive.read("ppt/presentation.xml"))
@@ -152,7 +168,7 @@ def _presentation_args(
             "{http://schemas.openxmlformats.org/presentationml/2006/main}sldSz"
         )
         if size is None:
-            raise CandidateConversionError("PPTX slide size is missing")
+            return ()
         width = int(size.attrib["cx"])
         height = int(size.attrib["cy"])
     except (
@@ -161,10 +177,10 @@ def _presentation_args(
         ValueError,
         ET.ParseError,
         zipfile.BadZipFile,
-    ) as error:
-        raise CandidateConversionError("invalid PPTX slide geometry") from error
-    if width <= 0 or height <= 0 or abs(width / height - 16 / 9) > 0.000001:
-        raise CandidateConversionError("PPTX capture requires 16:9 slide geometry")
+    ):
+        return ()
+    if width <= 0 or height <= 0:
+        return ()
     css_width = width * 96 / 914_400
     scale = 960 / css_width
     return "--presentation-scale", f"{scale:.12g}"
@@ -174,24 +190,30 @@ def _validate_diagnostics(
     value: JsonValue,
     document_format: DocumentFormat,
 ) -> None:
-    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+    if not isinstance(value, list):
         raise CandidateConversionError("diagnostics output has an invalid shape")
-    codes = {
-        item.get("code")
-        for item in value
-        if isinstance(item.get("code"), str) and item.get("code")
-    }
+    codes: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise CandidateConversionError("diagnostics output has an invalid shape")
+        code = item.get("code")
+        if isinstance(code, str) and code:
+            codes.add(code)
     if (
         document_format is not DocumentFormat.PPTX
         and "NATIVE_BACKEND_OPAQUE" not in codes
     ):
         raise CandidateConversionError("native runtime diagnostics are missing")
-    if codes & {
+    if not os.environ.get(ACTIVE_SANDBOX_ENV) and codes & {
         "NATIVE_NETWORK_ISOLATION_DISABLED",
         "PROCESS_ISOLATION_DISABLED",
         "PROCESS_ISOLATION_UNAVAILABLE",
     }:
         raise CandidateConversionError("native runtime isolation diagnostics failed")
+    # A truncated cell scan abandons all coordinate attribution, so the
+    # conversion cannot back spreadsheet cell evidence at all.
+    if "SPREADSHEET_CELL_SCAN_TRUNCATED" in codes:
+        raise CandidateConversionError("spreadsheet cell scan truncated")
 
 
 def _sha256(path: Path) -> str:

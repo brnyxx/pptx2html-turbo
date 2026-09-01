@@ -3,7 +3,7 @@ mod fixtures;
 use std::io::{Cursor, Read, Write};
 
 use fixtures::MinimalPptx;
-use pptx2html_core::convert_bytes_with_metadata;
+use pptx2html_core::{convert_bytes_with_metadata, error::PptxError};
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
 
@@ -748,4 +748,22 @@ fn chart_reference_failures_are_visible_and_typed() {
         assert!(diagnostics[0].reason.contains(expected));
         assert!(result.html.contains("chart-placeholder"));
     }
+}
+
+#[test]
+fn chart_doctype_is_rejected_before_invalid_xml_fallback() {
+    let bytes = package(
+        Some("<!DOCTYPE chartSpace><c:chartSpace"),
+        Some("rIdChart"),
+        true,
+    );
+    let error = convert_bytes_with_metadata(&bytes).expect_err("chart DOCTYPE should fail");
+    assert!(
+        matches!(
+            error,
+            PptxError::UnsupportedFormat(ref message)
+                if message == "XML document type declarations are forbidden: ppt/charts/chart1.xml"
+        ),
+        "{error}"
+    );
 }

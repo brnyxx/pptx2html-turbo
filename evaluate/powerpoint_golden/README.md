@@ -1,10 +1,16 @@
 # PowerPoint Reference Goldens
 
-This directory stores PowerPoint-rendered reference artifacts.
+This directory stores optional Microsoft PowerPoint-rendered reference
+artifacts for the separate PPTX `exact`-promotion contract. They are not
+required by the default macOS `libreoffice-poppler` seven-format
+acceptance profile.
 
 ## Purpose
 
-LibreOffice remains useful for broad regression detection, but PowerPoint is the primary fidelity oracle for features that claim `exact` support.
+LibreOffice/Poppler is the default reference profile for general seven-format
+acceptance. PowerPoint is the primary fidelity oracle only for features that
+claim the separate PPTX `exact` support tier; those Windows captures remain
+optional for general acceptance.
 
 ## Directory Contract
 

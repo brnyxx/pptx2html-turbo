@@ -6,9 +6,13 @@ Evolve the PPTX-specific workspace into a document-to-HTML tool that accepts
 PPTX, DOCX, DOC, XLSX, XLS, PPT, and PDF while preserving every existing
 PPTX API and fidelity contract.
 
-The project succeeds only when every format independently passes the
-versioned 96% acceptance gate defined below. Scores are never pooled across
-formats, modern and legacy variants, or metric families.
+The project succeeds only when every format independently satisfies the
+approved claim
+`96% under the documented general conversion evaluation contract`. Scores are
+never pooled across formats, modern and legacy variants, or metric families.
+This is a general conversion-evaluation claim, not Microsoft Office pixel
+accuracy, PowerPoint pixel matching, byte-identical output, or the separate
+PPTX `exact`-promotion tier.
 
 `.docs` is not a Microsoft Office file format. The requested Word formats are
 therefore interpreted as `.docx` and `.doc`.
@@ -20,8 +24,12 @@ therefore interpreted as `.docx` and `.doc`.
 - The existing pure-Rust PPTX implementation remains the preferred PPTX
   backend.
 - `evaluate/evaluate_fidelity.py` remains human-owned and unchanged.
-- A native Office or PDF renderer is regression evidence, not evidence for an
-  `exact` capability claim.
+- The locked LibreOffice/Poppler portable profile supplies the reference
+  evidence required by the general conversion-evaluation contract. Optional
+  Office/PDF native workflows may provide enrichment or promotion evidence;
+  Microsoft Office pixel output is not a requirement for the general claim.
+  Native PowerPoint pixel evidence remains reserved for the separate `exact`
+  capability claim.
 - Browser WASM cannot launch native processes. Unsupported runtime/format
   combinations must be reported explicitly rather than silently degraded.
 - New format support must preserve unsupported content through typed
@@ -38,7 +46,7 @@ This gives the best theoretical portability, including browser WASM. It is not
 the selected first path because Word pagination, Excel print layout, legacy
 CFBF formats, and PDF painting each require a separate rendering engine. A
 small implementation could parse content but could not honestly satisfy the
-96% visual and layout gate.
+claim `96% under the documented general conversion evaluation contract`.
 
 ### 2. Delegate every format directly to LibreOffice
 
@@ -438,11 +446,17 @@ vector; it is configured by trusted operators, never from document content.
 The evaluator additionally applies host-level CPU and memory limits. Runtime
 code enforces input, cumulative output, log, and time bounds on every platform.
 
-## 96% acceptance contract
+## General conversion evaluation contract
 
-The 96% gate is an acceptance gate, not an `exact` promotion. Existing PPTX
-exactness still requires the stricter PowerPoint-native zero-RGBA-difference
-contract.
+The standardized claim is
+`96% under the documented general conversion evaluation contract`. The gate is
+an acceptance gate, not an `exact` promotion. Its default required reference
+profile is `libreoffice-poppler`: supported macOS hosts use
+locked LibreOffice and Poppler over the seven frozen format corpora, with PDF
+entering Poppler directly. Existing PPTX exactness remains a separate,
+stricter PowerPoint-native zero-RGBA-difference contract. A signed
+`microsoft-office`/Windows profile is supported as optional evidence and is not
+a prerequisite for the default acceptance path.
 
 ### Corpus
 
@@ -486,39 +500,45 @@ Each blind file score is the arithmetic mean of all its unit scores. The blind
 format score is the arithmetic mean of exactly 75 file scores, so a long file
 cannot dominate the result.
 
-### Native oracles
+### Reference profiles and evidence identity
 
-- DOCX and DOC: pinned Microsoft Word PDF export on Windows.
-- XLSX and XLS: pinned Microsoft Excel PDF export on Windows.
-- PPTX and PPT: pinned Microsoft PowerPoint slide export on Windows.
-- PDF: source PDF rendered by pinned MuPDF, with a second renderer for complex
-  transparency and color-space cases.
+The default required profile is `libreoffice-poppler`:
 
-LibreOffice is a local regression oracle only. Missing Windows Office evidence
-is `INCOMPLETE`, never `PASS`.
+- On supported macOS hosts, DOCX, DOC, XLSX, XLS, PPTX, and PPT use locked
+  LibreOffice PDF export plus locked Poppler metadata, rendering, and text
+  extraction.
+- PDF uses the same locked Poppler stages directly, without LibreOffice.
+- Linux supports native conversion, but signed profile capture remains
+  `INCOMPLETE` until a Linux process-sandbox backend is implemented.
 
-Exact producer builds and rendering settings live in a versioned
-`evaluate/multiformat/oracle-lock.json`. The gate rejects a missing lock, an
-unrecorded producer, or any version mismatch. The initial lock records:
+Its schema-2 portable lock records the platform, routing-table and
+canonicalizer identities, tool/font/browser/runtime hashes, frozen corpus and
+evaluator scope, signed executor, network-isolated runtime attestation, and
+project revision. Every selected reference and candidate artifact is
+SHA-256-bound, and missing, stale, substituted, or tampered evidence remains
+`INCOMPLETE` or `FAIL`.
 
-- Windows 11 23H2,
-- the exact installed Microsoft 365 Word, Excel, and PowerPoint versions and
-  builds,
-- Office locale, timezone, default printer, disabled macro/link-update policy,
-  font-bundle digest, and PDF export settings,
-- exact MuPDF and secondary PDF renderer versions,
-- Chromium revision, viewport/device scale, locale, timezone, font-bundle
-  digest, animation policy, and color profile,
-- 144 DPI for paged documents and exactly 960 by 540 RGBA for presentations.
+The optional `microsoft-office` profile remains supported for signed Windows
+Word, Excel, and PowerPoint oracle evidence. Its schema-1 lock, distinct
+verifier, Office provenance, and artifact bindings remain fail-closed when that
+profile is selected, but its absence does not block the default portable
+profile. Profiles are selected as a complete evidence wave and are not mixed.
 
-The lock is populated only from the real evaluator hosts. Until those concrete
-values and hashes exist, every affected format is `INCOMPLETE`; placeholder or
-invented versions are forbidden.
+A selected Office profile may use:
 
-PowerPoint references are exported through the documented
-`Slide.Export(path, "PNG", 960, 540)` operation. The gate verifies every PNG
-IHDR is exactly 960 by 540. Decoding RGB PNG data into an RGBA pixel buffer is
-allowed; geometric resize, crop, padding, or alignment is not.
+- DOCX and DOC: pinned Microsoft Word PDF export on Windows;
+- XLSX and XLS: pinned Microsoft Excel PDF export on Windows;
+- PPTX and PPT: pinned Microsoft PowerPoint slide export on Windows;
+- PDF: source PDF rendered by pinned PDF renderers.
+
+The lock is populated only from real evaluator hosts. Until the concrete
+values and hashes for a selected profile exist, that profile is `INCOMPLETE`;
+placeholder or invented versions are forbidden.
+
+PowerPoint references in the optional Office profile are exported through the
+documented `Slide.Export(path, "PNG", 960, 540)` operation. The gate verifies
+every PNG IHDR is exactly 960 by 540. Decoding RGB PNG data into an RGBA pixel
+buffer is allowed; geometric resize, crop, padding, or alignment is not.
 
 ### Metrics
 
@@ -570,19 +590,27 @@ The machine implementation is fixed as follows:
 - Conformance score is the arithmetic mean of exactly 100 unit scores. Blind
   aggregation follows the file-then-format rule above.
 
-Oracle semantic inventories come from pinned Word, Excel, and PowerPoint COM
-exporters and from MuPDF's page text/image/link/annotation extraction. Candidate
+Reference semantic inventories for the default required profile come only
+from its locked LibreOffice/Poppler reference outputs and documented extraction
+contract. Optional Office/native enrichment may add pinned Word, Excel, and
+PowerPoint COM/Microsoft Office reading-order captures, MuPDF extraction, or
+other locked PDF-renderer evidence for a separately selected profile or exact
+promotion; none is a prerequisite for the default general gate. Candidate
 inventories come from a pinned Chromium script that walks visible DOM text
 nodes, images, links, form controls, SVG graphics, and page containers and
-records bounding boxes and text baselines. Spreadsheet oracle tuples retain
+records bounding boxes and text baselines. Spreadsheet reference tuples retain
 their cell coordinates; candidate nodes are assigned to tuples by displayed
 value, page, and minimum-cost box matching. Duplicate values use global
 minimum-cost assignment, never first-match order.
 
 Object identity is `(unit, type, semantic-value-or-content-hash, occurrence)`.
-Reading order is the oracle order from COM/MuPDF and candidate DOM order after
-page-container grouping. Baselines use the oracle PDF text baseline and
-Chromium `Range.getClientRects()` plus computed font metrics.
+Reading order is the selected profile's locked extraction order and candidate
+DOM order after page-container grouping. The default profile uses Poppler
+extraction; optional Office/native enrichment may use COM/Microsoft Office or
+MuPDF reading-order evidence. Baselines use the selected profile's bound PDF
+text geometry and Chromium `Range.getClientRects()` plus computed font metrics.
+These optional native readings never become prerequisites for the default
+`96% under the documented general conversion evaluation contract` claim.
 
 If a metric family is declared not applicable by the frozen stratum manifest,
 both inventories must be empty and that component scores 100. If either side
@@ -610,6 +638,17 @@ A format passes only when all of these hold:
 10. Two independent reviewers pass every full-resolution pair.
 11. Relevant tests, release builds, diagnostics, and contract checks pass.
 
+For the standardized claim, 96.00 applies only to the conformance and blind
+aggregate scores. Structural validity, exact unit/file/security quotas,
+review outcomes, determinism, and SHA-256 evidence bindings are hard gates;
+they are not averaged into a 96% promise. Textual/content similarity is `C`
+(minimum 98.00), layout is `L` (minimum 94.00), and visual similarity is `V`
+(minimum 95.00). Two clean runs must produce identical HTML, inventories, and
+screenshot hashes. Frozen source bytes and signed hashes bind the evaluator,
+corpora, tools, runtimes, and admitted outputs; they establish evidence
+identity, not byte-identical output across separate capture environments.
+Microsoft Office pixel-accuracy wording is prohibited for this general claim.
+
 The product passes only when all seven format results are `PASS` in the same
 evaluation wave.
 
@@ -624,9 +663,11 @@ Two reviewers independently inspect every full-resolution pair using the
 frozen checklist for missing content, clipping, overlap, wrong order, wrong
 color, and unsafe behavior. Both must return `PASS`. A disagreement or a
 reference defect fails the wave. For PDF transparency/color-space strata,
-MuPDF and the secondary locked renderer must agree within the reference
-threshold stored before candidate execution; disagreement invalidates the
-reference and cannot be waived.
+MuPDF agreement with a secondary locked renderer is optional native/reference
+or exact-promotion evidence. If that enrichment or promotion profile selects
+it, the agreement threshold is stored before candidate execution and
+invalidation remains fail-closed; its absence never blocks the default
+LibreOffice/Poppler general gate.
 
 ### Anti-gaming rules
 
@@ -686,9 +727,11 @@ The dependency-tree gate fails if `document2html-native` appears under
 Manual QA covers each CLI format with a valid input, invalid input, and
 `--help`. Native QA records the actual LibreOffice and Poppler versions.
 
-The final 96% product claim additionally requires the transferred,
-same-revision Windows Office evidence and all seven machine-readable format
-reports.
+The default general acceptance result requires the complete portable
+`libreoffice-poppler` profile and all seven machine-readable format reports at
+the same project revision. Optional Office/native evidence may enrich a
+separate selected profile or support exact promotion, but it cannot replace the
+portable profile or become a prerequisite for the general claim.
 
 ## Authoritative references
 

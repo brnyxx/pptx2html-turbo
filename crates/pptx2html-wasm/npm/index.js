@@ -7,6 +7,7 @@ export default init;
 
 /** @type {Promise<import('./pptx2html_wasm.js').InitOutput> | undefined} */
 let initialization;
+const MAX_PPTX_BYTES = 64 * 1024 * 1024;
 
 /**
  * @param {PptxInput} input
@@ -14,12 +15,21 @@ let initialization;
  */
 function toPptxBytes(input) {
   if (input instanceof Uint8Array) {
+    if (input.byteLength > MAX_PPTX_BYTES) {
+      throw new RangeError('PPTX input exceeds the 64 MiB limit');
+    }
     return Promise.resolve(input);
   }
   if (input instanceof ArrayBuffer) {
+    if (input.byteLength > MAX_PPTX_BYTES) {
+      throw new RangeError('PPTX input exceeds the 64 MiB limit');
+    }
     return Promise.resolve(new Uint8Array(input));
   }
   if (typeof Blob !== 'undefined' && input instanceof Blob) {
+    if (input.size > MAX_PPTX_BYTES) {
+      throw new RangeError('PPTX input exceeds the 64 MiB limit');
+    }
     return input.arrayBuffer().then((buffer) => new Uint8Array(buffer));
   }
   throw new TypeError(

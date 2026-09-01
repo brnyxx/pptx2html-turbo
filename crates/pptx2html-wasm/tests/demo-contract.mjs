@@ -60,6 +60,12 @@ assert.doesNotMatch(html, /meta\.innerHTML\s*=/);
 assert.match(html, /fitScaleToContainer\(\)/);
 assert.match(html, /syncScaleInputs\(fitScaleToContainer\(\)\)/);
 assert.match(html, /controls\.style\.display = 'none';\s+currentBuffer = null;\s+currentInfo = null;/);
+assert.match(html, /const MAX_PPTX_BYTES = 64 \* 1024 \* 1024;/);
+const sizeGuardIndex = html.indexOf('if (file.size > MAX_PPTX_BYTES)');
+const fileReadIndex = html.indexOf('await file.arrayBuffer()');
+assert.ok(sizeGuardIndex >= 0, 'demo must reject oversized PPTX files');
+assert.ok(fileReadIndex >= 0, 'demo must read accepted files');
+assert.ok(sizeGuardIndex < fileReadIndex, 'size guard must run before file allocation');
 assert.match(html, /href="https:\/\/github\.com\/brnyxx\/pptx2html-turbo\/releases"/);
 
 const versions = new Set(

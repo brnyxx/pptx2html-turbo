@@ -1,3 +1,5 @@
+import hashlib
+import re
 import unittest
 from pathlib import Path
 
@@ -99,7 +101,9 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
             source,
         )
         self.assertEqual(source.count("NODE_AUTH_TOKEN:"), 2)
-        self.assertEqual(source.count("npm publish --access public"), 2)
+        self.assertEqual(
+            source.count("npm publish --ignore-scripts --access public"), 2
+        )
         self.assertEqual(source.count('npm view "$PACKAGE_ID" version'), 2)
         cleanup_index = source.index(
             "rm -rf crates/pptx2html-wasm/pkg-legacy"
@@ -108,6 +112,42 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
             "cp -R crates/pptx2html-wasm/pkg crates/pptx2html-wasm/pkg-legacy"
         )
         self.assertLess(cleanup_index, copy_index)
+
+    def test_npm_publish_job_is_isolated_and_actions_are_sha_pinned(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (root / ".github" / "workflows" / "publish-npm.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("permissions:\n  contents: read", source)
+        self.assertNotIn("id-token: write", source)
+        self.assertIn("\n  validate:\n", source)
+        self.assertIn("\n  build-packages:\n", source)
+        publish_job = source.split("\n  publish:\n", maxsplit=1)[1]
+        self.assertIn("needs: build-packages", publish_job)
+        self.assertIn("actions/download-artifact@", publish_job)
+        self.assertNotIn("pip install", publish_job)
+        self.assertNotIn("cargo install", publish_job)
+        self.assertNotIn("actions/checkout@", publish_job)
+        self.assertEqual(publish_job.count("NODE_AUTH_TOKEN:"), 2)
+        validator = root / "scripts" / "validate_npm_release_artifact.mjs"
+        validator_sha256 = hashlib.sha256(validator.read_bytes()).hexdigest()
+        self.assertIn(f"VALIDATOR_SHA256: '{validator_sha256}'", source)
+        validator_index = publish_job.index(
+            "node scripts/validate_npm_release_artifact.mjs"
+        )
+        setup_node_index = publish_job.index("actions/setup-node@")
+        publish_index = publish_job.index("Publish primary package to npm")
+        self.assertLess(setup_node_index, validator_index)
+        self.assertLess(validator_index, publish_index)
+
+        action_revisions = re.findall(
+            r"^\s*- uses: [^\s]+@([^\s#]+)", source, re.MULTILINE
+        )
+        self.assertTrue(action_revisions)
+        self.assertTrue(
+            all(re.fullmatch(r"[0-9a-f]{40}", revision) for revision in action_revisions)
+        )
 
     def test_workflows_install_pinned_wasm_pack_idempotently(self) -> None:
         # Given
@@ -174,6 +214,57 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
         self.assertGreaterEqual(browser_index, 0)
         self.assertLess(chromium_index, browser_index)
         self.assertLess(package_index, browser_index)
+
+    def test_release_packages_and_validates_universal_surfaces(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (root / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("document_artifact: document2html", source)
+        self.assertIn("document_artifact: document2html.exe", source)
+        self.assertEqual(source.count("${{ matrix.document_artifact }}"), 2)
+        self.assertIn(
+            "7z a ../../../pptx2html-${{ matrix.target }}.zip "
+            "${{ matrix.artifact }} ${{ matrix.document_artifact }}",
+            source,
+        )
+        self.assertIn("permissions:\n  contents: read", source)
+        self.assertRegex(
+            source,
+            r"release:\n(?:.*\n)*?    permissions:\n      contents: write",
+        )
+        self.assertIsNone(
+            re.search(r"^\s*- uses: [^\s]+@(?:v\d+|stable)\s*$", source, re.MULTILINE)
+        )
+        action_revisions = re.findall(r"^\s*- uses: [^\s]+@([^\s#]+)", source, re.MULTILINE)
+        self.assertTrue(action_revisions)
+        self.assertTrue(
+            all(re.fullmatch(r"[0-9a-f]{40}", revision) for revision in action_revisions)
+        )
+        self.assertIn(
+            "python -m pip install --require-hashes --only-binary :all: "
+            "-r .github/requirements-release.txt",
+            source,
+        )
+        self.assertIn(
+            "--manifest-path crates/document2html-py/Cargo.toml",
+            source,
+        )
+        self.assertEqual(source.count("python -m maturin build --release"), 2)
+        self.assertIn("dist/document2html/*.whl", source)
+        release_job = source.split("\n  release:\n", maxsplit=1)[1]
+        self.assertIn("needs: validate-release", release_job)
+        self.assertNotRegex(release_job, re.compile(r"^\s+-?\s*run:", re.MULTILINE))
+
+    def test_browser_package_smoke_uses_generated_package_version(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (
+            root / "crates" / "pptx2html-wasm" / "tests" / "package_browser_smoke.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('package_metadata["version"]', source)
+        self.assertIsNone(re.search(r"v\d+\.\d+\.\d+", source))
 
 
 if __name__ == "__main__":

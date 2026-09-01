@@ -68,7 +68,7 @@
           "repository": "apache/tika",
           "commit": "7eae3ba3bafa1c5a2ce8cca51a85a8b411d9ecd8",
           "license_spdx": "Apache-2.0",
-          "quota": 15,
+          "quota": 14,
           "path_prefixes": ["tika-parsers/"],
           "static_paths": []
         },
@@ -77,7 +77,7 @@
           "repository": "dotnet/Open-XML-SDK",
           "commit": "431ab05cf160248cc3885a4a766026d4f8243792",
           "license_spdx": "MIT",
-          "quota": 15,
+          "quota": 16,
           "path_prefixes": ["test/"],
           "static_paths": []
         },

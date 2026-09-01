@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unittest
 from pathlib import Path
 
 from evaluate.multiformat_evaluator_files import EVALUATOR_FILES
@@ -12,20 +13,30 @@ from evaluate.multiformat_schema import (
     read_object,
     string_list,
 )
+from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
+    write_gate_oracle_lock,
+)
 from evaluate.tests.multiformat_corpus_fixture import (
     PAIRED_FORMATS,
     write_corpus,
 )
-from evaluate.tests.multiformat_candidate_gate_lock_fixture import (
-    write_gate_oracle_lock,
+from evaluate.tests.multiformat_metrics_fixture import (
+    patched_reviewer_registry,
+    write_metrics,
 )
-from evaluate.tests.multiformat_metrics_fixture import write_metrics
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = PROJECT_ROOT / "evaluate" / "multiformat" / "contract.v1.json"
 
 
-class MultiFormatGateFixture:
+class MultiFormatGateFixture(unittest.TestCase):
+    def setUp(self) -> None:
+        # Fixture metrics carry decisions signed by the deterministic test-only
+        # reviewers, so every consumer of this fixture resolves reviewer trust
+        # through the matching test registry instead of the tracked one.
+        super().setUp()
+        self.enterContext(patched_reviewer_registry())
+
     def _write_oracle_lock(self, root: Path) -> Path:
         return write_gate_oracle_lock(root, PROJECT_ROOT)
 
@@ -63,15 +74,16 @@ class MultiFormatGateFixture:
                 evaluator_hash,
                 lock_hash,
                 evidence_root,
+                lock,
             )
+            strata: dict[str, JsonValue] = {
+                name: 100.0 for name in string_list(strata_by_format, document_format)
+            }
             report = self._passing_report(
                 document_format,
                 contract_hash,
                 lock_hash,
-                {
-                    name: 100.0
-                    for name in string_list(strata_by_format, document_format)
-                },
+                strata,
                 evaluator_binding,
                 self._binding(evidence_root, corpus_path),
                 self._binding(evidence_root, metrics_path),
@@ -122,10 +134,10 @@ class MultiFormatGateFixture:
         document_format: str,
         contract_hash: str,
         lock_hash: str,
-        strata: dict[str, float],
-        evaluator: dict[str, str],
-        corpus_manifest: dict[str, str],
-        metrics_evidence: dict[str, str],
+        strata: dict[str, JsonValue],
+        evaluator: dict[str, JsonValue],
+        corpus_manifest: dict[str, JsonValue],
+        metrics_evidence: dict[str, JsonValue],
     ) -> dict[str, JsonValue]:
         return {
             "schema_version": 2,
@@ -174,7 +186,7 @@ class MultiFormatGateFixture:
         }
 
     @classmethod
-    def _binding(cls, root: Path, path: Path) -> dict[str, str]:
+    def _binding(cls, root: Path, path: Path) -> dict[str, JsonValue]:
         return {
             "path": path.relative_to(root).as_posix(),
             "sha256": cls._sha256(path),

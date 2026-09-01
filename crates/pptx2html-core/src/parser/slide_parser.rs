@@ -184,6 +184,15 @@ fn parse_slide_impl<R: Read + Seek>(
                 presentationml_depth.push(is_presentationml(&resolved_namespace));
                 namespace_depth.push(element_namespace);
 
+                if depth.len() == 1 && local == "sld" && is_presentationml(&resolved_namespace) {
+                    if let Some(show) = xml_utils::attr_str(e, "show") {
+                        slide.hidden = show == "0" || show == "false";
+                    }
+                    if let Some(show) = xml_utils::attr_str(e, "showMasterSp") {
+                        slide.show_master_sp = show != "0" && show != "false";
+                    }
+                }
+
                 if local == "cNvPr"
                     && is_presentationml(&resolved_namespace)
                     && let Some(owner) = start_c_nv_pr_owner(
@@ -3114,7 +3123,8 @@ mod tests {
     fn parse_slide_reads_empty_adjust_guides_for_preset_shapes() {
         let slide_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       show="0" showMasterSp="0">
   <p:cSld>
     <p:spTree>
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
@@ -3141,6 +3151,8 @@ mod tests {
 
         let mut archive = archive_with_entries(&[]);
         let slide = parse_slide(slide_xml, &HashMap::new(), &mut archive).expect("slide parses");
+        assert!(slide.hidden);
+        assert!(!slide.show_master_sp);
         let shape = slide
             .shapes
             .iter()

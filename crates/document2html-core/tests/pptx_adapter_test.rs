@@ -32,7 +32,23 @@ fn generic_converter_routes_pptx_through_existing_core() {
 #[test]
 fn core_converter_rejects_native_only_format_explicitly() {
     // Given
-    let input = DocumentInput::detect(b"%PDF-1.7\n", Some("report.pdf"));
+    let input = DocumentInput::detect(
+        b"%PDF-1.7
+1 0 obj
+<< /Type /Catalog >>
+endobj
+xref
+0 2
+0000000000 65535 f\x20
+0000000009 00000 n\x20
+trailer
+<< /Size 2 /Root 1 0 R >>
+startxref
+45
+%%EOF
+",
+        Some("report.pdf"),
+    );
 
     // When
     let error = CoreDocumentConverter::convert(&input, &DocumentConversionOptions::default())

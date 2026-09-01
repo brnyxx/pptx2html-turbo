@@ -30,6 +30,7 @@ def write_unit_artifacts(
                     "texts": [],
                     "cells": [],
                     "objects": [],
+                    "unattributed_cells": [],
                 },
                 sort_keys=True,
             ),
@@ -95,6 +96,47 @@ def binding(root: Path, path: Path) -> dict[str, JsonValue]:
     return {
         "path": path.relative_to(root).as_posix(),
         "sha256": sha256(path),
+    }
+
+
+def text_field(values: dict[str, JsonValue], field: str) -> str:
+    """Reads a required string field without widening the JSON schema."""
+    value = values[field]
+    if not isinstance(value, str):
+        raise TypeError(field)
+    return value
+
+
+def object_field(values: dict[str, JsonValue], field: str) -> dict[str, JsonValue]:
+    value = values[field]
+    if not isinstance(value, dict):
+        raise TypeError(field)
+    return value
+
+
+def integer_field(values: dict[str, JsonValue], field: str) -> int:
+    value = values[field]
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(field)
+    return value
+
+
+def pair_digests(
+    oracle: dict[str, JsonValue],
+    candidate: dict[str, JsonValue],
+    pair_id: str,
+) -> dict[str, JsonValue]:
+    """Builds one review pair's artifact digest scope."""
+    return {
+        "pair_id": pair_id,
+        "reference_png_sha256": text_field(object_field(oracle, "png"), "sha256"),
+        "candidate_png_sha256": text_field(object_field(candidate, "png"), "sha256"),
+        "reference_inventory_sha256": text_field(
+            object_field(oracle, "inventory"), "sha256"
+        ),
+        "candidate_inventory_sha256": text_field(
+            object_field(candidate, "inventory"), "sha256"
+        ),
     }
 
 

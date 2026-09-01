@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +16,10 @@ from evaluate.multiformat_candidate_process import (
 )
 from evaluate.multiformat_corpus_sources import validate_source
 from evaluate.multiformat_corpus_types import CorpusError, DocumentFormat
+from evaluate.multiformat_east_asian_fonts import (
+    EastAsianFontError,
+    seed_host_profile,
+)
 from evaluate.multiformat_legacy_process import (
     LegacyProcessRequest,
     LegacyProcessRunner,
@@ -22,6 +27,7 @@ from evaluate.multiformat_legacy_process import (
     run_process,
     tool_version,
 )
+from evaluate import multiformat_legacy_ppt_canonicalizer as legacy_ppt
 from evaluate.multiformat_legacy_types import (
     LegacyConformanceError,
     LegacyPairJob,
@@ -57,9 +63,10 @@ class _LegacyMaterializer:
         try:
             modern_extension, output_filter = _FILTERS[job.document_format]
             job.workspace.mkdir(parents=True)
-            input_dir = job.workspace / "input"
-            binary_dir = job.workspace / "binary"
-            pdf_dir = job.workspace / "pdf"
+            workspace = job.workspace.resolve(strict=True)
+            input_dir = workspace / "input"
+            binary_dir = workspace / "binary"
+            pdf_dir = workspace / "pdf"
             input_dir.mkdir()
             binary_dir.mkdir()
             pdf_dir.mkdir()
@@ -67,10 +74,10 @@ class _LegacyMaterializer:
             shutil.copyfile(job.source, source)
             font_environment = prepare_font_environment(
                 self.tools.font_bundle,
-                job.workspace / "fonts",
+                workspace / "fonts",
             )
             environment = _environment(
-                job.workspace,
+                workspace,
                 font_environment.config_path,
             )
             run_checked(
@@ -80,13 +87,16 @@ class _LegacyMaterializer:
                     source,
                     output_filter,
                     binary_dir,
-                    job.workspace / "profile-binary",
+                    workspace / "profile-binary",
                     environment,
-                    job.workspace / "binary",
+                    workspace / "binary",
                 ),
                 "LibreOffice conversion failed",
             )
             binary = binary_dir / f"{job.case_id}.{job.document_format.value}"
+            if job.document_format is DocumentFormat.PPT:
+                value = binary.read_bytes()
+                binary.write_bytes(legacy_ppt.canonicalize_legacy_ppt_bytes(value))
             _validate_output(binary, job.document_format)
             run_checked(
                 self.runner,
@@ -95,9 +105,9 @@ class _LegacyMaterializer:
                     binary,
                     "pdf",
                     pdf_dir,
-                    job.workspace / "profile-pdf",
+                    workspace / "profile-pdf",
                     environment,
-                    job.workspace / "pdf",
+                    workspace / "pdf",
                 ),
                 "LibreOffice PDF inspection export failed",
             )
@@ -105,10 +115,10 @@ class _LegacyMaterializer:
             _validate_output(pdf, DocumentFormat.PDF)
             page_request = LegacyProcessRequest(
                 (self.tools.pdfinfo.as_posix(), pdf.as_posix()),
-                job.workspace,
+                workspace,
                 environment,
-                job.workspace / "pdfinfo.stdout",
-                job.workspace / "pdfinfo.stderr",
+                workspace / "pdfinfo.stdout",
+                workspace / "pdfinfo.stderr",
                 30.0,
             )
             run_checked(
@@ -126,11 +136,24 @@ class _LegacyMaterializer:
             CandidateFontError,
             CandidateProcessError,
             CorpusError,
+            EastAsianFontError,
             KeyError,
+            legacy_ppt.LegacyPptCanonicalizationError,
             OSError,
             UnicodeError,
         ) as error:
             raise LegacyConformanceError("legacy conversion failed") from error
+        finally:
+            if job.workspace.exists():
+                active = sys.exception()
+                try:
+                    shutil.rmtree(job.workspace)
+                except OSError as error:
+                    failure = LegacyConformanceError("legacy workspace cleanup failed")
+                    if active is None:
+                        raise failure from error
+                    active.add_note(str(failure))
+                    active.add_note(str(error))
 
 
 def build_legacy_runtime(
@@ -186,10 +209,14 @@ def _soffice_request(
     log_prefix: Path,
 ) -> LegacyProcessRequest:
     profile.mkdir()
+    # ``FONTCONFIG_FILE`` below is honoured on Linux but ignored by the macOS
+    # CoreText backend, so corpus fixtures need the same replacement table the
+    # reference producer and the shipped converter use.
+    _ = seed_host_profile(profile)
     return LegacyProcessRequest(
         (
             soffice.as_posix(),
-            f"-env:UserInstallation={profile.as_uri()}",
+            f"-env:UserInstallation={profile.resolve().as_uri()}",
             "--headless",
             "--nologo",
             "--nolockcheck",

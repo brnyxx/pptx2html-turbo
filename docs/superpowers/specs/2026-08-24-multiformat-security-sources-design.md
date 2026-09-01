@@ -11,7 +11,8 @@ semantic detectors for every contract family and deterministic writers under
 This design promotes the existing deterministic writers into evaluator
 production modules and materializes an external snapshot under `artifacts/`.
 The snapshot is input to later corpus assembly. It does not make a corpus
-`READY`, prove runtime security outcomes, or support a 96% claim.
+`READY`, prove runtime security outcomes, or support the claim
+`96% under the documented general conversion evaluation contract`.
 
 ## Decision
 
@@ -99,20 +100,19 @@ device/inode. Any existing lock, including a stale one, is a typed contention
 failure; the tool never steals it. On every exit it closes the descriptor and
 unlinks the lock only when `lstat` still matches the recorded identity.
 
-The lock prevents two cooperating materializers from racing. The publisher
-records the staging device/inode and checks destination absence immediately
-before `os.rename`. A destination present at either check is a typed
-destination-exists failure. Any rename error is a typed publication failure.
-All such failures remove only staging whose `lstat` still matches its recorded
-identity and release the owned lock. Under the cooperative threat model,
-`os.rename` cannot replace another publisher's output.
+The lock excludes every cooperating materializer, including releases that
+predate the format-neutral snapshot publisher. The publisher pins open
+descriptors for both staging and lock paths, validates their device/inode
+identity at each cleanup and publication boundary, and never follows a
+substituted symlink.
 
-An adversarial local process that ignores the lock and mutates filesystem names
-concurrently is outside this local generator's threat model. This design does
-not claim no-replace publication or hostile-filesystem TOCTOU resistance.
-Later signed corpus admission owns descriptor-stable hashing and hostile
-replacement protection. Crash durability beyond the namespace rename is also
-out of scope.
+Publication uses the platform's atomic no-replace primitive rather than plain
+`os.rename`: `renameat2(RENAME_NOREPLACE)` on Linux and `renamex_np(RENAME_EXCL)`
+on macOS. An existing destination is preserved and mapped to a typed
+destination-exists failure. Unsupported platforms fail before publication.
+Cleanup removes only the staging and lock identities captured by the
+publisher; replacement sentinels survive. Crash durability beyond the atomic
+namespace operation remains out of scope.
 
 ### Snapshot manifest
 
@@ -320,8 +320,10 @@ The executable workflow is:
 There is deliberately no product evidence file beyond
 `security-sources.json`; the validator's canonical stdout is captured by CI or
 the task log. Snapshot A remains `GENERATED`. READY-manifest assembly, signed
-admission, runtime outcome capture, conversion determinism, metrics, and 96%
-reporting are later phases.
+admission, runtime outcome capture, conversion determinism, metrics, and
+reporting for the claim
+`96% under the documented general conversion evaluation contract` are later
+phases.
 
 Focused and full multiformat tests are implementation quality gates. Atomic
 commits and cherry-pick integration are separate delivery gates, not properties

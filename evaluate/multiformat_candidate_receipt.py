@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import (
@@ -12,9 +13,15 @@ from evaluate.multiformat_candidate_attestation import (
     canonical_payload,
     verify_signed_payload,
 )
+from evaluate.multiformat_candidate_portable_receipt import (
+    ReceiptExecutor,
+    write_portable_candidate_receipt,
+)
+from evaluate.multiformat_candidate_runtime_profile import CandidateRuntimeProfile
 from evaluate.multiformat_candidate_types import (
     CandidateCaptureError,
     CandidateRun,
+    RuntimeArtifactSnapshots,
 )
 from evaluate.multiformat_schema import (
     JsonValue,
@@ -46,11 +53,49 @@ def write_execution_receipt(
     oracle_lock_sha256: str,
     runtime_identity: Path,
     execution_log: Path,
+    runtime_profile: CandidateRuntimeProfile,
     determinism: Path,
     runs: tuple[CandidateRun, CandidateRun],
-    runtime_artifacts: dict[str, Path],
+    runtime_artifacts: Mapping[str, Path],
+    runtime_snapshots: RuntimeArtifactSnapshots | None = None,
+    security_artifacts: tuple[Path, ...] = (),
+    portable_execute: ReceiptExecutor | None = None,
 ) -> Path:
+    if runtime_snapshots is not None:
+        runtime_snapshots.revalidate()
+    if runtime_profile.portable:
+        generated = {
+            runtime_identity: "capture-runtime-identity",
+            execution_log: "capture-execution-log",
+            determinism: "capture-candidate-determinism",
+        }
+        for run in runs:
+            for source in run.sources:
+                generated[source.html] = "capture-candidate-html"
+                generated[source.inventory_manifest] = (
+                    "capture-candidate-inventory-manifest"
+                )
+                for unit in source.units:
+                    generated[unit.png] = "capture-unit-png"
+                    generated[unit.inventory] = "capture-unit-inventory"
+        for artifact in security_artifacts:
+            generated[artifact] = "security-execution"
+        receipt = write_portable_candidate_receipt(
+            evidence_root,
+            output_dir,
+            oracle_lock,
+            receipt_signer,
+            execute=portable_execute,
+            require_capture_roles=True,
+            batch_id=f"candidate-{corpus_sha256[:16]}",
+            artifacts=generated,
+        )
+        if runtime_snapshots is not None:
+            runtime_snapshots.revalidate()
+        return receipt
     artifacts = _artifact_bindings(evidence_root, runs, runtime_artifacts)
+    artifact_values: list[JsonValue] = list(artifacts)
+    artifact_root_payload: dict[str, JsonValue] = {"artifacts": artifact_values}
     payload: dict[str, JsonValue] = {
         "schema_version": 1,
         "status": "PASS",
@@ -68,9 +113,9 @@ def write_execution_receipt(
         "execution_log_sha256": sha256_file(execution_log),
         "determinism_sha256": sha256_file(determinism),
         "artifact_root_sha256": hashlib.sha256(
-            canonical_payload({"artifacts": artifacts})
+            canonical_payload(artifact_root_payload)
         ).hexdigest(),
-        "artifacts": artifacts,
+        "artifacts": artifact_values,
     }
     request = output_dir / "receipt-request.json"
     receipt = output_dir / "execution-receipt.json"
@@ -104,13 +149,15 @@ def write_execution_receipt(
         oracle_lock,
         payload,
     )
+    if runtime_snapshots is not None:
+        runtime_snapshots.revalidate()
     return receipt
 
 
 def _artifact_bindings(
     evidence_root: Path,
     runs: tuple[CandidateRun, CandidateRun],
-    runtime_artifacts: dict[str, Path],
+    runtime_artifacts: Mapping[str, Path],
 ) -> list[dict[str, JsonValue]]:
     paths = set(runtime_artifacts.values())
     for run in runs:

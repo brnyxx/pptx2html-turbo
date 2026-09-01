@@ -14,13 +14,12 @@ on:
           - 'true'
           - 'false'
       version_tag:
-        description: 'Release tag to validate against the package version (for manual publish, e.g. v2.0.1)'
+        description: 'Release tag to validate against the package version (for manual publish, e.g. v2.1.0)'
         required: true
         type: string
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -30,28 +29,26 @@ env:
   PACKAGE_HOMEPAGE: 'https://github.com/brnyxx/pptx2html-turbo'
   PACKAGE_BUGS_URL: 'https://github.com/brnyxx/pptx2html-turbo/issues'
   PACKAGE_DESCRIPTION: 'Convert PPTX slides to high-fidelity HTML in the browser — pure Rust/WASM, zero dependencies'
+  VALIDATOR_SHA256: '9ce1ed01b1c2c7d2d9a882a07907eac3be033ca574381ab09f9ebdbb71a53a45'
 
 jobs:
-  publish:
-    name: Build & Publish WASM to npm
+  validate:
+    name: Validate npm release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-
-      - uses: actions/setup-node@v6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install evaluate test dependencies
         run: python3 -m pip install -r evaluate/requirements-test.txt
@@ -59,46 +56,70 @@ jobs:
         run: python -m playwright install --with-deps chromium
       - name: Install PDF tooling
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
-
       - name: Run evaluate helper tests
         run: python3 -m unittest discover -s evaluate/tests -p 'test_*.py' -v
-
       - name: Check exactness contract
         run: python3 evaluate/check_exactness_contract.py --repo-root .
+      - name: Install wasm-pack
+        run: |
+          if ! wasm-pack --version 2>/dev/null | grep -qx 'wasm-pack 0.14.0'; then
+            cargo install wasm-pack --version 0.14.0 --locked --force
+          fi
+      - name: Read release version
+        run: |
+          chmod +x scripts/read_release_version.sh
+          VERSION=$(bash scripts/read_release_version.sh)
+          echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Prepare validated WASM package
+        run: bash scripts/prepare_wasm_release_package.sh "$PACKAGE_VERSION"
+      - name: Run browser package smoke
+        run: python3 crates/pptx2html-wasm/tests/package_browser_smoke.py
+
+  build-packages:
+    name: Build npm packages
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      package_version: ${{ steps.release-version.outputs.package_version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '20'
 
       - name: Install wasm-pack
         run: |
           if ! wasm-pack --version 2>/dev/null | grep -qx 'wasm-pack 0.14.0'; then
             cargo install wasm-pack --version 0.14.0 --locked --force
           fi
-
       - name: Read release version
+        id: release-version
         run: |
           chmod +x scripts/read_release_version.sh
           VERSION=$(bash scripts/read_release_version.sh)
           echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
-
+          echo "package_version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Check tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
         run: bash scripts/read_release_version.sh "${{ github.ref_name }}"
-
       - name: Check manual publish version tag
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'workflow_dispatch'
         env:
           VERSION_TAG: ${{ github.event.inputs.version_tag }}
         run: |
           if [ -z "$VERSION_TAG" ]; then
-            echo "version_tag is required for a real manual publish" >&2
+            echo "version_tag is required for a manual publish" >&2
             exit 1
           fi
           bash scripts/read_release_version.sh "$VERSION_TAG"
-
       - name: Prepare validated WASM package
         run: bash scripts/prepare_wasm_release_package.sh "$PACKAGE_VERSION"
-
-      - name: Run browser package smoke
-        run: python3 crates/pptx2html-wasm/tests/package_browser_smoke.py
-
       - name: Prepare legacy package alias
         run: |
           rm -rf crates/pptx2html-wasm/pkg-legacy
@@ -117,7 +138,6 @@ jobs:
           node crates/pptx2html-wasm/tests/package-root-smoke.mjs \
             "$LEGACY_PACKAGE_NAME" \
             crates/pptx2html-wasm/pkg-legacy
-
       - name: Show package contents
         run: |
           for package_dir in \
@@ -133,39 +153,79 @@ jobs:
             echo "=== $package_dir WASM size ==="
             du -h "$package_dir"/*.wasm
           done
-
       - name: Publish primary package to npm (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         working-directory: crates/pptx2html-wasm/pkg
-        run: npm publish --dry-run --access public
-
+        run: npm publish --dry-run --ignore-scripts --access public
       - name: Publish legacy package to npm (dry run)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         working-directory: crates/pptx2html-wasm/pkg-legacy
-        run: npm publish --dry-run --access public
+        run: npm publish --dry-run --ignore-scripts --access public
+      - name: Archive packages
+        run: |
+          tar -czf npm-packages.tar.gz \
+            crates/pptx2html-wasm/pkg \
+            crates/pptx2html-wasm/pkg-legacy \
+            scripts/validate_npm_release_artifact.mjs
+          sha256sum npm-packages.tar.gz > npm-packages.tar.gz.sha256
+      - name: Upload packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: npm-packages
+          path: |
+            npm-packages.tar.gz
+            npm-packages.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 3
 
+  publish:
+    name: Publish WASM packages to npm
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+    needs: build-packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PACKAGE_VERSION: ${{ needs.build-packages.outputs.package_version }}
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: npm-packages
+      - name: Verify and extract packages
+        run: |
+          sha256sum --check npm-packages.tar.gz.sha256
+          tar -xzf npm-packages.tar.gz
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Validate extracted package boundary
+        run: |
+          echo "$VALIDATOR_SHA256  scripts/validate_npm_release_artifact.mjs" | sha256sum --check
+          node scripts/validate_npm_release_artifact.mjs \
+            "$PACKAGE_VERSION" \
+            "$PACKAGE_NAME" \
+            "$LEGACY_PACKAGE_NAME"
       - name: Publish primary package to npm
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         working-directory: crates/pptx2html-wasm/pkg
         run: |
           PACKAGE_ID="$PACKAGE_NAME@$PACKAGE_VERSION"
           if npm view "$PACKAGE_ID" version >/dev/null 2>&1; then
             echo "$PACKAGE_ID is already published; skipping"
           else
-            npm publish --access public
+            npm publish --ignore-scripts --access public
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish legacy package to npm
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         working-directory: crates/pptx2html-wasm/pkg-legacy
         run: |
           PACKAGE_ID="$LEGACY_PACKAGE_NAME@$PACKAGE_VERSION"
           if npm view "$PACKAGE_ID" version >/dev/null 2>&1; then
             echo "$PACKAGE_ID is already published; skipping"
           else
-            npm publish --access public
+            npm publish --ignore-scripts --access public
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

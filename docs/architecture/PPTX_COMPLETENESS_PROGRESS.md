@@ -2,7 +2,7 @@
 
 `evaluate/completeness_manifest.json` is the sole machine-readable feature-status source. The generated registry below binds every current and target disposition to typed Rust registration, focused test case, completion scenario or closed exemption, and row/status hashes.
 
-No feature is `exact`. PowerPoint-native provenance is unavailable on this Mac, and secondary browser or LibreOffice captures cannot authorize promotion.
+No feature is `exact` in the separate PPTX promotion tier. PowerPoint-native provenance is unavailable on this Mac, and secondary browser or LibreOffice captures cannot authorize that exact-tier promotion. This status does not block the default signed macOS `libreoffice-poppler` general acceptance profile.
 
 The reusable post-integration gate is `scripts/task-23-final-local-gates.sh`. Run it, or the equivalent commands documented in the release checklist, against every release candidate after all intended changes are integrated.
 

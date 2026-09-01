@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+from collections.abc import Mapping
 from pathlib import Path
 
 from evaluate.multiformat_candidate_artifacts import (
@@ -13,11 +14,16 @@ from evaluate.multiformat_candidate_determinism import (
     validate_clean_runs,
 )
 from evaluate.multiformat_candidate_receipt import write_execution_receipt
+from evaluate.multiformat_candidate_runtime_profile import (
+    CandidateRuntimeProfile,
+    legacy_candidate_runtime_profile,
+)
 from evaluate.multiformat_candidate_sources import CandidateSourceSet
 from evaluate.multiformat_candidate_types import (
     CandidateCaptureError,
     CandidateManifestPaths,
     CandidateRun,
+    RuntimeArtifactSnapshots,
 )
 from evaluate.multiformat_capture_manifest import validate_capture_manifest
 from evaluate.multiformat_metric_links import load_metric_spec
@@ -42,11 +48,19 @@ def write_candidate_manifests(
     *,
     project_revision: str,
     runtime_tools: dict[str, str],
-    runtime_artifacts: dict[str, Path],
+    runtime_artifacts: Mapping[str, Path],
     receipt_signer: Path,
     font_bundle_sha256: str,
+    runtime_profile: CandidateRuntimeProfile | None = None,
+    runtime_snapshots: RuntimeArtifactSnapshots | None = None,
+    security_artifacts: tuple[Path, ...] = (),
 ) -> CandidateManifestPaths:
     evidence_root = evidence_root.resolve(strict=True)
+    if runtime_snapshots is not None:
+        runtime_snapshots.revalidate()
+    runtime_profile = runtime_profile or legacy_candidate_runtime_profile(
+        oracle_lock_path
+    )
     if output_dir.exists() and any(output_dir.iterdir()):
         raise CandidateManifestError(f"candidate output is not empty: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -118,14 +132,13 @@ def write_candidate_manifests(
         "execution_log": execution_binding,
     }
     determinism = output_dir / "determinism.json"
+    determinism_runs: list[JsonValue] = [
+        determinism_run_value(evidence_root, run1),
+        determinism_run_value(evidence_root, run2),
+    ]
     write_canonical_json(
         determinism,
-        {
-            "runs": [
-                determinism_run_value(evidence_root, run1),
-                determinism_run_value(evidence_root, run2),
-            ]
-        },
+        {"runs": determinism_runs},
     )
     receipt = write_execution_receipt(
         evidence_root,
@@ -145,6 +158,9 @@ def write_candidate_manifests(
         determinism=determinism,
         runs=(run1, run2),
         runtime_artifacts=runtime_artifacts,
+        runtime_profile=runtime_profile,
+        runtime_snapshots=runtime_snapshots,
+        security_artifacts=security_artifacts,
     )
     common["determinism_manifest"] = evidence_binding(
         evidence_root,
@@ -207,9 +223,9 @@ def _capture_records(
     root: Path,
     source_set: CandidateSourceSet,
     run: CandidateRun,
-) -> tuple[list[dict[str, JsonValue]], list[dict[str, JsonValue]]]:
-    units: list[dict[str, JsonValue]] = []
-    files: list[dict[str, JsonValue]] = []
+) -> tuple[list[JsonValue], list[JsonValue]]:
+    units: list[JsonValue] = []
+    files: list[JsonValue] = []
     for source_spec, source in zip(source_set.sources, run.sources, strict=True):
         files.append(
             {

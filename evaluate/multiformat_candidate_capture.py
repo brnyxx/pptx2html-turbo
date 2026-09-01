@@ -2,23 +2,56 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate.multiformat_candidate_manifest import write_candidate_manifests
 from evaluate.multiformat_candidate_artifacts import materialize_runtime_artifacts
+from evaluate.multiformat_candidate_manifest import write_candidate_manifests
 from evaluate.multiformat_candidate_preflight import preflight_candidate_capture
+from evaluate.multiformat_candidate_preflight_types import CandidatePreflight
 from evaluate.multiformat_candidate_run import capture_clean_run
+from evaluate.multiformat_candidate_runtime_lock import (
+    validate_candidate_runtime,
+)
+from evaluate.multiformat_candidate_sandbox import require_active_sandbox
+from evaluate.multiformat_candidate_security import capture_candidate_security
 from evaluate.multiformat_candidate_sources import (
     CandidateSourceSet,
     load_candidate_sources,
 )
-from evaluate.multiformat_candidate_types import CandidateManifestPaths
-from evaluate.multiformat_candidate_types import CandidateCaptureError
-from evaluate.multiformat_candidate_types import CandidateRuntimePaths
-from evaluate.multiformat_candidate_runtime_lock import (
-    validate_candidate_runtime,
+from evaluate.multiformat_candidate_types import (
+    CandidateCaptureError,
+    CandidateManifestPaths,
+    CandidateRuntimePaths,
+    RuntimeArtifactSnapshots,
 )
-from evaluate.multiformat_schema import object_value
 from evaluate.multiformat_schema import sha256_file
-from evaluate.multiformat_strict_json import read_strict_object
+
+
+def materialize_candidate_runtime(
+    preflight: CandidatePreflight,
+    evidence_root: Path,
+    output_dir: Path,
+) -> tuple[CandidateRuntimePaths, RuntimeArtifactSnapshots]:
+    runtime_artifacts = materialize_runtime_artifacts(
+        preflight.runtime_artifacts,
+        evidence_root,
+        output_dir / "runtime-inputs",
+    )
+    runtime = CandidateRuntimePaths(
+        runtime_artifacts["converter_binary"],
+        preflight.runtime.soffice,
+        runtime_artifacts["pdftohtml_binary"],
+        runtime_artifacts["pdfinfo_binary"],
+        preflight.runtime.chromium,
+        runtime_artifacts["receipt_signer_binary"],
+        runtime_artifacts["font_config"],
+        preflight.runtime.browser_version,
+        preflight.runtime.timeout_seconds,
+    )
+    validate_candidate_runtime(
+        preflight.runtime_profile.candidate_runtime_lock,
+        runtime,
+        preflight.project_revision,
+    )
+    return runtime, runtime_artifacts
 
 
 def capture_candidate_evidence(
@@ -68,34 +101,22 @@ def capture_candidate_evidence(
         require_clean_worktree=require_clean_worktree,
         require_release_binary=require_release_binary,
     )
+    if preflight.runtime_profile.portable:
+        if preflight.sandbox is None:
+            raise CandidateCaptureError("candidate sandbox attestation is missing")
+        require_active_sandbox(preflight.sandbox)
     output_dir.mkdir(parents=True, exist_ok=True)
-    runtime_artifacts = materialize_runtime_artifacts(
-        preflight.runtime_artifacts,
-        evidence_root,
-        output_dir / "runtime-inputs",
-    )
-    runtime = CandidateRuntimePaths(
-        runtime_artifacts["converter_binary"],
-        runtime_artifacts["soffice_binary"],
-        runtime_artifacts["pdftohtml_binary"],
-        runtime_artifacts["pdfinfo_binary"],
-        runtime_artifacts["chromium_binary"],
-        runtime_artifacts["receipt_signer_binary"],
-        runtime_artifacts["font_config"],
-        preflight.runtime.browser_version,
-        preflight.runtime.timeout_seconds,
-    )
-    validate_candidate_runtime(
-        object_value(read_strict_object(oracle_lock_path), "candidate_runtime"),
-        runtime,
-        preflight.project_revision,
+    runtime, runtime_artifacts = materialize_candidate_runtime(
+        preflight, evidence_root, output_dir
     )
     runtime_tools = {
         **preflight.runtime_tools,
+        "font_config_sha256": sha256_file(runtime_artifacts["font_config"]),
         "runtime_package_sha256": sha256_file(
             runtime_artifacts["runtime_package_manifest"]
         ),
     }
+    runtime_artifacts.revalidate()
     run1 = capture_clean_run(
         1,
         preflight.source_set,
@@ -103,11 +124,13 @@ def capture_candidate_evidence(
         evidence_root,
         runtime,
     )
+    runtime_artifacts.revalidate()
     _revalidate_sources(
         contract_path,
         corpus_path,
         preflight.source_set,
     )
+    runtime_artifacts.revalidate()
     run2 = capture_clean_run(
         2,
         preflight.source_set,
@@ -115,12 +138,25 @@ def capture_candidate_evidence(
         evidence_root,
         runtime,
     )
+    runtime_artifacts.revalidate()
     _revalidate_sources(
         contract_path,
         corpus_path,
         preflight.source_set,
     )
-    return write_candidate_manifests(
+    security_artifacts: tuple[Path, ...] = ()
+    if preflight.runtime_profile.portable:
+        runtime_artifacts.revalidate()
+        security_artifacts = capture_candidate_security(
+            contract_path,
+            corpus_path,
+            evaluator_path,
+            output_dir / "security",
+            runtime,
+            preflight.project_revision,
+        )
+        runtime_artifacts.revalidate()
+    manifests = write_candidate_manifests(
         evidence_root,
         output_dir / "published",
         preflight.source_set,
@@ -133,9 +169,14 @@ def capture_candidate_evidence(
         project_revision=preflight.project_revision,
         runtime_tools=runtime_tools,
         runtime_artifacts=runtime_artifacts,
+        runtime_snapshots=runtime_artifacts,
         receipt_signer=runtime.receipt_signer,
         font_bundle_sha256=preflight.font_bundle_sha256,
+        runtime_profile=preflight.runtime_profile,
+        security_artifacts=security_artifacts,
     )
+    runtime_artifacts.revalidate()
+    return manifests
 
 
 def _revalidate_sources(

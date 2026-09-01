@@ -12,16 +12,21 @@ from evaluate.multiformat_portable_lock import (
     portable_lock_template,
     validate_reference_lock,
 )
+from evaluate.multiformat_portable_package_inventory import (
+    bind_package_executable_with_inventory,
+    package_binding,
+)
 from evaluate.multiformat_reference_profile import ReferenceProfile
 from evaluate.multiformat_reference_routing import load_reference_routing
 from evaluate.multiformat_schema import JsonValue, sha256_file
+from evaluate.tests.multiformat_portable_lock_fixture import PortableLockFixture
 
 ROUTING_TABLE = (
     Path(__file__).resolve().parents[1] / "multiformat/reference-routing.v1.json"
 )
 
 
-class MultiFormatPortableLockTests(unittest.TestCase):
+class MultiFormatPortableLockTests(PortableLockFixture, unittest.TestCase):
     def test_template_artifact_bindings_are_independent(self) -> None:
         template = portable_lock_template()
         tools = self._mapping(template, "tools")
@@ -31,6 +36,42 @@ class MultiFormatPortableLockTests(unittest.TestCase):
         libreoffice["path"] = "artifacts/soffice"
 
         self.assertEqual(poppler["path"], "")
+
+    def test_missing_lock_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            ready = oracle_lock_ready(root / "missing.json", root)
+
+            self.assertFalse(ready)
+
+    def test_malformed_lock_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = root / "malformed.json"
+            path.write_text("{", encoding="utf-8")
+
+            ready = oracle_lock_ready(path, root)
+
+            self.assertFalse(ready)
+
+    def test_schema_two_lock_without_evidence_root_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _root, path, _lock = self._portable_lock(Path(temp_dir))
+
+            ready = oracle_lock_ready(path)
+
+            self.assertFalse(ready)
+
+    def test_schema_two_lock_with_wrong_evidence_root_is_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, path, _lock = self._portable_lock(Path(temp_dir) / "evidence")
+            wrong_root = root.parent / "wrong-evidence"
+            wrong_root.mkdir()
+
+            ready = oracle_lock_ready(path, wrong_root)
+
+            self.assertFalse(ready)
 
     def test_complete_lock_returns_typed_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -42,7 +83,7 @@ class MultiFormatPortableLockTests(unittest.TestCase):
             self.assertIs(identity.profile, ReferenceProfile.LIBREOFFICE_POPPLER)
             self.assertEqual(identity.sha256, sha256_file(path))
             self.assertEqual(identity.routing, load_reference_routing(ROUTING_TABLE))
-            self.assertTrue(oracle_lock_ready(path))
+            self.assertTrue(oracle_lock_ready(path, root))
 
     def test_routing_digest_substitution_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -76,7 +117,7 @@ class MultiFormatPortableLockTests(unittest.TestCase):
 
             self.assertIs(identity.profile, ReferenceProfile.LIBREOFFICE_POPPLER)
             self.assertEqual(identity.sha256, sha256_file(path))
-            self.assertTrue(oracle_lock_ready(path))
+            self.assertTrue(oracle_lock_ready(path, root))
 
     def test_incomplete_lock_reports_incomplete_before_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -135,6 +176,68 @@ class MultiFormatPortableLockTests(unittest.TestCase):
                     validate_reference_lock(path, root)
                 self.assertFalse(oracle_lock_ready(path))
 
+    def test_candidate_and_reference_sandbox_substitution_fails_closed(self) -> None:
+        mutations = (
+            ("candidate_sandbox.public_key.sha256", "0" * 64),
+            ("candidate_sandbox.openssl.sha256", "1" * 64),
+            ("candidate_sandbox.receipt_signer.sha256", "2" * 64),
+            ("sandbox.executable.sha256", "3" * 64),
+            ("sandbox.profile.sha256", "4" * 64),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temp_dir:
+                root, path, lock = self._portable_lock(Path(temp_dir))
+                self._set(lock, field, value)
+                self._write(path, lock)
+
+                with self.assertRaises(PortableLockError):
+                    validate_reference_lock(path, root)
+
+    def test_locked_app_sibling_and_symlink_tampering_fails_closed(self) -> None:
+        for tool_name, attack in (
+            ("libreoffice", "sibling"),
+            ("chromium", "symlink"),
+        ):
+            with (
+                self.subTest(tool=tool_name, attack=attack),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                root, path, lock = self._portable_lock(Path(temp_dir))
+                source_app = root.parent / f"{root.name}-{tool_name}.app"
+                executable = source_app / "Contents/MacOS/tool"
+                resource = source_app / "Contents/Resources/data"
+                executable.parent.mkdir(parents=True)
+                resource.parent.mkdir(parents=True)
+                executable.write_bytes(b"tool")
+                resource.write_bytes(b"resource")
+                (resource.parent / "alias").symlink_to("data")
+                bound, inventory = bind_package_executable_with_inventory(
+                    executable, root, root / "artifacts" / f"{tool_name}-package"
+                )
+                self.assertIsNotNone(inventory)
+                tool = (
+                    self._mapping(self._mapping(lock, "tools"), "libreoffice")
+                    if tool_name == "libreoffice"
+                    else self._mapping(self._mapping(lock, "browser"), "chromium")
+                )
+                tool.clear()
+                tool.update(package_binding(root, bound, "test", inventory))
+                self._write(path, lock)
+                validate_reference_lock(path, root)
+
+                copied_resource = bound.parents[1] / "Resources/data"
+                if attack == "sibling":
+                    copied_resource.write_bytes(b"tampered")
+                else:
+                    alias = copied_resource.with_name("alias")
+                    alias.unlink()
+                    outside = root.parent / f"{root.name}-outside"
+                    outside.write_bytes(b"outside")
+                    alias.symlink_to(outside)
+
+                with self.assertRaises(PortableLockError):
+                    validate_reference_lock(path, root)
+
     def test_runtime_attestation_drift_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, path, lock = self._portable_lock(Path(temp_dir))
@@ -164,112 +267,6 @@ class MultiFormatPortableLockTests(unittest.TestCase):
 
                 with self.assertRaises(PortableLockError):
                     validate_reference_lock(path, root)
-
-    @classmethod
-    def _portable_lock(cls, root: Path) -> tuple[Path, Path, dict[str, JsonValue]]:
-        names = (
-            ("soffice", "pdftoppm", "pdftotext", "pdfinfo", "canonicalizer")
-            + ("fonts", "configuration", "chromium", "candidate-runtime-lock")
-            + ("public-key", "executor", "contract", "evaluator", "corpus")
-        )
-        artifacts = {name: cls._artifact(root, name, name.encode()) for name in names}
-        attestation = cls._artifact(root, "attestation", b"")
-        cls._write(
-            attestation,
-            {
-                "schema_version": 1,
-                "os": "Darwin",
-                "architecture": "arm64",
-                "locale": "en-US",
-                "timezone": "UTC",
-                "rendering_dpi": 144,
-                "network_isolation": True,
-            },
-        )
-        bindings = {
-            name: cls._binding(root, artifact) for name, artifact in artifacts.items()
-        }
-        lock: dict[str, JsonValue] = {
-            "schema_version": 2,
-            "status": "locked",
-            "reference_profile": "libreoffice-poppler",
-            "platform": {"os": "Darwin", "architecture": "arm64"},
-            "tools": {
-                "libreoffice": {"version": "test", **bindings["soffice"]},
-                "poppler_render": {"version": "test", **bindings["pdftoppm"]},
-                "poppler_text": {"version": "test", **bindings["pdftotext"]},
-                "poppler_metadata": {"version": "test", **bindings["pdfinfo"]},
-            },
-            "routing_table_sha256": load_reference_routing(ROUTING_TABLE).sha256,
-            "canonicalizer": {"version": "1", **bindings["canonicalizer"]},
-            "font_bundle": {"version": "test", **bindings["fonts"]},
-            "configuration": {"version": "test", **bindings["configuration"]},
-            "browser": {
-                "chromium": {"version": "test", **bindings["chromium"]},
-                "lock": bindings["configuration"],
-            },
-            "candidate_runtime_lock": bindings["candidate-runtime-lock"],
-            "signer": {
-                "algorithm": "ed25519",
-                "signer_id": "multiformat-portable-reference-v1",
-                "public_key": bindings["public-key"],
-                "receipt_schema_version": 1,
-                "executor": bindings["executor"],
-            },
-            "scope": {
-                "contract": bindings["contract"],
-                "evaluator": bindings["evaluator"],
-                "corpus": bindings["corpus"],
-                "project_revision": "b" * 40,
-            },
-            "runtime": {
-                "locale": "en-US",
-                "timezone": "UTC",
-                "rendering_dpi": 144,
-                "network_isolation": True,
-                "attestation": cls._binding(root, attestation),
-            },
-        }
-        path = root / "oracle-lock.json"
-        cls._write(path, lock)
-        return root, path, lock
-
-    @staticmethod
-    def _artifact(root: Path, name: str, content: bytes) -> Path:
-        path = root / "artifacts" / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
-        return path
-
-    @staticmethod
-    def _binding(root: Path, path: Path) -> dict[str, JsonValue]:
-        return {"path": path.relative_to(root).as_posix(), "sha256": sha256_file(path)}
-
-    @staticmethod
-    def _write(path: Path, value: JsonValue) -> None:
-        path.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
-
-    @staticmethod
-    def _mapping(values: dict[str, JsonValue], field: str) -> dict[str, JsonValue]:
-        value = values[field]
-        if not isinstance(value, dict):
-            raise TypeError(field)
-        return value
-
-    @staticmethod
-    def _string(values: dict[str, JsonValue], field: str) -> str:
-        value = values[field]
-        if not isinstance(value, str):
-            raise TypeError(field)
-        return value
-
-    @classmethod
-    def _set(cls, values: dict[str, JsonValue], path: str, value: JsonValue) -> None:
-        parts = path.split(".")
-        target = values
-        for part in parts[:-1]:
-            target = cls._mapping(target, part)
-        target[parts[-1]] = value
 
 
 if __name__ == "__main__":

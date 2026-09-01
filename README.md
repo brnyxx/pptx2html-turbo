@@ -32,9 +32,9 @@ $ pptx2html --info deck.pptx
 
 ```bash
 # npm (WASM — browser)
-npm install @briank-dev/pptx-to-html
+npm install @briank-dev/pptx-to-html@2.1.0
 
-# CLI (from a checked-out v2.0.2 source tree)
+# CLI (from a checked-out v2.1.0 source tree)
 cargo install --path crates/pptx2html-cli
 
 # Python (requires maturin)
@@ -53,12 +53,12 @@ wasm-pack build crates/document2html-wasm --target web --release
 Existing `@briank-dev/pptx2html-turbo` installations remain supported and receive the same
 builds during the package-name migration.
 
-The Rust crates and Python binding are source distributions in v2.0.2; this release does not
+The Rust crates and Python bindings are source distributions in v2.1.0; this release does not
 publish them to crates.io or PyPI. Rust library consumers can depend on the release tag directly:
 
 ```toml
 [dependencies]
-pptx2html-core = { git = "https://github.com/brnyxx/pptx2html-turbo", tag = "v2.0.2" }
+pptx2html-core = { git = "https://github.com/brnyxx/pptx2html-turbo", tag = "v2.1.0" }
 ```
 
 ## What converts
@@ -83,6 +83,9 @@ Office-to-PDF-to-HTML pipeline. The native path requires `soffice`, `pdftohtml`,
 `pdfinfo`, and uses an isolated LibreOffice profile, a bounded temporary workspace, a process
 timeout, log/output limits, deterministic asset names, and strict remote-network blocking
 where a supported launcher is available.
+
+For legacy XLS inputs, the native adapter first creates a bounded XLSX snapshot that preserves
+cached formula values and disables workbook recalculation before PDF rendering.
 
 ```bash
 cargo run -p pptx2html-cli --bin document2html -- report.docx -o report.html
@@ -323,6 +326,11 @@ resolution chain, preset geometry catalog, placeholder types, and slide inherita
 <details>
 <summary><b>Preservation and security bounds</b></summary>
 
+The package parser rejects inputs larger than 64 MiB, archives with more than 8,192 entries,
+more than 256 MiB of declared uncompressed data, more than 64 MiB of cumulative XML, or an
+individual XML part larger than 16 MiB. The browser demo and npm convenience API apply the
+64 MiB input limit before reading a `Blob` into memory.
+
 The Rust core preserves ordered slide transition/timing XML and approximately executes a
 bounded interaction-driven subset: cut/fade transitions and click/with-previous/after-previous
 appear, disappear, or fade effects on resolved slide shapes, including finite start-condition
@@ -452,15 +460,32 @@ checker and the shared Python 3.11+ floor used by CI/release evaluation workflow
 </details>
 
 <details>
-<summary><b>Seven-format acceptance gate (currently INCOMPLETE)</b></summary>
+<summary><b>Seven-format acceptance gate</b></summary>
 
-The seven-format 96% acceptance gate is intentionally fail-closed:
+The seven-format acceptance gate is intentionally fail-closed. Its default required reference
+profile is `libreoffice-poppler`: on a supported macOS host, LibreOffice and Poppler produce
+the bound reference evidence for the six Office formats, while PDF uses Poppler directly.
+Linux document conversion is supported, but signed portable reference capture remains
+`INCOMPLETE` there until a Linux process-sandbox backend is implemented. The profile runs over
+seven frozen format corpora and requires a separate schema-2 portable lock, signed receipt,
+and SHA-256 binding for every admitted source, tool, runtime, and output. Missing, stale,
+substituted, or tampered evidence remains `INCOMPLETE` or `FAIL`.
+
+The approved general claim wording is
+`96% under the documented general conversion evaluation contract`. It is permitted only after
+one complete signed portable profile wave passes all seven formats. This is not a Microsoft
+Office pixel-accuracy, PowerPoint pixel-match, byte-identical-output, or PPTX `exact`-tier
+claim.
 
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/reports \
-  --oracle-lock evaluate/multiformat/oracle-lock.json
+  --oracle-lock-dir evaluate/multiformat/oracle-locks
 ```
+
+The lock directory contains exactly one schema-2 lock for each required format:
+`pptx.json`, `docx.json`, `doc.json`, `xlsx.json`, `xls.json`, `ppt.json`, and `pdf.json`.
+A shared lock cannot substitute for this set.
 
 Corpus manifests are validated independently before candidate execution:
 
@@ -477,15 +502,12 @@ alone cannot satisfy the security hard gate. Network-isolated two-run Chromium c
 produced with `python -m evaluate.capture_multiformat_candidates`; see `evaluate/README.md`
 for the locked runtime and sandbox contract.
 
-**The repository does not currently contain the required Windows Microsoft Office oracle lock
-or all seven native evidence batches, so the product-level gate reports `INCOMPLETE`. It must
-not be described as a verified 96% release until those external artifacts are captured and all
-reports pass together.** The signed closure path consists of the schema-2
-`capture_multiformat_office_oracles.ps1` batch, `finalize_multiformat_office_oracles.py`
-gate-ready captures, and the manual `.github/workflows/capture-office-oracles.yml` workflow.
-That workflow only routes to a dedicated self-hosted Windows runner labeled `office-oracle`;
-candidate and Office evidence use distinct Ed25519 verifier keys. No such runner is currently
-registered, so the automation does not change the real gate from `INCOMPLETE`.
+Signed Microsoft Office/Windows oracle evidence remains supported through the optional
+`microsoft-office` profile. It is not a prerequisite for the default portable acceptance path.
+If selected, that profile still validates fail-closed: its schema-1 lock, signed receipt,
+verifier-bound capture, provenance, and artifact hashes must all pass. Missing or invalid
+Office evidence cannot be relabeled as portable evidence or produce a passing Office-profile
+wave.
 
 </details>
 

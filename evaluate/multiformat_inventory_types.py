@@ -45,11 +45,26 @@ class ObjectItem:
 
 
 @dataclass(frozen=True, slots=True)
+class UnattributedCell:
+    """A cell deliberately excluded from coordinate attribution.
+
+    Carrying these through the inventory keeps a skipped attribution provable
+    rather than indistinguishable from a cell that never existed.
+    """
+
+    worksheet: str
+    address: str
+    number_format: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class Inventory:
     unit_id: str
     texts: tuple[TextItem, ...]
     cells: tuple[CellItem, ...]
     objects: tuple[ObjectItem, ...]
+    unattributed_cells: tuple[UnattributedCell, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

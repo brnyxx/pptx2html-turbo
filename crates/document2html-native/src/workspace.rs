@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::fonts::substitution_registry;
 use crate::{NativeError, NativeResult};
 
 static WORKSPACE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -33,11 +34,13 @@ impl TemporaryWorkspace {
         set_owner_only_permissions(&root)?;
         let input = root.join("input");
         let office = root.join("office");
+        let spreadsheet = root.join("spreadsheet");
         let poppler = root.join("poppler");
         let profile = root.join("profile");
         for directory in [
             &input,
             &office,
+            &spreadsheet,
             &poppler,
             &profile,
             &root.join("home"),
@@ -58,6 +61,19 @@ impl TemporaryWorkspace {
 
     pub(crate) fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Seeds the private LibreOffice profile with the east-Asian font
+    /// replacement table. LibreOffice merges this file on first launch, so it
+    /// must be written before any stage runs.
+    pub(crate) fn seed_font_substitution(&self, substitute: &str) -> NativeResult<()> {
+        let user = self.root.join("profile").join("user");
+        fs::create_dir_all(&user)?;
+        fs::write(
+            user.join("registrymodifications.xcu"),
+            substitution_registry(substitute),
+        )?;
+        Ok(())
     }
 }
 
@@ -98,6 +114,7 @@ mod tests {
         // When
         assert!(workspace.root().join("input").is_dir());
         assert!(workspace.root().join("office").is_dir());
+        assert!(workspace.root().join("spreadsheet").is_dir());
         assert!(workspace.root().join("poppler").is_dir());
         assert!(workspace.root().join("profile").is_dir());
         drop(workspace);

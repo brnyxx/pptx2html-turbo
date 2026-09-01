@@ -107,7 +107,7 @@ def scope_record(
 ) -> JsonObject:
     return {
         "schema_version": 1,
-        "receipt_schema_version": 1,
+        "receipt_schema_version": 2,
         "reference_profile": "libreoffice-poppler",
         "reference_lock": {"schema_version": 2, "sha256": values["lock_sha256"]},
         "routing_table_sha256": values["routing_sha256"],

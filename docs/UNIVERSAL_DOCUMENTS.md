@@ -42,6 +42,104 @@ the release security gate.
 LibreOffice command-line behavior is documented at:
 https://help.libreoffice.org/latest/en-US/text/shared/guide/start_parameters.html
 
+### East-Asian font determinism
+
+LibreOffice bundles no CJK-capable font, and its macOS backend contains no
+fontconfig: missing glyphs resolve through CoreText `CTFontCreateForString`.
+That fallback is not stable across processes, so a document requesting an
+absent family such as `Noto Sans CJK KR` selected a different host face on
+repeated runs, changing the embedded font name, the glyph advances, and
+therefore the shipped HTML bytes.
+
+On macOS the runtime seeds each private conversion profile with LibreOffice's
+documented font replacement table
+(`org.openoffice.Office.Common/Font/Substitution`), pinning the east-Asian
+families it cannot guarantee to one substitute family. The substitute is
+chosen from Apple base-install supplemental fonts, verified by reading the font
+file, and reported through the backend version as
+`east-asian-font <family> sha256:<digest> (<size> bytes)` so evidence binds the
+exact artifact that produced a conversion. If no candidate is installed the
+probe fails closed with `BackendUnavailable` rather than emitting
+nondeterministic output. Latin text is unaffected, and a family the host can
+already resolve is never rewritten.
+
+This is a CoreText remedy and is scoped to macOS. Other platforms resolve
+through fontconfig, which is deterministic for a fixed font set, so no
+substitution is applied and no substitute font is required; ordinary Linux
+conversion is unchanged.
+
+A family that a document does not name at all is outside this mechanism.
+CoreText fallback for an unnamed family is already stable, and PDF input never
+reaches LibreOffice.
+
+The signed reference producer applies the same policy independently, so
+reference and candidate cannot diverge. The family list and the ordered
+substitute candidates live in `evaluate/multiformat/east-asian-font-policy.v1.json`;
+`crates/document2html-native/src/fonts.rs` and
+`evaluate/multiformat_east_asian_fonts.py` are both pinned to that fixture and
+to `evaluate/multiformat/east-asian-font-substitution.golden.xml`, the registry
+both renderers must produce byte for byte. Parity tests fail on either side if
+the lists or the rendering drift.
+
+Each per-format outer lock records the selected font as `east_asian_font` with
+its family, absolute system path, SHA-256, byte size, and the digest of the
+policy that selected it. The substitute is an OS-provided font that cannot be
+redistributed into evidence, so determinism is bound by re-reading that file
+and comparing: a host whose font bytes, size, family, or policy differ from the
+wave's lock is refused rather than allowed to produce divergent output.
+
+LibreOffice also assigns PDF object ids in a run-dependent order, so two
+reference exports of one source carried identical faces and glyph subsets while
+differing in raw bytes. That ordering is font-independent: an ASCII-only
+document using two bundled Latin faces reorders the same way.
+
+Canonicalizer version 2 removes it. Objects are renumbered by a structural walk
+from the trailer `Root`, then `Info`, following each object's references in the
+order they appear in its dictionary; that order is a property of the document
+graph rather than of the exporting run. References, the xref table, and the
+trailer are rewritten to match, and numbering is dense, so a dropped object
+stream leaves no free slot. Only the structural part of an object is rewritten -
+stream payloads are copied byte for byte, so glyph subsets are untouched.
+
+Objects that no reference reaches are kept, never dropped, ordered after the
+reachable graph by a numbering-independent digest of their blanked structure and
+payload; an unresolved reference, or detached objects that digest identically,
+fails closed rather than inventing an order. Renumbering preserves rendered
+pages, `pdftotext` output, and `-bbox-layout` geometry.
+
+The canonicalizer is a one-way pipeline. `multiformat_pdf_types.py` is the
+dependency leaf holding the parsed-document types, the PDF name grammar, and the
+structural constants; the xref parser, Type1 normalizer, metadata writer, and
+object renumberer each depend on that leaf and never on the entry point, so
+every stage is imported statically with no lazy or type-only imports and the
+import graph is acyclic.
+
+Because the canonicalizer identity is bound into the routing table and every
+portable lock, version 2 invalidates locks produced by version 1. No final wave
+exists yet, so pre-production locks are regenerated rather than migrated.
+
+https://help.libreoffice.org/latest/en-US/text/shared/optionen/01010700.html
+
+## Reference profiles
+
+The default required profile is `libreoffice-poppler`. Its signed production
+capture currently runs on supported macOS hosts: the six Office formats use
+locked LibreOffice PDF export followed by locked Poppler rendering/text
+extraction, while PDF uses locked Poppler directly. Linux supports native
+conversion with the same tools, but cannot complete the signed profile until a
+Linux process-sandbox backend is implemented. The profile runs over the seven
+frozen format corpora and requires a schema-2 portable lock, signed receipt,
+and SHA-256 binding for every admitted source, tool, runtime, and output.
+Missing, stale, substituted, or tampered evidence remains `INCOMPLETE` or
+`FAIL`.
+
+Signed Microsoft Office/Windows oracle evidence remains supported as the
+optional `microsoft-office` profile. It is not a prerequisite for the default
+portable acceptance path. If selected, that profile still requires its signed
+schema-1 lock, verifier-bound capture, provenance, and artifact hashes; an
+incomplete Office profile cannot pass and cannot be substituted for portable
+evidence.
+
 ## CLI
 
 Build or run the universal binary:
@@ -103,10 +201,14 @@ can be converted because browser WASM cannot launch LibreOffice or Poppler.
 Native-only requests return a backend-unavailable error instead of silently
 degrading.
 
-## 96% acceptance gate
+## General conversion evaluation contract
 
-The contract is `evaluate/multiformat/contract.v1.json`. Every format must pass
-in the same evaluation wave. Scores cannot be pooled.
+The approved general claim wording is
+`96% under the documented general conversion evaluation contract`. The contract
+is `evaluate/multiformat/contract.v1.json`; every format must pass in the same
+evaluation wave, and scores cannot be pooled. This is not a Microsoft Office
+pixel-accuracy, PowerPoint pixel-match, byte-identical-output, or PPTX
+`exact`-promotion claim.
 
 Each format requires:
 
@@ -128,17 +230,40 @@ Thresholds include:
 - no blind file below 90.00,
 - zero critical defects.
 
-Word, Excel, and PowerPoint references require pinned Windows Microsoft Office
-exports. PDF references use pinned PDF renderers. LibreOffice output is local
-regression evidence and never substitutes for Microsoft Office-native
-evidence.
+For the standardized claim, 96.00 applies to the conformance and blind
+aggregate scores only. Structural validity, exact unit/file/security quotas,
+review outcomes, determinism, and SHA-256 evidence bindings are hard gates;
+they are not averaged into a 96% promise. Textual/content similarity is `C`
+(minimum 98.00), layout is `L` (minimum 94.00), and visual similarity is `V`
+(minimum 95.00). Two clean runs must produce identical HTML, inventories, and
+screenshot hashes. Frozen source bytes and signed hashes bind the evaluator,
+corpora, tools, runtimes, and admitted outputs; they establish evidence
+identity, not byte-identical output across separate capture environments.
+Microsoft Office pixel-accuracy wording is prohibited for this general claim.
+
+The default `libreoffice-poppler` profile uses the locked macOS
+LibreOffice + Poppler route for the six Office formats and locked Poppler
+directly for PDF. Signed Microsoft Office/Windows exports remain supported
+only as the optional `microsoft-office` profile; they are not required for the
+default path. Each selected profile must satisfy the same signed, hash-bound,
+fail-closed evidence contract.
+
+The native converter may run on Linux, but signed portable reference capture
+currently requires the macOS `sandbox-exec` backend. A Linux capture attempt is
+`INCOMPLETE` until an equivalent process-sandbox implementation is available.
 
 Run the gate:
 
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/reports \
-  --oracle-lock evaluate/multiformat/oracle-lock.json
+  --oracle-lock pptx=evaluate/multiformat/oracle-locks/pptx.json \
+  --oracle-lock docx=evaluate/multiformat/oracle-locks/docx.json \
+  --oracle-lock doc=evaluate/multiformat/oracle-locks/doc.json \
+  --oracle-lock xlsx=evaluate/multiformat/oracle-locks/xlsx.json \
+  --oracle-lock xls=evaluate/multiformat/oracle-locks/xls.json \
+  --oracle-lock ppt=evaluate/multiformat/oracle-locks/ppt.json \
+  --oracle-lock pdf=evaluate/multiformat/oracle-locks/pdf.json
 ```
 
 Exit codes are 0 for `PASS`, 1 for `FAIL`, and 2 for `INCOMPLETE`.
@@ -194,7 +319,12 @@ native dimensions, DOM inventories, and all run-2 artifacts are fail-closed and
 digest-bound.
 The trusted host receipt signer runs only after capture and signs the runtime,
 execution, determinism, and complete artifact root; replayed preflight
-attestations cannot authorize a different evidence set.
+attestations cannot authorize a different evidence set. Portable receipt
+schema 2 keeps the canonical runtime nonce field but makes it a signer-derived
+SHA-256 claim identity over a fixed domain, complete scope, batch identity,
+artifact root, and canonical receipt path. Request schema 2 contains no nonce.
+Exact replay is byte-identical; any batch, artifact, scope, or path variant has
+a different nonce unless SHA-256 collides. No mutable replay state is used.
 
 ```bash
 uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
@@ -207,10 +337,10 @@ uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
   --output evaluate/multiformat/wave/reports/docx.json
 ```
 
-On a network-disabled Windows host with desktop Microsoft Office and Poppler,
-capture the positive native references. Schema 2 also records `pdftotext
--bbox-layout` output so the finalizer can build page-bound text geometry and
-worksheet/cell inventories:
+For the optional `microsoft-office` profile, a network-disabled Windows host
+with desktop Microsoft Office and Poppler can capture the positive native
+references. Schema 2 also records `pdftotext -bbox-layout` output so the
+finalizer can build page-bound text geometry and worksheet/cell inventories:
 
 ```powershell
 pwsh -File evaluate/capture_multiformat_office_oracles.ps1 `
@@ -239,17 +369,18 @@ uv run --python 3.11 --with-requirements evaluate/requirements-test.txt \
   --run-nonce <64-lowercase-hex>
 ```
 
-For remote execution, dispatch `.github/workflows/capture-office-oracles.yml`.
-It deliberately requires a dedicated self-hosted runner labeled
-`office-oracle`; the host-owned `OFFICE_ORACLE_CAPTURE_WRAPPER` must enforce
-network isolation around both raw capture and finalization. The lock uses a
-separate `office_oracle_verifier` key, and pins the Office channel, Word,
-Excel, PowerPoint, `pdfinfo`, `pdftoppm`, and `pdftotext` identities. See
-GitHub's official
+For the optional `microsoft-office` profile, remote execution can dispatch
+`.github/workflows/capture-office-oracles.yml`. It deliberately requires a
+dedicated self-hosted runner labeled `office-oracle`; the host-owned
+`OFFICE_ORACLE_CAPTURE_WRAPPER` must enforce network isolation around both raw
+capture and finalization. The lock uses a separate `office_oracle_verifier`
+key, and pins the Office channel, Word, Excel, PowerPoint, `pdfinfo`,
+`pdftoppm`, and `pdftotext` identities. See GitHub's official
 [self-hosted runner workflow documentation](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow)
 for label routing. No self-hosted Office runner is currently registered in this
-repository, so actual native batches remain external prerequisites rather than
-claimed evidence.
+repository, so optional Office batches remain external prerequisites rather
+than claimed evidence. The default portable profile does not depend on this
+runner.
 
 Ready reports bind relative evaluator, corpus-manifest, and metrics-evidence
 paths to their real SHA-256 digests. The gate resolves every path under the
@@ -258,7 +389,13 @@ declared evidence root, rejects traversal, and re-hashes each file:
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/wave/reports \
-  --oracle-lock evaluate/multiformat/wave/oracle-lock.json \
+  --oracle-lock pptx=evaluate/multiformat/wave/oracle-locks/pptx.json \
+  --oracle-lock docx=evaluate/multiformat/wave/oracle-locks/docx.json \
+  --oracle-lock doc=evaluate/multiformat/wave/oracle-locks/doc.json \
+  --oracle-lock xlsx=evaluate/multiformat/wave/oracle-locks/xlsx.json \
+  --oracle-lock xls=evaluate/multiformat/wave/oracle-locks/xls.json \
+  --oracle-lock ppt=evaluate/multiformat/wave/oracle-locks/ppt.json \
+  --oracle-lock pdf=evaluate/multiformat/wave/oracle-locks/pdf.json \
   --evidence-root evaluate/multiformat/wave
 ```
 

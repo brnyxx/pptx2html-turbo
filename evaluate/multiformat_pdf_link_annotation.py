@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from evaluate.multiformat_conformance_pdf import PdfConformanceError
+from evaluate.multiformat_pdf_types import PdfConformanceError
 from evaluate.multiformat_pdf_writer import write_pdf_objects
 from evaluate.multiformat_pdf_xref import parse_pdf_objects
 

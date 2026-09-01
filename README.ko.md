@@ -32,9 +32,9 @@ $ pptx2html --info deck.pptx
 
 ```bash
 # npm (WASM — 브라우저)
-npm install @briank-dev/pptx-to-html
+npm install @briank-dev/pptx-to-html@2.1.0
 
-# CLI (체크아웃한 v2.0.2 소스 트리에서)
+# CLI (체크아웃한 v2.1.0 소스 트리에서)
 cargo install --path crates/pptx2html-cli
 
 # Python (maturin 필요)
@@ -53,12 +53,12 @@ wasm-pack build crates/document2html-wasm --target web --release
 기존 `@briank-dev/pptx2html-turbo` 설치도 계속 지원되며, 패키지명 이전 기간 동안 동일한 빌드를
 받습니다.
 
-v2.0.2에서 Rust 크레이트와 Python 바인딩은 소스 배포 형태입니다. 이번 릴리스는 crates.io나
+v2.1.0에서 Rust 크레이트와 Python 바인딩은 소스 배포 형태입니다. 이번 릴리스는 crates.io나
 PyPI에 게시하지 않습니다. Rust 라이브러리 사용자는 릴리스 태그를 직접 참조할 수 있습니다.
 
 ```toml
 [dependencies]
-pptx2html-core = { git = "https://github.com/brnyxx/pptx2html-turbo", tag = "v2.0.2" }
+pptx2html-core = { git = "https://github.com/brnyxx/pptx2html-turbo", tag = "v2.1.0" }
 ```
 
 ## 지원 형식
@@ -82,6 +82,9 @@ PPTX 엔진은 순수 Rust로 작성되어 브라우저를 포함한 어디서�
 경로에는 `soffice`, `pdftohtml`, `pdfinfo`가 필요하며, 격리된 LibreOffice 프로필, 크기가 제한된
 임시 작업 공간, 프로세스 타임아웃, 로그/출력 상한, 결정적 자산 이름을 사용하고, 지원되는
 런처가 있는 환경에서는 원격 네트워크 접근을 차단합니다.
+
+레거시 XLS 입력은 PDF로 렌더링하기 전에 캐시된 수식 값을 보존하고 워크북 재계산을 비활성화한,
+크기가 제한된 XLSX 스냅샷으로 먼저 변환합니다.
 
 ```bash
 cargo run -p pptx2html-cli --bin document2html -- report.docx -o report.html
@@ -321,6 +324,11 @@ PPTX → pptx2html-turbo (Rust) → HTML + 메타데이터
 <details>
 <summary><b>보존 범위와 보안 경계</b></summary>
 
+패키지 파서는 64 MiB보다 큰 입력, 항목이 8,192개를 넘는 압축 파일, 선언된 압축 해제 데이터가
+256 MiB를 넘는 파일, XML 누계가 64 MiB를 넘는 파일, 개별 XML 파트가 16 MiB를 넘는 파일을
+거부합니다. 브라우저 데모와 npm 편의 API는 `Blob`을 메모리로 읽기 전에 64 MiB 입력 제한을
+적용합니다.
+
 Rust 코어는 슬라이드 전환/타이밍 XML을 순서대로 보존하고, 상호작용 기반의 제한된 부분집합을
 근사 실행합니다. cut/fade 전환과 해석된 슬라이드 도형에 대한 클릭/이전 효과와 동시/이전 효과 다음
 나타내기·사라지기·페이드 효과가 여기 포함되며, 시작 조건 지연은 유한한 값에 한해 10000 ms까지
@@ -442,15 +450,30 @@ python evaluate_fidelity.py --project-root ..
 </details>
 
 <details>
-<summary><b>7종 형식 합격 게이트 (현재 INCOMPLETE)</b></summary>
+<summary><b>7종 형식 합격 게이트</b></summary>
 
-7종 형식 96% 합격 게이트는 의도적으로 fail-closed로 동작합니다.
+7종 형식 합격 게이트는 의도적으로 fail-closed로 동작합니다. 기본 필수 기준 프로필은
+`libreoffice-poppler`입니다. 지원되는 macOS 호스트에서는 여섯 Office 형식에 LibreOffice와
+Poppler를 사용하고 PDF에는 Poppler를 직접 사용해 바인딩된 기준 증거를 생성합니다. Linux에서도
+문서 변환은 지원하지만 Linux 프로세스 샌드박스 백엔드가 구현되기 전까지 서명된 휴대형 기준 캡처는
+`INCOMPLETE`입니다. 이 프로필은 고정된 7종 형식 코퍼스를 사용하며, 허용된 각 소스, 도구, 런타임,
+출력마다 형식별 schema-2 휴대형 락, 서명된 영수증, SHA-256 바인딩을 요구합니다. 누락되거나 오래되었거나
+대체 또는 변조된 증거는 `INCOMPLETE` 또는 `FAIL`로 남습니다.
+
+승인된 일반 성능 표기는 `96% under the documented general conversion evaluation contract`입니다.
+서명된 휴대형 프로필 한 웨이브가 7종 형식 전체에서 통과한 뒤에만 사용할 수 있습니다. 이 표기는
+Microsoft Office 픽셀 정확도, PowerPoint 픽셀 일치, 바이트 단위 동일 출력, 또는 PPTX `exact` 등급을
+의미하지 않습니다.
 
 ```bash
 uv run python -m evaluate.multiformat_gate \
   --reports-dir evaluate/multiformat/reports \
-  --oracle-lock evaluate/multiformat/oracle-lock.json
+  --oracle-lock-dir evaluate/multiformat/oracle-locks
 ```
+
+락 디렉터리에는 필요한 각 형식의 schema-2 락인 `pptx.json`, `docx.json`, `doc.json`,
+`xlsx.json`, `xls.json`, `ppt.json`, `pdf.json`이 정확히 하나씩 있어야 합니다. 하나의 공유 락으로
+이 집합을 대체할 수 없습니다.
 
 코퍼스 매니페스트는 후보 실행 전에 독립적으로 검증합니다.
 
@@ -466,15 +489,11 @@ uv run python -m evaluate.multiformat_corpus \
 `python -m evaluate.capture_multiformat_candidates`로 생성합니다. 고정된 런타임과 샌드박스 계약은
 `evaluate/README.md`를 참고하세요.
 
-**이 저장소에는 현재 필요한 Windows Microsoft Office 오라클 락과 7종 네이티브 증거 배치가 모두
-들어 있지 않으므로 제품 수준 게이트는 `INCOMPLETE`를 보고합니다. 해당 외부 아티팩트를 확보하고
-모든 보고서가 함께 통과하기 전까지는 검증된 96% 릴리스라고 표현해서는 안 됩니다.** 서명된 종료
-경로는 schema-2 `capture_multiformat_office_oracles.ps1` 배치,
-`finalize_multiformat_office_oracles.py` 게이트 준비 캡처, 수동
-`.github/workflows/capture-office-oracles.yml` 워크플로로 구성됩니다. 이 워크플로는 `office-oracle`
-라벨이 붙은 전용 자체 호스팅 Windows 러너로만 라우팅되며, 후보 증거와 Office 증거는 서로 다른
-Ed25519 검증 키를 사용합니다. 현재 그런 러너가 등록되어 있지 않으므로 이 자동화는 실제 게이트를
-`INCOMPLETE`에서 바꾸지 못합니다.
+서명된 Microsoft Office/Windows 오라클 증거는 선택적 `microsoft-office` 프로필로 계속 지원합니다.
+기본 휴대형 합격 경로의 필수 조건은 아닙니다. 이 프로필을 선택하면 schema-1 락, 서명된 영수증,
+검증 키에 바인딩된 캡처, 출처 정보, 아티팩트 해시가 모두 fail-closed로 검증되어야 합니다. 누락되거나
+유효하지 않은 Office 증거를 휴대형 증거로 바꾸어 표시하거나, 통과한 Office 프로필 웨이브로 만들 수
+없습니다.
 
 </details>
 

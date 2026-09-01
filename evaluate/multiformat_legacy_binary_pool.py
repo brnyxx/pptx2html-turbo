@@ -86,7 +86,8 @@ def collect_legacy_binary_pool(
                     except PublicPoolError as error:
                         if "quota" in str(error):
                             raise LegacyBinaryPoolError(
-                                "legacy binary source shortage"
+                                "legacy binary source shortage: "
+                                f"{plan.document_format.value}/{group.producer}"
                             ) from error
                         raise
                     for index, source in enumerate(group_sources, start=1):
@@ -98,10 +99,12 @@ def collect_legacy_binary_pool(
                     sources.extend(group_sources)
                 if len(sources) != plan.expected_count:
                     raise LegacyBinaryPoolError("legacy binary source count differs")
-                formats[plan.document_format.value] = {
+                source_values: list[JsonValue] = list(sources)
+                format_value: dict[str, JsonValue] = {
                     "expected_count": plan.expected_count,
-                    "sources": sources,
+                    "sources": source_values,
                 }
+                formats[plan.document_format.value] = format_value
             manifest = staging / "legacy-binary-pool.json"
             write_canonical_json(
                 manifest,

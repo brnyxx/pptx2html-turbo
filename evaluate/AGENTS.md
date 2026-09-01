@@ -2,15 +2,23 @@
 
 Scope: fidelity evidence and scoring tooling. Root `AGENTS.md` rules apply; not repeated here. Setup, CLI flags, and score weights live in `README.md`; read it first.
 
-## TWO ORACLES, NOT ONE
-PowerPoint is the exactness oracle. LibreOffice is the regression oracle. They never substitute for each other.
+## TWO REFERENCE TRACKS, NOT ONE
+For the separate PPTX `exact`-promotion track, PowerPoint is the exactness
+oracle and LibreOffice is secondary regression evidence; they never substitute
+for each other there. The default seven-format general conversion contract
+uses the locked macOS LibreOffice/Poppler profile over frozen admitted
+corpora. Optional Office/native captures may enrich a selected profile or
+support exact promotion, but they are not prerequisites for the default gate
+and cannot be substituted into it.
 
 - `powerpoint_golden/<deck>/Slide*.PNG` plus `metadata.json` per deck and one root `manifest.json`. Captured on Windows through `reference_render_powerpoint.ps1`. Native export only; no LibreOffice PNG ever lands here.
-- `golden_references/` holds LibreOffice PNGs from `reference_render.py`. Generated, disposable, cheap to rebuild. Use it to catch regressions during iteration, never to justify a tier change.
+- `golden_references/` holds LibreOffice PNGs from `reference_render.py`. Generated, disposable, cheap to rebuild. Use it to catch PPTX regressions during iteration, never to justify an exact-tier change.
 - `golden_set/` holds generated fixture decks from `create_golden_set.py`. Also disposable; both directories ship as `.gitkeep` only.
 - `completion_decks/` is a separate contract corpus with its own README. Byte-identical output is its contract: fixed ZIP order, timestamps, compression, XML bytes, JSON serialization. Output dir must not exist; the generator publishes atomically.
 
-A family stays `approximate` until PowerPoint captures exist. "Looks right in LibreOffice" is not evidence.
+A PPTX family stays `approximate` for the `exact` tier until PowerPoint
+captures exist. "Looks right in LibreOffice" is not evidence for that exact
+promotion.
 
 ## SCORING FUNCTION IS FROZEN
 `evaluate_fidelity.py` is human-owned. Don't touch the weights, the metric definitions, the SSIM path, or the `FIDELITY_SCORE:` output line. If a metric feels wrong, say so in the report and stop; changing the ruler to move the number is the one failure mode this whole directory exists to prevent.

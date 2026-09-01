@@ -1,7 +1,9 @@
 #[path = "table_style_support/review.rs"]
 mod review;
 
-use pptx2html_core::{convert_bytes_with_metadata, model::ShapeType, parser::PptxParser};
+use pptx2html_core::{
+    convert_bytes_with_metadata, error::PptxError, model::ShapeType, parser::PptxParser,
+};
 
 fn convert(data: &[u8]) -> pptx2html_core::ConversionResult {
     convert_bytes_with_metadata(data).expect("fixture converts")
@@ -96,17 +98,17 @@ fn duplicate_missing_and_malformed_style_parts_have_typed_diagnostics() {
 
 #[test]
 fn active_xml_tokens_are_rejected_by_table_style_parser() {
-    for active in [
-        "unexpected",
-        "<![CDATA[unexpected]]>",
-        "<?review active?>",
-        "<!DOCTYPE tblStyleLst>",
-    ] {
+    for active in ["unexpected", "<![CDATA[unexpected]]>", "<?review active?>"] {
         let xml = review::valid_styles().replacen('>', &format!(">{active}"), 1);
         let result = convert(&review::strict_style_package(&xml));
         assert!(!result.html.contains("background-color: #0D0D0D"));
         assert!(has_diagnostic(&result, "TABLE_STYLE_XML_INVALID"));
     }
+
+    let xml = review::valid_styles().replacen('>', "><!DOCTYPE tblStyleLst>", 1);
+    let error = convert_bytes_with_metadata(&review::strict_style_package(&xml))
+        .expect_err("DOCTYPE should fail package validation");
+    assert!(matches!(error, PptxError::UnsupportedFormat(_)), "{error}");
 }
 
 #[test]

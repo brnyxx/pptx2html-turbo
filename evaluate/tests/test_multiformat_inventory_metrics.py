@@ -13,7 +13,13 @@ from evaluate.multiformat_inventory_types import (
     ObjectItem,
     TextItem,
 )
+from evaluate.multiformat_metric_compute import compute_unit
 from evaluate.multiformat_metric_types import MetricError
+from evaluate.multiformat_corpus_types import DocumentFormat
+from evaluate.tests.multiformat_metric_artifact_fixture import (
+    binding,
+    write_unit_artifacts,
+)
 
 
 class MultiFormatInventoryMetricTests(unittest.TestCase):
@@ -21,6 +27,76 @@ class MultiFormatInventoryMetricTests(unittest.TestCase):
         self.assertEqual(split_graphemes("🇺🇸"), ["🇺🇸"])
         self.assertEqual(split_graphemes("👍🏽"), ["👍🏽"])
         self.assertEqual(split_graphemes("👩‍💻"), ["👩‍💻"])
+
+    def test_unattributed_cells_are_parsed_as_structured_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "inventory.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "unit_id": "unit-1",
+                        "texts": [],
+                        "cells": [],
+                        "objects": [],
+                        "unattributed_cells": [
+                            {
+                                "worksheet": "Sheet1",
+                                "address": "A1",
+                                "number_format": "unsupported",
+                                "reason": "number format display text is not"
+                                " reproduced",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            inventory = parse_inventory(path, "unit-1")
+
+            # The refusal survives parsing with its identifying detail intact,
+            # so downstream gates can act on it.
+            self.assertEqual(len(inventory.unattributed_cells), 1)
+            self.assertEqual(inventory.unattributed_cells[0].worksheet, "Sheet1")
+            self.assertEqual(inventory.unattributed_cells[0].address, "A1")
+            self.assertEqual(
+                inventory.unattributed_cells[0].number_format, "unsupported"
+            )
+
+    def test_unattributable_number_format_fails_the_content_gate(self) -> None:
+        """A structured refusal must hard-fail metrics, not just ride along.
+
+        If the diagnostic were accepted-and-ignored, the content metric would
+        silently score an incomplete cell set and could still publish READY.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            artifacts = write_unit_artifacts(root, "unit-1", 192, 192)
+            reference = root / "artifacts" / "unit-1-reference.json"
+            value = json.loads(reference.read_text(encoding="utf-8"))
+            value["unattributed_cells"] = [
+                {
+                    "worksheet": "Sheet1",
+                    "address": "A1",
+                    "number_format": "unsupported",
+                    "reason": "number format display text is not reproduced",
+                }
+            ]
+            reference.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+            # Rebind so the digest matches and the gate under test is reached
+            # rather than the artifact hash check.
+            artifacts["reference_inventory"] = binding(root, reference)
+
+            with self.assertRaisesRegex(MetricError, "inventory.unattributed_cells"):
+                _ = compute_unit(
+                    {"artifacts": artifacts},
+                    "unit-1",
+                    frozenset({"content", "layout"}),
+                    "#ffffff",
+                    DocumentFormat.XLSX,
+                    root,
+                )
 
     def test_object_occurrences_must_be_contiguous_per_semantic_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -41,6 +117,7 @@ class MultiFormatInventoryMetricTests(unittest.TestCase):
                                 "box": [0, 0, 10, 10],
                             }
                         ],
+                        "unattributed_cells": [],
                     }
                 ),
                 encoding="utf-8",

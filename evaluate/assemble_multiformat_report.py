@@ -26,7 +26,7 @@ def assemble_report(
 ) -> dict[str, JsonValue]:
     project_root = project_root.resolve(strict=True)
     evidence_root = evidence_root.resolve(strict=True)
-    if not oracle_lock_ready(oracle_lock_path):
+    if not oracle_lock_ready(oracle_lock_path, evidence_root):
         raise MetricError("oracle_lock", oracle_lock_path.as_posix())
     evaluator_hash = validate_evaluator_manifest(
         project_root,

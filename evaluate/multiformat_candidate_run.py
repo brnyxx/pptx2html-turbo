@@ -15,6 +15,7 @@ from evaluate.multiformat_candidate_types import (
     CandidateRuntimePaths,
     CapturedSource,
 )
+from evaluate.multiformat_corpus_types import DocumentFormat
 
 
 class CandidateRunError(CandidateCaptureError):
@@ -51,6 +52,13 @@ def capture_clean_run(
             source_set.document_format,
             tuple(unit.unit_id for unit in source.units),
             source_root / "artifacts",
+            source_track=source.track,
+            aggregate_paged_units=(
+                source.track == "conformance"
+                and source_set.document_format
+                not in {DocumentFormat.PPT, DocumentFormat.PPTX}
+                and len(source.units) == 1
+            ),
             expected_browser_version=runtime.browser_version,
             executable_path=runtime.chromium,
             font_config=runtime.font_config,

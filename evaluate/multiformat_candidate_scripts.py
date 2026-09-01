@@ -11,7 +11,14 @@ READINESS_SCRIPT = """
 async () => {
   await document.fonts.ready;
   if (document.fonts.status !== "loaded") throw new Error("fonts are not loaded");
-  await Promise.all([...document.images].map(image => image.decode()));
+  await Promise.all([...document.images].map(async image => {
+    try {
+      await image.decode();
+    } catch (error) {
+      if (/^data:image\\/x-(?:emf|wmf);base64,/i.test(image.src)) return;
+      throw error;
+    }
+  }));
   if (document.readyState !== "complete") {
     await new Promise(resolve => addEventListener("load", resolve, {once: true}));
   }
@@ -27,22 +34,114 @@ async () => {
 }
 """
 
+NORMALIZE_PRESENTATION_SCRIPT = """
+({format, width, height}) => {
+  const nodes = format === "pptx"
+    ? [...document.querySelectorAll(".slide")]
+    : [...document.querySelectorAll('div[id^="page"][id$="-div"]')];
+  if (!nodes.length) throw new Error("presentation units are missing");
+  nodes.forEach(node => {
+    const rect = node.getBoundingClientRect();
+    if (!(rect.width > 0 && rect.height > 0)) {
+      throw new Error(`invalid presentation geometry: ${node.id}`);
+    }
+    const existing = getComputedStyle(node).transform;
+    if (existing !== "none") {
+      const matrix = new DOMMatrix(existing);
+      if (matrix.b !== 0 || matrix.c !== 0 || matrix.e !== 0 || matrix.f !== 0
+          || !(matrix.a > 0 && matrix.d > 0)) {
+        throw new Error(`unsupported presentation transform: ${node.id}`);
+      }
+    }
+    node.style.transformOrigin = "top left";
+    const prefix = existing === "none" ? "" : `${existing} `;
+    node.style.transform = `${prefix}scale(${width / rect.width}, ${height / rect.height})`;
+  });
+}
+"""
+
 DISCOVER_UNITS_SCRIPT = """
-format => {
+({format, aggregatePages}) => {
   const corePresentation = format === "pptx";
   const nodes = corePresentation
     ? [...document.querySelectorAll(".slide")]
     : [...document.querySelectorAll('div[id^="page"][id$="-div"]')];
-  return nodes.map((node, index) => {
+  let previousSlide = 0;
+  const units = nodes.map((node, index) => {
     const ordinal = index + 1;
-    const expected = corePresentation ? `slide-${ordinal}` : `page${ordinal}-div`;
-    if (node.id !== expected) throw new Error(`nonsequential unit: ${node.id}`);
+    if (corePresentation) {
+      const match = /^slide-([1-9][0-9]*)$/.exec(node.id);
+      const slide = match ? Number(match[1]) : 0;
+      if (slide <= previousSlide) throw new Error(`nonsequential unit: ${node.id}`);
+      previousSlide = slide;
+    } else if (node.id !== `page${ordinal}-div`) {
+      throw new Error(`nonsequential unit: ${node.id}`);
+    }
     return {
       selector: `#${CSS.escape(node.id)}`,
+      x: node.getBoundingClientRect().x,
+      y: node.getBoundingClientRect().y,
       width: node.getBoundingClientRect().width,
       height: node.getBoundingClientRect().height,
     };
   });
+  if (!aggregatePages) return units;
+  if (corePresentation || !units.length) throw new Error("invalid paged-unit aggregation");
+  const left = Math.min(...units.map(unit => unit.x));
+  const top = Math.min(...units.map(unit => unit.y));
+  const right = Math.max(...units.map(unit => unit.x + unit.width));
+  const bottom = Math.max(...units.map(unit => unit.y + unit.height));
+  return [{
+    selectors: units.map(unit => unit.selector),
+    pages: units.map(({x, y, width, height}) => ({x, y, width, height})),
+    pageCount: units.length,
+    textCodeUnits: nodes.reduce((total, node) => total + (node.textContent || "").length, 0),
+    elementCount: nodes.reduce((total, node) => total + node.querySelectorAll("*").length + 1, 0),
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  }];
+}
+"""
+
+INITIALIZE_DISCOVERED_UNIT_ISOLATION_SCRIPT = """
+({selectors, token}) => {
+  if (!Array.isArray(selectors) || !selectors.length || !token) {
+    throw new Error("invalid discovered unit selectors");
+  }
+  const stateKey = "__multiformatCandidateUnitIsolationState";
+  if (window[stateKey]) throw new Error("discovered unit isolation already initialized");
+  const nodes = selectors.map(value => document.querySelector(value));
+  if (nodes.some(node => !node)) throw new Error("missing discovered unit root");
+  const displays = new WeakMap();
+  nodes.forEach(node => {
+    displays.set(node, {
+      value: node.style.getPropertyValue("display"),
+      priority: node.style.getPropertyPriority("display"),
+    });
+    node.style.setProperty("display", "none", "important");
+  });
+  window[stateKey] = {token, nodes, displays, active: null};
+}
+"""
+
+ISOLATE_DISCOVERED_UNIT_SCRIPT = """
+({token, index}) => {
+  const state = window.__multiformatCandidateUnitIsolationState;
+  if (!state || state.token !== token || !Number.isInteger(index)
+      || index < 0 || index >= state.nodes.length) {
+    throw new Error("invalid discovered unit isolation transition");
+  }
+  const active = state.nodes[index];
+  if (!active) throw new Error("missing discovered unit root");
+  if (state.active && state.active !== active) {
+    state.active.style.setProperty("display", "none", "important");
+  }
+  const display = state.displays.get(active);
+  if (!display) throw new Error("missing discovered unit display state");
+  active.style.setProperty("display", display.value, display.priority);
+  state.active = active;
 }
 """
 
@@ -54,11 +153,23 @@ EXTERNAL_RESOURCES_SCRIPT = """
 """
 
 EXTRACT_DOM_SCRIPT = """
-({selector, spreadsheet}) => {
-  const root = document.querySelector(selector);
-  if (!root) throw new Error(`missing unit ${selector}`);
-  const rootRect = root.getBoundingClientRect();
-  const scaleY = root.offsetHeight > 0 ? rootRect.height / root.offsetHeight : 1;
+({selector, selectors, spreadsheet}) => {
+  const roots = selectors
+    ? selectors.map(value => document.querySelector(value))
+    : [document.querySelector(selector)];
+  if (roots.some(root => !root)) throw new Error("missing unit root");
+  const rootRects = roots.map(root => root.getBoundingClientRect());
+  const rootRect = {
+    left: Math.min(...rootRects.map(rect => rect.left)),
+    top: Math.min(...rootRects.map(rect => rect.top)),
+    right: Math.max(...rootRects.map(rect => rect.right)),
+    bottom: Math.max(...rootRects.map(rect => rect.bottom)),
+  };
+  rootRect.width = rootRect.right - rootRect.left;
+  rootRect.height = rootRect.bottom - rootRect.top;
+  const root = roots[0];
+  const rootBounds = root.getBoundingClientRect();
+  const scaleY = root.offsetHeight > 0 ? rootBounds.height / root.offsetHeight : 1;
   const normalized = value => value.normalize("NFC").replace(/\\s+/g, " ").trim();
   const intersects = rect => rect.right > rootRect.left && rect.left < rootRect.right
     && rect.bottom > rootRect.top && rect.top < rootRect.bottom;
@@ -100,7 +211,7 @@ EXTRACT_DOM_SCRIPT = """
   const cellSelector = "[data-cell-coordinate][data-worksheet]";
   const cells = [];
   if (spreadsheet) {
-    [...root.querySelectorAll(cellSelector)].forEach((element, index) => {
+    roots.flatMap(root => [...root.querySelectorAll(cellSelector)]).forEach((element, index) => {
       if (!visible(element)) return;
       const coordinate = element.dataset.cellCoordinate || "";
       const worksheet = normalized(element.dataset.worksheet || "");
@@ -119,42 +230,44 @@ EXTRACT_DOM_SCRIPT = """
     });
   }
   const texts = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node;
   let textOrder = 0;
-  while ((node = walker.nextNode())) {
-    const parent = node.parentElement;
-    if (!parent || ["SCRIPT", "STYLE", "NOSCRIPT"].includes(parent.tagName)) continue;
-    if (spreadsheet && parent.closest(cellSelector)) continue;
-    if (!visible(parent)) continue;
-    const content = node.nodeValue || "";
-    const fragments = [];
-    for (let offset = 0; offset < content.length; offset++) {
-      const range = document.createRange();
-      range.setStart(node, offset);
-      range.setEnd(node, offset + 1);
-      const rect = range.getBoundingClientRect();
-      if (!(rect.width > 0 && rect.height > 0 && intersects(rect))) continue;
-      const current = fragments[fragments.length - 1];
-      if (current && Math.abs(current.rects[0].top - rect.top) < 1) {
-        current.value += content[offset];
-        current.rects.push(rect);
-      } else {
-        fragments.push({value: content[offset], rects: [rect]});
+  roots.forEach(root => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const parent = node.parentElement;
+      if (!parent || ["SCRIPT", "STYLE", "NOSCRIPT"].includes(parent.tagName)) continue;
+      if (spreadsheet && parent.closest(cellSelector)) continue;
+      if (!visible(parent)) continue;
+      const content = node.nodeValue || "";
+      const fragments = [];
+      for (let offset = 0; offset < content.length; offset++) {
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.setEnd(node, offset + 1);
+        const rect = range.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0 && intersects(rect))) continue;
+        const current = fragments[fragments.length - 1];
+        if (current && Math.abs(current.rects[0].top - rect.top) < 1) {
+          current.value += content[offset];
+          current.rects.push(rect);
+        } else {
+          fragments.push({value: content[offset], rects: [rect]});
+        }
       }
-    }
-    fragments.forEach(fragment => {
-      const value = normalized(fragment.value);
-      if (!value) return;
-      const last = fragment.rects[fragment.rects.length - 1];
-      texts.push({
-        value,
-        box: union(fragment.rects),
-        baseline: textBaseline(parent, value, last),
-        order: textOrder++,
+      fragments.forEach(fragment => {
+        const value = normalized(fragment.value);
+        if (!value) return;
+        const last = fragment.rects[fragment.rects.length - 1];
+        texts.push({
+          value,
+          box: union(fragment.rects),
+          baseline: textBaseline(parent, value, last),
+          order: textOrder++,
+        });
       });
-    });
-  }
+    }
+  });
   const objects = [];
   const addObject = (element, type, semantic) => {
     if (!semantic || !visible(element)) return;
@@ -163,13 +276,13 @@ EXTRACT_DOM_SCRIPT = """
         && rect.height >= rootRect.height * 0.9) return;
     objects.push({type, semantic, box: relativeBox(rect)});
   };
-  [...root.querySelectorAll("img")].forEach(element =>
+  roots.flatMap(root => [...root.querySelectorAll("img")]).forEach(element =>
     addObject(element, "image", element.currentSrc || element.src || element.alt));
-  [...root.querySelectorAll("svg")].forEach(element =>
+  roots.flatMap(root => [...root.querySelectorAll("svg")]).forEach(element =>
     addObject(element, "svg", element.outerHTML));
-  [...root.querySelectorAll("a[href]")].forEach(element =>
+  roots.flatMap(root => [...root.querySelectorAll("a[href]")]).forEach(element =>
     addObject(element, "link", element.getAttribute("href")));
-  [...root.querySelectorAll('input,button,select,textarea,[role="button"]')].forEach(element => {
+  roots.flatMap(root => [...root.querySelectorAll('input,button,select,textarea,[role="button"]')]).forEach(element => {
     const label = normalized(element.innerText || element.value
       || element.getAttribute("aria-label") || element.getAttribute("role") || element.tagName);
     addObject(element, "control", `${element.tagName.toLowerCase()}:${label}`);

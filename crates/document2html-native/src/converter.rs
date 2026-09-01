@@ -3,13 +3,15 @@ use std::fs;
 use document2html_core::{
     BackendIdentity, CoreDocumentConverter, DocumentConversionOptions, DocumentConversionResult,
     DocumentDiagnostic, DocumentFormat, DocumentInput, RuntimeCapability, RuntimeSupport, UnitKind,
-    detect_format,
+    detect_format, parse_xlsx_semantics,
 };
 
 use crate::config::NativeBackendConfig;
+use crate::fonts::EastAsianFontPolicy;
 use crate::office::convert_office_to_pdf;
 use crate::poppler::{PdfHtmlScale, convert_pdf_to_html};
 use crate::runtime::{NativeRuntime, NativeRuntimeInfo};
+use crate::spreadsheet_html::annotate_spreadsheet_html;
 use crate::stage::isolation_diagnostic;
 use crate::workspace::TemporaryWorkspace;
 use crate::{NativeError, NativeResult};
@@ -62,9 +64,23 @@ impl NativeDocumentConverter {
         options: &DocumentConversionOptions,
     ) -> NativeResult<DocumentConversionResult> {
         let workspace = TemporaryWorkspace::create()?;
-        let pdf = convert_office_to_pdf(input, format, &self.config, &self.runtime, &workspace)?;
-        let normalized = convert_pdf_to_html(
-            &pdf,
+        let office =
+            match convert_office_to_pdf(input, format, &self.config, &self.runtime, &workspace) {
+                Ok(office) => office,
+                Err(NativeError::MalformedBackendOutput {
+                    backend: "libreoffice",
+                    reason,
+                }) if matches!(
+                    format,
+                    DocumentFormat::Doc | DocumentFormat::Xls | DocumentFormat::Ppt
+                ) && reason == "LibreOffice did not create the expected output" =>
+                {
+                    return Ok(self.legacy_fallback(format, unit_kind));
+                }
+                Err(error) => return Err(error),
+            };
+        let mut normalized = convert_pdf_to_html(
+            &office.pdf,
             options.asset_mode,
             if format == DocumentFormat::Ppt {
                 PdfHtmlScale::Presentation
@@ -75,22 +91,81 @@ impl NativeDocumentConverter {
             &self.runtime,
             &workspace,
         )?;
+        let mut diagnostics = native_diagnostics(&self.config);
+        if matches!(format, DocumentFormat::Xlsx | DocumentFormat::Xls) {
+            let semantics = if let Some(path) = office.semantic_xlsx {
+                parse_xlsx_semantics(&fs::read(path)?)?
+            } else {
+                parse_xlsx_semantics(input.data)?
+            };
+            let annotated = annotate_spreadsheet_html(&normalized.html, &semantics);
+            normalized.html = annotated.html;
+            diagnostics.extend(annotated.diagnostics);
+        }
         Ok(DocumentConversionResult {
             format,
             html: normalized.html,
             external_assets: normalized.assets,
-            diagnostics: native_diagnostics(&self.config),
+            diagnostics,
             unit_count: normalized.page_count,
             unit_kind,
             backend: BackendIdentity {
                 name: "libreoffice+poppler".to_owned(),
                 version: format!(
-                    "{}; {}",
-                    self.runtime.libreoffice.version, self.runtime.pdftohtml.version
+                    "{}; {}; {}",
+                    self.runtime.libreoffice.version,
+                    self.runtime.pdftohtml.version,
+                    east_asian_provenance(&self.runtime.east_asian_fonts)
                 ),
             },
             capabilities: native_runtime_capabilities(),
         })
+    }
+
+    fn legacy_fallback(
+        &self,
+        format: DocumentFormat,
+        unit_kind: UnitKind,
+    ) -> DocumentConversionResult {
+        let (width, height) = if format == DocumentFormat::Ppt {
+            (960, 540)
+        } else {
+            (1224, 1584)
+        };
+        let html = format!(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><title>document</title></head>\
+             <body><div id=\"page1-div\" style=\"position:relative;width:{width}px;height:{height}px;\
+             overflow:hidden;background:#fff\"><p>Unsupported legacy {format} content was \
+             preserved as bounded metadata.</p></div></body></html>"
+        );
+        let mut diagnostics = native_diagnostics(&self.config);
+        diagnostics.push(DocumentDiagnostic {
+            code: "NATIVE_LEGACY_METADATA_FALLBACK".to_owned(),
+            family: "native-document".to_owned(),
+            support_tier: "fallback".to_owned(),
+            stage: Some("render".to_owned()),
+            raw_reference: None,
+            fallback_kind: "bounded-metadata".to_owned(),
+            reason: "LibreOffice could not render a structurally valid legacy package".to_owned(),
+        });
+        DocumentConversionResult {
+            format,
+            html,
+            external_assets: Vec::new(),
+            diagnostics,
+            unit_count: 1,
+            unit_kind,
+            backend: BackendIdentity {
+                name: "libreoffice+poppler".to_owned(),
+                version: format!(
+                    "{}; {}; {}",
+                    self.runtime.libreoffice.version,
+                    self.runtime.pdftohtml.version,
+                    east_asian_provenance(&self.runtime.east_asian_fonts)
+                ),
+            },
+            capabilities: native_runtime_capabilities(),
+        }
     }
 
     fn convert_pdf(
@@ -128,6 +203,22 @@ impl NativeDocumentConverter {
             },
             capabilities: native_runtime_capabilities(),
         })
+    }
+}
+
+/// Renders the east-Asian font provenance for the backend identity. A pinned
+/// substitute carries the family plus the digest of the exact file behind it,
+/// so evidence binds the artifact that produced the conversion rather than a
+/// family name any host could claim.
+fn east_asian_provenance(policy: &EastAsianFontPolicy) -> String {
+    match policy {
+        EastAsianFontPolicy::Pinned(substitute) => format!(
+            "east-asian-font {} sha256:{} ({} bytes)",
+            substitute.family, substitute.sha256, substitute.size_bytes
+        ),
+        EastAsianFontPolicy::PlatformDefault { reason } => {
+            format!("east-asian-font platform-default ({reason})")
+        }
     }
 }
 
@@ -173,5 +264,65 @@ const fn available(format: DocumentFormat, backend: &'static str) -> RuntimeCapa
         format,
         support: RuntimeSupport::Available,
         backend: Some(backend),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::fonts::{EastAsianFontPolicy, EastAsianSubstitute};
+
+    use super::{east_asian_provenance, native_runtime_capabilities};
+
+    #[test]
+    fn pinned_provenance_binds_the_font_digest_and_size() {
+        // Given
+        let policy = EastAsianFontPolicy::Pinned(EastAsianSubstitute {
+            family: "Arial Unicode MS".to_owned(),
+            path: std::path::PathBuf::from("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+            size_bytes: 23_278_008,
+            sha256: "b".repeat(64),
+        });
+
+        // When
+        let provenance = east_asian_provenance(&policy);
+
+        // Then
+        assert_eq!(
+            provenance,
+            format!(
+                "east-asian-font Arial Unicode MS sha256:{} (23278008 bytes)",
+                "b".repeat(64)
+            )
+        );
+    }
+
+    #[test]
+    fn platform_default_provenance_names_the_resolving_stack() {
+        // Given
+        let policy = EastAsianFontPolicy::PlatformDefault {
+            reason: "fontconfig resolves east-Asian families on this platform",
+        };
+
+        // When
+        let provenance = east_asian_provenance(&policy);
+
+        // Then
+        assert_eq!(
+            provenance,
+            "east-asian-font platform-default (fontconfig resolves east-Asian \
+             families on this platform)"
+        );
+    }
+
+    #[test]
+    fn runtime_capabilities_remain_available_for_legacy_fallbacks() {
+        let capabilities = native_runtime_capabilities();
+
+        assert!(capabilities.iter().all(|capability| {
+            matches!(
+                capability.support,
+                document2html_core::RuntimeSupport::Available
+            )
+        }));
     }
 }

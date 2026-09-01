@@ -48,7 +48,7 @@ class MultiFormatReferenceRoutingTests(unittest.TestCase):
             tuple(route.format.value for route in identity.routes), FORMATS
         )
         self.assertEqual(identity.schema_version, 1)
-        self.assertEqual(identity.canonicalizer_version, "1")
+        self.assertEqual(identity.canonicalizer_version, "2")
         self.assertRegex(identity.sha256, r"^[0-9a-f]{64}$")
         self.assertEqual(
             identity.environment_whitelist, ("HOME", "LANG", "LC_ALL", "TZ")
@@ -97,10 +97,20 @@ class MultiFormatReferenceRoutingTests(unittest.TestCase):
                 pdf_input = "{reference_pdf}" if office else "{source}"
                 self.assertEqual(route.normative_input, "source")
                 self.assertEqual(route.commands[-3].arguments, (pdf_input,))
-                self.assertEqual(
-                    route.commands[-2].arguments,
-                    ("-png", "-r", "144", pdf_input, "{render_prefix}"),
+                render_arguments = (
+                    (
+                        "-png",
+                        "-scale-to-x",
+                        "960",
+                        "-scale-to-y",
+                        "540",
+                        pdf_input,
+                        "{render_prefix}",
+                    )
+                    if route.format in {DocumentFormat.PPT, DocumentFormat.PPTX}
+                    else ("-png", "-r", "144", pdf_input, "{render_prefix}")
                 )
+                self.assertEqual(route.commands[-2].arguments, render_arguments)
                 self.assertEqual(
                     route.commands[-1].arguments,
                     ("-bbox-layout", "-enc", "UTF-8", pdf_input, "{text_output}"),
@@ -122,7 +132,9 @@ class MultiFormatReferenceRoutingTests(unittest.TestCase):
         # Then: JCS gives stable identity, while a field mutation changes its digest.
         self.assertEqual(first.sha256, second.sha256)
         mutated = self._repository_value()
-        mutated["canonicalizer_version"] = "2"
+        # Any value other than the live canonicalizer version; the digest must
+        # move even though loading such a table would be rejected.
+        mutated["canonicalizer_version"] = "0"
         self.assertNotEqual(first.sha256, self._canonical_sha256(mutated))
 
     def test_rejects_missing_extra_wrong_typed_and_duplicate_keys(self) -> None:
@@ -187,7 +199,7 @@ class MultiFormatReferenceRoutingTests(unittest.TestCase):
             ("locale", "C"),
             ("timezone", "Europe/London"),
             ("network_isolation", False),
-            ("canonicalizer_version", "2"),
+            ("canonicalizer_version", "1"),
         )
         for field, replacement in attacks:
             with self.subTest(field=field):

@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TypeAlias
 
 from evaluate.jcs import canonicalize
-from evaluate.multiformat_evidence import resolve_evidence_path
 from evaluate.multiformat_portable_lock import validate_reference_lock
 from evaluate.multiformat_portable_receipt_context import (
     _TRUST_SEAL,
@@ -18,11 +17,16 @@ from evaluate.multiformat_portable_receipt_context import (
     runtime_record,
     scope_record,
 )
+from evaluate.multiformat_portable_receipt_sources import load_receipt_sources
 from evaluate.multiformat_portable_receipt_validation import (
     ReceiptValidationError,
     StableFileIdentity,
     reject_identity_aliases,
     verify_stable_file,
+)
+from evaluate.multiformat_portable_trust_artifacts import (
+    load_lock_artifacts,
+    revalidate_package_inventories,
 )
 from evaluate.multiformat_reference_profile import ReferenceProfile
 from evaluate.multiformat_schema import (
@@ -58,7 +62,7 @@ def load_portable_receipt_trust(
         lock = read_strict_object(lock_path)
         if sha256_file(lock_path) != identity.sha256:
             raise PortableReceiptTrustError("portable lock changed after validation")
-        lock_artifacts = _lock_artifacts(
+        lock_artifacts = load_lock_artifacts(
             lock_path,
             lock,
             evidence_root,
@@ -74,7 +78,7 @@ def load_portable_receipt_trust(
         ):
             raise PortableReceiptTrustError("portable receipt public key is invalid")
         corpus_identity = by_role["corpus-manifest"]
-        sources = _load_sources(
+        sources = load_receipt_sources(
             evidence_root / corpus_identity.path,
             evidence_root,
         )
@@ -135,6 +139,7 @@ def verify_trusted_files(
     current_lock = tuple(
         _reverify(trust, artifact) for artifact in trust.lock_artifacts
     )
+    revalidate_package_inventories(trust.evidence_root, current_lock)
     current_sources = tuple(_reverify(trust, source) for source in trust.sources)
     if current_lock != trust.lock_artifacts or current_sources != trust.sources:
         raise PortableReceiptTrustError("portable receipt trusted identity changed")
@@ -155,39 +160,6 @@ def _reverify(
     )
 
 
-def _lock_artifacts(
-    lock_path: Path,
-    lock: JsonObject,
-    root: Path,
-    lock_sha256: str,
-) -> tuple[StableFileIdentity, ...]:
-    tools = object_value(lock, "tools")
-    signer = object_value(lock, "signer")
-    scope = object_value(lock, "scope")
-    runtime = object_value(lock, "runtime")
-    browser = object_value(lock, "browser")
-    bindings = (
-        ("portable-lock", _file_binding(lock_path, root, lock_sha256)),
-        ("tool:libreoffice", object_value(tools, "libreoffice")),
-        ("tool:poppler-render", object_value(tools, "poppler_render")),
-        ("tool:poppler-text", object_value(tools, "poppler_text")),
-        ("tool:poppler-metadata", object_value(tools, "poppler_metadata")),
-        ("canonicalizer", object_value(lock, "canonicalizer")),
-        ("font-bundle", object_value(lock, "font_bundle")),
-        ("configuration", object_value(lock, "configuration")),
-        ("browser:chromium", object_value(browser, "chromium")),
-        ("browser:lock", object_value(browser, "lock")),
-        ("candidate-runtime-lock", object_value(lock, "candidate_runtime_lock")),
-        ("public-key", object_value(signer, "public_key")),
-        ("executor", object_value(signer, "executor")),
-        ("contract", object_value(scope, "contract")),
-        ("evaluator", object_value(scope, "evaluator")),
-        ("corpus-manifest", object_value(scope, "corpus")),
-        ("attestation", object_value(runtime, "attestation")),
-    )
-    return tuple(_bound_identity(binding, root, role) for role, binding in bindings)
-
-
 def _tools(lock: JsonObject) -> tuple[ToolIdentity, ...]:
     values = object_value(lock, "tools")
     records = (
@@ -204,45 +176,3 @@ def _tools(lock: JsonObject) -> tuple[ToolIdentity, ...]:
         )
         for role, record in records
     )
-
-
-def _load_sources(corpus_path: Path, root: Path) -> tuple[StableFileIdentity, ...]:
-    manifest = read_strict_object(corpus_path)
-    raw = manifest.get("sources")
-    if not isinstance(raw, list) or not raw:
-        raise PortableReceiptTrustError("portable receipt corpus sources are missing")
-    sources: list[StableFileIdentity] = []
-    for value in raw:
-        if not isinstance(value, dict):
-            raise PortableReceiptTrustError("portable receipt source is invalid")
-        source = resolve_evidence_path(corpus_path.parent, string_value(value, "path"))
-        relative = source.relative_to(root.resolve(strict=True)).as_posix()
-        sources.append(
-            verify_stable_file(
-                root, relative, sha256_value(value, "sha256"), None, "source"
-            )
-        )
-    sources.sort(key=lambda item: item.path)
-    reject_identity_aliases((tuple(sources),))
-    return tuple(sources)
-
-
-def _bound_identity(
-    binding: JsonObject,
-    root: Path,
-    role: str,
-) -> StableFileIdentity:
-    return verify_stable_file(
-        root,
-        string_value(binding, "path"),
-        sha256_value(binding, "sha256"),
-        None,
-        role,
-    )
-
-
-def _file_binding(path: Path, root: Path, digest: str) -> JsonObject:
-    relative = (
-        path.resolve(strict=True).relative_to(root.resolve(strict=True)).as_posix()
-    )
-    return {"path": relative, "sha256": digest}

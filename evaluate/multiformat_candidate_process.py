@@ -5,14 +5,38 @@ import signal
 import subprocess
 import threading
 import time
+from enum import StrEnum
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Protocol
 
 from evaluate.multiformat_candidate_types import CandidateCaptureError
 
 
+class CandidateProcessFailure(StrEnum):
+    PIPES_UNAVAILABLE = "pipes-unavailable"
+    TIMEOUT = "timeout"
+    READER_TIMEOUT = "reader-timeout"
+    READER_FAILED = "reader-failed"
+    LOG_OVERSIZE = "log-oversize"
+    TERMINATION_FAILED = "termination-failed"
+    EXECUTABLE_UNTRUSTED = "executable-untrusted"
+
+
 class CandidateProcessError(CandidateCaptureError):
-    pass
+    failure: CandidateProcessFailure
+
+    def __init__(self, failure: CandidateProcessFailure) -> None:
+        self.failure = failure
+        messages = {
+            CandidateProcessFailure.PIPES_UNAVAILABLE: "converter pipes are unavailable",
+            CandidateProcessFailure.TIMEOUT: "converter timeout",
+            CandidateProcessFailure.READER_TIMEOUT: "converter reader timeout",
+            CandidateProcessFailure.READER_FAILED: "converter reader failed",
+            CandidateProcessFailure.LOG_OVERSIZE: "converter log exceeds limit",
+            CandidateProcessFailure.TERMINATION_FAILED: "converter termination failed",
+            CandidateProcessFailure.EXECUTABLE_UNTRUSTED: "converter executable is untrusted",
+        }
+        super().__init__(messages[failure])
 
 
 def run_bounded_process(
@@ -24,19 +48,43 @@ def run_bounded_process(
     *,
     timeout_seconds: float,
     max_log_bytes: int,
+    executable: Path | None = None,
+    stdin_fd: int | None = None,
 ) -> int:
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
-        process = subprocess.Popen(
-            command,
-            cwd=cwd,
-            env=environment,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
+        try:
+            _before_popen()
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                env=environment,
+                stdin=stdin_fd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+                executable=executable.as_posix() if executable else None,
+                pass_fds=(stdin_fd,) if stdin_fd is not None else (),
+            )
+        except (OSError, ValueError) as error:
+            raise CandidateProcessError(
+                CandidateProcessFailure.PIPES_UNAVAILABLE
+            ) from error
         if process.stdout is None or process.stderr is None:
-            raise CandidateProcessError("converter pipes are unavailable")
+            pipe_termination_failures: list[Exception] = []
+            if not _kill_process_group(process):
+                pipe_termination_failures.append(
+                    RuntimeError("process group survived pipe failure")
+                )
+            _reap_parent(process, timeout_seconds, pipe_termination_failures)
+            if pipe_termination_failures:
+                raise CandidateProcessError(
+                    CandidateProcessFailure.TERMINATION_FAILED
+                ) from pipe_termination_failures[0]
+            raise CandidateProcessError(CandidateProcessFailure.PIPES_UNAVAILABLE)
         overflow = threading.Event()
+        reader_failures: list[Exception] = []
+        termination_failures: list[Exception] = []
+        timeout_error: subprocess.TimeoutExpired | None = None
         readers = [
             threading.Thread(
                 target=_drain_bounded,
@@ -45,8 +93,11 @@ def run_bounded_process(
                     process.stdout,
                     stdout,
                     overflow,
+                    reader_failures,
+                    termination_failures,
                     max_log_bytes,
                 ),
+                daemon=True,
             ),
             threading.Thread(
                 target=_drain_bounded,
@@ -55,32 +106,61 @@ def run_bounded_process(
                     process.stderr,
                     stderr,
                     overflow,
+                    reader_failures,
+                    termination_failures,
                     max_log_bytes,
                 ),
+                daemon=True,
             ),
         ]
         for reader in readers:
             reader.start()
-        deadline = time.monotonic() + timeout_seconds
+        exit_code = 0
         try:
             exit_code = process.wait(timeout=timeout_seconds)
+            if not _kill_process_group(process):
+                termination_failures.append(RuntimeError("process group survived exit"))
         except subprocess.TimeoutExpired as error:
-            _kill_process_group(process)
-            process.wait()
-            raise CandidateProcessError("converter timeout") from error
+            timeout_error = error
+            if not _kill_process_group(process):
+                termination_failures.append(RuntimeError("process group survived kill"))
+            _reap_parent(process, timeout_seconds, termination_failures)
+        except (OSError, ValueError) as error:
+            termination_failures.append(error)
+            if not _kill_process_group(process):
+                termination_failures.append(
+                    RuntimeError("process group survived wait failure")
+                )
+            _reap_parent(process, timeout_seconds, termination_failures)
         finally:
-            if process.poll() is not None:
-                _kill_process_group(process)
+            deadline = time.monotonic() + _termination_timeout(timeout_seconds)
             for reader in readers:
                 reader.join(timeout=max(0.0, deadline - time.monotonic()))
             if any(reader.is_alive() for reader in readers):
-                process.stdout.close()
-                process.stderr.close()
-                raise CandidateProcessError("converter reader timeout")
-            process.stdout.close()
-            process.stderr.close()
+                _interrupt_pipe(process.stdout)
+                _interrupt_pipe(process.stderr)
+                deadline = time.monotonic() + _termination_timeout(timeout_seconds)
+                for reader in readers:
+                    reader.join(timeout=max(0.0, deadline - time.monotonic()))
+            if not any(reader.is_alive() for reader in readers):
+                _close_pipe(process.stdout)
+                _close_pipe(process.stderr)
+        if termination_failures:
+            raise CandidateProcessError(
+                CandidateProcessFailure.TERMINATION_FAILED
+            ) from termination_failures[0]
+        if any(reader.is_alive() for reader in readers):
+            raise CandidateProcessError(CandidateProcessFailure.READER_TIMEOUT)
+        if reader_failures:
+            raise CandidateProcessError(
+                CandidateProcessFailure.READER_FAILED
+            ) from reader_failures[0]
+        if timeout_error is not None:
+            raise CandidateProcessError(
+                CandidateProcessFailure.TIMEOUT
+            ) from timeout_error
         if overflow.is_set():
-            raise CandidateProcessError("converter log exceeds limit")
+            raise CandidateProcessError(CandidateProcessFailure.LOG_OVERSIZE)
         return exit_code
 
 
@@ -89,6 +169,8 @@ def _drain_bounded(
     source: BinaryIO,
     target: BinaryIO,
     overflow: threading.Event,
+    reader_failures: list[Exception],
+    termination_failures: list[Exception],
     max_log_bytes: int,
 ) -> None:
     written = 0
@@ -96,15 +178,62 @@ def _drain_bounded(
         for chunk in iter(lambda: source.read(8192), b""):
             remaining = max_log_bytes - written
             if remaining > 0:
-                target.write(chunk[:remaining])
+                _ = target.write(chunk[:remaining])
                 written += min(len(chunk), remaining)
             if len(chunk) > remaining:
                 overflow.set()
-                _kill_process_group(process)
+                if not _kill_process_group(process):
+                    termination_failures.append(
+                        RuntimeError("process group survived log overflow")
+                    )
                 break
+    except (OSError, ValueError, RuntimeError, TypeError) as error:
+        reader_failures.append(error)
+        if not _kill_process_group(process):
+            termination_failures.append(
+                RuntimeError("process group survived reader failure")
+            )
+
+
+def _reap_parent(
+    process: subprocess.Popen[bytes],
+    timeout_seconds: float,
+    failures: list[Exception],
+) -> None:
+    try:
+        _ = process.wait(timeout=_termination_timeout(timeout_seconds))
+    except (OSError, subprocess.TimeoutExpired) as error:
+        failures.append(error)
+
+
+def _termination_timeout(timeout_seconds: float) -> float:
+    return min(1.0, max(0.01, timeout_seconds))
+
+
+class _Closeable(Protocol):
+    def close(self) -> None: ...
+
+
+def _close_pipe(pipe: _Closeable) -> None:
+    try:
+        pipe.close()
     except (OSError, ValueError):
-        overflow.set()
-        _kill_process_group(process)
+        return
+
+
+class _Interruptible(Protocol):
+    def fileno(self) -> int: ...
+
+
+def _interrupt_pipe(pipe: _Interruptible) -> None:
+    try:
+        os.close(pipe.fileno())
+    except (AttributeError, OSError, ValueError):
+        return
+
+
+def _before_popen() -> None:
+    return
 
 
 def _kill_process_group(process: subprocess.Popen[bytes]) -> bool:
@@ -112,8 +241,21 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> bool:
         os.killpg(process.pid, signal.SIGKILL)
         return True
     except OSError:
+        group_absent = _group_absent_before_fallback(process)
         try:
-            process.kill()
-        except OSError:
-            return process.poll() is not None
+            _ = process.kill()
+        except (OSError, ValueError):
+            return group_absent
+        return group_absent
+
+
+def _group_absent_before_fallback(process: subprocess.Popen[bytes]) -> bool:
+    if process.poll() is None:
+        return False
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
         return True
+    except OSError:
+        return False
+    return False

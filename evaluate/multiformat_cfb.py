@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,32 +33,46 @@ def cfb_root_streams(path: Path) -> dict[str, int] | None:
         if not 0 < size <= MAX_SOURCE_BYTES:
             return None
         with path.open("rb") as source:
-            header = source.read(512)
-            layout = _parse_header(header, size)
-            if layout is None:
-                return None
-            sector_size, sector_count, fat_count, first_directory = layout
-            fat_sectors = _fat_sector_ids(
-                source,
-                header,
-                sector_size,
-                sector_count,
-                fat_count,
-            )
-            if fat_sectors is None:
-                return None
-            fat = _read_fat(source, fat_sectors, sector_size, sector_count)
-            if fat is None:
-                return None
-            directory = _read_chain(
-                source,
-                first_directory,
-                fat,
-                sector_size,
-                sector_count,
-            )
+            return _cfb_root_streams(source, size)
     except (OSError, struct.error):
         return None
+
+
+def cfb_root_streams_bytes(value: bytes) -> dict[str, int] | None:
+    if not 0 < len(value) <= MAX_SOURCE_BYTES:
+        return None
+    try:
+        with io.BytesIO(value) as source:
+            return _cfb_root_streams(source, len(value))
+    except (OSError, struct.error):
+        return None
+
+
+def _cfb_root_streams(source: BinaryIO, size: int) -> dict[str, int] | None:
+    header = source.read(512)
+    layout = _parse_header(header, size)
+    if layout is None:
+        return None
+    sector_size, sector_count, fat_count, first_directory = layout
+    fat_sectors = _fat_sector_ids(
+        source,
+        header,
+        sector_size,
+        sector_count,
+        fat_count,
+    )
+    if fat_sectors is None:
+        return None
+    fat = _read_fat(source, fat_sectors, sector_size, sector_count)
+    if fat is None:
+        return None
+    directory = _read_chain(
+        source,
+        first_directory,
+        fat,
+        sector_size,
+        sector_count,
+    )
     if directory is None:
         return None
     return _root_streams(directory)

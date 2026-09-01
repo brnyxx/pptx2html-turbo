@@ -4,7 +4,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TypeAlias
 
-from evaluate.multiformat_evidence import EvidencePathError, resolve_evidence_path
+from evaluate.multiformat_east_asian_fonts import (
+    EastAsianFontError,
+    EastAsianSubstitute,
+)
+from evaluate.multiformat_east_asian_fonts import (
+    load_policy as load_east_asian_policy,
+)
+from evaluate.multiformat_east_asian_fonts import (
+    validate_lock_binding as validate_east_asian_binding,
+)
+from evaluate import multiformat_portable_native_contract as native_io
+from evaluate.multiformat_evidence_path import EvidencePathError, resolve_evidence_path
+from evaluate.multiformat_portable_outer_sandbox import (
+    RuntimeIdentity,
+    validate_outer_sandbox,
+    validate_runtime_attestation,
+)
+from evaluate.multiformat_portable_package_inventory import validate_package_binding
 from evaluate.multiformat_reference_profile import (
     ReferenceLockIdentity,
     ReferenceProfile,
@@ -13,6 +30,7 @@ from evaluate.multiformat_reference_routing import (
     RoutingIdentity,
     load_reference_routing,
 )
+from evaluate.multiformat_rust_toolchain import load_locked_rust_toolchain
 from evaluate.multiformat_schema import (
     JsonValue,
     boolean_value,
@@ -42,15 +60,10 @@ class PortableLockIncompleteError(PortableLockError):
 @dataclass(frozen=True, slots=True)
 class PortableReferenceLockIdentity(ReferenceLockIdentity):
     routing: RoutingIdentity
-
-
-@dataclass(frozen=True, slots=True)
-class _RuntimeIdentity:
-    system: str
-    architecture: str
-    locale: str
-    timezone: str
-    dpi: int
+    scope_format: str
+    corpus_path: Path
+    corpus_sha256: str
+    east_asian_font: EastAsianSubstitute
 
 
 def validate_reference_lock(
@@ -66,11 +79,13 @@ def validate_reference_lock(
         platform = object_value(lock, "platform")
         system = string_value(platform, "os")
         architecture = string_value(platform, "architecture")
-        if system not in _SUPPORTED_SYSTEMS:
-            raise PortableLockError("portable reference OS is unsupported")
-        if architecture not in _SUPPORTED_ARCHITECTURES:
-            raise PortableLockError("portable reference architecture is unsupported")
+        if (
+            system not in _SUPPORTED_SYSTEMS
+            or architecture not in _SUPPORTED_ARCHITECTURES
+        ):
+            raise PortableLockError("portable reference platform is unsupported")
 
+        load_locked_rust_toolchain(path)
         tools = object_value(lock, "tools")
         for name in (
             "libreoffice",
@@ -80,7 +95,8 @@ def validate_reference_lock(
         ):
             tool = object_value(tools, name)
             string_value(tool, "version")
-            _artifact_path(tool, evidence_root)
+            executable = _artifact_path(tool, evidence_root)
+            validate_package_binding(tool, executable, evidence_root, _artifact_path)
         routing = load_reference_routing(_ROUTING_TABLE)
         if sha256_value(lock, "routing_table_sha256") != routing.sha256:
             raise PortableLockError("portable routing table digest mismatch")
@@ -93,26 +109,46 @@ def validate_reference_lock(
             binding = object_value(lock, field)
             string_value(binding, "version")
             _artifact_path(binding, evidence_root)
+        east_asian_font = validate_east_asian_binding(
+            object_value(lock, "east_asian_font"),
+            load_east_asian_policy(),
+        )
 
         browser = object_value(lock, "browser")
         chromium = object_value(browser, "chromium")
         string_value(chromium, "version")
-        _artifact_path(chromium, evidence_root)
+        chromium_path = _artifact_path(chromium, evidence_root)
+        validate_package_binding(chromium, chromium_path, evidence_root, _artifact_path)
         _artifact_path(object_value(browser, "lock"), evidence_root)
-        _artifact_path(object_value(lock, "candidate_runtime_lock"), evidence_root)
+        native_io.validate_native_package_runtime_binding(
+            lock, evidence_root, _artifact_path
+        )
+
+        candidate = object_value(lock, "candidate_sandbox")
+        openssl_binding = object_value(candidate, "openssl")
+        openssl = _artifact_path(openssl_binding, evidence_root)
+        validate_package_binding(
+            openssl_binding, openssl, evidence_root, _artifact_path
+        )
+        sandbox = validate_outer_sandbox(lock, evidence_root, _artifact_path)
 
         signer = object_value(lock, "signer")
         if string_value(signer, "algorithm") != "ed25519":
             raise PortableLockError("portable signer algorithm is unsupported")
         if string_value(signer, "signer_id") != _SIGNER_ID:
             raise PortableLockError("portable signer identity is unsupported")
-        if integer_value(signer, "receipt_schema_version") != 1:
+        if integer_value(signer, "receipt_schema_version") != 2:
             raise PortableLockError("portable receipt schema is unsupported")
         _artifact_path(object_value(signer, "public_key"), evidence_root)
         _artifact_path(object_value(signer, "executor"), evidence_root)
 
         scope = object_value(lock, "scope")
-        for field in ("contract", "evaluator", "corpus"):
+        scope_format = string_value(scope, "format")
+        if scope_format not in {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"}:
+            raise PortableLockError("portable scope format is unsupported")
+        corpus_binding = object_value(scope, "corpus")
+        corpus_path = _artifact_path(corpus_binding, evidence_root)
+        for field in ("contract", "evaluator"):
             _artifact_path(object_value(scope, field), evidence_root)
         _revision_value(scope, "project_revision")
 
@@ -127,26 +163,34 @@ def validate_reference_lock(
             object_value(runtime, "attestation"),
             evidence_root,
         )
-        _validate_attestation(
+        validate_runtime_attestation(
             attestation_path,
-            _RuntimeIdentity(system, architecture, locale, timezone, dpi),
+            RuntimeIdentity(system, architecture, locale, timezone, dpi),
+            evidence_root,
+            sandbox,
+            _artifact_path,
         )
         return PortableReferenceLockIdentity(
             schema_version=2,
             profile=ReferenceProfile.LIBREOFFICE_POPPLER,
             sha256=sha256_file(path),
             routing=routing,
+            scope_format=scope_format,
+            corpus_path=corpus_path,
+            corpus_sha256=sha256_value(corpus_binding, "sha256"),
+            east_asian_font=east_asian_font,
         )
     except PortableLockIncompleteError:
         raise
     except PortableLockError:
         raise
+    except EastAsianFontError as error:
+        raise PortableLockError(str(error)) from error
     except (EvidencePathError, OSError, TypeError, UnicodeError, ValueError) as error:
         raise PortableLockError("portable reference lock is invalid") from error
 
 
 def portable_lock_template() -> JsonObject:
-    """Return the incomplete schema-2 portable lock scaffold."""
     binding: JsonObject = {"path": "", "sha256": ""}
     versioned: JsonObject = {"version": "", **binding}
     return {
@@ -154,6 +198,10 @@ def portable_lock_template() -> JsonObject:
         "status": "INCOMPLETE",
         "reference_profile": ReferenceProfile.LIBREOFFICE_POPPLER.value,
         "platform": {"os": "", "architecture": ""},
+        "rust_toolchain": {
+            "cargo": {"path": "", "sha256": ""},
+            "rustc": {"path": "", "sha256": ""},
+        },
         "tools": {
             "libreoffice": {**versioned},
             "poppler_render": {**versioned},
@@ -163,17 +211,31 @@ def portable_lock_template() -> JsonObject:
         "routing_table_sha256": "",
         "canonicalizer": {**versioned},
         "font_bundle": {**versioned},
+        "east_asian_font": {
+            "family": "",
+            "path": "",
+            "sha256": "",
+            "size_bytes": 0,
+            "policy_sha256": "",
+        },
         "configuration": {**versioned},
         "browser": {"chromium": {**versioned}, "lock": {**binding}},
         "candidate_runtime_lock": {**binding},
+        "candidate_sandbox": {
+            "public_key": {**binding},
+            "openssl": {**binding},
+            "receipt_signer": {**binding},
+        },
+        "sandbox": {"executable": {**binding}, "profile": {**binding}},
         "signer": {
             "algorithm": "ed25519",
             "signer_id": _SIGNER_ID,
             "public_key": {**binding},
-            "receipt_schema_version": 1,
+            "receipt_schema_version": 2,
             "executor": {**binding},
         },
         "scope": {
+            "format": "",
             "contract": {**binding},
             "evaluator": {**binding},
             "corpus": {**binding},
@@ -209,30 +271,6 @@ def _artifact_path(binding: JsonObject, evidence_root: Path) -> Path:
 
 def _revision_value(values: JsonObject, field: str) -> str:
     revision = string_value(values, field)
-    if len(revision) != 40 or any(
-        character not in "0123456789abcdef" for character in revision
-    ):
+    if len(revision) != 40 or revision.strip("0123456789abcdef"):
         raise PortableLockError("portable project revision is malformed")
     return revision
-
-
-def _validate_attestation(path: Path, runtime: _RuntimeIdentity) -> None:
-    values = read_strict_object(path)
-    if integer_value(values, "schema_version") != 1:
-        raise PortableLockError("portable attestation schema is unsupported")
-    expected_strings = {
-        "os": runtime.system,
-        "architecture": runtime.architecture,
-        "locale": runtime.locale,
-        "timezone": runtime.timezone,
-    }
-    if any(
-        string_value(values, field) != expected
-        for field, expected in expected_strings.items()
-    ):
-        raise PortableLockError("portable runtime attestation does not match")
-    if integer_value(values, "rendering_dpi") != runtime.dpi or not boolean_value(
-        values,
-        "network_isolation",
-    ):
-        raise PortableLockError("portable runtime attestation does not match")

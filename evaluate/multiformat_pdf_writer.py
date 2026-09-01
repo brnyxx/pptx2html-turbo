@@ -5,7 +5,7 @@ import zlib
 from dataclasses import replace
 from typing import Final
 
-from evaluate.multiformat_conformance_pdf import (
+from evaluate.multiformat_pdf_types import (
     PDF_CATALOG_KEYS,
     PDF_DELIMITERS,
     PDF_METADATA_KEYS,

@@ -9,6 +9,10 @@ version_from_file() {
 }
 
 declare -a version_sources=(
+  "$REPO_ROOT/crates/document2html-core/Cargo.toml"
+  "$REPO_ROOT/crates/document2html-native/Cargo.toml"
+  "$REPO_ROOT/crates/document2html-py/Cargo.toml"
+  "$REPO_ROOT/crates/document2html-wasm/Cargo.toml"
   "$REPO_ROOT/crates/pptx2html-core/Cargo.toml"
   "$REPO_ROOT/crates/pptx2html-cli/Cargo.toml"
   "$REPO_ROOT/crates/pptx2html-py/Cargo.toml"

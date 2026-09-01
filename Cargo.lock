@@ -119,6 +119,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
+name = "cfb"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a347dcabdae9c31b0825fd6a8bed285ec9c2acb89c47827126d52fa4f59cece3"
+dependencies = [
+ "fnv",
+ "uuid",
+ "web-time",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,8 +314,9 @@ dependencies = [
 
 [[package]]
 name = "document2html-core"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
+ "cfb",
  "pptx2html-core",
  "quick-xml",
  "thiserror",
@@ -313,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "document2html-native"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "base64",
  "document2html-core",
@@ -325,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "document2html-py"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "document2html-core",
  "document2html-native",
@@ -335,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "document2html-wasm"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "document2html-core",
  "wasm-bindgen",
@@ -401,6 +413,12 @@ dependencies = [
  "crc32fast",
  "miniz_oxide",
 ]
+
+[[package]]
+name = "fnv"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "foldhash"
@@ -673,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-cli"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "clap",
  "document2html-core",
@@ -688,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-core"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "base64",
  "criterion",
@@ -702,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-py"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "pptx2html-core",
  "pyo3",
@@ -711,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "pptx2html-wasm"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "pptx2html-core",
  "wasm-bindgen",
@@ -1057,6 +1075,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
+name = "uuid"
+version = "1.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1168,6 +1196,16 @@ name = "web-sys"
 version = "0.3.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "854ba17bb104abfb26ba36da9729addc7ce7f06f5c0f90f3c391f8461cca21f9"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "web-time"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

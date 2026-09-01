@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import zlib
 
-from evaluate.multiformat_conformance_pdf import (
+from evaluate.multiformat_pdf_types import (
     PDF_CATALOG_KEYS,
     PDF_OBJECT_STREAM_KEYS,
     PDF_XREF_STREAM_KEYS,

@@ -38,6 +38,7 @@ def write_candidate_run(
                         "texts": [],
                         "cells": [],
                         "objects": [],
+                        "unattributed_cells": [],
                     },
                     sort_keys=True,
                 ),

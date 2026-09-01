@@ -9,6 +9,10 @@ const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const tempRoot = await mkdtemp(join(tmpdir(), 'pptx2html-release-version-'));
 const copiedFiles = [
   'scripts/read_release_version.sh',
+  'crates/document2html-core/Cargo.toml',
+  'crates/document2html-native/Cargo.toml',
+  'crates/document2html-py/Cargo.toml',
+  'crates/document2html-wasm/Cargo.toml',
   'crates/pptx2html-core/Cargo.toml',
   'crates/pptx2html-cli/Cargo.toml',
   'crates/pptx2html-py/Cargo.toml',
@@ -46,6 +50,31 @@ try {
     'invalid release tag syntax must fail validation',
   );
   assert.match(invalidTagResult.stderr, /must match vMAJOR\.MINOR\.PATCH/);
+
+  const universalManifestPath = join(
+    tempRoot,
+    'crates/document2html-core/Cargo.toml',
+  );
+  const universalManifest = await readFile(universalManifestPath, 'utf8');
+  await writeFile(
+    universalManifestPath,
+    universalManifest.replace(
+      `version = "${manifestVersion}"`,
+      'version = "9.9.9"',
+    ),
+  );
+  const universalDriftResult = spawnSync(
+    'bash',
+    [join(tempRoot, 'scripts/read_release_version.sh'), releaseTag],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(
+    universalDriftResult.status,
+    0,
+    'universal package version drift must fail release validation',
+  );
+  assert.match(universalDriftResult.stderr, /version mismatch/i);
+  await writeFile(universalManifestPath, universalManifest);
 
   const demoPath = join(tempRoot, 'crates/pptx2html-wasm/demo/index.html');
   const demo = await readFile(demoPath, 'utf8');
