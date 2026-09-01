@@ -572,17 +572,21 @@ enhanced_html = await enhance(
 
 </details>
 
-## Release readiness
+## Release
 
-The [v2.1.0 validation report](docs/release-notes/v2.1.0-validation.md) records the reviewed
-source boundary, reproducible gates, package and browser evidence, exactness limitation, and
-the external actions that remain intentionally unpublished. Run the
-[pre-release checklist](docs/release-notes/pre-release-checklist.md) before creating the tag.
+[v2.1.0](https://github.com/brnyxx/pptx2html-turbo/releases/tag/v2.1.0) is published with five
+platform archives, primary `@briank-dev/pptx-to-html@2.1.0` and legacy
+`@briank-dev/pptx2html-turbo@2.1.0` npm packages, and the live
+[GitHub Pages converter](https://brnyxx.github.io/pptx2html-turbo/).
 
-The GitHub Pages demo's existing visual tokens, components, responsive rules, motion, and
-accepted debt are codified in [DESIGN.md](DESIGN.md). A local PASS is not a remote publication
-receipt: the GitHub Release, both npm packages, and the deployed Pages URL must be checked after
-their workflows complete.
+The [v2.1.0 validation report](docs/release-notes/v2.1.0-validation.md) records the fixed annotated
+tag boundary, CI and npm workflow receipts, asset and registry digests, desktop/mobile browser
+evidence, preserved commit history, and exactness limitation. The release remains an
+approximate/high-fidelity release and does not claim Microsoft Office pixel equality or a PPTX
+`exact` tier.
+
+The demo's visual tokens, components, responsive rules, motion, and accepted debt are codified
+in [DESIGN.md](DESIGN.md).
 
 ## Development
 

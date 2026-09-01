@@ -26,6 +26,11 @@ All notable changes to this project will be documented in this file.
 - Preserve owner-specific XML fallback behavior while retaining package-wide size and DOCTYPE safety checks
 - Normalize invalid Poppler font-name bytes without rejecting otherwise complete UTF-8 PDF conversion output
 - Exclude an upstream-declared broken Apache POI PPT fixture from positive corpus selection and admit the next valid pinned source without changing producer quotas
+- Preserve golden XML line endings across Windows and Unix runners
+- Keep converted demo slides inside the output frame at desktop and mobile widths
+- Stabilize locked macOS release validation with an explicit LibreOffice runtime and deterministic test fonts
+- Make East-Asian font determinism checks independent of host fallback variance
+- Capture attempted browser security requests when they are issued instead of racing route completion
 
 ## [2.0.2] - 2026-08-26
 
