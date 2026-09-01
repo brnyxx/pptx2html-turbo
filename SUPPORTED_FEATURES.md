@@ -10,6 +10,11 @@
 
 Status legend: `exact` / `approximate` / `fallback` / `unparsed`
 
+Source verification note: `[교차검증 필요]` `[Cross-validation required]` the manifest currently records
+`source_status: unavailable` for `table-style` and `slide-synchronization`. Their rows describe
+repository implementation evidence and must not be presented as independent official-source
+confirmation.
+
 This file is the detailed ECMA-376 element inventory. The authoritative support contract now lives in `docs/architecture/CAPABILITY_MATRIX.md`.
 
 This inventory is in a staged migration from legacy labels to support tiers. Until every row is migrated, interpret legacy labels as follows:
@@ -114,7 +119,7 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Solid fill (theme) | `<a:solidFill><a:schemeClr>` | Supported |
 | Gradient fill | `<a:gradFill>` | Supported |
 | Image fill | `<a:blipFill>` | Supported |
-| Pattern fill | `<a:pattFill>` | Supported for all 54 presets with approximate repeated SVG tiles; unknown or unresolved patterns preserve raw semantics in `DRAWINGML_PATTERN_UNSUPPORTED` diagnostics |
+| Pattern fill | `<a:pattFill>` | Fallback - recognized values may use repeated SVG tiles, while unknown or unresolved patterns preserve raw semantics in `DRAWINGML_PATTERN_UNSUPPORTED`; no exact rendering claim |
 | No fill | `<a:noFill>` | Supported |
 | Fill style reference | `<a:fillRef>` | Supported |
 
@@ -162,8 +167,8 @@ Capability stages such as `parsed` and `rendered` belong in `docs/architecture/C
 | Row heights | `<a:tr h="...">` | Supported |
 | Column span | `gridSpan` | Supported |
 | Row span | `rowSpan` + `vMerge` | Supported |
-| Table styles | `<a:tblStyle>` | Partial - package definitions, official region order, strict namespace/context diagnostics |
-| Table-style fill reference | `<a:fillRef>` | Partial - index/color/modifiers preserved; parsed theme fills resolve; unavailable non-solid fills emit `TABLE_STYLE_PRIMITIVE_UNSUPPORTED` without a replacement or exactness claim |
+| Table styles | `<a:tblStyle>` | Fallback - package definitions and region precedence are applied where available; unavailable definitions and strict namespace/context gaps remain diagnosed |
+| Table-style fill reference | `<a:fillRef>` | Fallback - index/color/modifiers are preserved; parsed theme fills may resolve, while unavailable non-solid fills emit `TABLE_STYLE_PRIMITIVE_UNSUPPORTED` without replacement or an exactness claim |
 | Table-style effect/line reference | `<a:tblBg>/<a:effectRef>`, border side `<a:lnRef>` | Preserved only - scoped index/color/modifiers emit `TABLE_STYLE_PRIMITIVE_UNSUPPORTED`; no effect or line is invented |
 
 ## Images
@@ -277,6 +282,9 @@ Advanced-effect metadata uses the private `drawingml-effect-metadata-v1` envelop
 
 <!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->
 <!-- manifest-sha256: dd24142f66dbd737b6ef27f77ac4bc433053bc1249e86965c34033a19b32da47 -->
+<!-- current-tier-counts: exact=0 approximate=54 fallback=114 unparsed=0 -->
+Current disposition totals: **0 exact**, **54 approximate**, **114 fallback**, and **0 unparsed** across 56 features and three dimensions.
+
 | Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |
 |---|---|---|---|---|
 | <a id="capability-presentation"></a>`presentation` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c07e2810b8d5e13a63436f7b11c3ee961e11b15f61bdc50a1ca260c0738e4a4f` | `29665c44b1b28428449e05099e8b3f5d22f1e577d8eaaf700a7f1c9a1b347de5` |

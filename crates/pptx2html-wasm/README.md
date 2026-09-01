@@ -94,6 +94,7 @@ const filteredWithMetadata = convert_with_options_metadata(
 - `pptxToHtml(input, moduleOrPath?)` — lazily initialize WASM and convert browser or byte input; concurrent calls share the first initialization attempt and its success or failure, while a later call retries after failure
 - `init()` — initialize the WASM module
 - `convert(data)` — convert PPTX bytes to HTML
+- `convert_slides(data, slides)` — legacy conversion with 0-based slide indices
 - `convert_with_options(data, embedImages, includeHidden, slideIndices, scale)`
 - `convert_with_metadata(data)` — convert and return canonical diagnostics JSON plus unresolved-element metadata
 - `convert_with_options_metadata(data, embedImages, includeHidden, slideIndices, scale)`
@@ -121,6 +122,8 @@ parent project additionally converts DOCX, DOC, XLSX, XLS, PPT, and PDF, but tho
 require a native pipeline backed by installed LibreOffice and Poppler executables and are
 **not available in browser WASM**. See
 [Universal document conversion](https://github.com/brnyxx/pptx2html-turbo/blob/main/docs/UNIVERSAL_DOCUMENTS.md).
+For the complete 56-feature PPTX inventory and its semantic, visual, and behavioral tiers, see
+the [full capability guide](https://github.com/brnyxx/pptx2html-turbo/blob/main/SUPPORTED_FEATURES.md).
 
 `@briank-dev/pptx2html-turbo` is the legacy package name. It remains available with the same
 API and release versions during migration.

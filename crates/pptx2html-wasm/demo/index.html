@@ -1398,7 +1398,7 @@ input[type="file"] {
         <label class="control-label mono" id="scaleLabel" for="scaleRange">Slide zoom</label>
         <input type="range" id="scaleRange" min="0.1" max="3" step="0.01" value="1" aria-label="Slide zoom slider" aria-describedby="scaleHint">
         <input type="number" id="scaleNumber" min="0.1" max="3" step="0.01" value="1.0" aria-label="Slide zoom value" aria-describedby="scaleHint">
-        <p class="hint" id="scaleHint">Layout-preserving whole-slide scale. The output grows like an image without changing coordinates or reflowing text.</p>
+        <p class="hint" id="scaleHint">Whole-slide scaling keeps rendered coordinates proportional; it does not promote approximate text layout to exact.</p>
       </div>
 
       <div class="meta" id="meta"></div>
@@ -1456,7 +1456,7 @@ input[type="file"] {
           <svg class="glyph" aria-hidden="true"><use href="#i-rule"></use></svg>
           <h3>Measure</h3>
           <p class="module mono">model / units</p>
-          <p>English Metric Units become CSS pixels at 914400 EMU to the inch. Geometry stays absolute, so scaling the slide behaves like scaling an image and text never reflows.</p>
+          <p>English Metric Units become CSS pixels at 914400 EMU to the inch. Geometry stays absolute, so whole-slide scaling keeps coordinates proportional. Initial text layout and font metrics remain approximate.</p>
         </article>
         <article class="stage-step" data-reveal="wipe" style="--stagger:280ms">
           <svg class="glyph" aria-hidden="true"><use href="#i-frame"></use></svg>
@@ -1468,15 +1468,22 @@ input[type="file"] {
     </div>
   </section>
 
-  <section class="coverage band" id="coverage" aria-labelledby="coverageHeading">
+  <section class="coverage band" id="coverage" aria-labelledby="coverageHeading" data-capability-scope="pptx-highlights" data-feature-count="56" data-exact-dimensions="0">
     <div class="band-inner">
       <div class="section-head" data-reveal="rise">
-        <h2 id="coverageHeading">What the renderer resolves</h2>
-        <span class="tick mono">implemented, not stubbed</span>
+        <h2 id="coverageHeading">PPTX capability highlights</h2>
+        <span class="tick mono">7 highlights / 56 tracked features</span>
       </div>
 
+      <p class="section-note" data-reveal="rise" style="--stagger:60ms">
+        These rows are highlights, not the full support contract. The generated ledger tracks
+        semantic, visual, and behavioral status for 56 features. v2.1.0 has zero exact
+        dimensions; every current status is approximate or fallback. Read the
+        <a id="fullCapabilityLink" href="https://github.com/brnyxx/pptx2html-turbo/blob/main/SUPPORTED_FEATURES.md" target="_blank" rel="noopener noreferrer">full capability guide</a>.
+      </p>
+
       <table class="spec">
-        <caption>Behaviour is implemented directly from the ECMA-376 specification; no reference implementation is translated.</caption>
+        <caption>Seven selected PPTX areas. The full ledger distinguishes direct approximate rendering from fallback preservation.</caption>
         <thead>
           <tr><th scope="col">Area</th><th scope="col">Behaviour</th></tr>
         </thead>
@@ -1484,8 +1491,8 @@ input[type="file"] {
           <tr data-reveal="fade"><th scope="row">Theme colours</th><td>Twelve modifiers resolved through the slide colour map, including tint, shade, lumMod, and satMod, with layout-level overrides honoured.</td></tr>
           <tr data-reveal="fade" style="--stagger:50ms"><th scope="row">Inheritance</th><td>Slide to layout to master to theme, with placeholders matched by type and index at every level.</td></tr>
           <tr data-reveal="fade" style="--stagger:100ms"><th scope="row">Preset shapes</th><td>187 geometries rendered as SVG with adjust values. An unresolved custom guide formula is preserved verbatim and reported rather than substituted with zero.</td></tr>
-          <tr data-reveal="fade" style="--stagger:150ms"><th scope="row">Text</th><td>Runs, paragraph properties, bullet definitions, body insets, and autofit hints, kept in absolute boxes so line breaks match the source.</td></tr>
-          <tr data-reveal="fade" style="--stagger:200ms"><th scope="row">Tables and groups</th><td>Cell spans, borders, and fills from the table style part; nested group shapes with their own child coordinate spaces.</td></tr>
+          <tr data-reveal="fade" style="--stagger:150ms"><th scope="row">Text</th><td>Runs, paragraph properties, bullet definitions, body insets, and autofit hints. Explicit breaks and absolute boxes are preserved where supported; automatic wrapping and font metrics remain approximate.</td></tr>
+          <tr data-reveal="fade" style="--stagger:200ms"><th scope="row">Tables and groups</th><td>Cell spans, direct borders and fills, plus nested group shapes with their own child coordinate spaces. Package table-style definitions and unsupported primitives remain fallback-tier and diagnostic.</td></tr>
           <tr data-reveal="fade" style="--stagger:250ms"><th scope="row">Images</th><td>Embedded parts are inlined as base64 by default with source cropping applied, or written alongside the document when external mode is selected.</td></tr>
           <tr data-reveal="fade" style="--stagger:300ms"><th scope="row">Diagnostics</th><td>Every fallback carries a stable code and an order, so coverage gaps stay countable instead of silent. Convert a deck above to see the ones your own file produces.</td></tr>
         </tbody>
@@ -1499,6 +1506,13 @@ input[type="file"] {
         <h2 id="usageHeading">Use it outside this page</h2>
         <span class="tick mono">same core, three surfaces</span>
       </div>
+
+      <p class="section-note" id="nativeScope" data-browser-format-count="1" data-native-format-count="7" data-reveal="rise" style="--stagger:60ms">
+        This page and the npm package convert PPTX in the browser. The native CLI and Python API
+        support seven inputs: PPTX, DOCX, DOC, XLSX, XLS, PPT, and PDF. See the
+        <a id="universalDocumentsLink" href="https://github.com/brnyxx/pptx2html-turbo/blob/main/docs/UNIVERSAL_DOCUMENTS.md" target="_blank" rel="noopener noreferrer">universal document guide</a>
+        for runtime requirements and format-specific limits.
+      </p>
 
       <div class="panes">
         <div class="pane" data-reveal="rise">
@@ -1524,7 +1538,8 @@ import { <u>pptxToHtml</u> } from
           <div class="pane-head"><h3>Python</h3><button type="button" class="mini" data-copy="panePy" aria-label="Copy the Python snippet"><svg class="glyph" aria-hidden="true"><use href="#i-copy"></use></svg>Copy</button></div>
 <pre id="panePy"><span class="lg"><i># bindings built with maturin</i>
 import <b>pptx2html</b>
-</span><span class="lg" style="--d:110ms">html = pptx2html.<u>convert_file</u>("deck.pptx")
+</span><span class="lg" style="--d:110ms">html = pptx2html.<u>convert_file</u>(
+    "deck.pptx")
 </span><span class="lg" style="--d:220ms">out = pptx2html.<u>convert_with_metadata</u>(
     "deck.pptx")
 print(len(out.diagnostics))</span></pre>

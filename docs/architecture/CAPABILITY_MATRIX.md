@@ -22,7 +22,13 @@
 
 ## Machine-readable feature matrix
 
-The generated registry below is the only status table in this document.
+The generated registry below is the only status table in this document. `S/V/B` means
+semantic, visual, and behavioral. Each line within a cell is `tier/stage` in that order, so a
+reader can distinguish preserved meaning from rendered appearance and interactive behavior.
+
+`[교차검증 필요]` `[Cross-validation required]` The manifest currently records `source_status: unavailable` for
+`table-style` and `slide-synchronization`. Their generated rows are implementation evidence,
+not independent official-source confirmation.
 
 ## Operating Rules
 
@@ -36,6 +42,9 @@ The generated registry below is the only status table in this document.
 
 <!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->
 <!-- manifest-sha256: dd24142f66dbd737b6ef27f77ac4bc433053bc1249e86965c34033a19b32da47 -->
+<!-- current-tier-counts: exact=0 approximate=54 fallback=114 unparsed=0 -->
+Current disposition totals: **0 exact**, **54 approximate**, **114 fallback**, and **0 unparsed** across 56 features and three dimensions.
+
 | Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |
 |---|---|---|---|---|
 | <a id="capability-presentation"></a>`presentation` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c07e2810b8d5e13a63436f7b11c3ee961e11b15f61bdc50a1ca260c0738e4a4f` | `29665c44b1b28428449e05099e8b3f5d22f1e577d8eaaf700a7f1c9a1b347de5` |

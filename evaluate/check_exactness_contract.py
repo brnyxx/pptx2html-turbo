@@ -23,6 +23,10 @@ from evaluate.check_completeness_manifest import validate_manifest
 from evaluate.check_preset_adjustments import ContractError as PresetContractError
 from evaluate.check_preset_adjustments import check_repository
 from evaluate.completion_deck_inventory import SCENARIO_CANONICAL
+from evaluate.public_document_contract import (
+    PUBLIC_DOCUMENT_PATHS,
+    check_public_documents,
+)
 from evaluate.tests.completion_deck_fixture_contract import assert_fixture_root
 from evaluate.tests.completion_deck_inventory_contract import assert_inventory
 from evaluate.tests.completion_deck_locator_contract import assert_manifest_locators
@@ -33,6 +37,7 @@ MATRIX_BEGIN = "<!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->"
 MATRIX_END = "<!-- END GENERATED PPTX CAPABILITY MATRIX -->"
 DOCUMENT_PATHS = (
     "README.md",
+    "README.ko.md",
     "SUPPORTED_FEATURES.md",
     "docs/architecture/CAPABILITY_MATRIX.md",
     "docs/architecture/PPTX_COMPLETENESS_CONTRACT.md",
@@ -106,9 +111,29 @@ def _dimension_cell(disposition: object, dimension: str) -> str:
 def render_capability_matrix(manifest: object) -> tuple[str, str]:
     digest = manifest_sha256(manifest)
     features = manifest.get("features", []) if isinstance(manifest, Mapping) else []
+    tier_counts = {tier: 0 for tier in ("exact", "approximate", "fallback", "unparsed")}
+    for feature in features if isinstance(features, list) else []:
+        current = feature.get("current") if isinstance(feature, Mapping) else None
+        if not isinstance(current, Mapping):
+            continue
+        for dimension in ("semantic", "visual", "behavioral"):
+            disposition = current.get(dimension)
+            tier = disposition.get("tier") if isinstance(disposition, Mapping) else None
+            if isinstance(tier, str) and tier in tier_counts:
+                tier_counts[tier] += 1
     lines = [
         MATRIX_BEGIN,
         f"<!-- manifest-sha256: {digest} -->",
+        "<!-- current-tier-counts: "
+        f"exact={tier_counts['exact']} approximate={tier_counts['approximate']} "
+        f"fallback={tier_counts['fallback']} unparsed={tier_counts['unparsed']} -->",
+        "Current disposition totals: "
+        f"**{tier_counts['exact']} exact**, "
+        f"**{tier_counts['approximate']} approximate**, "
+        f"**{tier_counts['fallback']} fallback**, and "
+        f"**{tier_counts['unparsed']} unparsed** across "
+        f"{len(features) if isinstance(features, list) else 0} features and three dimensions.",
+        "",
         "| Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |",
         "|---|---|---|---|---|",
     ]
@@ -756,7 +781,7 @@ def check_exactness_contract(repo_root: str | Path, *, verify_generated: bool = 
     try:
         manifest = _load_manifest(root)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-        return {"ok": False, "checked_files": [MANIFEST_PATH], "checked_docs": list(DOCUMENT_PATHS), "checked_workflows": list(WORKFLOW_PATHS), "missing_checks": [f"MANIFEST_READ_FAILED:{error}"]}
+        return {"ok": False, "checked_files": [MANIFEST_PATH], "checked_docs": list(DOCUMENT_PATHS), "checked_public_docs": list(PUBLIC_DOCUMENT_PATHS), "checked_workflows": list(WORKFLOW_PATHS), "missing_checks": [f"MANIFEST_READ_FAILED:{error}"]}
     missing.extend(f"MANIFEST:{error}" for error in validate_manifest(manifest, root))
     registry = _validate_registry(root, manifest, missing)
     try:
@@ -777,6 +802,12 @@ def check_exactness_contract(repo_root: str | Path, *, verify_generated: bool = 
         generated = re.findall(re.escape(MATRIX_BEGIN) + r".*?" + re.escape(MATRIX_END), content, re.DOTALL)
         if generated != [block.rstrip("\n")]:
             missing.append(f"GENERATED_CAPABILITY_MATRIX_DRIFT:{relative}")
+    features = manifest.get("features")
+    feature_count = len(features) if isinstance(features, list) else 0
+    missing.extend(check_public_documents(root, feature_count=feature_count))
+    for relative in PUBLIC_DOCUMENT_PATHS:
+        if relative not in checked_files:
+            checked_files.append(relative)
     for relative in WORKFLOW_PATHS:
         checked_files.append(relative)
         path = root / relative
@@ -785,7 +816,7 @@ def check_exactness_contract(repo_root: str | Path, *, verify_generated: bool = 
     native_gate = _text_layout_gate(root)
     if registry["exact_dimensions"] and native_gate.get("exit_code") != 0:
         missing.append("EXACT_TIER_WITHOUT_READY_NATIVE_TEXT_LAYOUT_GATE")
-    return {"ok": not missing, "manifest_sha256": digest, "checked_files": checked_files, "checked_registry": registry, "preset_adjustments": preset_report, "generated_completion": generated_report, "native_text_layout_gate": native_gate, "checked_docs": list(DOCUMENT_PATHS), "checked_workflows": list(WORKFLOW_PATHS), "missing_checks": missing}
+    return {"ok": not missing, "manifest_sha256": digest, "checked_files": checked_files, "checked_registry": registry, "preset_adjustments": preset_report, "generated_completion": generated_report, "native_text_layout_gate": native_gate, "checked_docs": list(DOCUMENT_PATHS), "checked_public_docs": list(PUBLIC_DOCUMENT_PATHS), "checked_workflows": list(WORKFLOW_PATHS), "missing_checks": missing}
 
 
 def main(argv: list[str] | None = None) -> int:

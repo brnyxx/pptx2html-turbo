@@ -94,6 +94,7 @@ const filteredWithMetadata = convert_with_options_metadata(
 - `pptxToHtml(input, moduleOrPath?)` — WASM을 지연 초기화하고 브라우저 입력이나 바이트를 변환합니다. 동시 호출은 첫 초기화 시도와 그 성공/실패를 공유하며, 실패한 뒤의 호출은 다시 시도합니다
 - `init()` — WASM 모듈 초기화
 - `convert(data)` — PPTX 바이트를 HTML로 변환
+- `convert_slides(data, slides)` — 0부터 시작하는 슬라이드 인덱스를 쓰는 레거시 변환
 - `convert_with_options(data, embedImages, includeHidden, slideIndices, scale)`
 - `convert_with_metadata(data)` — 변환과 함께 표준 진단 JSON 및 미해석 요소 메타데이터 반환
 - `convert_with_options_metadata(data, embedImages, includeHidden, slideIndices, scale)`
@@ -121,6 +122,9 @@ DOC, XLSX, XLS, PPT, PDF도 변환하지만, 이 형식들은 설치된 LibreOff
 의존하는 네이티브 파이프라인이 필요하므로 **브라우저 WASM에서는 사용할 수 없습니다**.
 [통합 문서 변환](https://github.com/brnyxx/pptx2html-turbo/blob/main/docs/UNIVERSAL_DOCUMENTS.md)
 문서를 참고하세요.
+전체 56개 PPTX 기능과 의미·시각·동작 등급은
+[전체 기능 안내](https://github.com/brnyxx/pptx2html-turbo/blob/main/SUPPORTED_FEATURES.md)를
+참고하세요.
 
 `@briank-dev/pptx2html-turbo`는 이전 패키지명입니다. 이전 기간 동안 동일한 API와 릴리스 버전으로
 계속 제공됩니다.

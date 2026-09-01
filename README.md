@@ -178,6 +178,21 @@ for elem in &result.unresolved_elements {
 }
 ```
 
+The Rust API exposes the same operations for file paths and byte slices:
+
+| Task | File path | Bytes |
+|---|---|---|
+| HTML only | `convert_file` | `convert_bytes` |
+| HTML with `ConversionOptions` | `convert_file_with_options` | `convert_bytes_with_options` |
+| HTML and metadata | `convert_file_with_metadata` | `convert_bytes_with_metadata` |
+| Options and metadata | `convert_file_with_options_metadata` | `convert_bytes_with_options_metadata` |
+| Presentation information | `get_info` | `get_info_from_bytes` |
+
+`ConversionOptions` contains `embed_images`, `include_hidden`, the one-based inclusive
+`slide_range`, one-based `slide_indices`, and whole-slide `scale`. `ConversionResult` contains
+`html`, `external_assets`, `font_resolution_entries`, `provenance_entries`, ordered
+`diagnostics`, `unresolved_elements`, and `slide_count`.
+
 </details>
 
 <details>
@@ -249,11 +264,12 @@ console.log(`HTML: ${result.html.length}, Unresolved: ${result.unresolvedElement
 ```
 
 A single-file demo page is included at `crates/pptx2html-wasm/demo/index.html`, combining a
-project overview with a working drag-and-drop converter. It has no build step and no runtime
-dependencies beyond the generated `pkg/` output. It displays ordered diagnostic counts and
-expands them into individual coded entries, runs renderer-owned actions and timing in an
-opaque-origin frame, and initializes image-like whole-slide zoom to the available width while
-keeping slide coordinates and text flow intact.
+project overview with a working drag-and-drop converter. It has no build step. Conversion
+depends only on the generated `pkg/` output; the page typography also requests the three remote
+Google Fonts recorded in [DESIGN.md](DESIGN.md) and falls back to its documented local stacks.
+The demo displays ordered diagnostic counts and expands them into individual coded entries,
+runs renderer-owned actions and timing in an opaque-origin frame, and initializes image-like
+whole-slide zoom to the available width while keeping slide coordinates intact.
 
 </details>
 
@@ -278,13 +294,19 @@ authoritative support-stage matrix, and
 [docs/architecture/PPTX_COMPLETENESS_PROGRESS.md](docs/architecture/PPTX_COMPLETENESS_PROGRESS.md)
 for the current capability ledger and remaining exactness work.
 
+The generated registry covers all 56 tracked features. Each row reports semantic, visual, and
+behavioral status (`S/V/B`): `exact` requires PowerPoint-native evidence, `approximate` is
+implemented but known to diverge, and `fallback` preserves bounded content or diagnostics
+without claiming a complete rendering. The generated summary below is the current count; no
+current dimension is `exact`.
+
 | Category | Highlights |
 |----------|-----------|
 | Shapes | 187 preset shapes with broad adjust value coverage + custom geometry SVG rendering, guide formulas, and text rectangles |
 | Text | Bold, italic, underline, strikethrough, super/subscript, vertical text, highlights, shadows, letter spacing, default 18pt fallback |
 | Colors | RGB, theme, system, preset with 12 modifiers (tint, shade, lumMod, satMod, etc.) |
-| Fills | Solid, gradient, image, noFill, and all 54 DrawingML pattern presets with approximate repeated SVG tiles; style references (fillRef/lnRef) |
-| Tables | Package-defined DrawingML table styles, official region precedence, parsed theme-format cell fills, text/borders, column/row spans, and horizontal/vertical merge |
+| Fills | Solid, gradient, image, and noFill rendering; pattern fills remain fallback-tier and preserve unresolved source/diagnostics rather than claiming exact support; style references (fillRef/lnRef) |
+| Tables | Direct cell fills, text/borders, column/row spans, and horizontal/vertical merge; package-defined table styles remain fallback-tier when definitions or primitives cannot be resolved |
 | Images | Base64 embedding, deterministic external assets under `images/slide-N/`, cropping, MIME auto-detection |
 | Layout | Master/layout inheritance, ClrMap overrides, placeholder matching, TxStyles, and bodyPr property carry-over (wrap, margins, vertical anchor, vertical text, autofit) |
 | Bullets | Character and auto-numbered bullets plus embedded picture bullets in slide paragraphs, slide-owned list styles, and table cells |
@@ -297,6 +319,11 @@ for the current capability ledger and remaining exactness work.
 
 DrawingML preset names beginning with `math`, such as `mathPlus`, are geometric shapes only
 and do not imply OMML equation support.
+
+`[교차검증 필요]` `[Cross-validation required]` Source verification is not complete for the manifest entries `table-style` and
+`slide-synchronization`; their current rows describe repository implementation evidence, not
+independent official-source confirmation. See each manifest row before making a compatibility
+claim.
 
 ## Architecture
 
@@ -632,6 +659,9 @@ MIT - see [LICENSE](LICENSE)
 
 <!-- BEGIN GENERATED PPTX CAPABILITY MATRIX -->
 <!-- manifest-sha256: dd24142f66dbd737b6ef27f77ac4bc433053bc1249e86965c34033a19b32da47 -->
+<!-- current-tier-counts: exact=0 approximate=54 fallback=114 unparsed=0 -->
+Current disposition totals: **0 exact**, **54 approximate**, **114 fallback**, and **0 unparsed** across 56 features and three dimensions.
+
 | Feature | Current S/V/B | Target S/V/B | Verification SHA256 | Status SHA256 |
 |---|---|---|---|---|
 | <a id="capability-presentation"></a>`presentation` | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | approximate/parsed<br>approximate/rendered<br>fallback/not-applicable | `c07e2810b8d5e13a63436f7b11c3ee961e11b15f61bdc50a1ca260c0738e4a4f` | `29665c44b1b28428449e05099e8b3f5d22f1e577d8eaaf700a7f1c9a1b347de5` |

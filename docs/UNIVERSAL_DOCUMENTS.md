@@ -1,5 +1,24 @@
 # Universal document conversion
 
+## Quick availability matrix
+
+Use the browser/npm package for PPTX. Use the native CLI or Python binding when the input can
+be any of the seven supported formats.
+
+| Input | Native CLI/Python conversion | Browser WASM | Processing route |
+|---|---|---|---|
+| PPTX | Yes | Detect and convert | Pure-Rust PPTX parser, resolver, and renderer |
+| DOCX | Yes | Detect only | LibreOffice PDF export, then Poppler HTML conversion |
+| DOC | Yes | Detect only | LibreOffice PDF export, then Poppler HTML conversion |
+| XLSX | Yes | Detect only | LibreOffice PDF export, then Poppler HTML conversion |
+| XLS | Yes | Detect only | LibreOffice PDF export, then Poppler HTML conversion |
+| PPT | Yes | Detect only | LibreOffice PDF export, then Poppler HTML conversion |
+| PDF | Yes | Detect only | Poppler HTML conversion |
+
+Browser detection does not imply browser conversion. `runtime_capabilities_json` is the
+machine-readable runtime matrix; the sections below describe the native requirements and
+format-specific boundaries.
+
 ## Supported inputs
 
 The universal API recognizes PPTX, DOCX, DOC, XLSX, XLS, PPT, and PDF from

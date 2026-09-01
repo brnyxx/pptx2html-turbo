@@ -225,8 +225,9 @@ backdrop blur so content can pass underneath without losing navigation contrast.
 - Primary content must have no horizontal overflow at 375px, 768px, or 1280px.
 - Converted output stays in an opaque-origin sandbox and input larger than 64 MiB is rejected
   before allocation.
-- New release-only changes must not add visible, hardcoded UI copy. This release changes only
-  metadata and destinations; the existing English product copy is unchanged.
+- Capability copy must label summaries as highlights, disclose approximate/fallback limits,
+  distinguish browser and native format scope, and link to the generated 56-feature ledger.
+  Copy-only corrections reuse existing typography, spacing, and link primitives.
 
 ### Accepted Debt
 
@@ -234,5 +235,5 @@ backdrop blur so content can pass underneath without losing navigation contrast.
 |---|---|---|---|
 | Single-file component layer | `demo/index.html` | Preserving the already reviewed deployment surface avoids a release-time refactor | Extract only with an explicitly approved demo architecture change |
 | Optical raw values and one-off state colors | `demo/index.html` | Existing illustration and state details predate this extraction and are visually validated | Consolidate only during an approved visual-system refactor |
-| English-only visible demo copy | `demo/index.html` | No localization infrastructure exists and this release adds no visible copy | Add locale resources and a language contract in a separately scoped change |
+| English-only visible demo copy | `demo/index.html` | No localization infrastructure exists; the bilingual repository READMEs carry the Korean guidance | Add locale resources and a language contract in a separately scoped change |
 | Remote Google Fonts | `demo/index.html` | Current visual identity depends on Newsreader, Archivo, and IBM Plex Mono | Self-host only after font licensing, payload, and fallback QA are reviewed |

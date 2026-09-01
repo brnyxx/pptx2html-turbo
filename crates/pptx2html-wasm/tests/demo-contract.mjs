@@ -10,6 +10,11 @@ const manifestVersion = (await readFile(manifestPath, 'utf8')).match(
 )?.[1];
 assert.ok(manifestVersion, 'manifest version must be readable');
 const expectedVersion = process.argv[2] ?? manifestVersion;
+const capabilityManifestPath = fileURLToPath(
+  new URL('../../../evaluate/completeness_manifest.json', import.meta.url),
+);
+const capabilityManifest = JSON.parse(await readFile(capabilityManifestPath, 'utf8'));
+const expectedFeatureCount = capabilityManifest.features.length;
 
 function tagWithId(id) {
   const match = html.match(new RegExp(`<[^>]+\\bid="${id}"[^>]*>`));
@@ -39,6 +44,24 @@ assert.equal(attribute(controlsTag, 'role'), 'group');
 assert.equal(attribute(controlsTag, 'aria-labelledby'), 'scaleLabel');
 assert.equal(attribute(tagWithId('scaleLabel'), 'for'), 'scaleRange');
 
+const coverageTag = tagWithId('coverage');
+assert.equal(attribute(coverageTag, 'data-capability-scope'), 'pptx-highlights');
+assert.equal(attribute(coverageTag, 'data-feature-count'), String(expectedFeatureCount));
+assert.equal(attribute(coverageTag, 'data-exact-dimensions'), '0');
+
+const nativeScopeTag = tagWithId('nativeScope');
+assert.equal(attribute(nativeScopeTag, 'data-browser-format-count'), '1');
+assert.equal(attribute(nativeScopeTag, 'data-native-format-count'), '7');
+
+assert.equal(
+  attribute(tagWithId('fullCapabilityLink'), 'href'),
+  'https://github.com/brnyxx/pptx2html-turbo/blob/main/SUPPORTED_FEATURES.md',
+);
+assert.equal(
+  attribute(tagWithId('universalDocumentsLink'), 'href'),
+  'https://github.com/brnyxx/pptx2html-turbo/blob/main/docs/UNIVERSAL_DOCUMENTS.md',
+);
+
 const rangeTag = tagWithId('scaleRange');
 assert.equal(attribute(rangeTag, 'min'), '0.1');
 assert.equal(attribute(rangeTag, 'step'), '0.01');
@@ -54,6 +77,11 @@ assert.equal(attribute(numberTag, 'aria-describedby'), 'scaleHint');
 assert.match(html, /\bconvert_with_options_metadata\b/);
 assert.match(html, /JSON\.parse\(result\.diagnostics\)/);
 assert.match(html, /currentDiagnostics\.length/);
+assert.match(
+  html,
+  /convert_file<\/u>\(\n\s+"deck\.pptx"\)/,
+  'the Python path example must fit without horizontal clipping',
+);
 assert.match(html, /result\.free\(\)/);
 assert.match(html, /meta\.replaceChildren\(/);
 assert.doesNotMatch(html, /meta\.innerHTML\s*=/);

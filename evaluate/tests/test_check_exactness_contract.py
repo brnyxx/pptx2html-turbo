@@ -18,6 +18,11 @@ from evaluate.check_exactness_contract import (
     check_exactness_contract,
     render_capability_matrix,
 )
+from evaluate.public_document_contract import (
+    MAX_PUBLIC_DOCUMENT_BYTES,
+    PUBLIC_DOCUMENT_PATHS,
+    check_public_documents,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,6 +36,71 @@ class CheckExactnessContractTests(unittest.TestCase):
         self.assertTrue(payload["generated_completion"]["unique_deck_sha256"])
         self.assertEqual(payload["checked_docs"], list(DOCUMENT_PATHS))
         self.assertEqual(payload["checked_workflows"], list(WORKFLOW_PATHS))
+
+    def test_each_public_document_surface_is_required(self) -> None:
+        feature_count = len(self._json(ROOT)["features"])
+        for relative in PUBLIC_DOCUMENT_PATHS:
+            with self.subTest(relative=relative), self._public_docs_overlay() as root:
+                (root / relative).unlink()
+                missing = check_public_documents(root, feature_count=feature_count)
+                self.assertIn(f"PUBLIC_DOCUMENT_MISSING:{relative}", missing)
+
+    def test_korean_readme_carries_generated_capability_registry(self) -> None:
+        self.assertIn("README.ko.md", DOCUMENT_PATHS)
+
+    def test_public_document_contract_rejects_missing_surface(self) -> None:
+        with self._overlay() as root:
+            (root / "docs/UNIVERSAL_DOCUMENTS.md").unlink()
+            payload = check_exactness_contract(root, verify_generated=False)
+        self.assertIn(
+            "PUBLIC_DOCUMENT_MISSING:docs/UNIVERSAL_DOCUMENTS.md",
+            payload["missing_checks"],
+        )
+
+    def test_public_demo_contract_rejects_scope_drift(self) -> None:
+        with self._overlay() as root:
+            demo = root / "crates/pptx2html-wasm/demo/index.html"
+            source = demo.read_text()
+            feature_count = len(self._json(root)["features"])
+            mutated = source.replace(
+                f'data-feature-count="{feature_count}"',
+                f'data-feature-count="{feature_count - 1}"',
+            )
+            self.assertNotEqual(mutated, source)
+            demo.write_text(mutated)
+            payload = check_exactness_contract(root, verify_generated=False)
+        self.assertIn(
+            "PUBLIC_DOCUMENT_CONTRACT_MISSING:crates/pptx2html-wasm/demo/index.html:feature-count",
+            payload["missing_checks"],
+        )
+
+    def test_public_demo_feature_count_tracks_manifest(self) -> None:
+        with self._overlay() as root:
+            manifest = self._json(root)
+            manifest["features"].pop()
+            self._write_manifest(root, manifest)
+            payload = check_exactness_contract(root, verify_generated=False)
+        self.assertIn(
+            "PUBLIC_DOCUMENT_CONTRACT_MISSING:crates/pptx2html-wasm/demo/index.html:feature-count",
+            payload["missing_checks"],
+        )
+
+    def test_public_document_contract_rejects_symlink(self) -> None:
+        feature_count = len(self._json(ROOT)["features"])
+        with self._public_docs_overlay() as root:
+            target = root / "SUPPORTED_FEATURES.md"
+            target.unlink()
+            target.symlink_to(root / "README.md")
+            missing = check_public_documents(root, feature_count=feature_count)
+        self.assertIn("PUBLIC_DOCUMENT_MISSING:SUPPORTED_FEATURES.md", missing)
+
+    def test_public_document_contract_rejects_oversized_surface(self) -> None:
+        feature_count = len(self._json(ROOT)["features"])
+        with self._public_docs_overlay() as root:
+            target = root / "SUPPORTED_FEATURES.md"
+            target.write_bytes(b"x" * (MAX_PUBLIC_DOCUMENT_BYTES + 1))
+            missing = check_public_documents(root, feature_count=feature_count)
+        self.assertIn("PUBLIC_DOCUMENT_SIZE_INVALID:SUPPORTED_FEATURES.md", missing)
 
     def test_disposition_or_verification_drift_requires_generated_refresh(self) -> None:
         mutations = (
@@ -317,6 +387,10 @@ class CheckExactnessContractTests(unittest.TestCase):
         manifest = json.loads((ROOT / "evaluate/completeness_manifest.json").read_text())
         block, digest = render_capability_matrix(manifest)
         self.assertIn(f"manifest-sha256: {digest}", block)
+        self.assertIn(
+            "current-tier-counts: exact=0 approximate=54 fallback=114",
+            block,
+        )
         self.assertEqual(block.count("<a id=\"capability-"), 56)
         self.assertIn("Verification SHA256", block)
         self.assertIn("Target S/V/B", block)
@@ -325,12 +399,31 @@ class CheckExactnessContractTests(unittest.TestCase):
     def _overlay(self) -> Iterator[Path]:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for name in ("README.md", "SUPPORTED_FEATURES.md", "docs", "evaluate", "crates", ".github"):
+            for name in (
+                "README.md",
+                "README.ko.md",
+                "SUPPORTED_FEATURES.md",
+                "docs",
+                "evaluate",
+                "crates",
+                ".github",
+            ):
                 source = ROOT / name
                 if source.is_dir():
                     shutil.copytree(source, root / name, ignore=shutil.ignore_patterns("__pycache__"))
                 else:
                     shutil.copy2(source, root / name)
+            yield root
+
+    @contextlib.contextmanager
+    def _public_docs_overlay(self) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative in PUBLIC_DOCUMENT_PATHS:
+                source = ROOT / relative
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
             yield root
 
     def _json(self, root: Path) -> dict[str, object]:
