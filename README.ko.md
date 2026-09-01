@@ -557,6 +557,18 @@ enhanced_html = await enhance(
 
 </details>
 
+## 릴리스 준비 상태
+
+[v2.1.0 검증 보고서](docs/release-notes/v2.1.0-validation.md)는 리뷰된 소스 경계, 재현 가능한
+게이트, 패키지/브라우저 증거, exactness 제한, 의도적으로 아직 게시하지 않은 외부 작업을
+기록합니다. 태그를 만들기 전에
+[사전 릴리스 체크리스트](docs/release-notes/pre-release-checklist.md)를 실행하세요.
+
+GitHub Pages 데모의 기존 시각 토큰, 컴포넌트, 반응형 규칙, 모션, 수용된 기술 부채는
+[DESIGN.md](DESIGN.md)에 정리되어 있습니다. 로컬 PASS는 원격 게시 영수증이 아닙니다. GitHub
+Release, 두 npm 패키지, 배포된 Pages URL은 각 워크플로가 끝난 뒤 실제 원격 표면에서 확인해야
+합니다.
+
 ## 개발
 
 ```bash

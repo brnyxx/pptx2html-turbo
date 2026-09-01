@@ -36,6 +36,9 @@ Native conversion of DOCX, DOC, XLSX, XLS, and PPT requires LibreOffice and Popp
 
 This release does not add a Microsoft Office pixel-accuracy, PowerPoint pixel-match, byte-identical-output, or PPTX exact-tier claim.
 
+The repository, package, browser, exactness, and publication boundaries are recorded in the
+[v2.1.0 validation report](./v2.1.0-validation.md).
+
 ## Publication Scope
 
 - GitHub Release archives containing both CLI binaries.
@@ -48,3 +51,5 @@ This release does not add a Microsoft Office pixel-accuracy, PowerPoint pixel-ma
 
 - Target tag: `v2.1.0`.
 - Tag and publish remain pending the final human approval required by [`pre-release-checklist.md`](./pre-release-checklist.md).
+- The local validation report is not a publication receipt. Confirm GitHub Release, both npm
+  package versions, and the deployed Pages demo after their workflows complete.

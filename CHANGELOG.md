@@ -4,22 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-08-31
+## [2.1.0] - 2026-09-01
 
 ### Added
 
 - Add the format-neutral `document2html-core` API and bounded native conversion for DOCX, DOC, XLSX, XLS, PPT, and PDF while retaining the pure-Rust PPTX path
 - Add the `document2html` CLI binary, Python module, and browser WASM format-detection/capability surface
 - Add a fail-closed seven-format evaluation pipeline with immutable conformance, blind, and security corpora plus signed portable capture contracts
+- Add a versioned v2.1.0 validation report and codify the existing GitHub Pages demo design system
 
 ### Changed
 
 - Package both `pptx2html` and `document2html` in GitHub release archives and validate both Python wheels before release creation
 - Enforce one release version across all eight Rust crates, the Python project metadata, and the browser demo
 - Freeze legacy XLS calculation state before native rendering and preserve bounded spreadsheet number-format semantics across Rust and portable reference extraction
+- Declare the demo's canonical Pages URL and point its release destinations at GitHub's latest published release
 
 ### Fixed
 
+- Keep the Office-oracle workflow contract test aligned with immutable SHA-pinned GitHub Actions
 - Preserve owner-specific XML fallback behavior while retaining package-wide size and DOCTYPE safety checks
 - Normalize invalid Poppler font-name bytes without rejecting otherwise complete UTF-8 PDF conversion output
 - Exclude an upstream-declared broken Apache POI PPT fixture from positive corpus selection and admit the next valid pinned source without changing producer quotas

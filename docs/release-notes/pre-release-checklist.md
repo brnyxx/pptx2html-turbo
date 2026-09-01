@@ -39,12 +39,14 @@ See [`README.md`](./README.md) for the intended release-note workflow and how th
 - [ ] `CHANGELOG.md` has a heading for the release under preparation and it reflects the actual shipped scope
 - [ ] `docs/release-notes/unreleased-draft.md` is updated or intentionally superseded
 - [ ] The release validation report separates repository-reproducible evidence, external-corpus proxy evidence, and unavailable PowerPoint-native evidence
+- [ ] The versioned validation report records which branch, tag, packages, and deployments are still external/pending rather than treating local dry-runs as publication receipts
 - [ ] Root `README.md` reflects any new validation or packaging expectations introduced since the last release
 
 ## 6. Tagging Decision
 
 - [ ] `bash scripts/read_release_version.sh <tag>` succeeds for the intended release tag
 - [ ] Release artifacts are ready, but no deployment/publish step is triggered until a human approves the tag/publish action
+- [ ] After publication, the GitHub Release, both npm package versions, and the Pages demo are verified from their remote URLs and added to the versioned validation record
 
 
 ## Generated PPTX capability registry
