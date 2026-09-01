@@ -59,6 +59,11 @@ assert.match(html, /meta\.replaceChildren\(/);
 assert.doesNotMatch(html, /meta\.innerHTML\s*=/);
 assert.match(html, /fitScaleToContainer\(\)/);
 assert.match(html, /syncScaleInputs\(fitScaleToContainer\(\)\)/);
+assert.match(html, /const RENDERED_DOCUMENT_HORIZONTAL_PADDING = 40;/);
+assert.match(
+  html,
+  /availableWidth - RENDERED_DOCUMENT_HORIZONTAL_PADDING/,
+);
 assert.match(html, /controls\.style\.display = 'none';\s+currentBuffer = null;\s+currentInfo = null;/);
 assert.match(html, /const MAX_PPTX_BYTES = 64 \* 1024 \* 1024;/);
 const sizeGuardIndex = html.indexOf('if (file.size > MAX_PPTX_BYTES)');

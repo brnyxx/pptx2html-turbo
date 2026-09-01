@@ -1565,6 +1565,7 @@ const diagSummary = document.getElementById('diagSummary');
 const diagList = document.getElementById('diagList');
 const platenTitle = document.getElementById('platenTitle');
 const MAX_PPTX_BYTES = 64 * 1024 * 1024;
+const RENDERED_DOCUMENT_HORIZONTAL_PADDING = 40;
 let currentBuffer = null;
 let currentInfo = null;
 let currentDiagnostics = [];
@@ -1637,7 +1638,11 @@ function fitScaleToContainer() {
   const horizontalPadding =
     Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
   const availableWidth = container.clientWidth - horizontalPadding;
-  const fitScale = Math.floor((availableWidth / currentInfo.width_px) * 100) / 100;
+  const renderedContentWidth = Math.max(
+    0,
+    availableWidth - RENDERED_DOCUMENT_HORIZONTAL_PADDING,
+  );
+  const fitScale = Math.floor((renderedContentWidth / currentInfo.width_px) * 100) / 100;
   return clampScale(fitScale);
 }
 
