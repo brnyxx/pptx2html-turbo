@@ -44,6 +44,30 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
                 self.assertGreaterEqual(test_index, 0)
                 self.assertLess(install_index, test_index)
 
+    def test_evaluation_workflows_use_locked_macos_toolchain(self) -> None:
+        # Given
+        root = Path(__file__).resolve().parents[2]
+        jobs = (
+            ("ci.yml", "\n  evaluate-tools:\n", None),
+            ("release.yml", "\n  validate-release:\n", "\n  release:\n"),
+            ("publish-npm.yml", "\n  validate:\n", "\n  build-packages:\n"),
+        )
+
+        for workflow_name, start, end in jobs:
+            with self.subTest(workflow=workflow_name):
+                # When
+                source = (
+                    root / ".github" / "workflows" / workflow_name
+                ).read_text(encoding="utf-8")
+                job = source.split(start, maxsplit=1)[1]
+                if end is not None:
+                    job = job.split(end, maxsplit=1)[0]
+
+                # Then
+                self.assertIn("    runs-on: macos-latest", job)
+                self.assertIn("          toolchain: 1.95.0", job)
+                self.assertIn("brew install poppler", job)
+
     def test_npm_workflow_publishes_primary_and_legacy_packages(self) -> None:
         # Given
         root = Path(__file__).resolve().parents[2]
