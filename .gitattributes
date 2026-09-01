@@ -1,1 +1,2 @@
 evaluate/official_supplements/*.xml text eol=lf
+evaluate/multiformat/east-asian-font-substitution.golden.xml text eol=lf
