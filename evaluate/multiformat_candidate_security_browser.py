@@ -105,6 +105,12 @@ def inspect_security_html(
                 service_workers="block",
                 accept_downloads=False,
             )
+            context.on(
+                "request",
+                lambda request: _record_security_request(
+                    request, url, external
+                ),
+            )
             context.route(
                 "**/*",
                 lambda route, request: _route_security(
@@ -128,7 +134,18 @@ def inspect_security_html(
         raise
     except (OSError, PlaywrightError, TypeError, ValueError) as error:
         raise CandidateCaptureError("security browser inspection failed") from error
-    return SecurityBrowserFacts(tuple(external), active)
+    return SecurityBrowserFacts(tuple(dict.fromkeys(external)), active)
+
+
+def _record_security_request(
+    request: Request,
+    document_url: str,
+    external: list[str],
+) -> None:
+    if request.url == document_url and request.resource_type == "document":
+        return
+    if request.url.startswith(("http:", "https:", "file:", "ws:", "wss:")):
+        external.append(request.url)
 
 
 def _route_security(

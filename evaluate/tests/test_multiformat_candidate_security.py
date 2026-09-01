@@ -244,7 +244,10 @@ class CandidateSecurityTests(unittest.TestCase):
                 font_config=font_config,
             )
             self.assertTrue(facts.active_content_executed)
-            self.assertTrue(facts.external_requests)
+            self.assertEqual(
+                facts.external_requests,
+                ("https://blocked.example/data",),
+            )
             inert = inspect_security_html(
                 '<script type="application/json">{"diagnostics":[]}</script>',
                 chromium=executable,
