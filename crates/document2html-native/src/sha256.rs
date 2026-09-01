@@ -55,7 +55,7 @@ const INITIAL_STATE: [u32; 8] = [
 /// Returns the lowercase hexadecimal SHA-256 digest of `data`.
 pub(crate) fn hex_digest(data: &[u8]) -> String {
     let mut state = INITIAL_STATE;
-    for chunk in padded(data).chunks_exact(64) {
+    for chunk in padded(data).as_chunks::<64>().0 {
         compress(&mut state, chunk);
     }
     state.iter().fold(String::new(), |mut digest, word| {
