@@ -67,6 +67,7 @@ class CiEvaluateDependenciesTests(unittest.TestCase):
                 self.assertIn("    runs-on: macos-latest", job)
                 self.assertIn("          toolchain: 1.95.0", job)
                 self.assertIn("brew install poppler", job)
+                self.assertIn("brew install --cask libreoffice", job)
 
     def test_npm_workflow_publishes_primary_and_legacy_packages(self) -> None:
         # Given

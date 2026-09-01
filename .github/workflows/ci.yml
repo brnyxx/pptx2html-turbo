@@ -124,7 +124,9 @@ jobs:
       - name: Install Chromium test runtime
         run: python -m playwright install --with-deps chromium
       - name: Install PDF tooling
-        run: brew install poppler
+        run: |
+          brew install poppler
+          brew install --cask libreoffice
       - name: Run evaluate helper tests
         run: python3 -m unittest discover -s evaluate/tests -p 'test_*.py' -v
       - name: Check exactness contract

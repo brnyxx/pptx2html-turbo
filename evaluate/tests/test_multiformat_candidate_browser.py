@@ -408,7 +408,8 @@ class MultiFormatCandidateBrowserTests(unittest.TestCase):
             f'<div id="page{ordinal}-div" '
             'style="position:relative;display:block !important;width:300px;'
             'height:200px;background:#fff">'
-            f'<span style="position:absolute;left:10px;top:10px">Page {ordinal}</span>'
+            f'<span style="position:absolute;left:10px;top:10px;font:16px Arial">'
+            f"Page {ordinal}</span>"
             "</div>"
             for ordinal in range(1, page_count + 1)
         )
