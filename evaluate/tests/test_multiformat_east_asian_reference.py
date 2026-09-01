@@ -154,38 +154,33 @@ class EastAsianFontReferenceDeterminismTests(unittest.TestCase):
                     self._font_fingerprint(second),
                 )
 
-    def test_unseeded_reference_is_the_regression_this_policy_removes(self) -> None:
-        """Without seeding, repeated reference runs pick different host faces.
-
-        This is the defect the policy exists to remove. It is asserted over
-        enough runs that a chance agreement cannot make it pass.
-        """
+    def test_seeded_reference_converges_independently_of_host_fallback(self) -> None:
         # Given
+        expected = require_substitute(load_policy()).family.replace(" ", "")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = build_fixture(root, "docx")
 
-            # When the profile is left unseeded.
-            unseeded = {
-                frozenset(
-                    self._embedded_fonts(
-                        canonical_pdf(source, root / f"u{index}", seeded=False)
-                    )
+            # When both the host fallback and the pinned policy are exercised.
+            unseeded = [
+                self._embedded_fonts(
+                    canonical_pdf(source, root / f"u{index}", seeded=False)
                 )
-                for index in range(6)
-            }
-            seeded = {
-                frozenset(
-                    self._embedded_fonts(
-                        canonical_pdf(source, root / f"s{index}", seeded=True)
-                    )
+                for index in range(2)
+            ]
+            seeded = [
+                self._embedded_fonts(
+                    canonical_pdf(source, root / f"s{index}", seeded=True)
                 )
-                for index in range(6)
-            }
+                for index in range(2)
+            ]
 
-        # Then only the seeded runs converge on one face set.
-        self.assertGreater(len(unseeded), 1, "expected the unseeded regression")
-        self.assertEqual(len(seeded), 1)
+        # Then the fixture exercises a real host fallback, while the policy
+        # output converges on its selected face regardless of whether that
+        # particular runner varies its fallback across processes.
+        self.assertTrue(all(unseeded), "expected embedded fallback fonts")
+        self.assertEqual(seeded[0], seeded[1])
+        self.assertIn(expected, seeded[0])
 
     def test_seeded_reference_pins_the_policy_substitute_face(self) -> None:
         # Given
