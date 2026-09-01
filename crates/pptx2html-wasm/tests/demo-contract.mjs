@@ -66,7 +66,18 @@ const fileReadIndex = html.indexOf('await file.arrayBuffer()');
 assert.ok(sizeGuardIndex >= 0, 'demo must reject oversized PPTX files');
 assert.ok(fileReadIndex >= 0, 'demo must read accepted files');
 assert.ok(sizeGuardIndex < fileReadIndex, 'size guard must run before file allocation');
-assert.match(html, /href="https:\/\/github\.com\/brnyxx\/pptx2html-turbo\/releases"/);
+const canonicalUrl = 'https://brnyxx.github.io/pptx2html-turbo/';
+assert.ok(
+  html.includes(`<link rel="canonical" href="${canonicalUrl}">`),
+  'demo must identify its canonical Pages URL',
+);
+
+const latestReleaseUrl = 'https://github.com/brnyxx/pptx2html-turbo/releases/latest';
+assert.equal(
+  html.split(latestReleaseUrl).length - 1,
+  2,
+  'header and footer must link to the latest published release',
+);
 
 const versions = new Set(
   [...html.matchAll(/\bv(\d+\.\d+\.\d+)\b/g)].map((match) => match[1]),
