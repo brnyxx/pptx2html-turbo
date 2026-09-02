@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -425,6 +425,38 @@ function assertBoundaryFixtures() {
       renderFixture(
         manifestFixture([
           featureFixture({
+            current: {
+              semantic: { tier: 'approximate', stage: 'parsed' },
+              visual: { tier: 'fallback', stage: 'rendered' },
+              behavioral: { tier: 'fallback', stage: 'not-applicable' },
+              extra: { tier: 'fallback', stage: 'not-applicable' },
+            },
+          }),
+        ]),
+      ),
+    /current/,
+    'extra current dimension',
+  );
+  assertThrowsMessage(
+    () =>
+      renderFixture(
+        manifestFixture([
+          featureFixture({
+            target: {
+              semantic: { tier: 'approximate', stage: 'parsed' },
+              visual: { tier: 'fallback', stage: 'rendered' },
+            },
+          }),
+        ]),
+      ),
+    /target/,
+    'missing target dimension',
+  );
+  assertThrowsMessage(
+    () =>
+      renderFixture(
+        manifestFixture([
+          featureFixture({
             target: {
               semantic: { tier: 'approximate', stage: 'parsed' },
               visual: { tier: 'fallback', stage: 'rendered' },
@@ -470,6 +502,18 @@ function assertBoundaryFixtures() {
     'invalid stage',
   );
   assertThrowsMessage(
+    () =>
+      renderFixture(
+        manifestFixture([
+          featureFixture({
+            source_status: 'community',
+          }),
+        ]),
+      ),
+    /source_status/,
+    'unsupported source status',
+  );
+  assertThrowsMessage(
     () => renderCapabilityCatalog({ manifestBytes: Buffer.from('{'), templateText: TEMPLATE_TEXT }),
     /JSON/,
     'malformed JSON',
@@ -487,6 +531,20 @@ function assertBoundaryFixtures() {
       ),
     /ooxml/,
     'empty OOXML string',
+  );
+  assertThrowsMessage(
+    () =>
+      renderFixture(
+        manifestFixture([
+          featureFixture({
+            ooxml: {
+              relationship_type: '',
+            },
+          }),
+        ]),
+      ),
+    /ooxml/,
+    'empty OOXML relationship type',
   );
   assertThrowsMessage(
     () =>
@@ -524,6 +582,7 @@ function assertBoundaryFixtures() {
   for (const official_source of [
     'http://learn.microsoft.com/en-us/office/open-xml',
     'https://user@learn.microsoft.com/en-us/office/open-xml',
+    'https://:secret@learn.microsoft.com/en-us/office/open-xml',
     'https://example.com/en-us/office/open-xml',
     'https://learn.microsoft.com:444/en-us/office/open-xml',
   ]) {
@@ -615,9 +674,22 @@ async function assertWriteBoundaries() {
       'missing parent rejects',
     );
     await assertRejectsMessage(
+      () => stat(path.dirname(missingParentOutput)),
+      /ENOENT/,
+      'missing parent directory remains absent',
+    );
+    await assertRejectsMessage(
       () => readFile(missingParentOutput),
       /ENOENT/,
       'missing parent creates no output',
+    );
+    const nearestAncestorEntries = await readdir(dir);
+    assert.deepEqual(
+      nearestAncestorEntries.filter(
+        (entry) => entry === 'missing' || entry.startsWith('index.html.tmp-'),
+      ),
+      [],
+      'missing parent failure creates no sibling temp entry in nearest existing ancestor',
     );
   });
 }
