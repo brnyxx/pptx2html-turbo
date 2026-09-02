@@ -794,6 +794,21 @@ function assertWorkflowContract(workflowText) {
     ['release version contract', 'node crates/pptx2html-wasm/tests/release-version-contract.mjs'],
     ['exactness contract', 'python3 evaluate/check_exactness_contract.py --repo-root .'],
   ]);
+  const capabilityContractCommand = [
+    '          node crates/pptx2html-wasm/tests/capabilities-contract.mjs \\',
+    '            "$RUNNER_TEMP/pptx2html-capabilities/index.html" \\',
+    '            evaluate/completeness_manifest.json',
+  ].join('\n');
+  assert.equal(
+    countMatches(validationBlock, /node crates\/pptx2html-wasm\/tests\/capabilities-contract\.mjs/g),
+    1,
+    'validation must run exactly one capability contract command',
+  );
+  assertContains(
+    validationBlock,
+    capabilityContractCommand,
+    'validation must run the capability contract with the generated catalog path and manifest path arguments',
+  );
   for (const needle of [
     '--manifest evaluate/completeness_manifest.json',
     '--template crates/pptx2html-wasm/demo/capabilities.template.html',
@@ -825,6 +840,38 @@ function assertWorkflowContract(workflowText) {
   }
 }
 
+function assertWorkflowMutationFixtures(workflowText) {
+  const missingCatalogPath = workflowText.replace(
+    '            "$RUNNER_TEMP/pptx2html-capabilities/index.html" \\\n',
+    '',
+  );
+  assertThrowsMessage(
+    () => assertWorkflowContract(missingCatalogPath),
+    /capability contract/,
+    'capability contract must fail without the generated catalog path argument',
+  );
+
+  const missingManifestPath = workflowText.replace(
+    '            evaluate/completeness_manifest.json\n          node crates/pptx2html-wasm/tests/release-version-contract.mjs',
+    '          node crates/pptx2html-wasm/tests/release-version-contract.mjs',
+  );
+  assertThrowsMessage(
+    () => assertWorkflowContract(missingManifestPath),
+    /capability contract/,
+    'capability contract must fail without the manifest path argument',
+  );
+
+  const misplacedManifestPath = workflowText.replace(
+    '          node crates/pptx2html-wasm/tests/capabilities-contract.mjs \\\n            "$RUNNER_TEMP/pptx2html-capabilities/index.html" \\\n            evaluate/completeness_manifest.json',
+    '            evaluate/completeness_manifest.json\n          node crates/pptx2html-wasm/tests/capabilities-contract.mjs \\\n            "$RUNNER_TEMP/pptx2html-capabilities/index.html"',
+  );
+  assertThrowsMessage(
+    () => assertWorkflowContract(misplacedManifestPath),
+    /capability contract/,
+    'capability contract must fail when the manifest argument is outside the command block',
+  );
+}
+
 if (process.argv.length !== 4) {
   throw new Error('usage: capabilities-contract.mjs <generated-html> <manifest>');
 }
@@ -844,3 +891,4 @@ assertBoundaryFixtures();
 await assertWriteBoundaries();
 assertCliBoundaries();
 assertWorkflowContract(workflowText);
+assertWorkflowMutationFixtures(workflowText);
