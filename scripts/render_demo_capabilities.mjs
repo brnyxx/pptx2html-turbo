@@ -108,7 +108,7 @@ function validateOfficialSource(value, name) {
   ) {
     fail(`${name} must be a safe official HTTPS URL`);
   }
-  return url.href;
+  return source;
 }
 
 function validateOoxml(value, name) {

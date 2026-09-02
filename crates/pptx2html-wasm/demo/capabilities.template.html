@@ -357,18 +357,38 @@ ul { margin: 0; padding: 0; list-style: none; }
   grid-column: 1 / -1;
 }
 .site-foot {
-  padding: 28px var(--gutter) 44px;
+  padding: 34px var(--gutter) 44px;
   border-top: 1px solid var(--edge);
-  color: var(--paper-faint);
-  font-size: 14px;
 }
-.site-foot-inner {
-  width: min(1180px, 100%);
-  margin: 0 auto;
+.foot-inner {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 18px;
-  justify-content: space-between;
+  gap: 14px 32px;
+  align-items: baseline;
+  font-size: 14px;
+  color: var(--paper-faint);
+}
+.site-foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  margin-left: auto;
+}
+.site-foot nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.site-foot a {
+  color: var(--paper-soft);
+  text-decoration: none;
+}
+.site-foot a:hover {
+  color: var(--ember);
+}
+.site-foot .mono {
+  font-size: 12px;
+  letter-spacing: 0.05em;
 }
 
 @media (max-width: 900px) {
@@ -450,10 +470,14 @@ ul { margin: 0; padding: 0; list-style: none; }
   .fallback-policy {
     grid-template-columns: 1fr;
   }
-  .site-foot-inner {
+  .foot-inner {
     display: block;
   }
-  .site-foot-inner p + p {
+  .foot-inner nav {
+    margin-top: 8px;
+    margin-left: 0;
+  }
+  .foot-inner a {
     margin-top: 8px;
   }
 }
@@ -462,7 +486,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 <body>
 <a class="skip-link" href="#capabilityCatalog">Skip to catalog</a>
 <header class="topbar">
-<a class="wordmark" href="../" aria-label="pptx2html-turbo home"><b>pptx</b>2html-turbo</a>
+<span class="wordmark"><b>pptx</b>2html-turbo</span>
 <span class="release">capability catalog</span>
 <nav class="topnav" aria-label="Project">
 <a id="backLink" href="../">Demo</a>
@@ -495,9 +519,13 @@ ul { margin: 0; padding: 0; list-style: none; }
 </section>
 </main>
 <footer class="site-foot">
-<div class="site-foot-inner">
-<p>Rust ECMA-376 renderer compiled to WebAssembly.</p>
-<p><a href="https://github.com/brnyxx/pptx2html-turbo/releases/latest">Latest release</a></p>
+<div class="catalog-shell foot-inner">
+<span class="mono">pptx2html-turbo v2.1.0 &middot; MIT</span>
+<nav aria-label="Footer links">
+<a id="footerRepositoryLink" href="https://github.com/brnyxx/pptx2html-turbo" target="_blank" rel="noopener noreferrer">Repository</a>
+<a id="footerReleasesLink" href="https://github.com/brnyxx/pptx2html-turbo/releases/latest" target="_blank" rel="noopener noreferrer">Releases</a>
+<a id="footerNpmLink" href="https://www.npmjs.com/package/@briank-dev/pptx-to-html" target="_blank" rel="noopener noreferrer">npm package</a>
+</nav>
 </div>
 </footer>
 </body>

@@ -17,6 +17,9 @@ const MANIFEST_URL =
   'https://github.com/brnyxx/pptx2html-turbo/blob/main/evaluate/completeness_manifest.json';
 const MATRIX_URL =
   'https://github.com/brnyxx/pptx2html-turbo/blob/main/docs/architecture/CAPABILITY_MATRIX.md';
+const REPOSITORY_URL = 'https://github.com/brnyxx/pptx2html-turbo';
+const RELEASES_URL = 'https://github.com/brnyxx/pptx2html-turbo/releases/latest';
+const NPM_URL = 'https://www.npmjs.com/package/@briank-dev/pptx-to-html';
 const DIMENSIONS = ['semantic', 'visual', 'behavioral'];
 const TIERS = ['exact', 'approximate', 'fallback', 'unparsed'];
 const STAGES = ['parsed', 'resolved', 'rendered', 'fidelity-tested', 'not-applicable'];
@@ -186,10 +189,15 @@ function assertCatalogDom(html, manifest, manifestBytes) {
     html.includes(`<link rel="canonical" href="${CATALOG_URL}">`),
     'catalog canonical must be exact literal',
   );
+  assert.equal(countMatches(html, /\bhref="\.\.\/"/g), 1, 'catalog must have exactly one back link');
   assert.equal(attribute(tagById(html, 'a', 'backLink'), 'href'), '../');
   assert.equal(attribute(tagById(html, 'a', 'supportedFeaturesLink'), 'href'), SUPPORTED_FEATURES_URL);
   assert.equal(attribute(tagById(html, 'a', 'manifestSourceLink'), 'href'), MANIFEST_URL);
   assert.equal(attribute(tagById(html, 'a', 'capabilityMatrixLink'), 'href'), MATRIX_URL);
+  assert.match(html, />pptx2html-turbo v2\.1\.0 &middot; MIT</);
+  assert.equal(attribute(tagById(html, 'a', 'footerRepositoryLink'), 'href'), REPOSITORY_URL);
+  assert.equal(attribute(tagById(html, 'a', 'footerReleasesLink'), 'href'), RELEASES_URL);
+  assert.equal(attribute(tagById(html, 'a', 'footerNpmLink'), 'href'), NPM_URL);
   assert.equal(countMatches(html, /<script\b/gi), 0);
   assert.doesNotMatch(html, /fetch\s*\(/);
   assert.doesNotMatch(html, /@@CATALOG_/);
@@ -273,14 +281,40 @@ function assertCatalogDom(html, manifest, manifestBytes) {
       hasQualifiedName ? 1 : 0,
       `${feature.id} qualified name`,
     );
+    if (hasQualifiedName) {
+      const qualifiedNameTag = article.match(/<dd\b[^>]*\bdata-ooxml-qualified-name="[^"]*"[^>]*>/)?.[0];
+      assert.ok(qualifiedNameTag, `${feature.id} qualified name tag`);
+      assert.equal(
+        attribute(qualifiedNameTag, 'data-ooxml-qualified-name'),
+        feature.ooxml.qualified_name,
+      );
+      assert.match(
+        article,
+        new RegExp(`>${escapeRegExp(feature.ooxml.qualified_name)}<`),
+        `${feature.id} qualified name visible value`,
+      );
+    }
     assert.equal(
       countMatches(article, /\bdata-ooxml-relationship-type="/g),
       hasRelationshipType ? 1 : 0,
       `${feature.id} relationship type`,
     );
+    if (hasRelationshipType) {
+      const relationshipTypeTag = article.match(/<dd\b[^>]*\bdata-ooxml-relationship-type="[^"]*"[^>]*>/)?.[0];
+      assert.ok(relationshipTypeTag, `${feature.id} relationship type tag`);
+      assert.equal(
+        attribute(relationshipTypeTag, 'data-ooxml-relationship-type'),
+        feature.ooxml.relationship_type,
+      );
+      assert.match(
+        article,
+        new RegExp(`>${escapeRegExp(feature.ooxml.relationship_type)}<`),
+        `${feature.id} relationship type visible value`,
+      );
+    }
     if (!hasQualifiedName && !hasRelationshipType) {
       assert.equal(countMatches(article, /\bdata-ooxml-not-declared\b/g), 1);
-      assert.match(article, />Not declared in manifest</);
+      assert.equal(countMatches(article, />Not declared in manifest</g), 1);
     } else {
       assert.equal(countMatches(article, /\bdata-ooxml-not-declared\b/g), 0);
     }
@@ -499,15 +533,17 @@ function assertBoundaryFixtures() {
       `unsafe URL ${official_source}`,
     );
   }
+  const explicitDefaultPortSource = 'https://learn.microsoft.com:443/en-us/office/open-xml';
+  const explicitDefaultPortHtml = renderFixture(
+    manifestFixture([
+      featureFixture({
+        official_source: explicitDefaultPortSource,
+      }),
+    ]),
+  );
   assert.ok(
-    renderFixture(
-      manifestFixture([
-        featureFixture({
-          official_source: 'https://learn.microsoft.com:443/en-us/office/open-xml',
-        }),
-      ]),
-    ).includes('https://learn.microsoft.com/en-us/office/open-xml'),
-    'explicit HTTPS :443 succeeds after URL normalization',
+    explicitDefaultPortHtml.includes(`href="${explicitDefaultPortSource}"`),
+    'explicit HTTPS :443 succeeds and preserves the manifest literal href',
   );
 
   const escapedHtml = renderFixture(
@@ -587,18 +623,26 @@ async function assertWriteBoundaries() {
 }
 
 function assertCliBoundaries() {
-  const baseArgs = ['--manifest', 'manifest.json', '--template', 'template.html', '--output', 'index.html'];
-  for (const args of [
-    [],
-    ['--manifest', 'manifest.json', '--template', 'template.html'],
-    [...baseArgs, '--manifest', 'other.json'],
-    [...baseArgs, '--unknown', 'value'],
-  ]) {
+  for (const args of [[], ['--manifest', 'manifest.json', '--template', 'template.html']]) {
     const result = spawnSync(process.execPath, [GENERATOR_PATH, ...args], {
       encoding: 'utf8',
     });
     assert.notEqual(result.status, 0, `CLI rejects ${args.join(' ')}`);
   }
+  const duplicateOption = spawnSync(
+    process.execPath,
+    [GENERATOR_PATH, '--manifest', 'manifest.json', '--manifest', 'other.json', '--output', 'index.html'],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(duplicateOption.status, 0, 'CLI rejects duplicate option');
+  assert.match(duplicateOption.stderr, /duplicate option: --manifest/);
+  const unknownOption = spawnSync(
+    process.execPath,
+    [GENERATOR_PATH, '--manifest', 'manifest.json', '--unknown', 'template.html', '--output', 'index.html'],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(unknownOption.status, 0, 'CLI rejects unknown option');
+  assert.match(unknownOption.stderr, /unknown option: --unknown/);
 }
 
 if (process.argv.length !== 4) {
