@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
 
@@ -102,6 +103,91 @@ def with_extra_key(value: dict[str, object], key: str = "extra") -> dict[str, ob
     copied = json.loads(json.dumps(value))
     copied[key] = True
     return copied
+
+
+@dataclass(frozen=True, slots=True)
+class FakeResponse:
+    status: int
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class FakeRequest:
+    method: str
+    url: str
+
+
+class FakeLocator:
+    def __init__(self, page: "FakePage", selector: str) -> None:
+        self._page = page
+        self._selector = selector
+
+    def scroll_into_view_if_needed(self) -> None:
+        self._page.scrolled.append(self._selector)
+
+    def click(self) -> None:
+        self._page.url = "http://127.0.0.1:4173/capabilities/"
+
+    def is_visible(self) -> bool:
+        return True
+
+
+class FakePage:
+    def __init__(
+        self,
+        tmpdir: Path,
+        redirect_status: int | None = None,
+        require_warning_contract: bool = False,
+    ) -> None:
+        self.url = "http://127.0.0.1:4173/"
+        self.scrolled: list[str] = []
+        self.screenshots: list[dict[str, object]] = []
+        self._tmpdir = tmpdir
+        self._listeners: dict[str, object] = {}
+        self._evaluations = [
+            {"scrollWidth": 375, "clientWidth": 375},
+            {"scrollWidth": 375, "clientWidth": 375},
+            valid_viewport(375)["catalog"],
+        ]
+        self._redirect_status = redirect_status
+        self._require_warning_contract = require_warning_contract
+
+    def on(self, event: str, callback: object) -> None:
+        self._listeners[event] = callback
+
+    def goto(self, url: str, wait_until: str) -> FakeResponse:
+        self.url = url
+        if self._redirect_status is not None and "capabilities" in url:
+            self._listeners["response"](FakeResponse(self._redirect_status, url))
+        return FakeResponse(200, url)
+
+    def locator(self, selector: str) -> FakeLocator:
+        return FakeLocator(self, selector)
+
+    def screenshot(self, **kwargs: object) -> None:
+        path = Path(str(kwargs["path"]))
+        path.write_bytes(b"png")
+        self.screenshots.append(kwargs)
+
+    def wait_for_load_state(self, state: str) -> None:
+        return None
+
+    def evaluate(self, script: str) -> object:
+        if self._require_warning_contract and ".catalog-note" in script:
+            if ".hero-copy" not in script or "exact" not in script or "fallback" not in script or "cross-validation" not in script:
+                raise AssertionError("catalog warning check must include both pre-record warnings")
+        return self._evaluations.pop(0)
+
+    def close(self) -> None:
+        return None
+
+
+class FakeBrowser:
+    def __init__(self, tmpdir: Path, redirect_status: int | None = None) -> None:
+        self.page = FakePage(tmpdir, redirect_status=redirect_status)
+
+    def new_page(self, viewport: dict[str, int]) -> FakePage:
+        return self.page
 
 
 class QaDemoCapabilitiesTests(unittest.TestCase):
@@ -246,6 +332,54 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             navigation.capture_url,
             "https://brnyxx.github.io/pptx2html-turbo/capabilities/?v=01234567",
         )
+
+    def test_capture_uses_viewport_screenshots_for_scrolled_states(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            browser = FakeBrowser(Path(tmpdir))
+            context = module.RuntimeContext(
+                "http://127.0.0.1:4173/",
+                Path(tmpdir),
+                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                }, 2),
+            )
+
+            module._capture_viewport(browser, context, 375)
+
+        self.assertEqual([shot.get("full_page") for shot in browser.page.screenshots], [False, False, False])
+        self.assertEqual(browser.page.scrolled, ["#coverage", "#capability-presentation"])
+
+    def test_capture_records_redirect_responses_as_non2xx_errors(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            browser = FakeBrowser(Path(tmpdir), redirect_status=302)
+            context = module.RuntimeContext(
+                "http://127.0.0.1:4173/",
+                Path(tmpdir),
+                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                }, 2),
+            )
+
+            with self.assertRaises(module.QaError):
+                module._capture_viewport(browser, context, 375)
+
+    def test_catalog_dom_requires_hero_and_boundary_warnings_before_records(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            page = FakePage(Path(tmpdir), require_warning_contract=True)
+
+            module._catalog_dom(page)
 
 
 if __name__ == "__main__":

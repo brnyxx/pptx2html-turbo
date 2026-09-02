@@ -206,7 +206,7 @@ def _dom_widths(page) -> JsonObject:
 
 
 def _catalog_dom(page) -> JsonObject:
-    return page.evaluate("""() => { const main = document.querySelector('#capabilityCatalog'); const first = document.querySelector('article[data-capability-id]'); const warning = document.querySelector('.catalog-note'); const ids = [...document.querySelectorAll('article[data-capability-id]')].map(node => node.getAttribute('data-capability-id')); const tiers = {}; for (const item of document.querySelectorAll('[data-tier-count]')) tiers[item.getAttribute('data-tier')] = Number(item.getAttribute('data-tier-count')); return {canonical: document.querySelector('link[rel="canonical"]').getAttribute('href'), sourceSha256: main.getAttribute('data-source-sha256'), featureCount: Number(main.getAttribute('data-feature-count')), familyCount: document.querySelectorAll('section[data-capability-family]').length, uniqueFeatureCount: new Set(ids).size, currentDispositionCount: document.querySelectorAll('td[data-disposition="current"]').length, targetDispositionCount: document.querySelectorAll('td[data-disposition="target"]').length, exactCurrentCount: document.querySelectorAll('td[data-disposition="current"][data-tier="exact"]').length, tierCounts: tiers, unavailableSourceCount: document.querySelectorAll('article[data-source-status="unavailable"]').length, warningsBeforeFirstRecord: Boolean(warning && first && (warning.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING))}; }""")
+    return page.evaluate("""() => { const main = document.querySelector('#capabilityCatalog'); const first = document.querySelector('article[data-capability-id]'); const hero = document.querySelector('.hero-copy'); const note = document.querySelector('.catalog-note'); const heroText = (hero?.textContent || '').toLowerCase(); const noteText = (note?.textContent || '').toLowerCase(); const ids = [...document.querySelectorAll('article[data-capability-id]')].map(node => node.getAttribute('data-capability-id')); const tiers = {}; for (const item of document.querySelectorAll('[data-tier-count]')) tiers[item.getAttribute('data-tier')] = Number(item.getAttribute('data-tier-count')); const before = node => Boolean(node && first && (node.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING)); return {canonical: document.querySelector('link[rel="canonical"]').getAttribute('href'), sourceSha256: main.getAttribute('data-source-sha256'), featureCount: Number(main.getAttribute('data-feature-count')), familyCount: document.querySelectorAll('section[data-capability-family]').length, uniqueFeatureCount: new Set(ids).size, currentDispositionCount: document.querySelectorAll('td[data-disposition="current"]').length, targetDispositionCount: document.querySelectorAll('td[data-disposition="target"]').length, exactCurrentCount: document.querySelectorAll('td[data-disposition="current"][data-tier="exact"]').length, tierCounts: tiers, unavailableSourceCount: document.querySelectorAll('article[data-source-status="unavailable"]').length, warningsBeforeFirstRecord: before(hero) && before(note) && heroText.includes('exact') && heroText.includes('fallback') && noteText.includes('cross-validation')}; }""")
 
 
 def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
@@ -232,7 +232,7 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         page.on("console", lambda message: errors["console"].append(message.text) if message.type == "error" else None)
         page.on("pageerror", lambda error: errors["page"].append(str(error)))
         page.on("requestfailed", lambda request: errors["failedRequests"].append(f"{request.method} {request.url}"))
-        page.on("response", lambda response: errors["non2xxResponses"].append(f"{response.status} {response.url}") if response.status >= 400 else None)
+        page.on("response", lambda response: errors["non2xxResponses"].append(f"{response.status} {response.url}") if response.status < 200 or response.status >= 300 else None)
         landing_response = page.goto(context.base_url, wait_until="load")
         if landing_response is None:
             raise QaError("landing navigation produced no response")
@@ -241,7 +241,7 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         landing_widths = _dom_widths(page)
         link_visible, scope_visible = link.is_visible(), coverage.is_visible()
         landing_name = f"landing-{width}.png"
-        page.screenshot(path=str(context.evidence_dir / landing_name), full_page=True)
+        page.screenshot(path=str(context.evidence_dir / landing_name), full_page=False)
         link.click()
         page.wait_for_load_state("load")
         navigation = catalog_navigation_urls(context.base_url, page.url)
@@ -250,9 +250,9 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
             raise QaError("catalog navigation produced no response")
         catalog_widths = _dom_widths(page)
         catalog_name, records_name = f"catalog-top-{width}.png", f"catalog-records-{width}.png"
-        page.screenshot(path=str(context.evidence_dir / catalog_name), full_page=True)
+        page.screenshot(path=str(context.evidence_dir / catalog_name), full_page=False)
         page.locator("#capability-presentation").scroll_into_view_if_needed()
-        page.screenshot(path=str(context.evidence_dir / records_name), full_page=True)
+        page.screenshot(path=str(context.evidence_dir / records_name), full_page=False)
         catalog = _catalog_dom(page) | {"status": catalog_response.status, "scrollWidth": catalog_widths["scrollWidth"], "clientWidth": catalog_widths["clientWidth"]}
         report = {"width": width, "height": VIEWPORT_HEIGHT, "screenshots": {"landing": _shot(context.evidence_dir, landing_name), "catalogTop": _shot(context.evidence_dir, catalog_name), "catalogRecords": _shot(context.evidence_dir, records_name)}, "landing": {"status": landing_response.status, "resolvedCatalogHref": navigation.resolved_no_query, "linkVisible": link_visible, "scopeVisible": scope_visible, "scrollWidth": landing_widths["scrollWidth"], "clientWidth": landing_widths["clientWidth"]}, "catalog": catalog, "errors": errors}
         _check_viewport(report, context.stats)
