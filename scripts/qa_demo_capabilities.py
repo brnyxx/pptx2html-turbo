@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse, hashlib, json, logging, re, subprocess
+from dataclasses import dataclass; from datetime import UTC, datetime
+from pathlib import Path; from typing import Final, TypeAlias; from urllib.parse import urlsplit, urlunsplit
+
+JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = dict[str, JsonValue]
+
+logger = logging.getLogger(__name__)
+REPO_ROOT: Final = Path(__file__).resolve().parents[1]
+GIT_SHA_RE: Final = re.compile(r"^[0-9a-f]{40}$")
+HASH_RE: Final = re.compile(r"^[0-9a-f]{64}$")
+CAPTURED_AT_RE: Final = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+VIEWPORT_WIDTHS: Final = (375, 768, 1280); VIEWPORT_HEIGHT: Final = 900
+CANONICAL_URL: Final = "https://brnyxx.github.io/pptx2html-turbo/capabilities/"
+DIMENSIONS: Final = ("semantic", "visual", "behavioral")
+TIERS: Final = ("exact", "approximate", "fallback", "unparsed")
+OWNED_EVIDENCE_NAMES: Final = tuple(
+    [f"landing-{w}.png" for w in VIEWPORT_WIDTHS] + [f"catalog-top-{w}.png" for w in VIEWPORT_WIDTHS]
+    + [f"catalog-records-{w}.png" for w in VIEWPORT_WIDTHS] + ["browser-qa.json", "integrity-review.md", "visual-fidelity-review.md"]
+)
+
+
+class QaError(Exception): pass
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogNavigation:
+    resolved_no_query: str; capture_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestStats:
+    manifest_sha256: str; feature_count: int; family_count: int; current_disposition_count: int
+    target_disposition_count: int; exact_current_count: int; tier_counts: dict[str, int]; unavailable_source_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class CliArgs:
+    base_url: str; manifest: Path; catalog_html: Path; evidence_dir: Path; git_sha: str
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeContext:
+    base_url: str; evidence_dir: Path; stats: ManifestStats
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def cleanup_owned_evidence(evidence_dir: Path) -> None:
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    for name in OWNED_EVIDENCE_NAMES:
+        try:
+            (evidence_dir / name).unlink(missing_ok=True)
+        except OSError as error:
+            raise QaError(f"failed to remove owned evidence file: {evidence_dir / name}") from error
+
+
+def _git_text(args: list[str], repo_root: Path) -> str:
+    try:
+        return subprocess.run(args, cwd=repo_root, check=True, capture_output=True, text=True).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        raise QaError(f"git command failed: {' '.join(args)}") from error
+
+
+def assert_clean_git_binding(git_sha: str, repo_root: Path) -> None:
+    if GIT_SHA_RE.fullmatch(git_sha) is None:
+        raise QaError("--git-sha must be 40 lowercase hexadecimal characters")
+    if _git_text(["git", "rev-parse", "HEAD"], repo_root) != git_sha:
+        raise QaError("--git-sha does not match HEAD")
+    if _git_text(["git", "status", "--porcelain", "--untracked-files=no"], repo_root):
+        raise QaError("tracked worktree changes must be committed before browser QA")
+
+
+def catalog_navigation_urls(base_url: str, resolved_catalog_url: str) -> CatalogNavigation:
+    base = urlsplit(base_url)
+    catalog = urlsplit(resolved_catalog_url)
+    resolved = urlunsplit((catalog.scheme, catalog.netloc, catalog.path, "", catalog.fragment))
+    capture = resolved if not base.query else urlunsplit((catalog.scheme, catalog.netloc, catalog.path, base.query, catalog.fragment))
+    return CatalogNavigation(resolved_no_query=resolved, capture_url=capture)
+
+
+def _obj(value: JsonValue, label: str) -> JsonObject:
+    if isinstance(value, dict):
+        return value
+    raise QaError(f"{label} must be an object")
+
+
+def _arr(value: JsonValue, label: str) -> list[JsonValue]:
+    if isinstance(value, list):
+        return value
+    raise QaError(f"{label} must be an array")
+
+
+def _keys(value: JsonObject, expected: set[str], label: str) -> JsonObject:
+    if set(value) == expected:
+        return value
+    raise QaError(f"{label} keys must equal {sorted(expected)}")
+
+
+def _string(value: JsonValue, label: str) -> str:
+    if isinstance(value, str):
+        return value
+    raise QaError(f"{label} must be a string")
+
+
+def _integer(value: JsonValue, label: str) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise QaError(f"{label} must be an integer")
+
+
+def _hash(value: JsonValue, label: str) -> str:
+    text = _string(value, label)
+    if HASH_RE.fullmatch(text) is None:
+        raise QaError(f"{label} must be a lowercase sha256")
+    return text
+
+
+def validate_report_schema(report: JsonObject) -> None:
+    _keys(report, {"schemaVersion", "capturedAt", "source", "viewports"}, "report")
+    if report["schemaVersion"] != 1 or CAPTURED_AT_RE.fullmatch(_string(report["capturedAt"], "capturedAt")) is None:
+        raise QaError("report version or capturedAt is invalid")
+    source = _keys(_obj(report["source"], "source"), {"gitSha", "manifestSha256", "catalogHtmlSha256"}, "source")
+    if GIT_SHA_RE.fullmatch(_string(source["gitSha"], "source.gitSha")) is None:
+        raise QaError("source.gitSha must be a lowercase git SHA")
+    _hash(source["manifestSha256"], "source.manifestSha256")
+    _hash(source["catalogHtmlSha256"], "source.catalogHtmlSha256")
+    viewports = _arr(report["viewports"], "viewports")
+    if len(viewports) != len(VIEWPORT_WIDTHS):
+        raise QaError("viewports must contain exactly three entries")
+    for index, width in enumerate(VIEWPORT_WIDTHS):
+        _validate_viewport(viewports[index], index, width)
+
+
+def _validate_viewport(value: JsonValue, index: int, width: int) -> None:
+    label = f"viewports[{index}]"
+    viewport = _keys(_obj(value, label), {"width", "height", "screenshots", "landing", "catalog", "errors"}, label)
+    if _integer(viewport["width"], f"{label}.width") != width or _integer(viewport["height"], f"{label}.height") != VIEWPORT_HEIGHT:
+        raise QaError("viewport dimensions are invalid")
+    screenshots = _keys(_obj(viewport["screenshots"], f"{label}.screenshots"), {"landing", "catalogTop", "catalogRecords"}, f"{label}.screenshots")
+    for key, path in {"landing": f"landing-{width}.png", "catalogTop": f"catalog-top-{width}.png", "catalogRecords": f"catalog-records-{width}.png"}.items():
+        shot = _keys(_obj(screenshots[key], f"{label}.screenshots.{key}"), {"path", "sha256"}, f"{label}.screenshots.{key}")
+        if _string(shot["path"], f"{label}.screenshots.{key}.path") != path:
+            raise QaError(f"unexpected screenshot path: {path}")
+        _hash(shot["sha256"], f"{label}.screenshots.{key}.sha256")
+    landing = _keys(_obj(viewport["landing"], f"{label}.landing"), {"status", "resolvedCatalogHref", "linkVisible", "scopeVisible", "scrollWidth", "clientWidth"}, f"{label}.landing")
+    catalog_keys = {"status", "canonical", "sourceSha256", "featureCount", "familyCount", "uniqueFeatureCount", "currentDispositionCount", "targetDispositionCount", "exactCurrentCount", "tierCounts", "unavailableSourceCount", "warningsBeforeFirstRecord", "scrollWidth", "clientWidth"}
+    catalog = _keys(_obj(viewport["catalog"], f"{label}.catalog"), catalog_keys, f"{label}.catalog")
+    errors = _keys(_obj(viewport["errors"], f"{label}.errors"), {"console", "page", "failedRequests", "non2xxResponses"}, f"{label}.errors")
+    _validate_leaf_types(landing, catalog, errors, label, catalog_keys)
+
+
+def _validate_leaf_types(landing: JsonObject, catalog: JsonObject, errors: JsonObject, label: str, catalog_keys: set[str]) -> None:
+    for key in ("status", "scrollWidth", "clientWidth"):
+        _integer(landing[key], f"{label}.landing.{key}")
+    _string(landing["resolvedCatalogHref"], f"{label}.landing.resolvedCatalogHref")
+    if not isinstance(landing["linkVisible"], bool) or not isinstance(landing["scopeVisible"], bool):
+        raise QaError(f"{label}.landing visibility values must be booleans")
+    _string(catalog["canonical"], f"{label}.catalog.canonical")
+    _hash(catalog["sourceSha256"], f"{label}.catalog.sourceSha256")
+    if not isinstance(catalog["warningsBeforeFirstRecord"], bool):
+        raise QaError(f"{label}.catalog.warningsBeforeFirstRecord must be a boolean")
+    for key in catalog_keys - {"canonical", "sourceSha256", "tierCounts", "warningsBeforeFirstRecord"}:
+        _integer(catalog[key], f"{label}.catalog.{key}")
+    for tier, value in _keys(_obj(catalog["tierCounts"], f"{label}.catalog.tierCounts"), set(TIERS), f"{label}.catalog.tierCounts").items():
+        _integer(value, f"{label}.catalog.tierCounts.{tier}")
+    for key, value in errors.items():
+        if not all(isinstance(item, str) for item in _arr(value, f"{label}.errors.{key}")):
+            raise QaError(f"{label}.errors.{key} must contain only strings")
+
+
+def load_manifest_stats(path: Path) -> ManifestStats:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("features"), list):
+        raise QaError("manifest must contain a features array")
+    tier_counts = {tier: 0 for tier in TIERS}
+    families: set[str] = set()
+    unavailable = 0
+    for feature in payload["features"]:
+        if not isinstance(feature, dict) or not isinstance(feature.get("family"), str):
+            raise QaError("manifest features must be objects with family strings")
+        families.add(feature["family"])
+        unavailable += 1 if feature.get("source_status") == "unavailable" else 0
+        current, target = feature.get("current"), feature.get("target")
+        if not isinstance(current, dict) or not isinstance(target, dict):
+            raise QaError("manifest dispositions must be objects")
+        for dimension in DIMENSIONS:
+            current_cell, target_cell = current.get(dimension), target.get(dimension)
+            if not isinstance(current_cell, dict) or not isinstance(target_cell, dict):
+                raise QaError("manifest disposition cells must be objects")
+            tier = current_cell.get("tier")
+            if not isinstance(tier, str) or tier not in tier_counts:
+                raise QaError("manifest current tier is invalid")
+            tier_counts[tier] += 1
+    count = len(payload["features"])
+    return ManifestStats(sha256_file(path), count, len(families), count * len(DIMENSIONS), count * len(DIMENSIONS), tier_counts["exact"], tier_counts, unavailable)
+
+
+def _dom_widths(page) -> JsonObject:
+    return page.evaluate("() => ({scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth})")
+
+
+def _catalog_dom(page) -> JsonObject:
+    return page.evaluate("""() => { const main = document.querySelector('#capabilityCatalog'); const first = document.querySelector('article[data-capability-id]'); const warning = document.querySelector('.catalog-note'); const ids = [...document.querySelectorAll('article[data-capability-id]')].map(node => node.getAttribute('data-capability-id')); const tiers = {}; for (const item of document.querySelectorAll('[data-tier-count]')) tiers[item.getAttribute('data-tier')] = Number(item.getAttribute('data-tier-count')); return {canonical: document.querySelector('link[rel="canonical"]').getAttribute('href'), sourceSha256: main.getAttribute('data-source-sha256'), featureCount: Number(main.getAttribute('data-feature-count')), familyCount: document.querySelectorAll('section[data-capability-family]').length, uniqueFeatureCount: new Set(ids).size, currentDispositionCount: document.querySelectorAll('td[data-disposition="current"]').length, targetDispositionCount: document.querySelectorAll('td[data-disposition="target"]').length, exactCurrentCount: document.querySelectorAll('td[data-disposition="current"][data-tier="exact"]').length, tierCounts: tiers, unavailableSourceCount: document.querySelectorAll('article[data-source-status="unavailable"]').length, warningsBeforeFirstRecord: Boolean(warning && first && (warning.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING))}; }""")
+
+
+def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
+    catalog, landing = _obj(report["catalog"], "catalog"), _obj(report["landing"], "landing")
+    expected = {"sourceSha256": stats.manifest_sha256, "featureCount": stats.feature_count, "familyCount": stats.family_count, "uniqueFeatureCount": stats.feature_count, "currentDispositionCount": stats.current_disposition_count, "targetDispositionCount": stats.target_disposition_count, "exactCurrentCount": stats.exact_current_count, "tierCounts": stats.tier_counts, "unavailableSourceCount": stats.unavailable_source_count}
+    if landing["status"] != 200 or catalog["status"] != 200 or catalog["canonical"] != CANONICAL_URL:
+        raise QaError("landing or catalog response contract failed")
+    if landing["scrollWidth"] != landing["clientWidth"] or catalog["scrollWidth"] != catalog["clientWidth"]:
+        raise QaError("horizontal overflow detected")
+    if not landing["linkVisible"] or not landing["scopeVisible"] or not catalog["warningsBeforeFirstRecord"]:
+        raise QaError("required page landmark is not visible or ordered")
+    if any(_arr(value, f"errors.{key}") for key, value in _obj(report["errors"], "errors").items()):
+        raise QaError("browser emitted console, page, request, or HTTP errors")
+    for key, value in expected.items():
+        if catalog[key] != value:
+            raise QaError(f"catalog DOM mismatch for {key}: {catalog[key]} != {value}")
+
+
+def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObject:
+    page = browser.new_page(viewport={"width": width, "height": VIEWPORT_HEIGHT})
+    try:
+        errors: JsonObject = {"console": [], "page": [], "failedRequests": [], "non2xxResponses": []}
+        page.on("console", lambda message: errors["console"].append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors["page"].append(str(error)))
+        page.on("requestfailed", lambda request: errors["failedRequests"].append(f"{request.method} {request.url}"))
+        page.on("response", lambda response: errors["non2xxResponses"].append(f"{response.status} {response.url}") if response.status >= 400 else None)
+        landing_response = page.goto(context.base_url, wait_until="load")
+        if landing_response is None:
+            raise QaError("landing navigation produced no response")
+        coverage, link = page.locator("#coverage"), page.locator("#capabilityCatalogLink")
+        coverage.scroll_into_view_if_needed()
+        landing_widths = _dom_widths(page)
+        link_visible, scope_visible = link.is_visible(), coverage.is_visible()
+        landing_name = f"landing-{width}.png"
+        page.screenshot(path=str(context.evidence_dir / landing_name), full_page=True)
+        link.click()
+        page.wait_for_load_state("load")
+        navigation = catalog_navigation_urls(context.base_url, page.url)
+        catalog_response = page.goto(navigation.capture_url, wait_until="load")
+        if catalog_response is None:
+            raise QaError("catalog navigation produced no response")
+        catalog_widths = _dom_widths(page)
+        catalog_name, records_name = f"catalog-top-{width}.png", f"catalog-records-{width}.png"
+        page.screenshot(path=str(context.evidence_dir / catalog_name), full_page=True)
+        page.locator("#capability-presentation").scroll_into_view_if_needed()
+        page.screenshot(path=str(context.evidence_dir / records_name), full_page=True)
+        catalog = _catalog_dom(page) | {"status": catalog_response.status, "scrollWidth": catalog_widths["scrollWidth"], "clientWidth": catalog_widths["clientWidth"]}
+        report = {"width": width, "height": VIEWPORT_HEIGHT, "screenshots": {"landing": _shot(context.evidence_dir, landing_name), "catalogTop": _shot(context.evidence_dir, catalog_name), "catalogRecords": _shot(context.evidence_dir, records_name)}, "landing": {"status": landing_response.status, "resolvedCatalogHref": navigation.resolved_no_query, "linkVisible": link_visible, "scopeVisible": scope_visible, "scrollWidth": landing_widths["scrollWidth"], "clientWidth": landing_widths["clientWidth"]}, "catalog": catalog, "errors": errors}
+        _check_viewport(report, context.stats)
+        return report
+    finally:
+        page.close()
+
+
+def _shot(evidence_dir: Path, name: str) -> JsonObject:
+    return {"path": name, "sha256": sha256_file(evidence_dir / name)}
+
+
+def run_browser_qa(args: CliArgs) -> JsonObject:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as error:
+        raise QaError("Python Playwright is required for browser QA") from error
+    cleanup_owned_evidence(args.evidence_dir)
+    stats = load_manifest_stats(args.manifest)
+    assert_clean_git_binding(args.git_sha, REPO_ROOT)
+    source = {"gitSha": args.git_sha, "manifestSha256": stats.manifest_sha256, "catalogHtmlSha256": sha256_file(args.catalog_html)}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(channel="chrome", headless=True)
+        try:
+            context = RuntimeContext(args.base_url, args.evidence_dir, stats)
+            viewports = [_capture_viewport(browser, context, width) for width in VIEWPORT_WIDTHS]
+        finally:
+            browser.close()
+    report = {"schemaVersion": 1, "capturedAt": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"), "source": source, "viewports": viewports}
+    validate_report_schema(report)
+    (args.evidence_dir / "browser-qa.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return report
+
+
+def parse_args(argv: list[str] | None = None) -> CliArgs:
+    parser = argparse.ArgumentParser(description="Capture GitHub Pages capability-catalog browser QA evidence.")
+    for option in ("--base-url", "--manifest", "--catalog-html", "--evidence-dir", "--git-sha"):
+        parser.add_argument(option, required=True)
+    parsed = parser.parse_args(argv)
+    return CliArgs(parsed.base_url, Path(parsed.manifest), Path(parsed.catalog_html), Path(parsed.evidence_dir), parsed.git_sha)
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    try:
+        run_browser_qa(parse_args(argv))
+    except QaError as error:
+        logger.error("%s", error)
+        return 1
+    except OSError:
+        logger.exception("file-system error")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
