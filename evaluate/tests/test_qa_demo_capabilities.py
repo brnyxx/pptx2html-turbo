@@ -138,6 +138,7 @@ class FakePage:
         tmpdir: Path,
         redirect_status: int | None = None,
         require_warning_contract: bool = False,
+        raise_on_goto: bool = False,
     ) -> None:
         self.url = "http://127.0.0.1:4173/"
         self.scrolled: list[str] = []
@@ -151,11 +152,14 @@ class FakePage:
         ]
         self._redirect_status = redirect_status
         self._require_warning_contract = require_warning_contract
+        self._raise_on_goto = raise_on_goto
 
     def on(self, event: str, callback: object) -> None:
         self._listeners[event] = callback
 
     def goto(self, url: str, wait_until: str) -> FakeResponse:
+        if self._raise_on_goto:
+            raise RuntimeError("browser navigation failed")
         self.url = url
         if self._redirect_status is not None and "capabilities" in url:
             self._listeners["response"](FakeResponse(self._redirect_status, url))
@@ -183,11 +187,59 @@ class FakePage:
 
 
 class FakeBrowser:
-    def __init__(self, tmpdir: Path, redirect_status: int | None = None) -> None:
-        self.page = FakePage(tmpdir, redirect_status=redirect_status)
+    def __init__(
+        self,
+        tmpdir: Path,
+        redirect_status: int | None = None,
+        raise_on_goto: bool = False,
+    ) -> None:
+        self.page = FakePage(tmpdir, redirect_status=redirect_status, raise_on_goto=raise_on_goto)
 
     def new_page(self, viewport: dict[str, int]) -> FakePage:
         return self.page
+
+
+def manifest_fixture() -> dict[str, object]:
+    disposition = {
+        "semantic": {"tier": "approximate"},
+        "visual": {"tier": "fallback"},
+        "behavioral": {"tier": "fallback"},
+    }
+    return {
+        "features": [
+            {
+                "id": "presentation",
+                "family": "presentationml-package",
+                "source_status": "unavailable",
+                "current": disposition,
+                "target": disposition,
+            }
+        ]
+    }
+
+
+def write_valid_inputs(root: Path) -> tuple[Path, Path]:
+    manifest = root / "manifest.json"
+    catalog = root / "catalog.html"
+    manifest.write_text(json.dumps(manifest_fixture()), encoding="utf-8")
+    catalog.write_text("<main></main>", encoding="utf-8")
+    return manifest, catalog
+
+
+def evidence_bytes(evidence_dir: Path) -> dict[str, bytes]:
+    return {
+        path.name: path.read_bytes()
+        for path in sorted(evidence_dir.iterdir())
+        if path.is_file()
+    }
+
+
+def write_evidence_sentinel(evidence_dir: Path, module) -> dict[str, bytes]:
+    evidence_dir.mkdir()
+    for name in module.OWNED_EVIDENCE_NAMES:
+        (evidence_dir / name).write_bytes(f"existing:{name}".encode())
+    (evidence_dir / "unrelated.txt").write_bytes(b"keep")
+    return evidence_bytes(evidence_dir)
 
 
 class QaDemoCapabilitiesTests(unittest.TestCase):
@@ -321,7 +373,7 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         navigation = module.catalog_navigation_urls(
             "https://brnyxx.github.io/pptx2html-turbo/?v=01234567",
-            "https://brnyxx.github.io/pptx2html-turbo/capabilities/?stale=true",
+            "https://brnyxx.github.io/pptx2html-turbo/capabilities/",
         )
 
         self.assertEqual(
@@ -332,6 +384,70 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             navigation.capture_url,
             "https://brnyxx.github.io/pptx2html-turbo/capabilities/?v=01234567",
         )
+
+    def test_catalog_capture_url_rejects_external_or_wrong_path_destinations(self) -> None:
+        module = load_module()
+
+        for resolved in (
+            "https://example.test/pptx2html-turbo/capabilities/",
+            "https://brnyxx.github.io/pptx2html-turbo/not-capabilities/",
+            "https://user@brnyxx.github.io/pptx2html-turbo/capabilities/",
+            "https://brnyxx.github.io/pptx2html-turbo/capabilities/?stale=true",
+            "https://brnyxx.github.io/pptx2html-turbo/capabilities/#top",
+        ):
+            with self.subTest(resolved=resolved):
+                with self.assertRaises(module.QaError):
+                    module.catalog_navigation_urls(
+                        "https://brnyxx.github.io/pptx2html-turbo/?v=01234567",
+                        resolved,
+                    )
+
+    def test_preflight_failures_leave_existing_evidence_byte_identical(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest, catalog = write_valid_inputs(root)
+            bad_json = root / "bad.json"
+            bad_json.write_text("{", encoding="utf-8")
+            invalid_manifest = root / "invalid.json"
+            invalid_manifest.write_text(json.dumps({"features": {}}), encoding="utf-8")
+            cases = (
+                module.CliArgs("http://127.0.0.1:4173/", root / "missing.json", catalog, root / "evidence-a", VALID_SHA),
+                module.CliArgs("http://127.0.0.1:4173/", root, catalog, root / "evidence-b", VALID_SHA),
+                module.CliArgs("http://127.0.0.1:4173/", bad_json, catalog, root / "evidence-c", VALID_SHA),
+                module.CliArgs("http://127.0.0.1:4173/", manifest, root / "missing.html", root / "evidence-d", VALID_SHA),
+                module.CliArgs("http://127.0.0.1:4173/", manifest, root, root / "evidence-e", VALID_SHA),
+                module.CliArgs("http://127.0.0.1:4173/", invalid_manifest, catalog, root / "evidence-f", VALID_SHA),
+            )
+            for args in cases:
+                with self.subTest(args=args):
+                    before = write_evidence_sentinel(args.evidence_dir, module)
+                    with self.assertRaises(module.QaError):
+                        module.run_browser_qa(args)
+                    self.assertEqual(evidence_bytes(args.evidence_dir), before)
+
+    def test_dirty_or_mismatched_git_preflight_leaves_existing_evidence_byte_identical(
+        self,
+    ) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest, catalog = write_valid_inputs(root)
+            cases = (
+                ([completed(f"{OTHER_SHA}\n"), completed("")], "mismatch"),
+                ([completed(f"{VALID_SHA}\n"), completed(" M README.md\n")], "dirty"),
+            )
+            for side_effect, name in cases:
+                with self.subTest(name=name):
+                    evidence_dir = root / f"evidence-{name}"
+                    before = write_evidence_sentinel(evidence_dir, module)
+                    args = module.CliArgs("http://127.0.0.1:4173/", manifest, catalog, evidence_dir, VALID_SHA)
+                    with mock.patch.object(module.subprocess, "run", side_effect=side_effect):
+                        with self.assertRaises(module.QaError):
+                            module.run_browser_qa(args)
+                    self.assertEqual(evidence_bytes(evidence_dir), before)
 
     def test_capture_uses_viewport_screenshots_for_scrolled_states(self) -> None:
         module = load_module()
@@ -380,6 +496,27 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             page = FakePage(Path(tmpdir), require_warning_contract=True)
 
             module._catalog_dom(page)
+
+    def test_browser_runtime_errors_are_wrapped_as_qa_errors(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            browser = FakeBrowser(Path(tmpdir), raise_on_goto=True)
+            context = module.RuntimeContext(
+                "http://127.0.0.1:4173/",
+                Path(tmpdir),
+                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                }, 2),
+            )
+
+            with self.assertRaises(module.QaError) as caught:
+                module._capture_viewport(browser, context, 375)
+
+        self.assertIsInstance(caught.exception.__cause__, RuntimeError)
 
 
 if __name__ == "__main__":

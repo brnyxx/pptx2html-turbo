@@ -2,21 +2,15 @@
 from __future__ import annotations
 
 import argparse, hashlib, json, logging, re, subprocess
-from dataclasses import dataclass; from datetime import UTC, datetime
-from pathlib import Path; from typing import Final, TypeAlias; from urllib.parse import urlsplit, urlunsplit
+from dataclasses import dataclass; from datetime import UTC, datetime; from pathlib import Path; from typing import Final, TypeAlias; from urllib.parse import urlsplit, urlunsplit
 
-JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
-JsonObject: TypeAlias = dict[str, JsonValue]
+JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]; JsonObject: TypeAlias = dict[str, JsonValue]
 
-logger = logging.getLogger(__name__)
-REPO_ROOT: Final = Path(__file__).resolve().parents[1]
-GIT_SHA_RE: Final = re.compile(r"^[0-9a-f]{40}$")
-HASH_RE: Final = re.compile(r"^[0-9a-f]{64}$")
+logger = logging.getLogger(__name__); REPO_ROOT: Final = Path(__file__).resolve().parents[1]
+GIT_SHA_RE: Final = re.compile(r"^[0-9a-f]{40}$"); HASH_RE: Final = re.compile(r"^[0-9a-f]{64}$")
 CAPTURED_AT_RE: Final = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 VIEWPORT_WIDTHS: Final = (375, 768, 1280); VIEWPORT_HEIGHT: Final = 900
-CANONICAL_URL: Final = "https://brnyxx.github.io/pptx2html-turbo/capabilities/"
-DIMENSIONS: Final = ("semantic", "visual", "behavioral")
-TIERS: Final = ("exact", "approximate", "fallback", "unparsed")
+CANONICAL_URL: Final = "https://brnyxx.github.io/pptx2html-turbo/capabilities/"; DIMENSIONS: Final = ("semantic", "visual", "behavioral"); TIERS: Final = ("exact", "approximate", "fallback", "unparsed")
 OWNED_EVIDENCE_NAMES: Final = tuple(
     [f"landing-{w}.png" for w in VIEWPORT_WIDTHS] + [f"catalog-top-{w}.png" for w in VIEWPORT_WIDTHS]
     + [f"catalog-records-{w}.png" for w in VIEWPORT_WIDTHS] + ["browser-qa.json", "integrity-review.md", "visual-fidelity-review.md"]
@@ -27,28 +21,38 @@ class QaError(Exception): pass
 
 
 @dataclass(frozen=True, slots=True)
-class CatalogNavigation:
-    resolved_no_query: str; capture_url: str
+class CatalogNavigation: resolved_no_query: str; capture_url: str
 
 
 @dataclass(frozen=True, slots=True)
-class ManifestStats:
-    manifest_sha256: str; feature_count: int; family_count: int; current_disposition_count: int
-    target_disposition_count: int; exact_current_count: int; tier_counts: dict[str, int]; unavailable_source_count: int
+class ManifestStats: manifest_sha256: str; feature_count: int; family_count: int; current_disposition_count: int; target_disposition_count: int; exact_current_count: int; tier_counts: dict[str, int]; unavailable_source_count: int
 
 
 @dataclass(frozen=True, slots=True)
-class CliArgs:
-    base_url: str; manifest: Path; catalog_html: Path; evidence_dir: Path; git_sha: str
+class CliArgs: base_url: str; manifest: Path; catalog_html: Path; evidence_dir: Path; git_sha: str
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeContext:
-    base_url: str; evidence_dir: Path; stats: ManifestStats
+class RuntimeContext: base_url: str; evidence_dir: Path; stats: ManifestStats
 
 
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    _regular_file(path, "sha256 input")
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise QaError(f"failed to read sha256 input: {path}") from error
+
+
+def _regular_file(path: Path, label: str) -> None:
+    try:
+        path.lstat()
+    except OSError as error:
+        raise QaError(f"failed to inspect {label}: {path}") from error
+    if path.is_symlink():
+        raise QaError(f"{label} must be a real regular file: {path}") from OSError("symlink rejected")
+    if not path.is_file():
+        raise QaError(f"{label} must be a real regular file: {path}") from IsADirectoryError(str(path))
 
 
 def cleanup_owned_evidence(evidence_dir: Path) -> None:
@@ -79,45 +83,47 @@ def assert_clean_git_binding(git_sha: str, repo_root: Path) -> None:
 def catalog_navigation_urls(base_url: str, resolved_catalog_url: str) -> CatalogNavigation:
     base = urlsplit(base_url)
     catalog = urlsplit(resolved_catalog_url)
+    if base.username or base.password or not base.scheme or not base.netloc:
+        raise QaError("--base-url must be an absolute URL without credentials")
+    base_path = base.path if base.path.endswith("/") else base.path.rsplit("/", 1)[0] + "/"
+    expected = urlunsplit((base.scheme, base.netloc, f"{base_path}capabilities/", "", ""))
+    if catalog.username or catalog.password or catalog.query or catalog.fragment:
+        raise QaError("resolved catalog URL must not contain credentials, query, or fragment")
     resolved = urlunsplit((catalog.scheme, catalog.netloc, catalog.path, "", catalog.fragment))
+    if resolved != expected:
+        raise QaError(f"resolved catalog URL must equal {expected}")
     capture = resolved if not base.query else urlunsplit((catalog.scheme, catalog.netloc, catalog.path, base.query, catalog.fragment))
     return CatalogNavigation(resolved_no_query=resolved, capture_url=capture)
 
 
 def _obj(value: JsonValue, label: str) -> JsonObject:
-    if isinstance(value, dict):
-        return value
-    raise QaError(f"{label} must be an object")
+    if not isinstance(value, dict): raise QaError(f"{label} must be an object") from TypeError(label)
+    return value
 
 
 def _arr(value: JsonValue, label: str) -> list[JsonValue]:
-    if isinstance(value, list):
-        return value
-    raise QaError(f"{label} must be an array")
+    if not isinstance(value, list): raise QaError(f"{label} must be an array") from TypeError(label)
+    return value
 
 
 def _keys(value: JsonObject, expected: set[str], label: str) -> JsonObject:
-    if set(value) == expected:
-        return value
-    raise QaError(f"{label} keys must equal {sorted(expected)}")
+    if set(value) != expected: raise QaError(f"{label} keys must equal {sorted(expected)}")
+    return value
 
 
 def _string(value: JsonValue, label: str) -> str:
-    if isinstance(value, str):
-        return value
-    raise QaError(f"{label} must be a string")
+    if not isinstance(value, str): raise QaError(f"{label} must be a string") from TypeError(label)
+    return value
 
 
 def _integer(value: JsonValue, label: str) -> int:
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    raise QaError(f"{label} must be an integer")
+    if not isinstance(value, int) or isinstance(value, bool): raise QaError(f"{label} must be an integer") from TypeError(label)
+    return value
 
 
 def _hash(value: JsonValue, label: str) -> str:
     text = _string(value, label)
-    if HASH_RE.fullmatch(text) is None:
-        raise QaError(f"{label} must be a lowercase sha256")
+    if HASH_RE.fullmatch(text) is None: raise QaError(f"{label} must be a lowercase sha256")
     return text
 
 
@@ -126,13 +132,10 @@ def validate_report_schema(report: JsonObject) -> None:
     if report["schemaVersion"] != 1 or CAPTURED_AT_RE.fullmatch(_string(report["capturedAt"], "capturedAt")) is None:
         raise QaError("report version or capturedAt is invalid")
     source = _keys(_obj(report["source"], "source"), {"gitSha", "manifestSha256", "catalogHtmlSha256"}, "source")
-    if GIT_SHA_RE.fullmatch(_string(source["gitSha"], "source.gitSha")) is None:
-        raise QaError("source.gitSha must be a lowercase git SHA")
-    _hash(source["manifestSha256"], "source.manifestSha256")
-    _hash(source["catalogHtmlSha256"], "source.catalogHtmlSha256")
+    if GIT_SHA_RE.fullmatch(_string(source["gitSha"], "source.gitSha")) is None: raise QaError("source.gitSha must be a lowercase git SHA")
+    _hash(source["manifestSha256"], "source.manifestSha256"); _hash(source["catalogHtmlSha256"], "source.catalogHtmlSha256")
     viewports = _arr(report["viewports"], "viewports")
-    if len(viewports) != len(VIEWPORT_WIDTHS):
-        raise QaError("viewports must contain exactly three entries")
+    if len(viewports) != len(VIEWPORT_WIDTHS): raise QaError("viewports must contain exactly three entries")
     for index, width in enumerate(VIEWPORT_WIDTHS):
         _validate_viewport(viewports[index], index, width)
 
@@ -145,8 +148,7 @@ def _validate_viewport(value: JsonValue, index: int, width: int) -> None:
     screenshots = _keys(_obj(viewport["screenshots"], f"{label}.screenshots"), {"landing", "catalogTop", "catalogRecords"}, f"{label}.screenshots")
     for key, path in {"landing": f"landing-{width}.png", "catalogTop": f"catalog-top-{width}.png", "catalogRecords": f"catalog-records-{width}.png"}.items():
         shot = _keys(_obj(screenshots[key], f"{label}.screenshots.{key}"), {"path", "sha256"}, f"{label}.screenshots.{key}")
-        if _string(shot["path"], f"{label}.screenshots.{key}.path") != path:
-            raise QaError(f"unexpected screenshot path: {path}")
+        if _string(shot["path"], f"{label}.screenshots.{key}.path") != path: raise QaError(f"unexpected screenshot path: {path}")
         _hash(shot["sha256"], f"{label}.screenshots.{key}.sha256")
     landing = _keys(_obj(viewport["landing"], f"{label}.landing"), {"status", "resolvedCatalogHref", "linkVisible", "scopeVisible", "scrollWidth", "clientWidth"}, f"{label}.landing")
     catalog_keys = {"status", "canonical", "sourceSha256", "featureCount", "familyCount", "uniqueFeatureCount", "currentDispositionCount", "targetDispositionCount", "exactCurrentCount", "tierCounts", "unavailableSourceCount", "warningsBeforeFirstRecord", "scrollWidth", "clientWidth"}
@@ -159,12 +161,9 @@ def _validate_leaf_types(landing: JsonObject, catalog: JsonObject, errors: JsonO
     for key in ("status", "scrollWidth", "clientWidth"):
         _integer(landing[key], f"{label}.landing.{key}")
     _string(landing["resolvedCatalogHref"], f"{label}.landing.resolvedCatalogHref")
-    if not isinstance(landing["linkVisible"], bool) or not isinstance(landing["scopeVisible"], bool):
-        raise QaError(f"{label}.landing visibility values must be booleans")
-    _string(catalog["canonical"], f"{label}.catalog.canonical")
-    _hash(catalog["sourceSha256"], f"{label}.catalog.sourceSha256")
-    if not isinstance(catalog["warningsBeforeFirstRecord"], bool):
-        raise QaError(f"{label}.catalog.warningsBeforeFirstRecord must be a boolean")
+    if not isinstance(landing["linkVisible"], bool) or not isinstance(landing["scopeVisible"], bool): raise QaError(f"{label}.landing visibility values must be booleans")
+    _string(catalog["canonical"], f"{label}.catalog.canonical"); _hash(catalog["sourceSha256"], f"{label}.catalog.sourceSha256")
+    if not isinstance(catalog["warningsBeforeFirstRecord"], bool): raise QaError(f"{label}.catalog.warningsBeforeFirstRecord must be a boolean")
     for key in catalog_keys - {"canonical", "sourceSha256", "tierCounts", "warningsBeforeFirstRecord"}:
         _integer(catalog[key], f"{label}.catalog.{key}")
     for tier, value in _keys(_obj(catalog["tierCounts"], f"{label}.catalog.tierCounts"), set(TIERS), f"{label}.catalog.tierCounts").items():
@@ -175,27 +174,25 @@ def _validate_leaf_types(landing: JsonObject, catalog: JsonObject, errors: JsonO
 
 
 def load_manifest_stats(path: Path) -> ManifestStats:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or not isinstance(payload.get("features"), list):
-        raise QaError("manifest must contain a features array")
-    tier_counts = {tier: 0 for tier in TIERS}
-    families: set[str] = set()
-    unavailable = 0
+    _regular_file(path, "manifest")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error: raise QaError(f"manifest must be valid UTF-8: {path}") from error
+    except json.JSONDecodeError as error: raise QaError(f"manifest must be valid JSON: {path}") from error
+    except OSError as error: raise QaError(f"failed to read manifest: {path}") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("features"), list): raise QaError("manifest must contain a features array") from TypeError("manifest features")
+    tier_counts = {tier: 0 for tier in TIERS}; families: set[str] = set(); unavailable = 0
     for feature in payload["features"]:
-        if not isinstance(feature, dict) or not isinstance(feature.get("family"), str):
-            raise QaError("manifest features must be objects with family strings")
+        if not isinstance(feature, dict) or not isinstance(feature.get("family"), str): raise QaError("manifest features must be objects with family strings") from TypeError("manifest feature")
         families.add(feature["family"])
         unavailable += 1 if feature.get("source_status") == "unavailable" else 0
         current, target = feature.get("current"), feature.get("target")
-        if not isinstance(current, dict) or not isinstance(target, dict):
-            raise QaError("manifest dispositions must be objects")
+        if not isinstance(current, dict) or not isinstance(target, dict): raise QaError("manifest dispositions must be objects") from TypeError("manifest dispositions")
         for dimension in DIMENSIONS:
             current_cell, target_cell = current.get(dimension), target.get(dimension)
-            if not isinstance(current_cell, dict) or not isinstance(target_cell, dict):
-                raise QaError("manifest disposition cells must be objects")
+            if not isinstance(current_cell, dict) or not isinstance(target_cell, dict): raise QaError("manifest disposition cells must be objects") from TypeError("manifest disposition cells")
             tier = current_cell.get("tier")
-            if not isinstance(tier, str) or tier not in tier_counts:
-                raise QaError("manifest current tier is invalid")
+            if not isinstance(tier, str) or tier not in tier_counts: raise QaError("manifest current tier is invalid") from TypeError("manifest tier")
             tier_counts[tier] += 1
     count = len(payload["features"])
     return ManifestStats(sha256_file(path), count, len(families), count * len(DIMENSIONS), count * len(DIMENSIONS), tier_counts["exact"], tier_counts, unavailable)
@@ -257,6 +254,8 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         report = {"width": width, "height": VIEWPORT_HEIGHT, "screenshots": {"landing": _shot(context.evidence_dir, landing_name), "catalogTop": _shot(context.evidence_dir, catalog_name), "catalogRecords": _shot(context.evidence_dir, records_name)}, "landing": {"status": landing_response.status, "resolvedCatalogHref": navigation.resolved_no_query, "linkVisible": link_visible, "scopeVisible": scope_visible, "scrollWidth": landing_widths["scrollWidth"], "clientWidth": landing_widths["clientWidth"]}, "catalog": catalog, "errors": errors}
         _check_viewport(report, context.stats)
         return report
+    except RuntimeError as error:
+        raise QaError("browser QA runtime failed") from error
     finally:
         page.close()
 
@@ -265,22 +264,30 @@ def _shot(evidence_dir: Path, name: str) -> JsonObject:
     return {"path": name, "sha256": sha256_file(evidence_dir / name)}
 
 
+def preflight_inputs(args: CliArgs) -> tuple[ManifestStats, JsonObject]:
+    stats = load_manifest_stats(args.manifest)
+    source = {"gitSha": args.git_sha, "manifestSha256": stats.manifest_sha256, "catalogHtmlSha256": sha256_file(args.catalog_html)}
+    assert_clean_git_binding(args.git_sha, REPO_ROOT)
+    return stats, source
+
+
 def run_browser_qa(args: CliArgs) -> JsonObject:
+    stats, source = preflight_inputs(args)
+    cleanup_owned_evidence(args.evidence_dir)
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import Error as PlaywrightError, sync_playwright
     except ImportError as error:
         raise QaError("Python Playwright is required for browser QA") from error
-    cleanup_owned_evidence(args.evidence_dir)
-    stats = load_manifest_stats(args.manifest)
-    assert_clean_git_binding(args.git_sha, REPO_ROOT)
-    source = {"gitSha": args.git_sha, "manifestSha256": stats.manifest_sha256, "catalogHtmlSha256": sha256_file(args.catalog_html)}
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(channel="chrome", headless=True)
-        try:
-            context = RuntimeContext(args.base_url, args.evidence_dir, stats)
-            viewports = [_capture_viewport(browser, context, width) for width in VIEWPORT_WIDTHS]
-        finally:
-            browser.close()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(channel="chrome", headless=True)
+            try:
+                context = RuntimeContext(args.base_url, args.evidence_dir, stats)
+                viewports = [_capture_viewport(browser, context, width) for width in VIEWPORT_WIDTHS]
+            finally:
+                browser.close()
+    except PlaywrightError as error:
+        raise QaError("browser QA runtime failed") from error
     report = {"schemaVersion": 1, "capturedAt": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"), "source": source, "viewports": viewports}
     validate_report_schema(report)
     (args.evidence_dir / "browser-qa.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -301,9 +308,6 @@ def main(argv: list[str] | None = None) -> int:
         run_browser_qa(parse_args(argv))
     except QaError as error:
         logger.error("%s", error)
-        return 1
-    except OSError:
-        logger.exception("file-system error")
         return 1
     return 0
 
