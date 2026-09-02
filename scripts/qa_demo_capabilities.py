@@ -97,18 +97,52 @@ def _regular_file(path: Path, label: str) -> None:
         ) from IsADirectoryError(str(path))
 
 
-def cleanup_owned_evidence(evidence_dir: Path) -> None:
+def cleanup_owned_evidence(evidence_dir: Path, repo_root: Path = REPO_ROOT) -> Path:
     try:
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+        root = repo_root.resolve(strict=True)
     except OSError as error:
-        raise QaError(f"failed to create evidence directory: {evidence_dir}") from error
+        raise QaError(f"failed to resolve repository root: {repo_root}") from error
+    lexical_root = repo_root if repo_root.is_absolute() else Path.cwd() / repo_root
+    if evidence_dir.is_absolute():
+        try:
+            relative = evidence_dir.relative_to(lexical_root)
+        except ValueError:
+            try:
+                relative = evidence_dir.relative_to(root)
+            except ValueError as error:
+                raise QaError(
+                    "evidence directory must be inside the repository"
+                ) from error
+    else:
+        relative = evidence_dir
+    candidate = root / relative
+    if (
+        len(relative.parts) < 3
+        or relative.parts[:2] != (".omo", "evidence")
+        or ".." in relative.parts
+    ):
+        raise QaError("evidence directory must be below .omo/evidence") from ValueError(
+            str(evidence_dir)
+        )
+    current = root
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise QaError(
+                f"evidence directory must not traverse symlinks: {evidence_dir}"
+            ) from OSError("symlink rejected")
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise QaError(f"failed to create evidence directory: {candidate}") from error
     for name in OWNED_EVIDENCE_NAMES:
         try:
-            (evidence_dir / name).unlink(missing_ok=True)
+            (candidate / name).unlink(missing_ok=True)
         except OSError as error:
             raise QaError(
-                f"failed to remove owned evidence file: {evidence_dir / name}"
+                f"failed to remove owned evidence file: {candidate / name}"
             ) from error
+    return candidate
 
 
 def _git_text(args: list[str], repo_root: Path) -> str:
@@ -699,20 +733,22 @@ def _shot(evidence_dir: Path, name: str) -> JsonObject:
     return {"path": name, "sha256": sha256_file(evidence_dir / name)}
 
 
-def preflight_inputs(args: CliArgs) -> tuple[ManifestStats, JsonObject]:
+def preflight_inputs(
+    args: CliArgs, repo_root: Path = REPO_ROOT
+) -> tuple[ManifestStats, JsonObject]:
     stats = load_manifest_stats(args.manifest)
     source = {
         "gitSha": args.git_sha,
         "manifestSha256": stats.manifest_sha256,
         "catalogHtmlSha256": sha256_file(args.catalog_html),
     }
-    assert_clean_git_binding(args.git_sha, REPO_ROOT)
+    assert_clean_git_binding(args.git_sha, repo_root)
     return stats, source
 
 
-def run_browser_qa(args: CliArgs) -> JsonObject:
-    stats, source = preflight_inputs(args)
-    cleanup_owned_evidence(args.evidence_dir)
+def run_browser_qa(args: CliArgs, repo_root: Path = REPO_ROOT) -> JsonObject:
+    stats, source = preflight_inputs(args, repo_root)
+    evidence_dir = cleanup_owned_evidence(args.evidence_dir, repo_root)
     try:
         from playwright.sync_api import Error as PlaywrightError, sync_playwright
     except ImportError as error:
@@ -721,7 +757,7 @@ def run_browser_qa(args: CliArgs) -> JsonObject:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(channel="chrome", headless=True)
             try:
-                context = RuntimeContext(args.base_url, args.evidence_dir, stats)
+                context = RuntimeContext(args.base_url, evidence_dir, stats)
                 viewports = [
                     _capture_viewport(browser, context, width)
                     for width in VIEWPORT_WIDTHS
@@ -740,12 +776,12 @@ def run_browser_qa(args: CliArgs) -> JsonObject:
     }
     validate_report_schema(report)
     try:
-        (args.evidence_dir / "browser-qa.json").write_text(
+        (evidence_dir / "browser-qa.json").write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     except OSError as error:
         raise QaError(
-            f"failed to write browser QA report: {args.evidence_dir / 'browser-qa.json'}"
+            f"failed to write browser QA report: {evidence_dir / 'browser-qa.json'}"
         ) from error
     return report
 

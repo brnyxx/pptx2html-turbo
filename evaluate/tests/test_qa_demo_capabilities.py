@@ -363,7 +363,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
         module = load_module()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            evidence_dir = Path(tmpdir)
+            root = Path(tmpdir)
+            evidence_dir = root / ".omo" / "evidence" / "cleanup"
+            evidence_dir.mkdir(parents=True)
             for name in module.OWNED_EVIDENCE_NAMES:
                 (evidence_dir / name).write_text("owned", encoding="utf-8")
             sentinel = evidence_dir / "sentinel.txt"
@@ -372,21 +374,63 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             sentinel.write_text("keep", encoding="utf-8")
             (nested / "landing-375.png").write_text("keep nested", encoding="utf-8")
 
-            module.cleanup_owned_evidence(evidence_dir)
+            module.cleanup_owned_evidence(evidence_dir, root)
 
             for name in module.OWNED_EVIDENCE_NAMES:
                 self.assertFalse((evidence_dir / name).exists(), name)
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
             self.assertTrue((nested / "landing-375.png").is_file())
 
+    def test_cleanup_rejects_symlinked_evidence_paths_without_deleting_targets(
+        self,
+    ) -> None:
+        module = load_module()
+
+        for nested in (False, True):
+            with self.subTest(nested=nested), tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                outside = root / "outside"
+                target = outside / "nested" if nested else outside
+                target.mkdir(parents=True)
+                owned = target / module.OWNED_EVIDENCE_NAMES[0]
+                owned.write_bytes(b"keep")
+                evidence_root = root / ".omo" / "evidence"
+                evidence_root.mkdir(parents=True)
+                linked = evidence_root / "linked"
+                linked.symlink_to(outside, target_is_directory=True)
+                evidence_dir = linked / "nested" if nested else linked
+
+                with self.assertRaises(module.QaError):
+                    module.cleanup_owned_evidence(evidence_dir, root)
+
+                self.assertEqual(owned.read_bytes(), b"keep")
+
+    def test_cleanup_rejects_paths_outside_repository_evidence_root(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            outside = root / "outside"
+            outside.mkdir()
+            owned = outside / module.OWNED_EVIDENCE_NAMES[0]
+            owned.write_bytes(b"keep")
+
+            with self.assertRaises(module.QaError):
+                module.cleanup_owned_evidence(outside, root)
+
+            self.assertEqual(owned.read_bytes(), b"keep")
+
     def test_cleanup_wraps_mkdir_os_error_with_cause(self) -> None:
         module = load_module()
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
             cause = PermissionError("mkdir blocked")
             with mock.patch.object(module.Path, "mkdir", side_effect=cause):
                 with self.assertRaises(module.QaError) as caught:
-                    module.cleanup_owned_evidence(Path(tmpdir) / "evidence")
+                    module.cleanup_owned_evidence(
+                        root / ".omo" / "evidence" / "blocked", root
+                    )
 
         self.assertIs(caught.exception.__cause__, cause)
 
@@ -899,8 +943,8 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            evidence_dir = root / "evidence"
-            evidence_dir.mkdir()
+            evidence_dir = root / ".omo" / "evidence" / "write-error"
+            evidence_dir.mkdir(parents=True)
             stats = module.ManifestStats(
                 "b" * 64,
                 56,
@@ -947,7 +991,8 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                                     root / "catalog.html",
                                     evidence_dir,
                                     VALID_SHA,
-                                )
+                                ),
+                                root,
                             )
 
         self.assertIs(caught.exception.__cause__, cause)
