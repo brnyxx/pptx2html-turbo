@@ -26,6 +26,9 @@ const STAGES = ['parsed', 'resolved', 'rendered', 'fidelity-tested', 'not-applic
 const GENERATOR_PATH = fileURLToPath(
   new URL('../../../scripts/render_demo_capabilities.mjs', import.meta.url),
 );
+const WORKFLOW_PATH = fileURLToPath(
+  new URL('../../../.github/workflows/deploy-demo.yml', import.meta.url),
+);
 const TEMPLATE_TEXT = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,6 +61,10 @@ function escapeRegExp(value) {
 
 function countMatches(html, pattern) {
   return [...html.matchAll(pattern)].length;
+}
+
+function assertContains(text, needle, label) {
+  assert.ok(text.includes(needle), label);
 }
 
 function tagById(html, tag, id) {
@@ -722,6 +729,102 @@ function assertCliBoundaries() {
   assert.match(unknownOption.stderr, /unknown option: --unknown/);
 }
 
+function workflowStepRunBlock(workflowText, stepName) {
+  const lines = workflowText.split('\n');
+  const nameLine = `      - name: ${stepName}`;
+  const startIndex = lines.indexOf(nameLine);
+  assert.notEqual(startIndex, -1, `missing workflow step: ${stepName}`);
+  assert.equal(lines[startIndex + 1], '        run: |', `${stepName} must use a block run`);
+  const blockLines = [];
+  for (const line of lines.slice(startIndex + 2)) {
+    if (line.startsWith('      - name: ') || line.startsWith('      - uses: ')) {
+      break;
+    }
+    blockLines.push(line);
+  }
+  return blockLines.join('\n');
+}
+
+function assertCommandOrder(block, labels) {
+  let previousIndex = -1;
+  for (const [label, needle] of labels) {
+    const index = block.indexOf(needle);
+    assert.ok(index >= 0, `missing workflow command: ${label}`);
+    assert.ok(index > previousIndex, `workflow command order: ${label}`);
+    previousIndex = index;
+  }
+}
+
+function assertWorkflowContract(workflowText) {
+  assertContains(
+    workflowText,
+    "      - 'evaluate/completeness_manifest.json'",
+    'workflow must trigger when the capability manifest changes',
+  );
+  assertContains(
+    workflowText,
+    "      - 'scripts/render_demo_capabilities.mjs'",
+    'workflow must trigger when the catalog generator changes',
+  );
+
+  const jobsBlock = workflowText.match(/^jobs:\n([\s\S]*)$/m)?.[1];
+  assert.ok(jobsBlock, 'workflow jobs block must exist');
+  const jobNames = [...jobsBlock.matchAll(/^  ([a-zA-Z0-9_-]+):\s*$/gm)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(jobNames, ['deploy'], 'workflow must keep exactly one deploy job');
+  assert.equal(
+    countMatches(workflowText, /uses:\s*actions\/deploy-pages@/g),
+    1,
+    'workflow must have exactly one deploy-pages action',
+  );
+  assert.doesNotMatch(workflowText, /^\s*matrix:/m, 'workflow must not add a matrix');
+
+  const validationBlock = workflowStepRunBlock(workflowText, 'Validate demo contracts');
+  assertContains(
+    validationBlock,
+    'mkdir -p "$RUNNER_TEMP/pptx2html-capabilities"',
+    'validation must use a runner temp capability directory',
+  );
+  assertCommandOrder(validationBlock, [
+    ['release version read', 'VERSION=$(bash scripts/read_release_version.sh)'],
+    ['temporary catalog generation', 'node scripts/render_demo_capabilities.mjs'],
+    ['demo contract', 'node crates/pptx2html-wasm/tests/demo-contract.mjs "$VERSION"'],
+    ['capability contract', 'node crates/pptx2html-wasm/tests/capabilities-contract.mjs'],
+    ['release version contract', 'node crates/pptx2html-wasm/tests/release-version-contract.mjs'],
+    ['exactness contract', 'python3 evaluate/check_exactness_contract.py --repo-root .'],
+  ]);
+  for (const needle of [
+    '--manifest evaluate/completeness_manifest.json',
+    '--template crates/pptx2html-wasm/demo/capabilities.template.html',
+    '--output "$RUNNER_TEMP/pptx2html-capabilities/index.html"',
+    '"$RUNNER_TEMP/pptx2html-capabilities/index.html"',
+    'evaluate/completeness_manifest.json',
+    '--output-json "$RUNNER_TEMP/pptx2html-capabilities/exactness-contract.json"',
+  ]) {
+    assertContains(validationBlock, needle, `validation block must contain ${needle}`);
+  }
+
+  const assembleBlock = workflowStepRunBlock(workflowText, 'Assemble site');
+  assertContains(
+    assembleBlock,
+    'mkdir -p _site/pkg _site/capabilities',
+    'assemble step must create the package and capability directories',
+  );
+  assertCommandOrder(assembleBlock, [
+    ['package directory creation', 'mkdir -p _site/pkg _site/capabilities'],
+    ['landing page copy', 'cp crates/pptx2html-wasm/demo/index.html _site/'],
+    ['final catalog generation', 'node scripts/render_demo_capabilities.mjs'],
+  ]);
+  for (const needle of [
+    '--manifest evaluate/completeness_manifest.json',
+    '--template crates/pptx2html-wasm/demo/capabilities.template.html',
+    '--output _site/capabilities/index.html',
+  ]) {
+    assertContains(assembleBlock, needle, `assemble block must contain ${needle}`);
+  }
+}
+
 if (process.argv.length !== 4) {
   throw new Error('usage: capabilities-contract.mjs <generated-html> <manifest>');
 }
@@ -733,9 +836,11 @@ const [html, manifestBytes] = await Promise.all([
   readFile(manifestPath),
 ]);
 const manifest = parseJson(manifestBytes);
+const workflowText = await readFile(WORKFLOW_PATH, 'utf8');
 
 assertCatalogDom(html, manifest, manifestBytes);
 assertRootValidation();
 assertBoundaryFixtures();
 await assertWriteBoundaries();
 assertCliBoundaries();
+assertWorkflowContract(workflowText);

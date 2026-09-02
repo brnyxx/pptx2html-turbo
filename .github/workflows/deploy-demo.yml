@@ -6,6 +6,8 @@ on:
     paths:
       - 'crates/pptx2html-wasm/**'
       - 'crates/pptx2html-core/**'
+      - 'evaluate/completeness_manifest.json'
+      - 'scripts/render_demo_capabilities.mjs'
       - '.github/workflows/deploy-demo.yml'
   workflow_dispatch:
 
@@ -46,17 +48,31 @@ jobs:
       - name: Validate demo contracts
         run: |
           VERSION=$(bash scripts/read_release_version.sh)
+          mkdir -p "$RUNNER_TEMP/pptx2html-capabilities"
+          node scripts/render_demo_capabilities.mjs \
+            --manifest evaluate/completeness_manifest.json \
+            --template crates/pptx2html-wasm/demo/capabilities.template.html \
+            --output "$RUNNER_TEMP/pptx2html-capabilities/index.html"
           node crates/pptx2html-wasm/tests/demo-contract.mjs "$VERSION"
+          node crates/pptx2html-wasm/tests/capabilities-contract.mjs \
+            "$RUNNER_TEMP/pptx2html-capabilities/index.html" \
+            evaluate/completeness_manifest.json
           node crates/pptx2html-wasm/tests/release-version-contract.mjs
+          python3 evaluate/check_exactness_contract.py --repo-root . \
+            --output-json "$RUNNER_TEMP/pptx2html-capabilities/exactness-contract.json"
 
       - name: Assemble site
         run: |
-          mkdir -p _site/pkg
+          mkdir -p _site/pkg _site/capabilities
           cp crates/pptx2html-wasm/demo/index.html _site/
           cp crates/pptx2html-wasm/pkg/pptx2html_wasm.js _site/pkg/
           cp crates/pptx2html-wasm/pkg/pptx2html_wasm_bg.wasm _site/pkg/
           cp crates/pptx2html-wasm/pkg/pptx2html_wasm.d.ts _site/pkg/
           cp crates/pptx2html-wasm/npm/index.js _site/pkg/
+          node scripts/render_demo_capabilities.mjs \
+            --manifest evaluate/completeness_manifest.json \
+            --template crates/pptx2html-wasm/demo/capabilities.template.html \
+            --output _site/capabilities/index.html
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
 
