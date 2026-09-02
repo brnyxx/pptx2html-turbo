@@ -32,7 +32,7 @@ and `docs/architecture/CAPABILITY_MATRIX.md` remains the explanatory architectur
 The generator consumes these manifest fields for every feature:
 
 - `id` and `family`
-- `ooxml.qualified_name`
+- `ooxml.qualified_name` and `ooxml.relationship_type` when present
 - `official_source` and `source_status`
 - `current` and `target` dispositions for `semantic`, `visual`, and `behavioral`
 - `fallback_policy.kind` and `fallback_policy.diagnostic_code`
@@ -147,6 +147,7 @@ It adds exactly these source and test files:
 - `scripts/render_demo_capabilities.mjs`
 - `crates/pptx2html-wasm/tests/capabilities-contract.mjs`
 - `scripts/qa_demo_capabilities.py`
+- `evaluate/tests/test_qa_demo_capabilities.py`
 
 The existing `_site` assembly inputs remain the landing-page HTML and four WASM/npm package
 files. The only new output is `_site/capabilities/index.html`; the manifest itself is not copied
@@ -223,7 +224,9 @@ The catalog follows the existing dark editorial workbench design:
   values rather than hard-coded counts.
 - A summary strip shows the four current tier totals across 168 dimension dispositions.
 - Family sections appear in manifest-derived order and expose anchor links.
-- Each record names the feature ID and OOXML qualified name before status details.
+- Each record names the feature ID and every OOXML binding declared by the manifest before status
+  details. It shows `qualified_name`, `relationship_type`, or both when present; when neither is
+  declared it shows the literal `Not declared in manifest` instead of inventing a binding.
 - Current status is visually primary; target status is secondary but always visible.
 - Verified official sources are linked. Sources marked `unavailable` are visibly labelled and
   never presented as independent confirmation.
@@ -231,8 +234,9 @@ The catalog follows the existing dark editorial workbench design:
   for silent support.
 
 At 1280px, disposition rows may use a two-column current/target layout. At 768px and 375px,
-each record stacks without changing document order. The page must have no horizontal overflow,
-overlap, or text truncation at the three project QA widths.
+each record and its disposition rows stack without changing document order; the 900px media
+boundary owns this transition. The page must have no horizontal overflow, overlap, or text
+truncation at the three project QA widths.
 
 ## Error Handling and Security
 
@@ -244,8 +248,11 @@ overlap, or text truncation at the three project QA widths.
   `verified` and `unavailable`.
 - Manifest strings are rendered as text through one HTML-escaping boundary.
 - Official-source URLs must use HTTPS, contain no username or password, and have the exact host
-  `learn.microsoft.com` or `ecma-international.org`; unsafe, unsupported, or malformed URLs fail
-  generation rather than becoming clickable content.
+  `learn.microsoft.com` or `ecma-international.org`, with no non-default explicit port; unsafe,
+  unsupported, or malformed URLs fail generation rather than becoming clickable content. The
+  normalized port must be empty. An explicit HTTPS default port is therefore allowed because the
+  WHATWG URL API normalizes it to the empty string, as described by the
+  [official Node.js URL documentation](https://nodejs.org/api/url.html#urlport).
 - The output path is explicit. The generator does not delete directories or discover arbitrary
   files.
 - The catalog contains no file upload, conversion runtime, service worker, or client-side data
@@ -276,6 +283,9 @@ Implementation follows a failing-test-first sequence.
    - pre-existing `family-*` or `capability-*` template IDs fail in both quote forms,
    - duplicate IDs, missing dimensions, invalid enums, unsafe official-source URLs, and malformed
      JSON fail,
+   - extra current/target dimension keys, non-default URL ports, and empty OOXML binding strings fail,
+   - an otherwise valid official-source URL with explicit HTTPS `:443` succeeds,
+   - a valid special-character fixture proves HTML escaping in text and quoted attributes,
    - a pre-existing final output remains byte-identical after validation failure,
    - a missing output parent fails without creating a final or sibling temporary file,
    - two generations from identical inputs are byte-identical,
@@ -286,10 +296,14 @@ Implementation follows a failing-test-first sequence.
    workflow assembly required to make these tests pass.
 6. Run the existing release-version contract and the exactness/public-document contract checks
    to ensure the catalog does not create a competing status source.
+7. Before implementing the browser harness, add focused standard-library tests that fail until
+   the harness exposes strict Git-SHA/clean-tree validation, removes only the twelve named prior
+   evidence files, and rejects missing or unknown keys in the closed browser-QA report schema.
 
 The generated DOM contract is stable and test-facing:
 
 - The head contains exactly one `<link rel="canonical">` whose `href` is the literal catalog URL.
+- The generated catalog contains no `<script>` element.
 - `main#capabilityCatalog` has `data-feature-count` equal to `features.length`,
   `data-current-dimension-count` equal to `features.length * dimensions.length`,
   `data-exact-dimensions` equal to the manifest-derived current `exact` count, and
@@ -310,6 +324,12 @@ The generated DOM contract is stable and test-facing:
 - Each article contains exactly one
   `dl[data-fallback-kind="<fallback kind>"][data-diagnostic-code="<diagnostic code>"]` whose
   attributes equal its manifest fallback policy.
+- Each article contains exactly one `dl[data-ooxml-binding]`. It contains
+  `[data-ooxml-qualified-name]` exactly when `ooxml.qualified_name` is a non-empty string and
+  `[data-ooxml-relationship-type]` exactly when `ooxml.relationship_type` is a non-empty string;
+  each value equals the manifest. When neither field is present, it contains exactly one
+  `[data-ooxml-not-declared]` with the literal text `Not declared in manifest` and neither value
+  element.
 - Each article contains one `a[data-official-source]` whose `href` equals `official_source`.
   Articles with `source_status="unavailable"` additionally contain exactly one visible
   `[data-cross-validation-required]` label; verified articles contain none.
@@ -423,6 +443,12 @@ site are removed after capture; the committed harness remains in the repository.
 The harness and integrity reviewer reject unknown or missing keys at the top level and within
 `source`, each viewport, `screenshots`, `landing`, `catalog`, and `errors`.
 
+When `--base-url` contains a query string for public cache-busting, the harness first follows the
+unchanged `#capabilityCatalogLink` and records its resolved no-query destination. It then applies
+the same query string to that resolved catalog URL for the catalog response and screenshots. This
+keeps the actual link contract observable while ensuring both public page responses bypass a stale
+cache. Local QA has no query string and follows the same path without an extra navigation.
+
 The QA orchestrator dispatches two fresh read-only agents with `fork_turns="none"`:
 
 - `lazycodex-gate-reviewer` receives the worktree path, manifest path, assembled catalog path,
@@ -452,8 +478,8 @@ Acceptance requires:
 - All family sections and all records are reachable through ordinary scrolling and browser
   find.
 - Exactness and fallback warnings are visible before the first capability record.
-- Source-verification labels, current/target values, OOXML names, and fallback diagnostics are
-  readable at every QA width.
+- Source-verification labels, current/target values, declared OOXML bindings or the explicit
+  not-declared label, and fallback diagnostics are readable at every QA width.
 - There is no horizontal overflow, overlap, clipping, console error, failed request, or bad HTTP
   response.
 - The independent integrity and visual-fidelity reviewers both pass the same fresh viewport
@@ -465,3 +491,29 @@ The implementation is complete locally only after tests, workflow-equivalent ass
 browser QA pass. Commit and integration may proceed on `feature/pages-capability-catalog`.
 Publishing to `origin/main` remains a separate push action and requires the user to approve the
 target branch immediately before push.
+
+After an approved push, public acceptance is bound to the exact deployed SHA and the successful
+`Deploy Demo` workflow run. The public evidence directory contains the same nine screenshot names
+plus `public-browser-qa.json`. That file has exactly these top-level keys:
+
+```json
+{
+  "schemaVersion": 1,
+  "deployment": {
+    "gitSha": "40 lowercase hexadecimal characters",
+    "workflowName": "Deploy Demo",
+    "runId": 123456789,
+    "runUrl": "https://github.com/brnyxx/pptx2html-turbo/actions/runs/123456789",
+    "conclusion": "success",
+    "cacheBuster": "first 12 SHA characters followed by -20260902"
+  },
+  "browserQa": "the exact closed browser-qa.json object defined above"
+}
+```
+
+The deployment record is obtained for the pushed SHA with the officially documented GitHub CLI
+`gh run list --workflow ... --commit ... --json ...` fields, then `gh run watch <run-id>
+--exit-status` confirms completion. Unknown or missing wrapper/deployment keys, a non-matching
+`headSha`, a workflow name other than `Deploy Demo`, or a conclusion other than `success` fails
+public acceptance. The catalog screenshots are captured with
+`?verify=<12-char-sha>-20260902` propagated by the harness as described above.
