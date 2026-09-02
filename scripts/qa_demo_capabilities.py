@@ -131,15 +131,13 @@ def _hash(value: JsonValue, label: str) -> str:
 
 def validate_report_schema(report: JsonObject) -> None:
     _keys(report, {"schemaVersion", "capturedAt", "source", "viewports"}, "report")
-    if report["schemaVersion"] != 1 or CAPTURED_AT_RE.fullmatch(_string(report["capturedAt"], "capturedAt")) is None:
-        raise QaError("report version or capturedAt is invalid")
+    if report["schemaVersion"] != 1 or CAPTURED_AT_RE.fullmatch(_string(report["capturedAt"], "capturedAt")) is None: raise QaError("report version or capturedAt is invalid")
     source = _keys(_obj(report["source"], "source"), {"gitSha", "manifestSha256", "catalogHtmlSha256"}, "source")
     if GIT_SHA_RE.fullmatch(_string(source["gitSha"], "source.gitSha")) is None: raise QaError("source.gitSha must be a lowercase git SHA")
     _hash(source["manifestSha256"], "source.manifestSha256"); _hash(source["catalogHtmlSha256"], "source.catalogHtmlSha256")
     viewports = _arr(report["viewports"], "viewports")
     if len(viewports) != len(VIEWPORT_WIDTHS): raise QaError("viewports must contain exactly three entries")
-    for index, width in enumerate(VIEWPORT_WIDTHS):
-        _validate_viewport(viewports[index], index, width)
+    for index, width in enumerate(VIEWPORT_WIDTHS): _validate_viewport(viewports[index], index, width)
 
 
 def _validate_viewport(value: JsonValue, index: int, width: int) -> None:
@@ -160,19 +158,16 @@ def _validate_viewport(value: JsonValue, index: int, width: int) -> None:
 
 
 def _validate_leaf_types(landing: JsonObject, catalog: JsonObject, errors: JsonObject, label: str, catalog_keys: set[str]) -> None:
-    for key in ("status", "scrollWidth", "clientWidth"):
-        _integer(landing[key], f"{label}.landing.{key}")
+    for key in ("status", "scrollWidth", "clientWidth"): _integer(landing[key], f"{label}.landing.{key}")
     _string(landing["resolvedCatalogHref"], f"{label}.landing.resolvedCatalogHref")
     if not isinstance(landing["linkVisible"], bool) or not isinstance(landing["scopeVisible"], bool): raise QaError(f"{label}.landing visibility values must be booleans")
     _string(catalog["canonical"], f"{label}.catalog.canonical"); _hash(catalog["sourceSha256"], f"{label}.catalog.sourceSha256")
     if not isinstance(catalog["warningsBeforeFirstRecord"], bool): raise QaError(f"{label}.catalog.warningsBeforeFirstRecord must be a boolean")
-    for key in catalog_keys - {"canonical", "sourceSha256", "tierCounts", "warningsBeforeFirstRecord"}:
-        _integer(catalog[key], f"{label}.catalog.{key}")
+    for key in catalog_keys - {"canonical", "sourceSha256", "tierCounts", "warningsBeforeFirstRecord"}: _integer(catalog[key], f"{label}.catalog.{key}")
     for tier, value in _keys(_obj(catalog["tierCounts"], f"{label}.catalog.tierCounts"), set(TIERS), f"{label}.catalog.tierCounts").items():
         _integer(value, f"{label}.catalog.tierCounts.{tier}")
     for key, value in errors.items():
-        if not all(isinstance(item, str) for item in _arr(value, f"{label}.errors.{key}")):
-            raise QaError(f"{label}.errors.{key} must contain only strings")
+        if not all(isinstance(item, str) for item in _arr(value, f"{label}.errors.{key}")): raise QaError(f"{label}.errors.{key} must contain only strings")
 
 
 def load_manifest_stats(path: Path) -> ManifestStats:
@@ -200,12 +195,21 @@ def load_manifest_stats(path: Path) -> ManifestStats:
     return ManifestStats(sha256_file(path), count, len(families), count * len(DIMENSIONS), count * len(DIMENSIONS), tier_counts["exact"], tier_counts, unavailable)
 
 
-def _dom_widths(page) -> JsonObject:
-    return page.evaluate("() => ({scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth})")
+def _dom_widths(page) -> JsonObject: return page.evaluate("() => ({scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth})")
 
 
 def _catalog_dom(page) -> JsonObject:
     return page.evaluate("""() => { const main = document.querySelector('#capabilityCatalog'); const first = document.querySelector('article[data-capability-id]'); const hero = document.querySelector('.hero-copy'); const note = document.querySelector('.catalog-note'); const heroText = (hero?.textContent || '').toLowerCase(); const noteText = (note?.textContent || '').toLowerCase(); const ids = [...document.querySelectorAll('article[data-capability-id]')].map(node => node.getAttribute('data-capability-id')); const tiers = {}; for (const item of document.querySelectorAll('[data-tier-count]')) tiers[item.getAttribute('data-tier')] = Number(item.getAttribute('data-tier-count')); const before = node => Boolean(node && first && (node.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING)); return {canonical: document.querySelector('link[rel="canonical"]').getAttribute('href'), sourceSha256: main.getAttribute('data-source-sha256'), featureCount: Number(main.getAttribute('data-feature-count')), familyCount: document.querySelectorAll('section[data-capability-family]').length, uniqueFeatureCount: new Set(ids).size, currentDispositionCount: document.querySelectorAll('td[data-disposition="current"]').length, targetDispositionCount: document.querySelectorAll('td[data-disposition="target"]').length, exactCurrentCount: document.querySelectorAll('td[data-disposition="current"][data-tier="exact"]').length, tierCounts: tiers, unavailableSourceCount: document.querySelectorAll('article[data-source-status="unavailable"]').length, warningsBeforeFirstRecord: before(hero) && before(note) && heroText.includes('exact') && heroText.includes('fallback') && noteText.includes('cross-validation')}; }""")
+
+
+def _new_qa_page(browser, width: int): return browser.new_page(viewport={"width": width, "height": VIEWPORT_HEIGHT}, reduced_motion="reduce")
+
+
+def _intersects_viewport(box: JsonValue, width: int, height: int) -> bool:
+    if not isinstance(box, dict): return False
+    x, y, box_width, box_height = box.get("x"), box.get("y"), box.get("width"), box.get("height")
+    if not all(isinstance(value, int | float) and not isinstance(value, bool) for value in (x, y, box_width, box_height)): return False
+    return box_width > 0 and box_height > 0 and x < width and x + box_width > 0 and y < height and y + box_height > 0
 
 
 def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
@@ -220,7 +224,7 @@ def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
 
 
 def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObject:
-    page = browser.new_page(viewport={"width": width, "height": VIEWPORT_HEIGHT})
+    page = _new_qa_page(browser, width)
     try:
         errors: JsonObject = {"console": [], "page": [], "failedRequests": [], "non2xxResponses": []}
         page.on("console", lambda message: errors["console"].append(message.text) if message.type == "error" else None)
@@ -230,10 +234,12 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         landing_response = page.goto(context.base_url, wait_until="load")
         if landing_response is None:
             raise QaError("landing navigation produced no response")
-        coverage, link = page.locator("#coverage"), page.locator("#capabilityCatalogLink")
+        coverage, heading, link, scope = page.locator("#coverage"), page.locator("#coverageHeading"), page.locator("#capabilityCatalogLink"), page.locator(".section-note")
         coverage.scroll_into_view_if_needed()
+        heading.scroll_into_view_if_needed()
+        link.scroll_into_view_if_needed()
         landing_widths = _dom_widths(page)
-        link_visible, scope_visible = link.is_visible(), coverage.is_visible()
+        link_visible, scope_visible = _intersects_viewport(link.bounding_box(), width, VIEWPORT_HEIGHT), _intersects_viewport(scope.bounding_box(), width, VIEWPORT_HEIGHT)
         landing_name = f"landing-{width}.png"
         page.screenshot(path=str(context.evidence_dir / landing_name), full_page=False)
         link.click()
@@ -295,8 +301,7 @@ def run_browser_qa(args: CliArgs) -> JsonObject:
 
 def parse_args(argv: list[str] | None = None) -> CliArgs:
     parser = argparse.ArgumentParser(description="Capture GitHub Pages capability-catalog browser QA evidence.")
-    for option in ("--base-url", "--manifest", "--catalog-html", "--evidence-dir", "--git-sha"):
-        parser.add_argument(option, required=True)
+    for option in ("--base-url", "--manifest", "--catalog-html", "--evidence-dir", "--git-sha"): parser.add_argument(option, required=True)
     parsed = parser.parse_args(argv)
     return CliArgs(parsed.base_url, Path(parsed.manifest), Path(parsed.catalog_html), Path(parsed.evidence_dir), parsed.git_sha)
 

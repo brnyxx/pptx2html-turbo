@@ -132,6 +132,9 @@ class FakeLocator:
     def is_visible(self) -> bool:
         return True
 
+    def bounding_box(self) -> dict[str, int] | None:
+        return self._page.bounding_boxes.get(self._selector, {"x": 0, "y": 0, "width": 120, "height": 32})
+
 
 class FakePage:
     def __init__(
@@ -140,6 +143,7 @@ class FakePage:
         redirect_status: int | None = None,
         require_warning_contract: bool = False,
         raise_on_goto: bool = False,
+        bounding_boxes: dict[str, dict[str, int] | None] | None = None,
     ) -> None:
         self.url = "http://127.0.0.1:4173/"
         self.scrolled: list[str] = []
@@ -154,6 +158,7 @@ class FakePage:
         self._redirect_status = redirect_status
         self._require_warning_contract = require_warning_contract
         self._raise_on_goto = raise_on_goto
+        self.bounding_boxes = bounding_boxes or {}
 
     def on(self, event: str, callback: object) -> None:
         self._listeners[event] = callback
@@ -193,14 +198,18 @@ class FakeBrowser:
         tmpdir: Path,
         redirect_status: int | None = None,
         raise_on_goto: bool = False,
+        bounding_boxes: dict[str, dict[str, int] | None] | None = None,
     ) -> None:
         self._tmpdir = tmpdir
         self._redirect_status = redirect_status
         self._raise_on_goto = raise_on_goto
-        self.page = FakePage(tmpdir, redirect_status=redirect_status, raise_on_goto=raise_on_goto)
+        self._bounding_boxes = bounding_boxes
+        self.new_page_options: list[dict[str, object]] = []
+        self.page = FakePage(tmpdir, redirect_status=redirect_status, raise_on_goto=raise_on_goto, bounding_boxes=bounding_boxes)
 
-    def new_page(self, viewport: dict[str, int]) -> FakePage:
-        self.page = FakePage(self._tmpdir, redirect_status=self._redirect_status, raise_on_goto=self._raise_on_goto)
+    def new_page(self, **kwargs: object) -> FakePage:
+        self.new_page_options.append(kwargs)
+        self.page = FakePage(self._tmpdir, redirect_status=self._redirect_status, raise_on_goto=self._raise_on_goto, bounding_boxes=self._bounding_boxes)
         return self.page
 
     def close(self) -> None:
@@ -454,6 +463,30 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                         resolved,
                     )
 
+    def test_new_qa_page_sets_viewport_and_reduced_motion(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            browser = FakeBrowser(Path(tmpdir))
+
+            module._new_qa_page(browser, 375)
+
+        self.assertEqual(browser.new_page_options, [{"viewport": {"width": 375, "height": 900}, "reduced_motion": "reduce"}])
+
+    def test_intersects_viewport_distinguishes_visible_and_offscreen_boxes(self) -> None:
+        module = load_module()
+
+        visible = {"x": 340, "y": 20, "width": 40, "height": 20}
+        left = {"x": -50, "y": 20, "width": 40, "height": 20}
+        below = {"x": 20, "y": 901, "width": 40, "height": 20}
+        zero = {"x": 20, "y": 20, "width": 0, "height": 20}
+
+        self.assertTrue(module._intersects_viewport(visible, 375, 900))
+        self.assertFalse(module._intersects_viewport(left, 375, 900))
+        self.assertFalse(module._intersects_viewport(below, 375, 900))
+        self.assertFalse(module._intersects_viewport(zero, 375, 900))
+        self.assertFalse(module._intersects_viewport(None, 375, 900))
+
     def test_preflight_failures_leave_existing_evidence_byte_identical(self) -> None:
         module = load_module()
 
@@ -520,7 +553,31 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             module._capture_viewport(browser, context, 375)
 
         self.assertEqual([shot.get("full_page") for shot in browser.page.screenshots], [False, False, False])
-        self.assertEqual(browser.page.scrolled, ["#coverage", "#capability-presentation"])
+        self.assertEqual(browser.page.scrolled, ["#coverage", "#coverageHeading", "#capabilityCatalogLink", "#capability-presentation"])
+
+    def test_capture_requires_link_and_section_note_to_intersect_viewport(self) -> None:
+        module = load_module()
+
+        for selector in ("#capabilityCatalogLink", ".section-note"):
+            with self.subTest(selector=selector):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    browser = FakeBrowser(
+                        Path(tmpdir),
+                        bounding_boxes={selector: {"x": 0, "y": 901, "width": 120, "height": 32}},
+                    )
+                    context = module.RuntimeContext(
+                        "http://127.0.0.1:4173/",
+                        Path(tmpdir),
+                        module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
+                            "exact": 0,
+                            "approximate": 54,
+                            "fallback": 114,
+                            "unparsed": 0,
+                        }, 2),
+                    )
+
+                    with self.assertRaises(module.QaError):
+                        module._capture_viewport(browser, context, 375)
 
     def test_capture_records_redirect_responses_as_non2xx_errors(self) -> None:
         module = load_module()
