@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
@@ -193,10 +194,41 @@ class FakeBrowser:
         redirect_status: int | None = None,
         raise_on_goto: bool = False,
     ) -> None:
+        self._tmpdir = tmpdir
+        self._redirect_status = redirect_status
+        self._raise_on_goto = raise_on_goto
         self.page = FakePage(tmpdir, redirect_status=redirect_status, raise_on_goto=raise_on_goto)
 
     def new_page(self, viewport: dict[str, int]) -> FakePage:
+        self.page = FakePage(self._tmpdir, redirect_status=self._redirect_status, raise_on_goto=self._raise_on_goto)
         return self.page
+
+    def close(self) -> None:
+        return None
+
+
+class FakeChromium:
+    def __init__(self, tmpdir: Path) -> None:
+        self._tmpdir = tmpdir
+
+    def launch(self, channel: str, headless: bool) -> FakeBrowser:
+        return FakeBrowser(self._tmpdir)
+
+
+class FakePlaywright:
+    def __init__(self, tmpdir: Path) -> None:
+        self.chromium = FakeChromium(tmpdir)
+
+
+class FakePlaywrightContext:
+    def __init__(self, tmpdir: Path) -> None:
+        self._tmpdir = tmpdir
+
+    def __enter__(self) -> FakePlaywright:
+        return FakePlaywright(self._tmpdir)
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        return None
 
 
 def manifest_fixture() -> dict[str, object]:
@@ -282,6 +314,15 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             with self.assertRaises(module.QaError):
                 module.assert_clean_git_binding(VALID_SHA, ROOT)
 
+    def test_git_text_wraps_os_error_with_cause(self) -> None:
+        module = load_module()
+
+        with mock.patch.object(module.subprocess, "run", side_effect=FileNotFoundError("git")):
+            with self.assertRaises(module.QaError) as caught:
+                module._git_text(["git", "rev-parse", "HEAD"], ROOT)
+
+        self.assertIsInstance(caught.exception.__cause__, FileNotFoundError)
+
     def test_cleanup_removes_only_owned_evidence_files(self) -> None:
         module = load_module()
 
@@ -301,6 +342,17 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                 self.assertFalse((evidence_dir / name).exists(), name)
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
             self.assertTrue((nested / "landing-375.png").is_file())
+
+    def test_cleanup_wraps_mkdir_os_error_with_cause(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cause = PermissionError("mkdir blocked")
+            with mock.patch.object(module.Path, "mkdir", side_effect=cause):
+                with self.assertRaises(module.QaError) as caught:
+                    module.cleanup_owned_evidence(Path(tmpdir) / "evidence")
+
+        self.assertIs(caught.exception.__cause__, cause)
 
     def test_report_schema_accepts_exact_required_shape(self) -> None:
         module = load_module()
@@ -517,6 +569,45 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                 module._capture_viewport(browser, context, 375)
 
         self.assertIsInstance(caught.exception.__cause__, RuntimeError)
+
+    def test_browser_report_write_os_error_is_wrapped_with_cause(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            evidence_dir = root / "evidence"
+            evidence_dir.mkdir()
+            stats = module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
+                "exact": 0,
+                "approximate": 54,
+                "fallback": 114,
+                "unparsed": 0,
+            }, 2)
+            source = {
+                "gitSha": VALID_SHA,
+                "manifestSha256": "b" * 64,
+                "catalogHtmlSha256": "c" * 64,
+            }
+            sync_api = types.ModuleType("playwright.sync_api")
+            sync_api.Error = RuntimeError
+            sync_api.sync_playwright = lambda: FakePlaywrightContext(evidence_dir)
+            cause = PermissionError("write blocked")
+
+            with mock.patch.dict(sys.modules, {"playwright": types.ModuleType("playwright"), "playwright.sync_api": sync_api}):
+                with mock.patch.object(module, "preflight_inputs", return_value=(stats, source)):
+                    with mock.patch.object(module.Path, "write_text", side_effect=cause):
+                        with self.assertRaises(module.QaError) as caught:
+                            module.run_browser_qa(
+                                module.CliArgs(
+                                    "http://127.0.0.1:4173/",
+                                    root / "manifest.json",
+                                    root / "catalog.html",
+                                    evidence_dir,
+                                    VALID_SHA,
+                                )
+                            )
+
+        self.assertIs(caught.exception.__cause__, cause)
 
 
 if __name__ == "__main__":

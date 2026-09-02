@@ -56,7 +56,9 @@ def _regular_file(path: Path, label: str) -> None:
 
 
 def cleanup_owned_evidence(evidence_dir: Path) -> None:
-    evidence_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error: raise QaError(f"failed to create evidence directory: {evidence_dir}") from error
     for name in OWNED_EVIDENCE_NAMES:
         try:
             (evidence_dir / name).unlink(missing_ok=True)
@@ -67,8 +69,8 @@ def cleanup_owned_evidence(evidence_dir: Path) -> None:
 def _git_text(args: list[str], repo_root: Path) -> str:
     try:
         return subprocess.run(args, cwd=repo_root, check=True, capture_output=True, text=True).stdout.strip()
-    except subprocess.CalledProcessError as error:
-        raise QaError(f"git command failed: {' '.join(args)}") from error
+    except subprocess.CalledProcessError as error: raise QaError(f"git command failed: {' '.join(args)}") from error
+    except OSError as error: raise QaError(f"git command could not start: {' '.join(args)}") from error
 
 
 def assert_clean_git_binding(git_sha: str, repo_root: Path) -> None:
@@ -209,17 +211,12 @@ def _catalog_dom(page) -> JsonObject:
 def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
     catalog, landing = _obj(report["catalog"], "catalog"), _obj(report["landing"], "landing")
     expected = {"sourceSha256": stats.manifest_sha256, "featureCount": stats.feature_count, "familyCount": stats.family_count, "uniqueFeatureCount": stats.feature_count, "currentDispositionCount": stats.current_disposition_count, "targetDispositionCount": stats.target_disposition_count, "exactCurrentCount": stats.exact_current_count, "tierCounts": stats.tier_counts, "unavailableSourceCount": stats.unavailable_source_count}
-    if landing["status"] != 200 or catalog["status"] != 200 or catalog["canonical"] != CANONICAL_URL:
-        raise QaError("landing or catalog response contract failed")
-    if landing["scrollWidth"] != landing["clientWidth"] or catalog["scrollWidth"] != catalog["clientWidth"]:
-        raise QaError("horizontal overflow detected")
-    if not landing["linkVisible"] or not landing["scopeVisible"] or not catalog["warningsBeforeFirstRecord"]:
-        raise QaError("required page landmark is not visible or ordered")
-    if any(_arr(value, f"errors.{key}") for key, value in _obj(report["errors"], "errors").items()):
-        raise QaError("browser emitted console, page, request, or HTTP errors")
+    if landing["status"] != 200 or catalog["status"] != 200 or catalog["canonical"] != CANONICAL_URL: raise QaError("landing or catalog response contract failed")
+    if landing["scrollWidth"] != landing["clientWidth"] or catalog["scrollWidth"] != catalog["clientWidth"]: raise QaError("horizontal overflow detected")
+    if not landing["linkVisible"] or not landing["scopeVisible"] or not catalog["warningsBeforeFirstRecord"]: raise QaError("required page landmark is not visible or ordered")
+    if any(_arr(value, f"errors.{key}") for key, value in _obj(report["errors"], "errors").items()): raise QaError("browser emitted console, page, request, or HTTP errors")
     for key, value in expected.items():
-        if catalog[key] != value:
-            raise QaError(f"catalog DOM mismatch for {key}: {catalog[key]} != {value}")
+        if catalog[key] != value: raise QaError(f"catalog DOM mismatch for {key}: {catalog[key]} != {value}")
 
 
 def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObject:
@@ -290,7 +287,9 @@ def run_browser_qa(args: CliArgs) -> JsonObject:
         raise QaError("browser QA runtime failed") from error
     report = {"schemaVersion": 1, "capturedAt": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"), "source": source, "viewports": viewports}
     validate_report_schema(report)
-    (args.evidence_dir / "browser-qa.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        (args.evidence_dir / "browser-qa.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError as error: raise QaError(f"failed to write browser QA report: {args.evidence_dir / 'browser-qa.json'}") from error
     return report
 
 
