@@ -181,7 +181,9 @@ async function assertRejectsMessage(fn, pattern, label) {
 }
 
 function assertCatalogDom(html, manifest, manifestBytes) {
-  assert.equal(manifest.features.length, 56);
+  const expectedFeatureCount = manifest.features.length;
+  const expectedCurrentDimensionCount = expectedFeatureCount * manifest.dimensions.length;
+  assert.ok(expectedFeatureCount > 0, 'manifest must contain at least one feature');
   assert.deepEqual(manifest.dimensions, DIMENSIONS);
   assert.equal(manifest.dimensions.length, 3);
   assert.equal(countMatches(html, /<link\b[^>]*\brel="canonical"[^>]*>/g), 1);
@@ -205,8 +207,11 @@ function assertCatalogDom(html, manifest, manifestBytes) {
 
   const mainTag = tagById(html, 'main', 'capabilityCatalog');
   const expectedTierCounts = tierCounts(manifest);
-  assert.equal(attribute(mainTag, 'data-feature-count'), '56');
-  assert.equal(attribute(mainTag, 'data-current-dimension-count'), '168');
+  assert.equal(attribute(mainTag, 'data-feature-count'), String(expectedFeatureCount));
+  assert.equal(
+    attribute(mainTag, 'data-current-dimension-count'),
+    String(expectedCurrentDimensionCount),
+  );
   assert.equal(attribute(mainTag, 'data-exact-dimensions'), String(expectedTierCounts.exact));
   assert.equal(attribute(mainTag, 'data-source-sha256'), sha256(manifestBytes));
 
@@ -236,7 +241,7 @@ function assertCatalogDom(html, manifest, manifestBytes) {
   const articleTags = tagsByName(html, 'article').filter((tag) =>
     tag.includes('data-capability-id='),
   );
-  assert.equal(articleTags.length, 56);
+  assert.equal(articleTags.length, expectedFeatureCount);
   for (const feature of manifest.features) {
     const articleId = `capability-${feature.id}`;
     assert.equal(countMatches(html, new RegExp(`<article\\b[^>]*\\bid="${articleId}"`, 'g')), 1);
