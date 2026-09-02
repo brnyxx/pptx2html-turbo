@@ -184,6 +184,27 @@ exercise the required variants over the 375px, 768px, and 1280px QA viewports.
 - **Layout**: two-column editorial rail above 900px; one readable column below it. The table
   becomes labelled blocks below 640px.
 
+### Capability Catalog Family and Record
+
+- **Structure**: generated static `main#capabilityCatalog` containing one semantic section per
+  capability family and one `article.capability-record` per manifest feature. Every record
+  includes source, OOXML binding, current and target dispositions, and fallback policy.
+- **Variants**: capability family, capability record, source warning, OOXML qualified-name,
+  OOXML relationship-type, and not-declared binding. Current disposition is the primary
+  comparison column; target disposition is secondary context.
+- **States**: static default, same-page family anchor, source-warning cross-validation label,
+  and native link hover/focus states inherited from the existing anchor primitive.
+- **Accessibility**: semantic heading hierarchy, table headers for dimension/current/target,
+  definition lists for OOXML and fallback metadata, and visible text for every generated
+  manifest record. Source entries with unavailable official status must show
+  "Cross-validation required".
+- **Layout**: 1280px uses the existing editorial two-column rhythm for family sections and
+  records; 768px and 375px stack into one readable column. Records must remain visible rather
+  than collapsed into accordions or overflow-hidden panels.
+- **Constraints**: use only existing color, typography, spacing, border, and link tokens.
+  The generated catalog must not introduce new raw colors or hidden responsive shortcuts.
+  Primary content must not overflow horizontally or collapse at 1280px, 768px, or 375px.
+
 ## 6. Motion & Interaction
 
 ### Timing

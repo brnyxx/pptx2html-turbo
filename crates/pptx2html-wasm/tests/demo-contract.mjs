@@ -22,6 +22,15 @@ function tagWithId(id) {
   return match[0];
 }
 
+function anchorWithId(id) {
+  const match = html.match(new RegExp(`<a\\b[^>]*\\bid="${id}"[^>]*>([\\s\\S]*?)</a>`));
+  assert.ok(match, `missing anchor #${id}`);
+  return {
+    tag: match[0].match(/^<a\b[^>]*>/)[0],
+    text: match[1].trim(),
+  };
+}
+
 function attribute(tag, name) {
   const match = tag.match(new RegExp(`\\b${name}="([^"]*)"`));
   assert.ok(match, `missing ${name} on ${tag}`);
@@ -52,6 +61,10 @@ assert.equal(attribute(coverageTag, 'data-exact-dimensions'), '0');
 const nativeScopeTag = tagWithId('nativeScope');
 assert.equal(attribute(nativeScopeTag, 'data-browser-format-count'), '1');
 assert.equal(attribute(nativeScopeTag, 'data-native-format-count'), '7');
+
+const capabilityCatalogLink = anchorWithId('capabilityCatalogLink');
+assert.equal(attribute(capabilityCatalogLink.tag, 'href'), './capabilities/');
+assert.equal(capabilityCatalogLink.text, `Browse all ${expectedFeatureCount} capabilities`);
 
 assert.equal(
   attribute(tagWithId('fullCapabilityLink'), 'href'),
