@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -185,12 +186,14 @@ class FakePage:
         self.locator_selectors.append(selector)
         return FakeLocator(self, selector)
 
-    def screenshot(self, **kwargs: object) -> None:
-        path = Path(str(kwargs["path"]))
-        path.write_bytes(b"png")
+    def screenshot(self, **kwargs: object) -> bytes:
+        if "path" in kwargs:
+            path = Path(str(kwargs["path"]))
+            path.write_bytes(b"png")
         snapshot = dict(kwargs)
         snapshot["scrolled"] = list(self.scrolled)
         self.screenshots.append(snapshot)
+        return b"png"
 
     def wait_for_load_state(self, state: str) -> None:
         return None
@@ -219,6 +222,7 @@ class FakeBrowser:
         self._raise_on_goto = raise_on_goto
         self._bounding_boxes = bounding_boxes
         self.new_page_options: list[dict[str, object]] = []
+        self.pages: list[FakePage] = []
         self.page = FakePage(
             tmpdir,
             redirect_status=redirect_status,
@@ -234,6 +238,7 @@ class FakeBrowser:
             raise_on_goto=self._raise_on_goto,
             bounding_boxes=self._bounding_boxes,
         )
+        self.pages.append(self.page)
         return self.page
 
     def close(self) -> None:
@@ -243,9 +248,11 @@ class FakeBrowser:
 class FakeChromium:
     def __init__(self, tmpdir: Path) -> None:
         self._tmpdir = tmpdir
+        self.browser: FakeBrowser | None = None
 
     def launch(self, channel: str, headless: bool) -> FakeBrowser:
-        return FakeBrowser(self._tmpdir)
+        self.browser = FakeBrowser(self._tmpdir)
+        return self.browser
 
 
 class FakePlaywright:
@@ -256,9 +263,11 @@ class FakePlaywright:
 class FakePlaywrightContext:
     def __init__(self, tmpdir: Path) -> None:
         self._tmpdir = tmpdir
+        self.playwright: FakePlaywright | None = None
 
     def __enter__(self) -> FakePlaywright:
-        return FakePlaywright(self._tmpdir)
+        self.playwright = FakePlaywright(self._tmpdir)
+        return self.playwright
 
     def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
         return None
@@ -305,6 +314,22 @@ def write_evidence_sentinel(evidence_dir: Path, module) -> dict[str, bytes]:
         (evidence_dir / name).write_bytes(f"existing:{name}".encode())
     (evidence_dir / "unrelated.txt").write_bytes(b"keep")
     return evidence_bytes(evidence_dir)
+
+
+def runtime_context(module, test, base_url: str, evidence_dir: Path, stats):
+    descriptor = os.open(evidence_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    test.addCleanup(os.close, descriptor)
+    directory_status = os.fstat(descriptor)
+    return module.RuntimeContext(
+        base_url,
+        module.EvidenceDirectory(
+            evidence_dir,
+            descriptor,
+            directory_status.st_dev,
+            directory_status.st_ino,
+        ),
+        stats,
+    )
 
 
 class QaDemoCapabilitiesTests(unittest.TestCase):
@@ -706,7 +731,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             browser = FakeBrowser(Path(tmpdir))
-            context = module.RuntimeContext(
+            context = runtime_context(
+                module,
+                self,
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
                 module.ManifestStats(
@@ -749,7 +776,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             browser = FakeBrowser(Path(tmpdir))
-            context = module.RuntimeContext(
+            context = runtime_context(
+                module,
+                self,
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
                 module.ManifestStats(
@@ -786,7 +815,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                             selector: {"x": 0, "y": 901, "width": 120, "height": 32}
                         },
                     )
-                    context = module.RuntimeContext(
+                    context = runtime_context(
+                        module,
+                        self,
                         "http://127.0.0.1:4173/",
                         Path(tmpdir),
                         module.ManifestStats(
@@ -837,7 +868,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                     },
                 },
             )
-            context = module.RuntimeContext(
+            context = runtime_context(
+                module,
+                self,
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
                 module.ManifestStats(
@@ -894,7 +927,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                     },
                 },
             )
-            context = module.RuntimeContext(
+            context = runtime_context(
+                module,
+                self,
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
                 module.ManifestStats(
@@ -922,7 +957,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             browser = FakeBrowser(Path(tmpdir), redirect_status=302)
-            context = module.RuntimeContext(
+            context = runtime_context(
+                module,
+                self,
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
                 module.ManifestStats(
@@ -950,7 +987,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             browser = FakeBrowser(Path(tmpdir), raise_on_goto=True)
-            context = module.RuntimeContext(
+            context = runtime_context(
+                module,
+                self,
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
                 module.ManifestStats(
@@ -1006,6 +1045,22 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             sync_api.Error = RuntimeError
             sync_api.sync_playwright = lambda: FakePlaywrightContext(evidence_dir)
             cause = PermissionError("write blocked")
+            real_open = module.os.open
+            real_write = module.os.write
+            failed_descriptor = None
+            opened_descriptors: list[int] = []
+
+            def track_open(*args, **kwargs) -> int:
+                descriptor = real_open(*args, **kwargs)
+                opened_descriptors.append(descriptor)
+                return descriptor
+
+            def fail_report_write(descriptor: int, content: bytes) -> int:
+                nonlocal failed_descriptor
+                if bytes(content).startswith(b"{\n"):
+                    failed_descriptor = descriptor
+                    raise cause
+                return real_write(descriptor, content)
 
             with mock.patch.dict(
                 sys.modules,
@@ -1017,22 +1072,218 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                 with mock.patch.object(
                     module, "preflight_inputs", return_value=(stats, source)
                 ):
-                    with mock.patch.object(
-                        module.Path, "write_text", side_effect=cause
-                    ):
-                        with self.assertRaises(module.QaError) as caught:
-                            module.run_browser_qa(
-                                module.CliArgs(
-                                    "http://127.0.0.1:4173/",
-                                    root / "manifest.json",
-                                    root / "catalog.html",
-                                    evidence_dir,
-                                    VALID_SHA,
-                                ),
-                                root,
-                            )
+                    with mock.patch.object(module.os, "open", side_effect=track_open):
+                        with mock.patch.object(
+                            module.os, "write", side_effect=fail_report_write
+                        ):
+                            with self.assertRaises(module.QaError) as caught:
+                                module.run_browser_qa(
+                                    module.CliArgs(
+                                        "http://127.0.0.1:4173/",
+                                        root / "manifest.json",
+                                        root / "catalog.html",
+                                        evidence_dir,
+                                        VALID_SHA,
+                                    ),
+                                    root,
+                                )
 
         self.assertIs(caught.exception.__cause__, cause)
+        self.assertIsNotNone(failed_descriptor)
+        for descriptor in opened_descriptors:
+            with self.subTest(descriptor=descriptor):
+                with self.assertRaises(OSError):
+                    os.fstat(descriptor)
+
+    def test_fake_playwright_run_writes_complete_verified_output_without_path_writes(
+        self,
+    ) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            evidence_dir = root / ".omo" / "evidence" / "complete"
+            stats = module.ManifestStats(
+                "b" * 64,
+                56,
+                19,
+                168,
+                168,
+                0,
+                {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                },
+                2,
+            )
+            source = {
+                "gitSha": VALID_SHA,
+                "manifestSha256": "b" * 64,
+                "catalogHtmlSha256": "c" * 64,
+            }
+            playwright_context = FakePlaywrightContext(evidence_dir)
+            sync_api = types.ModuleType("playwright.sync_api")
+            sync_api.Error = RuntimeError
+            sync_api.sync_playwright = lambda: playwright_context
+
+            with mock.patch.dict(
+                sys.modules,
+                {
+                    "playwright": types.ModuleType("playwright"),
+                    "playwright.sync_api": sync_api,
+                },
+            ):
+                with mock.patch.object(
+                    module, "preflight_inputs", return_value=(stats, source)
+                ):
+                    report = module.run_browser_qa(
+                        module.CliArgs(
+                            "http://127.0.0.1:4173/",
+                            root / "manifest.json",
+                            root / "catalog.html",
+                            evidence_dir,
+                            VALID_SHA,
+                        ),
+                        root,
+                    )
+
+            expected_names = {
+                name
+                for name in module.OWNED_EVIDENCE_NAMES
+                if name.endswith(".png") or name == "browser-qa.json"
+            }
+            self.assertEqual(set(evidence_bytes(evidence_dir)), expected_names)
+            self.assertEqual(
+                json.loads((evidence_dir / "browser-qa.json").read_text()),
+                report,
+            )
+            self.assertIsNotNone(playwright_context.playwright)
+            browser = playwright_context.playwright.chromium.browser
+            self.assertIsNotNone(browser)
+            screenshots = [shot for page in browser.pages for shot in page.screenshots]
+            self.assertEqual(len(screenshots), 9)
+            self.assertTrue(all("path" not in shot for shot in screenshots))
+
+    def test_run_rejects_post_cleanup_directory_swap_without_overwriting_outside_files(
+        self,
+    ) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            evidence_dir = root / ".omo" / "evidence" / "race"
+            evidence_dir.mkdir(parents=True)
+            captured = evidence_dir.with_name("captured")
+            outside = root / "outside"
+            outside.mkdir()
+            for name in module.OWNED_EVIDENCE_NAMES:
+                (outside / name).write_bytes(f"outside:{name}".encode())
+            (outside / "unrelated.txt").write_bytes(b"sentinel")
+            outside_before = evidence_bytes(outside)
+            stats = module.ManifestStats(
+                "b" * 64,
+                56,
+                19,
+                168,
+                168,
+                0,
+                {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                },
+                2,
+            )
+            source = {
+                "gitSha": VALID_SHA,
+                "manifestSha256": "b" * 64,
+                "catalogHtmlSha256": "c" * 64,
+            }
+
+            class SwappingPlaywrightContext(FakePlaywrightContext):
+                def __enter__(self) -> FakePlaywright:
+                    evidence_dir.rename(captured)
+                    evidence_dir.symlink_to(outside, target_is_directory=True)
+                    return super().__enter__()
+
+            sync_api = types.ModuleType("playwright.sync_api")
+            sync_api.Error = RuntimeError
+            sync_api.sync_playwright = lambda: SwappingPlaywrightContext(captured)
+            caught = None
+            with mock.patch.dict(
+                sys.modules,
+                {
+                    "playwright": types.ModuleType("playwright"),
+                    "playwright.sync_api": sync_api,
+                },
+            ):
+                with mock.patch.object(
+                    module, "preflight_inputs", return_value=(stats, source)
+                ):
+                    try:
+                        module.run_browser_qa(
+                            module.CliArgs(
+                                "http://127.0.0.1:4173/",
+                                root / "manifest.json",
+                                root / "catalog.html",
+                                evidence_dir,
+                                VALID_SHA,
+                            ),
+                            root,
+                        )
+                    except module.QaError as error:
+                        caught = error
+
+            for name, expected in outside_before.items():
+                with self.subTest(name=name):
+                    self.assertEqual((outside / name).read_bytes(), expected)
+            self.assertIsNotNone(caught)
+            self.assertEqual((captured / "landing-375.png").read_bytes(), b"png")
+            self.assertTrue((captured / "browser-qa.json").is_file())
+
+    def test_integrity_validation_rejects_directory_swap_during_hashing(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            evidence_dir = root / ".omo" / "evidence" / "hash-race"
+            captured = evidence_dir.with_name("captured")
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "unrelated.txt").write_bytes(b"sentinel")
+            with module._prepared_evidence_directory(evidence_dir, root) as evidence:
+                names = {
+                    name
+                    for name in module.OWNED_EVIDENCE_NAMES
+                    if name.endswith(".png") or name == "browser-qa.json"
+                }
+                expected_hashes = {}
+                for name in names:
+                    content = f"inside:{name}".encode()
+                    evidence.write_bytes(name, content)
+                    expected_hashes[name] = module.hashlib.sha256(content).hexdigest()
+                original_sha256 = module.EvidenceDirectory.sha256
+                swapped = False
+
+                def swap_then_hash(directory, name: str) -> str:
+                    nonlocal swapped
+                    if not swapped:
+                        evidence_dir.rename(captured)
+                        evidence_dir.symlink_to(outside, target_is_directory=True)
+                        swapped = True
+                    return original_sha256(directory, name)
+
+                with mock.patch.object(
+                    module.EvidenceDirectory, "sha256", new=swap_then_hash
+                ):
+                    with self.assertRaises(module.QaError):
+                        module._validate_output_integrity(evidence, expected_hashes)
+
+            self.assertTrue(evidence_dir.is_symlink())
+            self.assertEqual((outside / "unrelated.txt").read_bytes(), b"sentinel")
 
 
 if __name__ == "__main__":

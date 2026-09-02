@@ -7,8 +7,10 @@ import json
 import logging
 import os
 import re
+import stat
 import subprocess
-from contextlib import ExitStack
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -72,8 +74,72 @@ class CliArgs:
 @dataclass(frozen=True, slots=True)
 class RuntimeContext:
     base_url: str
-    evidence_dir: Path
+    evidence: EvidenceDirectory
     stats: ManifestStats
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceDirectory:
+    path: Path
+    descriptor: int
+    device: int
+    inode: int
+
+    def write_bytes(self, name: str, content: bytes) -> None:
+        _owned_evidence_name(name)
+        try:
+            file_descriptor = os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=self.descriptor,
+            )
+            try:
+                remaining = memoryview(content)
+                while remaining:
+                    written = os.write(file_descriptor, remaining)
+                    if written == 0:
+                        raise OSError("evidence write made no progress")
+                    remaining = remaining[written:]
+            finally:
+                os.close(file_descriptor)
+        except OSError as error:
+            raise QaError(f"failed to write evidence file: {name}") from error
+
+    def sha256(self, name: str) -> str:
+        _owned_evidence_name(name)
+        try:
+            file_descriptor = os.open(
+                name,
+                os.O_RDONLY | os.O_NOFOLLOW,
+                dir_fd=self.descriptor,
+            )
+            with os.fdopen(file_descriptor, "rb") as evidence_file:
+                file_status = os.fstat(evidence_file.fileno())
+                if not stat.S_ISREG(file_status.st_mode):
+                    raise OSError("evidence input is not a regular file")
+                return hashlib.sha256(evidence_file.read()).hexdigest()
+        except OSError as error:
+            raise QaError(f"failed to hash evidence file: {name}") from error
+
+    def validate_public_path(self) -> None:
+        try:
+            public_status = os.stat(self.path, follow_symlinks=False)
+        except OSError as error:
+            raise QaError(
+                f"failed to inspect evidence directory: {self.path}"
+            ) from error
+        if (
+            not stat.S_ISDIR(public_status.st_mode)
+            or public_status.st_dev != self.device
+            or public_status.st_ino != self.inode
+        ):
+            raise QaError(f"evidence directory changed during browser QA: {self.path}")
+
+
+def _owned_evidence_name(name: str) -> None:
+    if name not in OWNED_EVIDENCE_NAMES or Path(name).name != name:
+        raise QaError(f"unexpected evidence filename: {name}")
 
 
 def sha256_file(path: Path) -> str:
@@ -99,7 +165,10 @@ def _regular_file(path: Path, label: str) -> None:
         ) from IsADirectoryError(str(path))
 
 
-def cleanup_owned_evidence(evidence_dir: Path, repo_root: Path = REPO_ROOT) -> Path:
+@contextmanager
+def _prepared_evidence_directory(
+    evidence_dir: Path, repo_root: Path = REPO_ROOT
+) -> Iterator[EvidenceDirectory]:
     try:
         root = repo_root.resolve(strict=True)
     except OSError as error:
@@ -148,9 +217,20 @@ def cleanup_owned_evidence(evidence_dir: Path, repo_root: Path = REPO_ROOT) -> P
                     os.unlink(name, dir_fd=directory_descriptor)
                 except FileNotFoundError:
                     pass
+            directory_status = os.fstat(directory_descriptor)
+            yield EvidenceDirectory(
+                candidate,
+                directory_descriptor,
+                directory_status.st_dev,
+                directory_status.st_ino,
+            )
     except OSError as error:
         raise QaError(f"failed to clean evidence directory: {candidate}") from error
-    return candidate
+
+
+def cleanup_owned_evidence(evidence_dir: Path, repo_root: Path = REPO_ROOT) -> Path:
+    with _prepared_evidence_directory(evidence_dir, repo_root) as prepared:
+        return prepared.path
 
 
 def _git_text(args: list[str], repo_root: Path) -> str:
@@ -680,7 +760,10 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
             ),
         )
         landing_name = f"landing-{width}.png"
-        page.screenshot(path=str(context.evidence_dir / landing_name), full_page=False)
+        landing_image = page.screenshot(full_page=False)
+        if not isinstance(landing_image, bytes):
+            raise QaError("browser screenshot did not return bytes")
+        context.evidence.write_bytes(landing_name, landing_image)
         link.click()
         page.wait_for_load_state("load")
         navigation = catalog_navigation_urls(context.base_url, page.url)
@@ -692,7 +775,10 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
             f"catalog-top-{width}.png",
             f"catalog-records-{width}.png",
         )
-        page.screenshot(path=str(context.evidence_dir / catalog_name), full_page=False)
+        catalog_image = page.screenshot(full_page=False)
+        if not isinstance(catalog_image, bytes):
+            raise QaError("browser screenshot did not return bytes")
+        context.evidence.write_bytes(catalog_name, catalog_image)
         record = page.locator("#capability-presentation")
         record.scroll_into_view_if_needed()
         _align_capture_below_topbar(page, "#capability-presentation")
@@ -702,7 +788,10 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         record_start_visible = _starts_in_viewport(
             record.bounding_box(), width, VIEWPORT_HEIGHT, catalog_top_edge
         )
-        page.screenshot(path=str(context.evidence_dir / records_name), full_page=False)
+        records_image = page.screenshot(full_page=False)
+        if not isinstance(records_image, bytes):
+            raise QaError("browser screenshot did not return bytes")
+        context.evidence.write_bytes(records_name, records_image)
         catalog = _catalog_dom(page) | {
             "status": catalog_response.status,
             "recordStartVisible": record_start_visible,
@@ -713,9 +802,9 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
             "width": width,
             "height": VIEWPORT_HEIGHT,
             "screenshots": {
-                "landing": _shot(context.evidence_dir, landing_name),
-                "catalogTop": _shot(context.evidence_dir, catalog_name),
-                "catalogRecords": _shot(context.evidence_dir, records_name),
+                "landing": _shot(context.evidence, landing_name),
+                "catalogTop": _shot(context.evidence, catalog_name),
+                "catalogRecords": _shot(context.evidence, records_name),
             },
             "landing": {
                 "status": landing_response.status,
@@ -737,8 +826,8 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         page.close()
 
 
-def _shot(evidence_dir: Path, name: str) -> JsonObject:
-    return {"path": name, "sha256": sha256_file(evidence_dir / name)}
+def _shot(evidence: EvidenceDirectory, name: str) -> JsonObject:
+    return {"path": name, "sha256": evidence.sha256(name)}
 
 
 def preflight_inputs(
@@ -754,44 +843,76 @@ def preflight_inputs(
     return stats, source
 
 
+def _expected_output_hashes(report: JsonObject, report_bytes: bytes) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    for index, viewport_value in enumerate(_arr(report["viewports"], "viewports")):
+        screenshots = _obj(
+            _obj(viewport_value, f"viewports[{index}]")["screenshots"],
+            f"viewports[{index}].screenshots",
+        )
+        for label, shot_value in screenshots.items():
+            shot = _obj(shot_value, f"viewports[{index}].screenshots.{label}")
+            hashes[_string(shot["path"], f"{label}.path")] = _hash(
+                shot["sha256"], f"{label}.sha256"
+            )
+    hashes["browser-qa.json"] = hashlib.sha256(report_bytes).hexdigest()
+    return hashes
+
+
+def _validate_output_integrity(
+    evidence: EvidenceDirectory, expected_hashes: dict[str, str]
+) -> None:
+    expected_names = {
+        name
+        for name in OWNED_EVIDENCE_NAMES
+        if name.endswith(".png") or name == "browser-qa.json"
+    }
+    if set(expected_hashes) != expected_names:
+        raise QaError("browser QA output set is incomplete")
+    evidence.validate_public_path()
+    for name, expected_hash in expected_hashes.items():
+        if evidence.sha256(name) != expected_hash:
+            raise QaError(f"browser QA output hash mismatch: {name}")
+    evidence.validate_public_path()
+
+
 def run_browser_qa(args: CliArgs, repo_root: Path = REPO_ROOT) -> JsonObject:
     stats, source = preflight_inputs(args, repo_root)
-    evidence_dir = cleanup_owned_evidence(args.evidence_dir, repo_root)
-    try:
-        from playwright.sync_api import Error as PlaywrightError, sync_playwright
-    except ImportError as error:
-        raise QaError("Python Playwright is required for browser QA") from error
-    try:
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(channel="chrome", headless=True)
-            try:
-                context = RuntimeContext(args.base_url, evidence_dir, stats)
-                viewports = [
-                    _capture_viewport(browser, context, width)
-                    for width in VIEWPORT_WIDTHS
-                ]
-            finally:
-                browser.close()
-    except PlaywrightError as error:
-        raise QaError("browser QA runtime failed") from error
-    report = {
-        "schemaVersion": 1,
-        "capturedAt": datetime.now(UTC)
-        .isoformat(timespec="milliseconds")
-        .replace("+00:00", "Z"),
-        "source": source,
-        "viewports": viewports,
-    }
-    validate_report_schema(report)
-    try:
-        (evidence_dir / "browser-qa.json").write_text(
-            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    with _prepared_evidence_directory(args.evidence_dir, repo_root) as evidence:
+        try:
+            from playwright.sync_api import Error as PlaywrightError, sync_playwright
+        except ImportError as error:
+            raise QaError("Python Playwright is required for browser QA") from error
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(channel="chrome", headless=True)
+                try:
+                    context = RuntimeContext(args.base_url, evidence, stats)
+                    viewports = [
+                        _capture_viewport(browser, context, width)
+                        for width in VIEWPORT_WIDTHS
+                    ]
+                finally:
+                    browser.close()
+        except PlaywrightError as error:
+            raise QaError("browser QA runtime failed") from error
+        report = {
+            "schemaVersion": 1,
+            "capturedAt": datetime.now(UTC)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z"),
+            "source": source,
+            "viewports": viewports,
+        }
+        validate_report_schema(report)
+        report_bytes = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode(
+            "utf-8"
         )
-    except OSError as error:
-        raise QaError(
-            f"failed to write browser QA report: {evidence_dir / 'browser-qa.json'}"
-        ) from error
-    return report
+        evidence.write_bytes("browser-qa.json", report_bytes)
+        _validate_output_integrity(
+            evidence, _expected_output_hashes(report, report_bytes)
+        )
+        return report
 
 
 def parse_args(argv: list[str] | None = None) -> CliArgs:
