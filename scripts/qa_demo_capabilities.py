@@ -234,7 +234,7 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         landing_response = page.goto(context.base_url, wait_until="load")
         if landing_response is None:
             raise QaError("landing navigation produced no response")
-        coverage, heading, link, scope = page.locator("#coverage"), page.locator("#coverageHeading"), page.locator("#capabilityCatalogLink"), page.locator(".section-note")
+        coverage, heading, link, scope = page.locator("#coverage"), page.locator("#coverageHeading"), page.locator("#capabilityCatalogLink"), page.locator("#coverage .section-note")
         coverage.scroll_into_view_if_needed()
         heading.scroll_into_view_if_needed()
         link.scroll_into_view_if_needed()

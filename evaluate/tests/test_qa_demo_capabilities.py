@@ -147,6 +147,7 @@ class FakePage:
     ) -> None:
         self.url = "http://127.0.0.1:4173/"
         self.scrolled: list[str] = []
+        self.locator_selectors: list[str] = []
         self.screenshots: list[dict[str, object]] = []
         self._tmpdir = tmpdir
         self._listeners: dict[str, object] = {}
@@ -172,6 +173,7 @@ class FakePage:
         return FakeResponse(200, url)
 
     def locator(self, selector: str) -> FakeLocator:
+        self.locator_selectors.append(selector)
         return FakeLocator(self, selector)
 
     def screenshot(self, **kwargs: object) -> None:
@@ -555,10 +557,31 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
         self.assertEqual([shot.get("full_page") for shot in browser.page.screenshots], [False, False, False])
         self.assertEqual(browser.page.scrolled, ["#coverage", "#coverageHeading", "#capabilityCatalogLink", "#capability-presentation"])
 
+    def test_capture_uses_coverage_owned_section_note_scope_locator(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            browser = FakeBrowser(Path(tmpdir))
+            context = module.RuntimeContext(
+                "http://127.0.0.1:4173/",
+                Path(tmpdir),
+                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                }, 2),
+            )
+
+            module._capture_viewport(browser, context, 375)
+
+        self.assertIn("#coverage .section-note", browser.page.locator_selectors)
+        self.assertNotIn(".section-note", browser.page.locator_selectors)
+
     def test_capture_requires_link_and_section_note_to_intersect_viewport(self) -> None:
         module = load_module()
 
-        for selector in ("#capabilityCatalogLink", ".section-note"):
+        for selector in ("#capabilityCatalogLink", "#coverage .section-note"):
             with self.subTest(selector=selector):
                 with tempfile.TemporaryDirectory() as tmpdir:
                     browser = FakeBrowser(
