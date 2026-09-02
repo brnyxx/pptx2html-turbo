@@ -54,6 +54,7 @@ def valid_viewport(width: int) -> dict[str, object]:
         "landing": {
             "status": 200,
             "resolvedCatalogHref": "http://127.0.0.1:4173/capabilities/",
+            "headingVisible": True,
             "linkVisible": True,
             "scopeVisible": True,
             "scrollWidth": width,
@@ -135,9 +136,12 @@ class FakeLocator:
         return True
 
     def bounding_box(self) -> dict[str, int] | None:
-        return self._page.bounding_boxes.get(
-            self._selector, {"x": 0, "y": 0, "width": 120, "height": 32}
+        default = (
+            {"x": 0, "y": 0, "width": 375, "height": 56}
+            if self._selector == ".topbar"
+            else {"x": 24, "y": 96, "width": 120, "height": 32}
         )
+        return self._page.bounding_boxes.get(self._selector, default)
 
 
 class FakePage:
@@ -189,6 +193,8 @@ class FakePage:
         return None
 
     def evaluate(self, script: str) -> object:
+        if "window.scrollBy" in script:
+            return True
         return self._evaluations.pop(0)
 
     def close(self) -> None:
@@ -499,21 +505,25 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             [{"viewport": {"width": 375, "height": 900}, "reduced_motion": "reduce"}],
         )
 
-    def test_intersects_viewport_distinguishes_visible_and_offscreen_boxes(
+    def test_full_visibility_rejects_clipped_and_offscreen_boxes(
         self,
     ) -> None:
         module = load_module()
 
-        visible = {"x": 340, "y": 20, "width": 40, "height": 20}
-        left = {"x": -50, "y": 20, "width": 40, "height": 20}
+        visible = {"x": 300, "y": 80, "width": 40, "height": 20}
+        right = {"x": 340, "y": 80, "width": 40, "height": 20}
+        left = {"x": -50, "y": 80, "width": 40, "height": 20}
+        behind_header = {"x": 20, "y": 20, "width": 40, "height": 20}
         below = {"x": 20, "y": 901, "width": 40, "height": 20}
-        zero = {"x": 20, "y": 20, "width": 0, "height": 20}
+        zero = {"x": 20, "y": 80, "width": 0, "height": 20}
 
-        self.assertTrue(module._intersects_viewport(visible, 375, 900))
-        self.assertFalse(module._intersects_viewport(left, 375, 900))
-        self.assertFalse(module._intersects_viewport(below, 375, 900))
-        self.assertFalse(module._intersects_viewport(zero, 375, 900))
-        self.assertFalse(module._intersects_viewport(None, 375, 900))
+        self.assertTrue(module._fully_visible_in_viewport(visible, 375, 900, 56))
+        self.assertFalse(module._fully_visible_in_viewport(right, 375, 900, 56))
+        self.assertFalse(module._fully_visible_in_viewport(left, 375, 900, 56))
+        self.assertFalse(module._fully_visible_in_viewport(behind_header, 375, 900, 56))
+        self.assertFalse(module._fully_visible_in_viewport(below, 375, 900, 56))
+        self.assertFalse(module._fully_visible_in_viewport(zero, 375, 900, 56))
+        self.assertFalse(module._fully_visible_in_viewport(None, 375, 900, 56))
 
     def test_preflight_failures_leave_existing_evidence_byte_identical(self) -> None:
         module = load_module()
@@ -709,6 +719,57 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
                     with self.assertRaises(module.QaError):
                         module._capture_viewport(browser, context, 375)
+
+    def test_capture_rejects_heading_hidden_by_sticky_header(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            browser = FakeBrowser(
+                Path(tmpdir),
+                bounding_boxes={
+                    ".topbar": {"x": 0, "y": 0, "width": 375, "height": 56},
+                    "#coverageHeading": {
+                        "x": 24,
+                        "y": 24,
+                        "width": 240,
+                        "height": 40,
+                    },
+                    "#capabilityCatalogLink": {
+                        "x": 24,
+                        "y": 128,
+                        "width": 220,
+                        "height": 32,
+                    },
+                    "#coverage .section-note": {
+                        "x": 24,
+                        "y": 96,
+                        "width": 327,
+                        "height": 160,
+                    },
+                },
+            )
+            context = module.RuntimeContext(
+                "http://127.0.0.1:4173/",
+                Path(tmpdir),
+                module.ManifestStats(
+                    "b" * 64,
+                    56,
+                    19,
+                    168,
+                    168,
+                    0,
+                    {
+                        "exact": 0,
+                        "approximate": 54,
+                        "fallback": 114,
+                        "unparsed": 0,
+                    },
+                    2,
+                ),
+            )
+
+            with self.assertRaises(module.QaError):
+                module._capture_viewport(browser, context, 375)
 
     def test_capture_records_redirect_responses_as_non2xx_errors(self) -> None:
         module = load_module()

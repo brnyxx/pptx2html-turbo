@@ -258,6 +258,7 @@ def _validate_viewport(value: JsonValue, index: int, width: int) -> None:
         {
             "status",
             "resolvedCatalogHref",
+            "headingVisible",
             "linkVisible",
             "scopeVisible",
             "scrollWidth",
@@ -302,8 +303,9 @@ def _validate_leaf_types(
     for key in ("status", "scrollWidth", "clientWidth"):
         _integer(landing[key], f"{label}.landing.{key}")
     _string(landing["resolvedCatalogHref"], f"{label}.landing.resolvedCatalogHref")
-    if not isinstance(landing["linkVisible"], bool) or not isinstance(
-        landing["scopeVisible"], bool
+    if not all(
+        isinstance(landing[key], bool)
+        for key in ("headingVisible", "linkVisible", "scopeVisible")
     ):
         raise QaError(f"{label}.landing visibility values must be booleans")
     _string(catalog["canonical"], f"{label}.catalog.canonical")
@@ -437,7 +439,9 @@ def _new_qa_page(browser, width: int):
     )
 
 
-def _intersects_viewport(box: JsonValue, width: int, height: int) -> bool:
+def _fully_visible_in_viewport(
+    box: JsonValue, width: int, height: int, top_edge: int | float
+) -> bool:
     if not isinstance(box, dict):
         return False
     x, y, box_width, box_height = (
@@ -454,11 +458,45 @@ def _intersects_viewport(box: JsonValue, width: int, height: int) -> bool:
     return (
         box_width > 0
         and box_height > 0
-        and x < width
-        and x + box_width > 0
-        and y < height
-        and y + box_height > 0
+        and x >= 0
+        and x + box_width <= width
+        and y >= top_edge
+        and y + box_height <= height
     )
+
+
+def _box_bottom(box: JsonValue) -> int | float | None:
+    if not isinstance(box, dict):
+        return None
+    y, height = box.get("y"), box.get("height")
+    if not all(
+        isinstance(value, int | float) and not isinstance(value, bool)
+        for value in (y, height)
+    ):
+        return None
+    if height <= 0:
+        return None
+    return y + height
+
+
+def _align_landing_capture(page) -> None:
+    aligned = page.evaluate(
+        """
+        () => {
+          const heading = document.querySelector('#coverageHeading');
+          const topbar = document.querySelector('.topbar');
+          if (!heading || !topbar) return false;
+          const gap = 16;
+          const delta = heading.getBoundingClientRect().top
+            - topbar.getBoundingClientRect().bottom
+            - gap;
+          window.scrollBy(0, delta);
+          return true;
+        }
+        """
+    )
+    if aligned is not True:
+        raise QaError("landing capture landmarks are missing")
 
 
 def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
@@ -489,7 +527,8 @@ def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
     ):
         raise QaError("horizontal overflow detected")
     if (
-        not landing["linkVisible"]
+        not landing["headingVisible"]
+        or not landing["linkVisible"]
         or not landing["scopeVisible"]
         or not catalog["warningsBeforeFirstRecord"]
     ):
@@ -539,19 +578,31 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         landing_response = page.goto(context.base_url, wait_until="load")
         if landing_response is None:
             raise QaError("landing navigation produced no response")
-        coverage, heading, link, scope = (
+        coverage, heading, link, scope, topbar = (
             page.locator("#coverage"),
             page.locator("#coverageHeading"),
             page.locator("#capabilityCatalogLink"),
             page.locator("#coverage .section-note"),
+            page.locator(".topbar"),
         )
         coverage.scroll_into_view_if_needed()
         heading.scroll_into_view_if_needed()
         link.scroll_into_view_if_needed()
+        _align_landing_capture(page)
         landing_widths = _dom_widths(page)
-        link_visible, scope_visible = (
-            _intersects_viewport(link.bounding_box(), width, VIEWPORT_HEIGHT),
-            _intersects_viewport(scope.bounding_box(), width, VIEWPORT_HEIGHT),
+        top_edge = _box_bottom(topbar.bounding_box())
+        if top_edge is None:
+            raise QaError("sticky header bounds are unavailable")
+        heading_visible, link_visible, scope_visible = (
+            _fully_visible_in_viewport(
+                heading.bounding_box(), width, VIEWPORT_HEIGHT, top_edge
+            ),
+            _fully_visible_in_viewport(
+                link.bounding_box(), width, VIEWPORT_HEIGHT, top_edge
+            ),
+            _fully_visible_in_viewport(
+                scope.bounding_box(), width, VIEWPORT_HEIGHT, top_edge
+            ),
         )
         landing_name = f"landing-{width}.png"
         page.screenshot(path=str(context.evidence_dir / landing_name), full_page=False)
@@ -585,6 +636,7 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
             "landing": {
                 "status": landing_response.status,
                 "resolvedCatalogHref": navigation.resolved_no_query,
+                "headingVisible": heading_visible,
                 "linkVisible": link_visible,
                 "scopeVisible": scope_visible,
                 "scrollWidth": landing_widths["scrollWidth"],
