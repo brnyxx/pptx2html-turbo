@@ -349,6 +349,66 @@ function assertCatalogDom(html, manifest, manifestBytes) {
   }
 }
 
+function matchingBrace(text, openBraceIndex) {
+  let depth = 0;
+  for (let index = openBraceIndex; index < text.length; index += 1) {
+    if (text[index] === '{') {
+      depth += 1;
+    } else if (text[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  throw new Error('unterminated CSS block');
+}
+
+function scrollMarginTop(css, viewportWidth) {
+  const selector = 'section[id], article[id], main[id]';
+  const selectorPattern = new RegExp(`${escapeRegExp(selector)}\\s*\\{([^}]*)\\}`);
+  const baseCss = [...css.matchAll(/@media\s*\(max-width:\s*\d+px\)\s*\{/g)].reduceRight(
+    (remaining, media) => {
+      const closingBrace = matchingBrace(css, media.index + media[0].length - 1);
+      return remaining.replace(css.slice(media.index, closingBrace + 1), '');
+    },
+    css,
+  );
+  const baseDeclaration = baseCss.match(selectorPattern)?.[1];
+  assert.ok(baseDeclaration, 'anchor targets need a base scroll margin rule');
+  let offset = Number(baseDeclaration.match(/scroll-margin-top:\s*(\d+)px/)?.[1]);
+  assert.ok(Number.isFinite(offset), 'base anchor scroll margin must be a pixel value');
+
+  for (const media of css.matchAll(/@media\s*\(max-width:\s*(\d+)px\)\s*\{/g)) {
+    const maxWidth = Number(media[1]);
+    if (viewportWidth > maxWidth) {
+      continue;
+    }
+    const closingBrace = matchingBrace(css, media.index + media[0].length - 1);
+    const declaration = css.slice(media.index, closingBrace + 1).match(selectorPattern)?.[1];
+    if (declaration) {
+      offset = Number(declaration.match(/scroll-margin-top:\s*(\d+)px/)?.[1]);
+    }
+  }
+  return offset;
+}
+
+function assertResponsiveAnchorClearance(html) {
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)?.[1];
+  assert.ok(css, 'catalog must include its stylesheet');
+  for (const { viewportWidth, headerBottom } of [
+    { viewportWidth: 375, headerBottom: 161.19 },
+    { viewportWidth: 768, headerBottom: 107.19 },
+    { viewportWidth: 1280, headerBottom: 74 },
+  ]) {
+    const offset = scrollMarginTop(css, viewportWidth);
+    assert.ok(
+      offset >= headerBottom + 8,
+      `anchor offset at ${viewportWidth}px must clear the sticky header with an 8px gap`,
+    );
+  }
+}
+
 function assertRootValidation() {
   const base = manifestFixture();
   assertThrowsMessage(
@@ -886,6 +946,7 @@ const manifest = parseJson(manifestBytes);
 const workflowText = await readFile(WORKFLOW_PATH, 'utf8');
 
 assertCatalogDom(html, manifest, manifestBytes);
+assertResponsiveAnchorClearance(html);
 assertRootValidation();
 assertBoundaryFixtures();
 await assertWriteBoundaries();
