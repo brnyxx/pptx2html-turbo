@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Static pptx2html-turbo capability catalog generated from the completeness manifest.">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="https://brnyxx.github.io/pptx2html-turbo/capabilities/">
+<link rel="icon" href="data:,">
+<title>pptx2html-turbo · Capability catalog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --ink: #0E1211;
+  --ink-raised: #131917;
+  --ink-panel: #19201D;
+  --ink-well: #0A0D0C;
+  --edge: #242D29;
+  --edge-strong: #35403A;
+  --edge-control: #5E6D65;
+  --paper: #ECF1EE;
+  --paper-soft: #9FB3A9;
+  --paper-faint: #75897F;
+  --ember: #F2703C;
+  --ember-deep: #C4501F;
+  --amber: #F0C24E;
+  --celadon: #8FD9AE;
+  --flag: #F2705C;
+  --ember-lift: #FF8552;
+  --on-ember: #180E08;
+  --amber-edge: #776536;
+  --wash: rgba(255, 255, 255, 0.028);
+  --topbar-veil: rgba(12, 16, 15, 0.93);
+  --font-display: 'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-text: 'Archivo', 'Segoe UI', 'Liberation Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --gutter: clamp(20px, 5vw, 72px);
+  --measure: 38rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-text);
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--paper);
+  background-color: var(--ink);
+  background-image:
+    linear-gradient(168deg, #101615 0%, #0E1211 42%, #0C100F 100%),
+    linear-gradient(96deg, #121A17 0%, #0E1211 55%, #131614 100%);
+}
+
+section[id], article[id], main[id] { scroll-margin-top: 82px; }
+::selection { background: var(--ember-deep); color: #FFF3EC; }
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+a {
+  color: var(--paper);
+  text-decoration-color: var(--edge-strong);
+  text-underline-offset: 0.28em;
+  text-decoration-thickness: 1px;
+  transition: color 180ms var(--ease), text-decoration-color 180ms var(--ease);
+}
+a:hover { color: var(--ember); text-decoration-color: var(--ember); }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; }
+p, dl, dd { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 40;
+  padding: 12px 20px;
+  background: var(--ember);
+  color: var(--on-ember);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 3px;
+  text-decoration: none;
+  transform: translate3d(0, -200%, 0);
+  transition: transform 200ms var(--ease);
+}
+.skip-link:hover, .skip-link:focus { color: var(--on-ember); }
+.skip-link:focus { transform: none; }
+
+.topbar, main, .site-foot { position: relative; z-index: 1; }
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  padding: 14px var(--gutter);
+  border-bottom: 1px solid var(--edge);
+  background: var(--topbar-veil);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.wordmark {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--paper);
+  text-decoration: none;
+}
+.wordmark b { color: var(--ember); font-weight: 600; }
+.release {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--amber);
+  padding: 3px 9px 4px;
+  border: 1px solid var(--amber-edge);
+  border-radius: 3px;
+  text-decoration: none;
+}
+.topnav {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px;
+}
+.topnav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--paper-soft);
+  text-decoration: none;
+}
+.topnav a:hover { color: var(--paper); }
+
+.catalog-shell {
+  width: min(1180px, calc(100% - var(--gutter) * 2));
+  margin: 0 auto;
+}
+.hero {
+  padding: clamp(58px, 9vw, 104px) 0 clamp(44px, 7vw, 76px);
+  border-bottom: 1px solid var(--edge);
+}
+.eyebrow {
+  max-width: var(--measure);
+  margin-bottom: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--amber);
+}
+.hero h1 {
+  max-width: 900px;
+  font-size: clamp(2.7rem, 7.2vw, 4.4rem);
+  line-height: 1.02;
+}
+.hero-copy {
+  max-width: 760px;
+  margin-top: 22px;
+  color: var(--paper-soft);
+  font-size: 19px;
+}
+.hero-copy strong { color: var(--paper); font-weight: 500; }
+.source-hash {
+  max-width: 100%;
+  margin-top: 22px;
+  color: var(--paper-faint);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.link-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+.link-strip a {
+  min-height: 42px;
+  padding: 9px 13px;
+  border: 1px solid var(--edge-control);
+  border-radius: 3px;
+  color: var(--paper-soft);
+  text-decoration: none;
+}
+.link-strip a:hover {
+  color: var(--paper);
+  border-color: var(--ember);
+}
+
+.summary {
+  padding: 34px 0;
+  border-bottom: 1px solid var(--edge);
+}
+.tier-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--edge);
+  background: var(--edge);
+}
+.tier-summary li {
+  min-width: 0;
+  padding: 18px;
+  background: var(--ink-raised);
+}
+.tier-name {
+  display: block;
+  color: var(--paper-faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.tier-count {
+  display: block;
+  margin-top: 8px;
+  color: var(--paper);
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  line-height: 1;
+}
+
+.catalog-body {
+  padding: clamp(36px, 7vw, 74px) 0;
+}
+.catalog-note {
+  max-width: 780px;
+  color: var(--paper-soft);
+  margin-bottom: 34px;
+}
+.catalog-note strong { color: var(--amber); font-weight: 500; }
+.capability-family {
+  padding: 34px 0;
+  border-top: 1px solid var(--edge);
+}
+.family-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 14px;
+  margin-bottom: 20px;
+}
+.family-heading h2 {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+  line-height: 1.08;
+}
+.family-anchor {
+  color: var(--paper-faint);
+  text-decoration: none;
+}
+.family-count {
+  color: var(--paper-faint);
+  font-size: 13px;
+}
+.capability-record {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  gap: 20px 26px;
+  padding: 24px 0;
+  border-top: 1px solid var(--edge);
+}
+.record-head h3 {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.35rem, 2.2vw, 1.8rem);
+  line-height: 1.12;
+}
+.record-family {
+  margin-top: 6px;
+  color: var(--paper-faint);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.source-row a {
+  overflow-wrap: anywhere;
+  color: var(--paper-soft);
+}
+.source-warning {
+  padding: 3px 8px;
+  border: 1px solid var(--amber-edge);
+  border-radius: 3px;
+  color: var(--amber);
+  font-size: 12px;
+}
+.capability-ooxml,
+.fallback-policy {
+  display: grid;
+  grid-template-columns: minmax(130px, max-content) minmax(0, 1fr);
+  gap: 6px 14px;
+  color: var(--paper-soft);
+  font-size: 15px;
+}
+.capability-ooxml dt,
+.fallback-policy dt {
+  color: var(--paper-faint);
+}
+.capability-ooxml dd,
+.fallback-policy dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.disposition-table {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 15px;
+}
+.disposition-table th,
+.disposition-table td {
+  padding: 12px 14px;
+  border: 1px solid var(--edge);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.disposition-table th {
+  color: var(--paper-faint);
+  font-weight: 500;
+  text-align: left;
+}
+.disposition-table td[data-disposition="current"] {
+  background: var(--wash);
+  color: var(--paper);
+}
+.disposition-table td[data-disposition="target"] {
+  color: var(--paper-soft);
+}
+.tier-value,
+.stage-value {
+  display: block;
+}
+.stage-value {
+  margin-top: 4px;
+  color: var(--paper-faint);
+  font-size: 13px;
+}
+.fallback-policy {
+  grid-column: 1 / -1;
+}
+.site-foot {
+  padding: 28px var(--gutter) 44px;
+  border-top: 1px solid var(--edge);
+  color: var(--paper-faint);
+  font-size: 14px;
+}
+.site-foot-inner {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  justify-content: space-between;
+}
+
+@media (max-width: 900px) {
+  .topnav {
+    width: 100%;
+    margin-left: 0;
+  }
+  .tier-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .capability-record {
+    display: block;
+  }
+  .capability-record > * + * {
+    margin-top: 16px;
+  }
+  .disposition-table,
+  .disposition-table thead,
+  .disposition-table tbody,
+  .disposition-table tr,
+  .disposition-table th,
+  .disposition-table td {
+    display: block;
+    width: 100%;
+  }
+  .disposition-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .disposition-table tr {
+    border: 1px solid var(--edge);
+  }
+  .disposition-table tr + tr {
+    margin-top: 12px;
+  }
+  .disposition-table th,
+  .disposition-table td {
+    border: 0;
+    padding: 10px 12px;
+  }
+  .disposition-table td::before {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--paper-faint);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .disposition-table td[data-disposition="current"]::before { content: "Current"; }
+  .disposition-table td[data-disposition="target"]::before { content: "Target"; }
+}
+
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .catalog-shell {
+    width: min(100% - 32px, 1180px);
+  }
+  .hero {
+    padding-top: 42px;
+  }
+  .hero h1 {
+    font-size: 2.6rem;
+  }
+  .hero-copy {
+    font-size: 17px;
+  }
+  .tier-summary {
+    grid-template-columns: 1fr;
+  }
+  .link-strip a {
+    width: 100%;
+    justify-content: center;
+  }
+  .capability-ooxml,
+  .fallback-policy {
+    grid-template-columns: 1fr;
+  }
+  .site-foot-inner {
+    display: block;
+  }
+  .site-foot-inner p + p {
+    margin-top: 8px;
+  }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#capabilityCatalog">Skip to catalog</a>
+<header class="topbar">
+<a class="wordmark" href="../" aria-label="pptx2html-turbo home"><b>pptx</b>2html-turbo</a>
+<span class="release">capability catalog</span>
+<nav class="topnav" aria-label="Project">
+<a id="backLink" href="../">Demo</a>
+<a id="supportedFeaturesLink" href="https://github.com/brnyxx/pptx2html-turbo/blob/main/SUPPORTED_FEATURES.md">Supported features</a>
+<a id="manifestSourceLink" href="https://github.com/brnyxx/pptx2html-turbo/blob/main/evaluate/completeness_manifest.json">Manifest</a>
+<a id="capabilityMatrixLink" href="https://github.com/brnyxx/pptx2html-turbo/blob/main/docs/architecture/CAPABILITY_MATRIX.md">Capability matrix</a>
+</nav>
+</header>
+<main id="capabilityCatalog">
+<section class="hero catalog-shell" aria-labelledby="catalogHeading">
+<p class="eyebrow">Manifest-backed browser Pages catalog</p>
+<h1 id="catalogHeading">@@CATALOG_FEATURE_COUNT@@ tracked PPTX capabilities</h1>
+<p class="hero-copy">The catalog renders every current manifest record as static HTML. It reports <strong>@@CATALOG_EXACT_COUNT@@ exact dimensions</strong>; approximate and fallback dispositions remain visible instead of being promoted.</p>
+<p class="source-hash mono">Source manifest SHA-256: @@CATALOG_SOURCE_SHA256@@</p>
+<div class="link-strip" aria-label="Catalog source links">
+<a href="https://github.com/brnyxx/pptx2html-turbo/blob/main/SUPPORTED_FEATURES.md">Detailed inventory</a>
+<a href="https://github.com/brnyxx/pptx2html-turbo/blob/main/evaluate/completeness_manifest.json">Raw manifest</a>
+<a href="https://github.com/brnyxx/pptx2html-turbo/blob/main/docs/architecture/CAPABILITY_MATRIX.md">Architecture contract</a>
+</div>
+</section>
+<section class="summary catalog-shell" aria-labelledby="summaryHeading">
+<h2 id="summaryHeading">Current support tiers across @@CATALOG_DIMENSION_COUNT@@ dimensions</h2>
+<ul class="tier-summary" aria-label="Current tier counts">
+<!-- CATALOG_TIER_SUMMARY -->
+</ul>
+</section>
+<section class="catalog-body catalog-shell" aria-labelledby="recordsHeading">
+<p class="catalog-note" id="recordsHeading"><strong>Exactness boundary:</strong> verified source links identify official references when the manifest records them. Unavailable source records are labelled for cross-validation before relying on them as independent confirmation.</p>
+<!-- CATALOG_FAMILY_SECTIONS -->
+</section>
+</main>
+<footer class="site-foot">
+<div class="site-foot-inner">
+<p>Rust ECMA-376 renderer compiled to WebAssembly.</p>
+<p><a href="https://github.com/brnyxx/pptx2html-turbo/releases/latest">Latest release</a></p>
+</div>
+</footer>
+</body>
+</html>
