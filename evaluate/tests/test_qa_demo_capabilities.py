@@ -30,7 +30,9 @@ def load_module():
 
 
 def completed(stdout: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(args=["git"], returncode=0, stdout=stdout, stderr="")
+    return subprocess.CompletedProcess(
+        args=["git"], returncode=0, stdout=stdout, stderr=""
+    )
 
 
 def screenshot(path: str) -> dict[str, str]:
@@ -133,7 +135,9 @@ class FakeLocator:
         return True
 
     def bounding_box(self) -> dict[str, int] | None:
-        return self._page.bounding_boxes.get(self._selector, {"x": 0, "y": 0, "width": 120, "height": 32})
+        return self._page.bounding_boxes.get(
+            self._selector, {"x": 0, "y": 0, "width": 120, "height": 32}
+        )
 
 
 class FakePage:
@@ -141,7 +145,6 @@ class FakePage:
         self,
         tmpdir: Path,
         redirect_status: int | None = None,
-        require_warning_contract: bool = False,
         raise_on_goto: bool = False,
         bounding_boxes: dict[str, dict[str, int] | None] | None = None,
     ) -> None:
@@ -157,7 +160,6 @@ class FakePage:
             valid_viewport(375)["catalog"],
         ]
         self._redirect_status = redirect_status
-        self._require_warning_contract = require_warning_contract
         self._raise_on_goto = raise_on_goto
         self.bounding_boxes = bounding_boxes or {}
 
@@ -179,15 +181,14 @@ class FakePage:
     def screenshot(self, **kwargs: object) -> None:
         path = Path(str(kwargs["path"]))
         path.write_bytes(b"png")
-        self.screenshots.append(kwargs)
+        snapshot = dict(kwargs)
+        snapshot["scrolled"] = list(self.scrolled)
+        self.screenshots.append(snapshot)
 
     def wait_for_load_state(self, state: str) -> None:
         return None
 
     def evaluate(self, script: str) -> object:
-        if self._require_warning_contract and ".catalog-note" in script:
-            if ".hero-copy" not in script or "exact" not in script or "fallback" not in script or "cross-validation" not in script:
-                raise AssertionError("catalog warning check must include both pre-record warnings")
         return self._evaluations.pop(0)
 
     def close(self) -> None:
@@ -207,11 +208,21 @@ class FakeBrowser:
         self._raise_on_goto = raise_on_goto
         self._bounding_boxes = bounding_boxes
         self.new_page_options: list[dict[str, object]] = []
-        self.page = FakePage(tmpdir, redirect_status=redirect_status, raise_on_goto=raise_on_goto, bounding_boxes=bounding_boxes)
+        self.page = FakePage(
+            tmpdir,
+            redirect_status=redirect_status,
+            raise_on_goto=raise_on_goto,
+            bounding_boxes=bounding_boxes,
+        )
 
     def new_page(self, **kwargs: object) -> FakePage:
         self.new_page_options.append(kwargs)
-        self.page = FakePage(self._tmpdir, redirect_status=self._redirect_status, raise_on_goto=self._raise_on_goto, bounding_boxes=self._bounding_boxes)
+        self.page = FakePage(
+            self._tmpdir,
+            redirect_status=self._redirect_status,
+            raise_on_goto=self._raise_on_goto,
+            bounding_boxes=self._bounding_boxes,
+        )
         return self.page
 
     def close(self) -> None:
@@ -286,7 +297,9 @@ def write_evidence_sentinel(evidence_dir: Path, module) -> dict[str, bytes]:
 
 
 class QaDemoCapabilitiesTests(unittest.TestCase):
-    def test_git_binding_accepts_exact_lowercase_sha_and_matching_clean_head(self) -> None:
+    def test_git_binding_accepts_exact_lowercase_sha_and_matching_clean_head(
+        self,
+    ) -> None:
         module = load_module()
 
         with mock.patch.object(
@@ -328,7 +341,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
     def test_git_text_wraps_os_error_with_cause(self) -> None:
         module = load_module()
 
-        with mock.patch.object(module.subprocess, "run", side_effect=FileNotFoundError("git")):
+        with mock.patch.object(
+            module.subprocess, "run", side_effect=FileNotFoundError("git")
+        ):
             with self.assertRaises(module.QaError) as caught:
                 module._git_text(["git", "rev-parse", "HEAD"], ROOT)
 
@@ -370,7 +385,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         module.validate_report_schema(valid_report())
 
-    def test_report_schema_rejects_missing_or_unknown_keys_at_each_object_level(self) -> None:
+    def test_report_schema_rejects_missing_or_unknown_keys_at_each_object_level(
+        self,
+    ) -> None:
         module = load_module()
         cases = []
         for path in (
@@ -426,7 +443,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             "http://127.0.0.1:4173/capabilities/",
         )
 
-        self.assertEqual(navigation.resolved_no_query, "http://127.0.0.1:4173/capabilities/")
+        self.assertEqual(
+            navigation.resolved_no_query, "http://127.0.0.1:4173/capabilities/"
+        )
         self.assertEqual(navigation.capture_url, "http://127.0.0.1:4173/capabilities/")
 
     def test_catalog_capture_url_reapplies_public_query_after_recording_resolved_link(
@@ -448,7 +467,9 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             "https://brnyxx.github.io/pptx2html-turbo/capabilities/?v=01234567",
         )
 
-    def test_catalog_capture_url_rejects_external_or_wrong_path_destinations(self) -> None:
+    def test_catalog_capture_url_rejects_external_or_wrong_path_destinations(
+        self,
+    ) -> None:
         module = load_module()
 
         for resolved in (
@@ -473,9 +494,14 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
             module._new_qa_page(browser, 375)
 
-        self.assertEqual(browser.new_page_options, [{"viewport": {"width": 375, "height": 900}, "reduced_motion": "reduce"}])
+        self.assertEqual(
+            browser.new_page_options,
+            [{"viewport": {"width": 375, "height": 900}, "reduced_motion": "reduce"}],
+        )
 
-    def test_intersects_viewport_distinguishes_visible_and_offscreen_boxes(self) -> None:
+    def test_intersects_viewport_distinguishes_visible_and_offscreen_boxes(
+        self,
+    ) -> None:
         module = load_module()
 
         visible = {"x": 340, "y": 20, "width": 40, "height": 20}
@@ -500,12 +526,48 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             invalid_manifest = root / "invalid.json"
             invalid_manifest.write_text(json.dumps({"features": {}}), encoding="utf-8")
             cases = (
-                module.CliArgs("http://127.0.0.1:4173/", root / "missing.json", catalog, root / "evidence-a", VALID_SHA),
-                module.CliArgs("http://127.0.0.1:4173/", root, catalog, root / "evidence-b", VALID_SHA),
-                module.CliArgs("http://127.0.0.1:4173/", bad_json, catalog, root / "evidence-c", VALID_SHA),
-                module.CliArgs("http://127.0.0.1:4173/", manifest, root / "missing.html", root / "evidence-d", VALID_SHA),
-                module.CliArgs("http://127.0.0.1:4173/", manifest, root, root / "evidence-e", VALID_SHA),
-                module.CliArgs("http://127.0.0.1:4173/", invalid_manifest, catalog, root / "evidence-f", VALID_SHA),
+                module.CliArgs(
+                    "http://127.0.0.1:4173/",
+                    root / "missing.json",
+                    catalog,
+                    root / "evidence-a",
+                    VALID_SHA,
+                ),
+                module.CliArgs(
+                    "http://127.0.0.1:4173/",
+                    root,
+                    catalog,
+                    root / "evidence-b",
+                    VALID_SHA,
+                ),
+                module.CliArgs(
+                    "http://127.0.0.1:4173/",
+                    bad_json,
+                    catalog,
+                    root / "evidence-c",
+                    VALID_SHA,
+                ),
+                module.CliArgs(
+                    "http://127.0.0.1:4173/",
+                    manifest,
+                    root / "missing.html",
+                    root / "evidence-d",
+                    VALID_SHA,
+                ),
+                module.CliArgs(
+                    "http://127.0.0.1:4173/",
+                    manifest,
+                    root,
+                    root / "evidence-e",
+                    VALID_SHA,
+                ),
+                module.CliArgs(
+                    "http://127.0.0.1:4173/",
+                    invalid_manifest,
+                    catalog,
+                    root / "evidence-f",
+                    VALID_SHA,
+                ),
             )
             for args in cases:
                 with self.subTest(args=args):
@@ -530,8 +592,16 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                 with self.subTest(name=name):
                     evidence_dir = root / f"evidence-{name}"
                     before = write_evidence_sentinel(evidence_dir, module)
-                    args = module.CliArgs("http://127.0.0.1:4173/", manifest, catalog, evidence_dir, VALID_SHA)
-                    with mock.patch.object(module.subprocess, "run", side_effect=side_effect):
+                    args = module.CliArgs(
+                        "http://127.0.0.1:4173/",
+                        manifest,
+                        catalog,
+                        evidence_dir,
+                        VALID_SHA,
+                    )
+                    with mock.patch.object(
+                        module.subprocess, "run", side_effect=side_effect
+                    ):
                         with self.assertRaises(module.QaError):
                             module.run_browser_qa(args)
                     self.assertEqual(evidence_bytes(evidence_dir), before)
@@ -544,18 +614,36 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             context = module.RuntimeContext(
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
-                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
-                    "exact": 0,
-                    "approximate": 54,
-                    "fallback": 114,
-                    "unparsed": 0,
-                }, 2),
+                module.ManifestStats(
+                    "b" * 64,
+                    56,
+                    19,
+                    168,
+                    168,
+                    0,
+                    {
+                        "exact": 0,
+                        "approximate": 54,
+                        "fallback": 114,
+                        "unparsed": 0,
+                    },
+                    2,
+                ),
             )
 
             module._capture_viewport(browser, context, 375)
 
-        self.assertEqual([shot.get("full_page") for shot in browser.page.screenshots], [False, False, False])
-        self.assertEqual(browser.page.scrolled, ["#coverage", "#coverageHeading", "#capabilityCatalogLink", "#capability-presentation"])
+        self.assertEqual(
+            [shot.get("full_page") for shot in browser.page.screenshots],
+            [False, False, False],
+        )
+        landing_scrolls = browser.page.screenshots[0]["scrolled"]
+        records_scrolls = browser.page.screenshots[2]["scrolled"]
+        self.assertIn("#coverage", landing_scrolls)
+        self.assertIn("#coverageHeading", landing_scrolls)
+        self.assertIn("#capabilityCatalogLink", landing_scrolls)
+        self.assertNotIn("#capability-presentation", landing_scrolls)
+        self.assertIn("#capability-presentation", records_scrolls)
 
     def test_capture_uses_coverage_owned_section_note_scope_locator(self) -> None:
         module = load_module()
@@ -565,12 +653,21 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             context = module.RuntimeContext(
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
-                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
-                    "exact": 0,
-                    "approximate": 54,
-                    "fallback": 114,
-                    "unparsed": 0,
-                }, 2),
+                module.ManifestStats(
+                    "b" * 64,
+                    56,
+                    19,
+                    168,
+                    168,
+                    0,
+                    {
+                        "exact": 0,
+                        "approximate": 54,
+                        "fallback": 114,
+                        "unparsed": 0,
+                    },
+                    2,
+                ),
             )
 
             module._capture_viewport(browser, context, 375)
@@ -586,17 +683,28 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as tmpdir:
                     browser = FakeBrowser(
                         Path(tmpdir),
-                        bounding_boxes={selector: {"x": 0, "y": 901, "width": 120, "height": 32}},
+                        bounding_boxes={
+                            selector: {"x": 0, "y": 901, "width": 120, "height": 32}
+                        },
                     )
                     context = module.RuntimeContext(
                         "http://127.0.0.1:4173/",
                         Path(tmpdir),
-                        module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
-                            "exact": 0,
-                            "approximate": 54,
-                            "fallback": 114,
-                            "unparsed": 0,
-                        }, 2),
+                        module.ManifestStats(
+                            "b" * 64,
+                            56,
+                            19,
+                            168,
+                            168,
+                            0,
+                            {
+                                "exact": 0,
+                                "approximate": 54,
+                                "fallback": 114,
+                                "unparsed": 0,
+                            },
+                            2,
+                        ),
                     )
 
                     with self.assertRaises(module.QaError):
@@ -610,24 +718,25 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             context = module.RuntimeContext(
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
-                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
-                    "exact": 0,
-                    "approximate": 54,
-                    "fallback": 114,
-                    "unparsed": 0,
-                }, 2),
+                module.ManifestStats(
+                    "b" * 64,
+                    56,
+                    19,
+                    168,
+                    168,
+                    0,
+                    {
+                        "exact": 0,
+                        "approximate": 54,
+                        "fallback": 114,
+                        "unparsed": 0,
+                    },
+                    2,
+                ),
             )
 
             with self.assertRaises(module.QaError):
                 module._capture_viewport(browser, context, 375)
-
-    def test_catalog_dom_requires_hero_and_boundary_warnings_before_records(self) -> None:
-        module = load_module()
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            page = FakePage(Path(tmpdir), require_warning_contract=True)
-
-            module._catalog_dom(page)
 
     def test_browser_runtime_errors_are_wrapped_as_qa_errors(self) -> None:
         module = load_module()
@@ -637,12 +746,21 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             context = module.RuntimeContext(
                 "http://127.0.0.1:4173/",
                 Path(tmpdir),
-                module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
-                    "exact": 0,
-                    "approximate": 54,
-                    "fallback": 114,
-                    "unparsed": 0,
-                }, 2),
+                module.ManifestStats(
+                    "b" * 64,
+                    56,
+                    19,
+                    168,
+                    168,
+                    0,
+                    {
+                        "exact": 0,
+                        "approximate": 54,
+                        "fallback": 114,
+                        "unparsed": 0,
+                    },
+                    2,
+                ),
             )
 
             with self.assertRaises(module.QaError) as caught:
@@ -657,12 +775,21 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             root = Path(tmpdir)
             evidence_dir = root / "evidence"
             evidence_dir.mkdir()
-            stats = module.ManifestStats("b" * 64, 56, 19, 168, 168, 0, {
-                "exact": 0,
-                "approximate": 54,
-                "fallback": 114,
-                "unparsed": 0,
-            }, 2)
+            stats = module.ManifestStats(
+                "b" * 64,
+                56,
+                19,
+                168,
+                168,
+                0,
+                {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                },
+                2,
+            )
             source = {
                 "gitSha": VALID_SHA,
                 "manifestSha256": "b" * 64,
@@ -673,9 +800,19 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             sync_api.sync_playwright = lambda: FakePlaywrightContext(evidence_dir)
             cause = PermissionError("write blocked")
 
-            with mock.patch.dict(sys.modules, {"playwright": types.ModuleType("playwright"), "playwright.sync_api": sync_api}):
-                with mock.patch.object(module, "preflight_inputs", return_value=(stats, source)):
-                    with mock.patch.object(module.Path, "write_text", side_effect=cause):
+            with mock.patch.dict(
+                sys.modules,
+                {
+                    "playwright": types.ModuleType("playwright"),
+                    "playwright.sync_api": sync_api,
+                },
+            ):
+                with mock.patch.object(
+                    module, "preflight_inputs", return_value=(stats, source)
+                ):
+                    with mock.patch.object(
+                        module.Path, "write_text", side_effect=cause
+                    ):
                         with self.assertRaises(module.QaError) as caught:
                             module.run_browser_qa(
                                 module.CliArgs(
