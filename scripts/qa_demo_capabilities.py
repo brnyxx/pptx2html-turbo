@@ -14,13 +14,18 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, TypeAlias
+from typing import Final, Protocol, TypeAlias
 from urllib.parse import urlsplit, urlunsplit
 
 JsonValue: TypeAlias = (
     None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 )
 JsonObject: TypeAlias = dict[str, JsonValue]
+
+
+class CatalogResponse(Protocol):
+    def body(self) -> bytes: ...
+
 
 logger = logging.getLogger(__name__)
 REPO_ROOT: Final = Path(__file__).resolve().parents[1]
@@ -76,6 +81,7 @@ class RuntimeContext:
     base_url: str
     evidence: EvidenceDirectory
     stats: ManifestStats
+    catalog_html_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -698,6 +704,28 @@ def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
             raise QaError(f"catalog DOM mismatch for {key}: {catalog[key]} != {value}")
 
 
+def _verify_catalog_response(
+    response: CatalogResponse | None, expected_sha256: str
+) -> None:
+    if response is None:
+        raise QaError("catalog navigation produced no response") from RuntimeError(
+            "main resource response is unavailable"
+        )
+    try:
+        body = response.body()
+    except RuntimeError as error:
+        raise QaError("failed to read catalog response body") from error
+    if not isinstance(body, bytes):
+        raise QaError("catalog response body must be bytes") from TypeError(
+            type(body).__name__
+        )
+    actual_sha256 = hashlib.sha256(body).hexdigest()
+    if actual_sha256 != expected_sha256:
+        raise QaError(
+            "catalog response body does not match --catalog-html"
+        ) from ValueError(actual_sha256)
+
+
 def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObject:
     page = _new_qa_page(browser, width)
     try:
@@ -768,8 +796,7 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         page.wait_for_load_state("load")
         navigation = catalog_navigation_urls(context.base_url, page.url)
         catalog_response = page.goto(navigation.capture_url, wait_until="load")
-        if catalog_response is None:
-            raise QaError("catalog navigation produced no response")
+        _verify_catalog_response(catalog_response, context.catalog_html_sha256)
         catalog_widths = _dom_widths(page)
         catalog_name, records_name = (
             f"catalog-top-{width}.png",
@@ -887,7 +914,12 @@ def run_browser_qa(args: CliArgs, repo_root: Path = REPO_ROOT) -> JsonObject:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(channel="chrome", headless=True)
                 try:
-                    context = RuntimeContext(args.base_url, evidence, stats)
+                    context = RuntimeContext(
+                        args.base_url,
+                        evidence,
+                        stats,
+                        _hash(source["catalogHtmlSha256"], "source.catalogHtmlSha256"),
+                    )
                     viewports = [
                         _capture_viewport(browser, context, width)
                         for width in VIEWPORT_WIDTHS

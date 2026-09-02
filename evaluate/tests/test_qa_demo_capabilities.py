@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -19,6 +20,8 @@ MODULE_PATH = ROOT / "scripts" / "qa_demo_capabilities.py"
 VALID_SHA = "0123456789abcdef0123456789abcdef01234567"
 OTHER_SHA = "89abcdef0123456789abcdef0123456789abcdef"
 VIEWPORTS = (375, 768, 1280)
+CATALOG_BYTES = b"<main>served catalog</main>"
+CATALOG_SHA256 = hashlib.sha256(CATALOG_BYTES).hexdigest()
 
 
 def load_module():
@@ -116,6 +119,13 @@ def with_extra_key(value: dict[str, object], key: str = "extra") -> dict[str, ob
 class FakeResponse:
     status: int
     url: str
+    content: bytes = CATALOG_BYTES
+    body_error: RuntimeError | None = None
+
+    def body(self) -> bytes:
+        if self.body_error is not None:
+            raise self.body_error
+        return self.content
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,12 +163,15 @@ class FakePage:
         tmpdir: Path,
         redirect_status: int | None = None,
         raise_on_goto: bool = False,
+        catalog_body_error: RuntimeError | None = None,
+        missing_catalog_response: bool = False,
         bounding_boxes: dict[str, dict[str, int] | None] | None = None,
     ) -> None:
         self.url = "http://127.0.0.1:4173/"
         self.scrolled: list[str] = []
         self.locator_selectors: list[str] = []
         self.screenshots: list[dict[str, object]] = []
+        self.goto_urls: list[str] = []
         self.alignment_targets: list[str] = []
         self._tmpdir = tmpdir
         self._listeners: dict[str, object] = {}
@@ -169,17 +182,28 @@ class FakePage:
         ]
         self._redirect_status = redirect_status
         self._raise_on_goto = raise_on_goto
+        self._catalog_body_error = catalog_body_error
+        self._missing_catalog_response = missing_catalog_response
         self.bounding_boxes = bounding_boxes or {}
 
     def on(self, event: str, callback: object) -> None:
         self._listeners[event] = callback
 
-    def goto(self, url: str, wait_until: str) -> FakeResponse:
+    def goto(self, url: str, wait_until: str) -> FakeResponse | None:
         if self._raise_on_goto:
             raise RuntimeError("browser navigation failed")
+        self.goto_urls.append(url)
         self.url = url
-        if self._redirect_status is not None and "capabilities" in url:
-            self._listeners["response"](FakeResponse(self._redirect_status, url))
+        if "capabilities" in url:
+            if self._redirect_status is not None:
+                self._listeners["response"](FakeResponse(self._redirect_status, url))
+            if self._missing_catalog_response:
+                return None
+            return FakeResponse(
+                200,
+                url,
+                body_error=self._catalog_body_error,
+            )
         return FakeResponse(200, url)
 
     def locator(self, selector: str) -> FakeLocator:
@@ -215,11 +239,15 @@ class FakeBrowser:
         tmpdir: Path,
         redirect_status: int | None = None,
         raise_on_goto: bool = False,
+        catalog_body_error: RuntimeError | None = None,
+        missing_catalog_response: bool = False,
         bounding_boxes: dict[str, dict[str, int] | None] | None = None,
     ) -> None:
         self._tmpdir = tmpdir
         self._redirect_status = redirect_status
         self._raise_on_goto = raise_on_goto
+        self._catalog_body_error = catalog_body_error
+        self._missing_catalog_response = missing_catalog_response
         self._bounding_boxes = bounding_boxes
         self.new_page_options: list[dict[str, object]] = []
         self.pages: list[FakePage] = []
@@ -227,6 +255,8 @@ class FakeBrowser:
             tmpdir,
             redirect_status=redirect_status,
             raise_on_goto=raise_on_goto,
+            catalog_body_error=catalog_body_error,
+            missing_catalog_response=missing_catalog_response,
             bounding_boxes=bounding_boxes,
         )
 
@@ -236,6 +266,8 @@ class FakeBrowser:
             self._tmpdir,
             redirect_status=self._redirect_status,
             raise_on_goto=self._raise_on_goto,
+            catalog_body_error=self._catalog_body_error,
+            missing_catalog_response=self._missing_catalog_response,
             bounding_boxes=self._bounding_boxes,
         )
         self.pages.append(self.page)
@@ -292,6 +324,24 @@ def manifest_fixture() -> dict[str, object]:
     }
 
 
+def full_manifest_stats(module):
+    return module.ManifestStats(
+        "b" * 64,
+        56,
+        19,
+        168,
+        168,
+        0,
+        {
+            "exact": 0,
+            "approximate": 54,
+            "fallback": 114,
+            "unparsed": 0,
+        },
+        2,
+    )
+
+
 def write_valid_inputs(root: Path) -> tuple[Path, Path]:
     manifest = root / "manifest.json"
     catalog = root / "catalog.html"
@@ -329,6 +379,7 @@ def runtime_context(module, test, base_url: str, evidence_dir: Path, stats):
             directory_status.st_ino,
         ),
         stats,
+        CATALOG_SHA256,
     )
 
 
@@ -1014,6 +1065,71 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
         self.assertIsInstance(caught.exception.__cause__, RuntimeError)
 
+    def test_capture_rejects_unreadable_catalog_response_before_catalog_evidence(
+        self,
+    ) -> None:
+        module = load_module()
+        body_error = RuntimeError("response body unavailable")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            browser = FakeBrowser(root, catalog_body_error=body_error)
+            context = runtime_context(
+                module,
+                self,
+                "http://127.0.0.1:4173/",
+                root,
+                full_manifest_stats(module),
+            )
+
+            with self.assertRaises(module.QaError) as caught:
+                module._capture_viewport(browser, context, 375)
+
+            self.assertIs(caught.exception.__cause__, body_error)
+            self.assertFalse((root / "catalog-top-375.png").exists())
+
+    def test_capture_rejects_missing_catalog_response_with_cause(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            browser = FakeBrowser(root, missing_catalog_response=True)
+            context = runtime_context(
+                module,
+                self,
+                "http://127.0.0.1:4173/",
+                root,
+                full_manifest_stats(module),
+            )
+
+            with self.assertRaises(module.QaError) as caught:
+                module._capture_viewport(browser, context, 375)
+
+            self.assertIsInstance(caught.exception.__cause__, RuntimeError)
+            self.assertFalse((root / "catalog-top-375.png").exists())
+
+    def test_capture_binds_cache_busted_catalog_navigation_response(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            browser = FakeBrowser(root)
+            context = runtime_context(
+                module,
+                self,
+                "http://127.0.0.1:4173/?cache=release",
+                root,
+                full_manifest_stats(module),
+            )
+
+            report = module._capture_viewport(browser, context, 375)
+
+            self.assertEqual(
+                browser.page.goto_urls[-1],
+                "http://127.0.0.1:4173/capabilities/?cache=release",
+            )
+            self.assertEqual(report["catalog"]["status"], 200)
+
     def test_browser_report_write_os_error_is_wrapped_with_cause(self) -> None:
         module = load_module()
 
@@ -1021,25 +1137,11 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             root = Path(tmpdir)
             evidence_dir = root / ".omo" / "evidence" / "write-error"
             evidence_dir.mkdir(parents=True)
-            stats = module.ManifestStats(
-                "b" * 64,
-                56,
-                19,
-                168,
-                168,
-                0,
-                {
-                    "exact": 0,
-                    "approximate": 54,
-                    "fallback": 114,
-                    "unparsed": 0,
-                },
-                2,
-            )
+            stats = full_manifest_stats(module)
             source = {
                 "gitSha": VALID_SHA,
                 "manifestSha256": "b" * 64,
-                "catalogHtmlSha256": "c" * 64,
+                "catalogHtmlSha256": CATALOG_SHA256,
             }
             sync_api = types.ModuleType("playwright.sync_api")
             sync_api.Error = RuntimeError
@@ -1121,7 +1223,7 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             source = {
                 "gitSha": VALID_SHA,
                 "manifestSha256": "b" * 64,
-                "catalogHtmlSha256": "c" * 64,
+                "catalogHtmlSha256": CATALOG_SHA256,
             }
             playwright_context = FakePlaywrightContext(evidence_dir)
             sync_api = types.ModuleType("playwright.sync_api")
@@ -1166,6 +1268,67 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             self.assertEqual(len(screenshots), 9)
             self.assertTrue(all("path" not in shot for shot in screenshots))
 
+    def test_run_rejects_unrelated_catalog_file_without_successful_report(
+        self,
+    ) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            evidence_dir = root / ".omo" / "evidence" / "response-mismatch"
+            unrelated_catalog = root / "unrelated.html"
+            unrelated_catalog.write_bytes(b"<main>not served</main>")
+            stats = module.ManifestStats(
+                "b" * 64,
+                56,
+                19,
+                168,
+                168,
+                0,
+                {
+                    "exact": 0,
+                    "approximate": 54,
+                    "fallback": 114,
+                    "unparsed": 0,
+                },
+                2,
+            )
+            source = {
+                "gitSha": VALID_SHA,
+                "manifestSha256": "b" * 64,
+                "catalogHtmlSha256": hashlib.sha256(
+                    unrelated_catalog.read_bytes()
+                ).hexdigest(),
+            }
+            sync_api = types.ModuleType("playwright.sync_api")
+            sync_api.Error = RuntimeError
+            sync_api.sync_playwright = lambda: FakePlaywrightContext(evidence_dir)
+
+            with mock.patch.dict(
+                sys.modules,
+                {
+                    "playwright": types.ModuleType("playwright"),
+                    "playwright.sync_api": sync_api,
+                },
+            ):
+                with mock.patch.object(
+                    module, "preflight_inputs", return_value=(stats, source)
+                ):
+                    with self.assertRaises(module.QaError) as caught:
+                        module.run_browser_qa(
+                            module.CliArgs(
+                                "http://127.0.0.1:4173/",
+                                root / "manifest.json",
+                                unrelated_catalog,
+                                evidence_dir,
+                                VALID_SHA,
+                            ),
+                            root,
+                        )
+
+            self.assertIsInstance(caught.exception.__cause__, ValueError)
+            self.assertFalse((evidence_dir / "browser-qa.json").exists())
+
     def test_run_rejects_post_cleanup_directory_swap_without_overwriting_outside_files(
         self,
     ) -> None:
@@ -1200,7 +1363,7 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
             source = {
                 "gitSha": VALID_SHA,
                 "manifestSha256": "b" * 64,
-                "catalogHtmlSha256": "c" * 64,
+                "catalogHtmlSha256": CATALOG_SHA256,
             }
 
             class SwappingPlaywrightContext(FakePlaywrightContext):
