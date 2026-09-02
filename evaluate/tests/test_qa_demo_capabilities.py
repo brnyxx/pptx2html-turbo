@@ -78,6 +78,7 @@ def valid_viewport(width: int) -> dict[str, object]:
             },
             "unavailableSourceCount": 2,
             "warningsBeforeFirstRecord": True,
+            "recordStartVisible": True,
             "scrollWidth": width,
             "clientWidth": width,
         },
@@ -156,6 +157,7 @@ class FakePage:
         self.scrolled: list[str] = []
         self.locator_selectors: list[str] = []
         self.screenshots: list[dict[str, object]] = []
+        self.alignment_targets: list[str] = []
         self._tmpdir = tmpdir
         self._listeners: dict[str, object] = {}
         self._evaluations = [
@@ -192,8 +194,10 @@ class FakePage:
     def wait_for_load_state(self, state: str) -> None:
         return None
 
-    def evaluate(self, script: str) -> object:
+    def evaluate(self, script: str, arg: object = None) -> object:
         if "window.scrollBy" in script:
+            if isinstance(arg, str):
+                self.alignment_targets.append(arg)
             return True
         return self._evaluations.pop(0)
 
@@ -654,6 +658,10 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
         self.assertIn("#capabilityCatalogLink", landing_scrolls)
         self.assertNotIn("#capability-presentation", landing_scrolls)
         self.assertIn("#capability-presentation", records_scrolls)
+        self.assertEqual(
+            browser.page.alignment_targets,
+            ["#coverageHeading", "#capability-presentation"],
+        )
 
     def test_capture_uses_coverage_owned_section_note_scope_locator(self) -> None:
         module = load_module()
@@ -745,6 +753,63 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
                         "y": 96,
                         "width": 327,
                         "height": 160,
+                    },
+                },
+            )
+            context = module.RuntimeContext(
+                "http://127.0.0.1:4173/",
+                Path(tmpdir),
+                module.ManifestStats(
+                    "b" * 64,
+                    56,
+                    19,
+                    168,
+                    168,
+                    0,
+                    {
+                        "exact": 0,
+                        "approximate": 54,
+                        "fallback": 114,
+                        "unparsed": 0,
+                    },
+                    2,
+                ),
+            )
+
+            with self.assertRaises(module.QaError):
+                module._capture_viewport(browser, context, 375)
+
+    def test_capture_rejects_catalog_record_hidden_by_sticky_header(self) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            browser = FakeBrowser(
+                Path(tmpdir),
+                bounding_boxes={
+                    ".topbar": {"x": 0, "y": 0, "width": 375, "height": 161},
+                    "#coverageHeading": {
+                        "x": 20,
+                        "y": 177,
+                        "width": 320,
+                        "height": 48,
+                    },
+                    "#capabilityCatalogLink": {
+                        "x": 20,
+                        "y": 300,
+                        "width": 220,
+                        "height": 32,
+                    },
+                    "#coverage .section-note": {
+                        "x": 20,
+                        "y": 240,
+                        "width": 335,
+                        "height": 220,
+                    },
+                    "#capability-presentation": {
+                        "x": 16,
+                        "y": 120,
+                        "width": 343,
+                        "height": 780,
                     },
                 },
             )

@@ -279,6 +279,7 @@ def _validate_viewport(value: JsonValue, index: int, width: int) -> None:
         "tierCounts",
         "unavailableSourceCount",
         "warningsBeforeFirstRecord",
+        "recordStartVisible",
         "scrollWidth",
         "clientWidth",
     }
@@ -310,13 +311,17 @@ def _validate_leaf_types(
         raise QaError(f"{label}.landing visibility values must be booleans")
     _string(catalog["canonical"], f"{label}.catalog.canonical")
     _hash(catalog["sourceSha256"], f"{label}.catalog.sourceSha256")
-    if not isinstance(catalog["warningsBeforeFirstRecord"], bool):
-        raise QaError(f"{label}.catalog.warningsBeforeFirstRecord must be a boolean")
+    if not all(
+        isinstance(catalog[key], bool)
+        for key in ("warningsBeforeFirstRecord", "recordStartVisible")
+    ):
+        raise QaError(f"{label}.catalog visibility values must be booleans")
     for key in catalog_keys - {
         "canonical",
         "sourceSha256",
         "tierCounts",
         "warningsBeforeFirstRecord",
+        "recordStartVisible",
     }:
         _integer(catalog[key], f"{label}.catalog.{key}")
     for tier, value in _keys(
@@ -479,24 +484,51 @@ def _box_bottom(box: JsonValue) -> int | float | None:
     return y + height
 
 
-def _align_landing_capture(page) -> None:
+def _align_capture_below_topbar(page, selector: str) -> None:
     aligned = page.evaluate(
         """
-        () => {
-          const heading = document.querySelector('#coverageHeading');
+        (selector) => {
+          const target = document.querySelector(selector);
           const topbar = document.querySelector('.topbar');
-          if (!heading || !topbar) return false;
+          if (!target || !topbar) return false;
           const gap = 16;
-          const delta = heading.getBoundingClientRect().top
+          const delta = target.getBoundingClientRect().top
             - topbar.getBoundingClientRect().bottom
             - gap;
           window.scrollBy(0, delta);
           return true;
         }
-        """
+        """,
+        selector,
     )
     if aligned is not True:
-        raise QaError("landing capture landmarks are missing")
+        raise QaError(f"capture landmark is missing: {selector}")
+
+
+def _starts_in_viewport(
+    box: JsonValue, width: int, height: int, top_edge: int | float
+) -> bool:
+    if not isinstance(box, dict):
+        return False
+    x, y, box_width, box_height = (
+        box.get("x"),
+        box.get("y"),
+        box.get("width"),
+        box.get("height"),
+    )
+    if not all(
+        isinstance(value, int | float) and not isinstance(value, bool)
+        for value in (x, y, box_width, box_height)
+    ):
+        return False
+    return (
+        box_width > 0
+        and box_height > 0
+        and x >= 0
+        and x + box_width <= width
+        and y >= top_edge
+        and y < height
+    )
 
 
 def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
@@ -531,6 +563,7 @@ def _check_viewport(report: JsonObject, stats: ManifestStats) -> None:
         or not landing["linkVisible"]
         or not landing["scopeVisible"]
         or not catalog["warningsBeforeFirstRecord"]
+        or not catalog["recordStartVisible"]
     ):
         raise QaError("required page landmark is not visible or ordered")
     if any(
@@ -588,7 +621,7 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
         coverage.scroll_into_view_if_needed()
         heading.scroll_into_view_if_needed()
         link.scroll_into_view_if_needed()
-        _align_landing_capture(page)
+        _align_capture_below_topbar(page, "#coverageHeading")
         landing_widths = _dom_widths(page)
         top_edge = _box_bottom(topbar.bounding_box())
         if top_edge is None:
@@ -618,10 +651,19 @@ def _capture_viewport(browser, context: RuntimeContext, width: int) -> JsonObjec
             f"catalog-records-{width}.png",
         )
         page.screenshot(path=str(context.evidence_dir / catalog_name), full_page=False)
-        page.locator("#capability-presentation").scroll_into_view_if_needed()
+        record = page.locator("#capability-presentation")
+        record.scroll_into_view_if_needed()
+        _align_capture_below_topbar(page, "#capability-presentation")
+        catalog_top_edge = _box_bottom(page.locator(".topbar").bounding_box())
+        if catalog_top_edge is None:
+            raise QaError("catalog sticky header bounds are unavailable")
+        record_start_visible = _starts_in_viewport(
+            record.bounding_box(), width, VIEWPORT_HEIGHT, catalog_top_edge
+        )
         page.screenshot(path=str(context.evidence_dir / records_name), full_page=False)
         catalog = _catalog_dom(page) | {
             "status": catalog_response.status,
+            "recordStartVisible": record_start_visible,
             "scrollWidth": catalog_widths["scrollWidth"],
             "clientWidth": catalog_widths["clientWidth"],
         }
