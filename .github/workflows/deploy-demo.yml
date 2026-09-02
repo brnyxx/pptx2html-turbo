@@ -45,6 +45,9 @@ jobs:
       - name: Build WASM
         run: wasm-pack build crates/pptx2html-wasm --target web --release
 
+      - name: Install exactness dependency
+        run: python3 -m pip install 'python-pptx==1.0.2'
+
       - name: Validate demo contracts
         run: |
           VERSION=$(bash scripts/read_release_version.sh)

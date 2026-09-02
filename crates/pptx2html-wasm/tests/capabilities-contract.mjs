@@ -840,6 +840,26 @@ function assertWorkflowContract(workflowText) {
   );
   assert.doesNotMatch(workflowText, /^\s*matrix:/m, 'workflow must not add a matrix');
 
+  const exactnessDependencyStep = [
+    '      - name: Install exactness dependency',
+    "        run: python3 -m pip install 'python-pptx==1.0.2'",
+  ].join('\n');
+  assertContains(
+    workflowText,
+    exactnessDependencyStep,
+    'workflow must install only the pinned exactness dependency',
+  );
+  assert.ok(
+    workflowText.indexOf(exactnessDependencyStep)
+      < workflowText.indexOf('      - name: Validate demo contracts'),
+    'workflow must install the exactness dependency before validation',
+  );
+  assert.doesNotMatch(
+    workflowText,
+    /pip install -r evaluate\/requirements(?:-test)?\.txt/,
+    'workflow must not install the full evaluation dependency set',
+  );
+
   const validationBlock = workflowStepRunBlock(workflowText, 'Validate demo contracts');
   assertContains(
     validationBlock,
