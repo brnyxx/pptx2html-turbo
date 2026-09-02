@@ -7,6 +7,7 @@ import sys
 import tempfile
 import types
 import unittest
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
@@ -405,6 +406,42 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
 
                 self.assertEqual(owned.read_bytes(), b"keep")
 
+    def test_cleanup_keeps_outside_files_when_child_is_replaced_after_open(
+        self,
+    ) -> None:
+        module = load_module()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            evidence_dir = root / ".omo" / "evidence" / "cleanup"
+            evidence_dir.mkdir(parents=True)
+            captured = evidence_dir.with_name("captured")
+            owned_name = "landing-375.png"
+            (evidence_dir / owned_name).write_bytes(b"inside")
+            outside = root / "outside"
+            outside.mkdir()
+            outside_owned = outside / owned_name
+            outside_owned.write_bytes(b"outside")
+            outside_sentinel = outside / "unrelated.txt"
+            outside_sentinel.write_bytes(b"sentinel")
+
+            class ReplaceChildWithOutsideSymlink:
+                def __iter__(self) -> Iterator[str]:
+                    evidence_dir.rename(captured)
+                    evidence_dir.symlink_to(outside, target_is_directory=True)
+                    return iter((owned_name,))
+
+            with mock.patch.object(
+                module,
+                "OWNED_EVIDENCE_NAMES",
+                ReplaceChildWithOutsideSymlink(),
+            ):
+                module.cleanup_owned_evidence(evidence_dir, root)
+
+            self.assertEqual(outside_owned.read_bytes(), b"outside")
+            self.assertEqual(outside_sentinel.read_bytes(), b"sentinel")
+            self.assertFalse((captured / owned_name).exists())
+
     def test_cleanup_rejects_paths_outside_repository_evidence_root(self) -> None:
         module = load_module()
 
@@ -426,7 +463,7 @@ class QaDemoCapabilitiesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             cause = PermissionError("mkdir blocked")
-            with mock.patch.object(module.Path, "mkdir", side_effect=cause):
+            with mock.patch.object(module.os, "mkdir", side_effect=cause):
                 with self.assertRaises(module.QaError) as caught:
                     module.cleanup_owned_evidence(
                         root / ".omo" / "evidence" / "blocked", root

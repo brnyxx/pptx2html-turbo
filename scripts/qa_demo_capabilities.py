@@ -5,8 +5,10 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import re
 import subprocess
+from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -124,24 +126,30 @@ def cleanup_owned_evidence(evidence_dir: Path, repo_root: Path = REPO_ROOT) -> P
         raise QaError("evidence directory must be below .omo/evidence") from ValueError(
             str(evidence_dir)
         )
-    current = root
-    for part in relative.parts:
-        current /= part
-        if current.is_symlink():
-            raise QaError(
-                f"evidence directory must not traverse symlinks: {evidence_dir}"
-            ) from OSError("symlink rejected")
     try:
-        candidate.mkdir(parents=True, exist_ok=True)
+        with ExitStack() as descriptors:
+            directory_descriptor = os.open(
+                root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            )
+            descriptors.callback(os.close, directory_descriptor)
+            for part in relative.parts:
+                try:
+                    os.mkdir(part, dir_fd=directory_descriptor)
+                except FileExistsError:
+                    pass
+                directory_descriptor = os.open(
+                    part,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=directory_descriptor,
+                )
+                descriptors.callback(os.close, directory_descriptor)
+            for name in OWNED_EVIDENCE_NAMES:
+                try:
+                    os.unlink(name, dir_fd=directory_descriptor)
+                except FileNotFoundError:
+                    pass
     except OSError as error:
-        raise QaError(f"failed to create evidence directory: {candidate}") from error
-    for name in OWNED_EVIDENCE_NAMES:
-        try:
-            (candidate / name).unlink(missing_ok=True)
-        except OSError as error:
-            raise QaError(
-                f"failed to remove owned evidence file: {candidate / name}"
-            ) from error
+        raise QaError(f"failed to clean evidence directory: {candidate}") from error
     return candidate
 
 
